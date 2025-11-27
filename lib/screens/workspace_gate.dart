@@ -2,6 +2,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class WorkspaceGate extends StatefulWidget {
   const WorkspaceGate({
@@ -62,15 +63,24 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
   Future<void> _create() async {
     setState(() => _creating = true);
     try {
+      // Get current user ID from Firebase Auth
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId == null) {
+        throw Exception('No user logged in');
+      }
+
       final ref = _db.collection('workspaces').doc();
       final code = _randomCode(6);
 
-      // Canonical: joinCode (immutable). Optional friendly: displayName.
+      // Create workspace with the creator as first member
       await ref.set({
         'joinCode': code,
-        'displayName': '', // empty by default; purely cosmetic
-        'name': code, // keep legacy 'name' matching joinCode for now
+        'displayName': '',
+        'name': code,
         'createdAt': FieldValue.serverTimestamp(),
+        'members': {
+          currentUserId: true, // Add creator to members
+        },
       });
 
       if (!mounted) return;
@@ -82,7 +92,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       );
 
       widget.onJoined(ref.id);
-      if (mounted) Navigator.of(context).maybePop(); // close the gate
+      if (mounted) Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -100,6 +110,12 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     setState(() => _joining = true);
 
     try {
+      // Get current user ID
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId == null) {
+        throw Exception('No user logged in');
+      }
+
       final snap = await _db
           .collection('workspaces')
           .where('joinCode', isEqualTo: code)
@@ -115,8 +131,12 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       }
 
       final doc = snap.docs.first;
+
+      // Add current user to workspace members
+      await doc.reference.update({'members.$currentUserId': true});
+
       widget.onJoined(doc.id);
-      Navigator.of(context).maybePop(); // close the gate
+      Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -135,14 +155,13 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     setState(() => _savingName = true);
     try {
       await _db.collection('workspaces').doc(wsId).update({
-        'displayName': friendly, // cosmetic only
-        // keep 'joinCode' immutable; 'name' remains canonical code for now
+        'displayName': friendly,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Workspace name updated.')));
-      Navigator.of(context).maybePop(); // return to Home; label will refresh
+      Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -150,6 +169,86 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       ).showSnackBar(SnackBar(content: Text('Failed to save name: $e')));
     } finally {
       if (mounted) setState(() => _savingName = false);
+    }
+  }
+
+  Future<void> _editNickname(String userId, String currentName) async {
+    final nicknameCtrl = TextEditingController();
+
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      final userDoc = await _db.collection('users').doc(currentUserId).get();
+      final userData = userDoc.data();
+      final nicknames = (userData?['nicknames'] as Map<String, dynamic>?) ?? {};
+      nicknameCtrl.text = (nicknames[userId] as String?) ?? '';
+    } catch (_) {
+      // Ignore, start with empty
+    }
+
+    if (!mounted) return;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Set Nickname for $currentName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This nickname is only visible to you.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nicknameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nickname',
+                hintText: 'e.g. Girl, Babe, Partner',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, nicknameCtrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+
+    try {
+      await _db.collection('users').doc(currentUserId).set({
+        'nicknames': {userId: result.isEmpty ? FieldValue.delete() : result},
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.isEmpty ? 'Nickname cleared' : 'Nickname saved: $result',
+          ),
+        ),
+      );
+
+      // Force rebuild to fetch new nickname immediately
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save nickname: $e')));
     }
   }
 
@@ -254,14 +353,14 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                     controller: _displayNameCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Display name (optional)',
-                      hintText: 'e.g. Lovell Family',
+                      hintText: 'e.g. Team Love',
                     ),
                   ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Shown as “CODE (Display name)”. Joining always uses CODE.',
+                      'Shown as "CODE (Display name)". Joining always uses CODE.',
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ),
@@ -283,12 +382,128 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                       label: Text(_savingName ? 'Saving...' : 'Save'),
                     ),
                   ),
-                ],
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 16),
+
+                  // --- MEMBERS SECTION ---
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Workspace Members',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: _db
+                        .collection('workspaces')
+                        .doc(widget.workspaceId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final workspaceData =
+                          snapshot.data?.data() as Map<String, dynamic>?;
+                      final members =
+                          (workspaceData?['members']
+                              as Map<String, dynamic>?) ??
+                          {};
+
+                      if (members.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'No members yet',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        children: members.keys.map((memberId) {
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: _db.collection('users').doc(memberId).get(),
+                            builder: (context, userSnapshot) {
+                              final userData =
+                                  userSnapshot.data?.data()
+                                      as Map<String, dynamic>?;
+                              final displayName =
+                                  (userData?['displayName'] as String?) ??
+                                  (userData?['email'] as String?) ??
+                                  'Unknown User';
+                              final email =
+                                  (userData?['email'] as String?) ?? '';
+
+                              final currentUserId =
+                                  FirebaseAuth.instance.currentUser?.uid;
+                              final isMe = memberId == currentUserId;
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: Text(
+                                      displayName.isNotEmpty
+                                          ? displayName[0].toUpperCase()
+                                          : '?',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade800,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    displayName,
+                                    style: TextStyle(
+                                      fontWeight: isMe
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    isMe ? '$email (You)' : email,
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  trailing: isMe
+                                      ? null
+                                      : IconButton(
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            size: 20,
+                                          ),
+                                          onPressed: () => _editNickname(
+                                            memberId,
+                                            displayName,
+                                          ),
+                                          tooltip: 'Set nickname',
+                                        ),
+                                ),
+                              );
+                            }, // ← This closes FutureBuilder builder
+                          ); // ← This closes FutureBuilder
+                        }).toList(), // ← This closes map
+                      ); // ← This closes Column
+                    }, // ← This closes StreamBuilder builder
+                  ), // ← This closes StreamBuilder
+                ], // ← This closes the "else" block for manage mode
+              ], // ← This closes the main children list
+            ], // Column
+          ), // SingleChildScrollView
+        ), // Center
+      ), // body
+    ); // Scaffold
+  } // build
+}  // class

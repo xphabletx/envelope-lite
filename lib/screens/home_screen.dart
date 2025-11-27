@@ -3,23 +3,34 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as fs;
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
-import '../services/auth_service.dart';
-import '../services/run_migrations_once.dart'; // ADD THIS
+import '../services/run_migrations_once.dart';
+import '../services/user_service.dart';
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
 import '../widgets/group_editor.dart' as editor;
+import '../widgets/calculator_widget.dart';
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
+import '../models/user_profile.dart';
+import '../providers/theme_provider.dart';
+
+import '../theme/app_themes.dart';
 
 import 'envelopes_detail_screen.dart';
 import 'workspace_gate.dart';
 import 'stats_history_screen.dart';
+import 'settings_screen.dart';
+import 'pay_day_screen.dart';
+import 'calendar_screen.dart';
+import 'budget_screen.dart';
 
 // Unified SpeedDial child style
 SpeedDialChild sdChild({
@@ -61,12 +72,20 @@ class _HomeScreenState extends State<HomeScreen> {
     _restoreLastWorkspaceName();
 
     // Run migrations once per build for the current user on first entry
-    // to Home. Safe to call every app start; internally it no-ops if already run.
     Future.microtask(() {
       return runMigrationsOncePerBuild(
         db: widget.repo.db,
         explicitUid: widget.repo.currentUserId,
       );
+    });
+
+    // If already in a workspace, start listening to changes
+    Future.microtask(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final savedWorkspaceId = prefs.getString(kPrefsKeyWorkspace);
+      if (savedWorkspaceId != null && savedWorkspaceId.isNotEmpty) {
+        _listenToWorkspaceChanges(savedWorkspaceId);
+      }
     });
   }
 
@@ -93,6 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
       final snap = await widget.repo.db.collection('workspaces').doc(id).get();
       if (!snap.exists) return null;
       final data = snap.data();
+
+      // Prefer displayName over name (joinCode)
+      final displayName = (data?['displayName'] as String?)?.trim();
+      if (displayName?.isNotEmpty == true) {
+        return displayName;
+      }
+
+      // Fallback to name (which is the join code)
       return (data?['name'] as String?)?.trim();
     } catch (_) {
       return null;
@@ -107,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // Set repo context first
             await widget.repo.setWorkspace(wsId);
 
-            // Try to fetch a friendly name (the implicit name = joinCode)
+            // Try to fetch a friendly name
             final fetchedName = await _fetchWorkspaceName(wsId);
             setState(() {
               _workspaceName = fetchedName;
@@ -116,11 +143,13 @@ class _HomeScreenState extends State<HomeScreen> {
             // Persist both id + name locally
             await _saveWorkspaceSelection(id: wsId, name: fetchedName);
 
+            // Start listening to workspace changes
+            _listenToWorkspaceChanges(wsId);
+
             if (!mounted) return;
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(const SnackBar(content: Text('Joined workspace.')));
-            // Gate pops itself; no pop() here.
           },
         ),
       ),
@@ -128,8 +157,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _leaveWorkspace() async {
+    final wsId = widget.repo.workspaceId;
+
+    if (wsId != null) {
+      // Remove yourself from the workspace members list
+      try {
+        await widget.repo.db.collection('workspaces').doc(wsId).update({
+          'members.${widget.repo.currentUserId}': fs.FieldValue.delete(),
+        });
+      } catch (e) {
+        // Workspace might not exist anymore, ignore error
+      }
+    }
+
     await _saveWorkspaceSelection(id: null, name: null);
     widget.repo.setWorkspace(null);
+
     if (!mounted) return;
     setState(() => _workspaceName = null);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -139,153 +182,118 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get _workspaceLabel {
     if (!widget.repo.inWorkspace) return 'Solo Mode';
+
+    // Show displayName if set, otherwise show the join code
+    if (_workspaceName?.isNotEmpty == true) {
+      return _workspaceName!;
+    }
+
+    // Fallback to join code
     final id = widget.repo.workspaceId!;
     final short = id.length > 6 ? id.substring(0, 6) : id;
-    return _workspaceName?.isNotEmpty == true
-        ? _workspaceName!
-        : 'Workspace: $short';
+    return short;
+  }
+
+  void _listenToWorkspaceChanges(String workspaceId) {
+    widget.repo.db.collection('workspaces').doc(workspaceId).snapshots().listen(
+      (snap) {
+        if (!mounted) return;
+        final data = snap.data();
+        final displayName = (data?['displayName'] as String?)?.trim();
+        final name = (data?['name'] as String?)?.trim();
+
+        final newName = displayName?.isNotEmpty == true ? displayName : name;
+
+        if (newName != _workspaceName) {
+          setState(() {
+            _workspaceName = newName;
+          });
+
+          // Also update SharedPreferences
+          _saveWorkspaceSelection(id: workspaceId, name: newName);
+        }
+      },
+    );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SettingsScreen(repo: widget.repo)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // ADD THIS LINE
+
     final pages = <Widget>[
       _AllEnvelopes(repo: widget.repo, groupRepo: _groupRepo),
       _GroupsPage(repo: widget.repo, groupRepo: _groupRepo),
+      BudgetScreen(repo: widget.repo),
+      CalendarScreen(repo: widget.repo),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Team Envelopes',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
-          ),
+        title: StreamBuilder<UserProfile?>(
+          stream: UserService(
+            widget.repo.db,
+            widget.repo.currentUserId,
+          ).userProfileStream,
+          builder: (context, snapshot) {
+            final displayName = snapshot.data?.displayName ?? 'Team Envelopes';
+            return Text(
+              displayName,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+              ),
+            );
+          },
         ),
         elevation: 0,
         actions: [
-          // Sign out
+          // Settings cog
           IconButton(
-            tooltip: 'Sign out',
-            icon: const Icon(Icons.logout, color: Colors.black),
-            onPressed: () async {
-              await AuthService.signOut();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Signed out')));
-              // AuthGate takes over after this.
-            },
-          ),
-
-          // Workspace chip + menu
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: PopupMenuButton<String>(
-              tooltip: 'Workspace',
-              onSelected: (value) async {
-                switch (value) {
-                  case 'join':
-                    await _openWorkspaceGate();
-                    break;
-                  case 'leave':
-                    await _leaveWorkspace();
-                    break;
-                  case 'manage':
-                    // Open the same WorkspaceGate in Manage mode
-                    if (!mounted) return;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => WorkspaceGate(
-                          onJoined: (_) {}, // not used in manage mode
-                          workspaceId:
-                              widget.repo.workspaceId!, // current workspace
-                        ),
-                      ),
-                    );
-                    setState(() {}); // refresh label if nickname changed
-                    break;
-                }
-              },
-              itemBuilder: (ctx) {
-                final items = <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    enabled: false,
-                    child: Text(
-                      _workspaceLabel,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                ];
-                if (widget.repo.inWorkspace) {
-                  items.addAll([
-                    const PopupMenuItem<String>(
-                      value: 'manage',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.settings),
-                        title: Text('Workspace settings / rename'),
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: 'leave',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.logout),
-                        title: Text('Leave workspace'),
-                      ),
-                    ),
-                  ]);
-                } else {
-                  items.add(
-                    const PopupMenuItem<String>(
-                      value: 'join',
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.group_add),
-                        title: Text('Create / Join workspace'),
-                      ),
-                    ),
-                  );
-                }
-                return items;
-              },
-              child: Chip(
-                label: Text(
-                  _workspaceLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                avatar: Icon(
-                  widget.repo.inWorkspace ? Icons.groups : Icons.person,
-                  size: 18,
-                ),
-                shape: StadiumBorder(
-                  side: BorderSide(color: Colors.grey.shade300),
-                ),
-                backgroundColor: Colors.white,
-              ),
-            ),
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings, color: Colors.black),
+            onPressed: _openSettings,
           ),
         ],
       ),
       body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        selectedItemColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        selectedItemColor: theme.colorScheme.primary,
         unselectedItemColor: Colors.grey.shade600,
         elevation: 8,
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: GoogleFonts.caveat(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+        unselectedLabelStyle: GoogleFonts.caveat(fontSize: 14),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.inventory_2_outlined),
-            activeIcon: Icon(Icons.inventory_2),
+            icon: Icon(Icons.mail_outline),
+            activeIcon: Icon(Icons.mail),
             label: 'Envelopes',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_alt_outlined),
             activeIcon: Icon(Icons.people_alt),
             label: 'Groups',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: Icon(Icons.account_balance_wallet),
+            label: 'Budget',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined),
+            activeIcon: Icon(Icons.calendar_today),
+            label: 'Calendar',
           ),
         ],
         currentIndex: _selectedIndex,
@@ -309,6 +317,8 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   bool isMulti = false;
   final selected = <String>{};
 
+  String _sortBy = 'name';
+
   void _toggle(String id) {
     setState(() {
       if (selected.contains(id)) {
@@ -319,6 +329,46 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
       isMulti = selected.isNotEmpty;
       if (!isMulti) selected.clear();
     });
+  }
+
+  String? _calcDisplay;
+  String? _calcExpression;
+  bool _calcMinimized = false;
+  Offset _calcPosition = const Offset(20, 100);
+
+  void _openCalculator() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final calcKey = GlobalKey<CalculatorWidgetState>();
+
+        if (_calcDisplay != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            calcKey.currentState?.restoreState(
+              _calcDisplay!,
+              _calcExpression ?? '',
+              _calcMinimized,
+              _calcPosition,
+            );
+          });
+        }
+
+        return WillPopScope(
+          onWillPop: () async {
+            final state = calcKey.currentState;
+            if (state != null) {
+              _calcDisplay = state.display;
+              _calcExpression = state.expression;
+              _calcMinimized = state.isMinimized;
+              _calcPosition = state.position;
+            }
+            return true;
+          },
+          child: Stack(children: [CalculatorWidget(key: calcKey)]),
+        );
+      },
+    );
   }
 
   void _openDetails(Envelope envelope) {
@@ -344,8 +394,54 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
     );
   }
 
+  void _openPayDayScreen() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PayDayScreen(repo: widget.repo)));
+  }
+
+  List<Envelope> _sortEnvelopes(List<Envelope> envelopes) {
+    final sorted = envelopes.toList();
+
+    switch (_sortBy) {
+      case 'name':
+        sorted.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        break;
+
+      case 'balance':
+        sorted.sort((a, b) => b.currentAmount.compareTo(a.currentAmount));
+        break;
+
+      case 'target':
+        sorted.sort((a, b) {
+          final aTarget = a.targetAmount ?? 0;
+          final bTarget = b.targetAmount ?? 0;
+          return bTarget.compareTo(aTarget);
+        });
+        break;
+
+      case 'percent':
+        sorted.sort((a, b) {
+          final aPercent = (a.targetAmount != null && a.targetAmount! > 0)
+              ? (a.currentAmount / a.targetAmount!) * 100
+              : 0.0;
+          final bPercent = (b.targetAmount != null && b.targetAmount! > 0)
+              ? (b.currentAmount / b.targetAmount!) * 100
+              : 0.0;
+          return bPercent.compareTo(aPercent);
+        });
+        break;
+    }
+
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // ADD THIS LINE
+
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream,
       builder: (c1, s1) {
@@ -357,27 +453,143 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
             return StreamBuilder<List<Transaction>>(
               stream: widget.repo.transactionsStream,
               builder: (c3, s3) {
-                final _ = s3.data ?? []; // txs not directly used here
+                final _ = s3.data ?? [];
 
-                final sortedEnvs = envs.toList()
-                  ..sort((a, b) {
-                    if (a.groupId != null && b.groupId == null) return -1;
-                    if (a.groupId == null && b.groupId != null) return 1;
-                    return a.name.compareTo(b.name);
-                  });
+                final sortedEnvs = _sortEnvelopes(envs);
 
                 return Scaffold(
                   appBar: AppBar(
-                    title: const Text(
-                      'All Envelopes',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                      ),
+                    title: Row(
+                      children: [
+                        // Pay Day button
+                        ElevatedButton.icon(
+                          onPressed: _openPayDayScreen,
+                          icon: const Icon(Icons.monetization_on, size: 20),
+                          label: Text(
+                            'PAY DAY',
+                            style: GoogleFonts.caveat(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 22,
+                              color: Colors.white,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.secondary,
+                            foregroundColor: Colors.white,
+                            elevation: 3,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     elevation: 0,
                     actions: [
+                      // Sort dropdown
+                      PopupMenuButton<String>(
+                        tooltip: 'Sort by',
+                        icon: const Icon(Icons.sort, color: Colors.black),
+                        onSelected: (value) {
+                          setState(() {
+                            _sortBy = value;
+                          });
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'name',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.sort_by_alpha,
+                                  color: _sortBy == 'name'
+                                      ? Colors.black
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'A-Z',
+                                  style: TextStyle(
+                                    fontWeight: _sortBy == 'name'
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'balance',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.monetization_on,
+                                  color: _sortBy == 'balance'
+                                      ? Colors.black
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Highest Balance',
+                                  style: TextStyle(
+                                    fontWeight: _sortBy == 'balance'
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'target',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.flag,
+                                  color: _sortBy == 'target'
+                                      ? Colors.black
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Highest Target',
+                                  style: TextStyle(
+                                    fontWeight: _sortBy == 'target'
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'percent',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.percent,
+                                  color: _sortBy == 'percent'
+                                      ? Colors.black
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '% to Target',
+                                  style: TextStyle(
+                                    fontWeight: _sortBy == 'percent'
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                       IconButton(
                         icon: const Icon(Icons.bar_chart_sharp, size: 28),
                         onPressed: _openStatsScreen,
@@ -388,7 +600,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                   body: sortedEnvs.isEmpty && !s1.hasData
                       ? const Center(child: CircularProgressIndicator())
                       : ListView(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                           children: sortedEnvs.map((e) {
                             final isSel = selected.contains(e.id);
                             return Padding(
@@ -440,12 +652,17 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                           ]
                         : [
                             sdChild(
-                              icon: Icons.people_alt, // group icon
+                              icon: Icons.calculate,
+                              label: 'Calculator',
+                              onTap: () => _openCalculator(),
+                            ),
+                            sdChild(
+                              icon: Icons.people_alt,
                               label: 'New Group',
                               onTap: _openGroupCreator,
                             ),
                             sdChild(
-                              icon: Icons.mail_outline, // envelope-looking
+                              icon: Icons.mail_outline,
                               label: 'New Envelope',
                               onTap: () async {
                                 await showEnvelopeCreator(
@@ -455,7 +672,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                               },
                             ),
                             sdChild(
-                              icon: Icons.edit_note, // multi-select
+                              icon: Icons.edit_note,
                               label: 'Enter Multi-Select Mode',
                               onTap: () => setState(() => isMulti = true),
                             ),
@@ -505,17 +722,9 @@ class _GroupsPage extends StatelessWidget {
     List<Envelope> envs,
     List<Transaction> txs,
   ) {
-    final groupEnvelopeIds = envs
-        .where((e) => e.groupId == group.id)
-        .map((e) => e.id)
-        .toList();
-
-    // Reuse the Stats screen; it will subscribe itself.
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => StatsHistoryScreen(repo: repo)));
-
-    // (If you prefer the old sheet behavior, swap back to the modal instead.)
   }
 
   Future<void> _openGroupEditor(
@@ -647,6 +856,56 @@ class _GroupsPage extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+// ====== Budget Placeholder ======
+class _BudgetPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.account_balance_wallet, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Budget Overview',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Coming soon!',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====== Calendar Placeholder ======
+class _CalendarPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Calendar',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Coming soon!',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ],
+      ),
     );
   }
 }

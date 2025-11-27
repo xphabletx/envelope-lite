@@ -1,28 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/envelope.dart';
-import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
-import '../screens/envelopes_detail_screen.dart';
-import './quick_action_modal.dart';
+import 'emoji_pie_chart.dart';
+import 'quick_action_modal.dart';
+import '../models/transaction.dart';
 
-// Helper for calculating progress
-extension EnvelopeX on Envelope {
-  double get progress {
-    if (targetAmount == null || targetAmount! <= 0) return 0.0;
-    return (currentAmount / targetAmount!).clamp(0.0, 1.0);
-  }
-}
-
-class EnvelopeTile extends StatelessWidget {
-  final Envelope envelope;
-  final List<Envelope> allEnvelopes;
-  final bool isSelected;
-  final VoidCallback? onLongPress;
-  final VoidCallback? onTap;
-  final EnvelopeRepo repo;
-  final bool isMultiSelectMode; // Added to control quick actions/navigation
-
+class EnvelopeTile extends StatefulWidget {
   const EnvelopeTile({
     super.key,
     required this.envelope,
@@ -34,176 +19,477 @@ class EnvelopeTile extends StatelessWidget {
     this.isMultiSelectMode = false,
   });
 
-  void _openDetail(BuildContext context) {
-    // Only allow navigation if not in multi-select mode
-    if (isMultiSelectMode) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EnvelopeDetailScreen(envelope: envelope, repo: repo),
+  final Envelope envelope;
+  final List<Envelope> allEnvelopes;
+  final EnvelopeRepo repo;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onTap;
+  final bool isMultiSelectMode;
+
+  @override
+  State<EnvelopeTile> createState() => _EnvelopeTileState();
+}
+
+class _EnvelopeTileState extends State<EnvelopeTile>
+    with SingleTickerProviderStateMixin {
+  String? _customEmoji;
+  String? _subtitle;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnimation;
+  bool _isRevealed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _customEmoji = widget.envelope.emoji;
+    _subtitle = widget.envelope.subtitle;
+
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(-0.45, 0),
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+  }
+
+  @override
+  void didUpdateWidget(EnvelopeTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update local state if envelope data changes
+    if (oldWidget.envelope.emoji != widget.envelope.emoji) {
+      _customEmoji = widget.envelope.emoji;
+    }
+    if (oldWidget.envelope.subtitle != widget.envelope.subtitle) {
+      _subtitle = widget.envelope.subtitle;
+    }
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    super.dispose();
+  }
+
+  void _toggleReveal() {
+    setState(() {
+      if (_isRevealed) {
+        _slideController.reverse();
+      } else {
+        _slideController.forward();
+      }
+      _isRevealed = !_isRevealed;
+    });
+  }
+
+  void _hideButtons() {
+    if (_isRevealed) {
+      setState(() {
+        _slideController.reverse();
+        _isRevealed = false;
+      });
+    }
+  }
+
+  Future<void> _pickEmoji() async {
+    final controller = TextEditingController(text: _customEmoji ?? '');
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose emoji'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Tap the box below and select an emoji from your keyboard',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 1,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 60),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
+                onChanged: (value) {
+                  if (value.characters.length > 1) {
+                    controller.text = value.characters.first;
+                    controller.selection = TextSelection.fromPosition(
+                      TextPosition(offset: controller.text.length),
+                    );
+                  }
+                },
+                onSubmitted: (value) {
+                  Navigator.pop(context);
+                  final emoji = value.characters.isEmpty
+                      ? null
+                      : value.characters.first;
+                  setState(() => _customEmoji = emoji);
+                  widget.repo.updateEnvelope(
+                    envelopeId: widget.envelope.id,
+                    emoji: emoji,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _customEmoji = null);
+              widget.repo.updateEnvelope(
+                envelopeId: widget.envelope.id,
+                emoji: null,
+              );
+            },
+            child: const Text('Remove'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              final emoji = controller.text.characters.isEmpty
+                  ? null
+                  : controller.text.characters.first;
+              setState(() => _customEmoji = emoji);
+              widget.repo.updateEnvelope(
+                envelopeId: widget.envelope.id,
+                emoji: emoji,
+              );
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editSubtitle() async {
+    final controller = TextEditingController(text: _subtitle ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add subtitle'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'e.g., "Weekly shopping"',
+            border: OutlineInputBorder(),
+          ),
+          maxLength: 50,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _subtitle = result.isEmpty ? null : result);
+      await widget.repo.updateEnvelope(
+        envelopeId: widget.envelope.id,
+        subtitle: result.isEmpty ? null : result,
+      );
+    }
+  }
+
+  void _showQuickAction(TransactionType type) {
+    _hideButtons();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => QuickActionModal(
+        envelope: widget.envelope,
+        allEnvelopes: widget.allEnvelopes,
+        repo: widget.repo,
+        type: type,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(symbol: '£');
+    final currencyFormat = NumberFormat.currency(symbol: '£');
+    final theme = Theme.of(context);
 
-    return InkWell(
-      onLongPress: onLongPress,
-      onTap:
-          onTap ??
-          () => _openDetail(context), // Use _openDetail if onTap is null
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.grey.shade100 : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05), // Lighter shadow
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-          border: Border.all(
-            color: isSelected
-                ? Colors.black
-                : Colors.transparent, // Highlight with black border
-            width: isSelected ? 2 : 0,
+    final isMyEnvelope = widget.envelope.userId == widget.repo.currentUserId;
+    final showOwnerLabel = widget.repo.inWorkspace && !isMyEnvelope;
+
+    double? percentage;
+    if (widget.envelope.targetAmount != null &&
+        widget.envelope.targetAmount! > 0) {
+      percentage =
+          (widget.envelope.currentAmount / widget.envelope.targetAmount!).clamp(
+            0.0,
+            1.0,
+          );
+    }
+
+    // Main tile content
+    final tileContent = Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: widget.isSelected
+            ? theme.colorScheme.primary.withValues(alpha: 0.2)
+            : theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-        ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row (name + selection indicator)
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    envelope.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      overflow: TextOverflow.ellipsis,
+                GestureDetector(
+                  onTap: _pickEmoji,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _customEmoji ?? '📨',
+                        style: const TextStyle(fontSize: 24),
+                      ),
                     ),
                   ),
                 ),
-                if (isMultiSelectMode)
-                  Icon(
-                    isSelected ? Icons.check_circle : Icons.circle_outlined,
-                    color: isSelected ? Colors.black : Colors.grey,
-                    size: 24,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Balance + target/progress + quick actions
-            Row(
-              children: [
-                // Balance + (optional) progress
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (showOwnerLabel)
+                        FutureBuilder<String>(
+                          future: widget.repo.getUserDisplayName(
+                            widget.envelope.userId,
+                          ),
+                          builder: (context, snapshot) {
+                            final ownerName = snapshot.data ?? 'Unknown';
+                            return Text(
+                              ownerName,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontSize: 11,
+                              ),
+                            );
+                          },
+                        ),
                       Text(
-                        currency.format(envelope.currentAmount),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
+                        widget.envelope.name,
+                        style: GoogleFonts.caveat(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (envelope.targetAmount != null) ...[
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: envelope.progress,
-                            backgroundColor: Colors.grey.shade200,
-                            minHeight: 8,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              Colors.black,
-                            ), // Black progress bar
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Target: ${currency.format(envelope.targetAmount)} (${(envelope.progress * 100).toStringAsFixed(0)}%)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
-
-                if (!isMultiSelectMode) ...[
-                  const SizedBox(width: 16),
-                  // Quick actions: + / − / ↔
-                  _btn(
-                    icon: Icons.add,
-                    color: Colors.green.shade800,
-                    onTap: () => _openAction(context, TransactionType.deposit),
-                  ),
-                  _btn(
-                    icon: Icons.remove,
-                    color: Colors.red.shade800,
-                    onTap: () =>
-                        _openAction(context, TransactionType.withdrawal),
-                  ),
-                  _btn(
-                    icon: Icons.compare_arrows,
-                    color: Colors.blue.shade800,
-                    onTap: () => _openAction(context, TransactionType.transfer),
-                  ),
+                if (percentage != null) ...[
+                  const SizedBox(width: 12),
+                  EmojiPieChart(percentage: percentage, size: 60),
                 ],
               ],
+            ),
+            if (_subtitle != null && _subtitle!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 56),
+                child: GestureDetector(
+                  onTap: _editSubtitle,
+                  child: Text(
+                    '"$_subtitle"',
+                    style: GoogleFonts.caveat(
+                      fontSize: 16,
+                      fontStyle: FontStyle.italic,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(left: 56),
+              child: Row(
+                children: [
+                  Text(
+                    currencyFormat.format(widget.envelope.currentAmount),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  if (widget.envelope.targetAmount != null) ...[
+                    Text(
+                      ' / ${currencyFormat.format(widget.envelope.targetAmount)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
-  }
 
-  void _openAction(BuildContext context, TransactionType type) async {
-    // Prevent quick actions in multi-select mode
-    if (isMultiSelectMode) return;
+    // If multi-select mode is active, disable swipe
+    if (widget.isMultiSelectMode) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: tileContent,
+      );
+    }
 
-    await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => QuickActionModal(
-        envelope: envelope,
-        type: type,
-        allEnvelopes: allEnvelopes.where((e) => e.id != envelope.id).toList(),
-        repo: repo,
+    // Otherwise, wrap in swipeable stack with action buttons
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity!.abs() > 300) {
+            _toggleReveal();
+          }
+        }
+      },
+      onTap: () {
+        if (_isRevealed) {
+          _hideButtons();
+        } else {
+          widget.onTap?.call();
+        }
+      },
+      onLongPress: widget.onLongPress,
+      child: Stack(
+        children: [
+          // Background action buttons
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _ActionButton(
+                      icon: Icons.add,
+                      onPressed: () =>
+                          _showQuickAction(TransactionType.deposit),
+                      primaryColor: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    _ActionButton(
+                      icon: Icons.remove,
+                      onPressed: () =>
+                          _showQuickAction(TransactionType.withdrawal),
+                      primaryColor: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    _ActionButton(
+                      icon: Icons.swap_horiz,
+                      onPressed: () =>
+                          _showQuickAction(TransactionType.transfer),
+                      primaryColor: theme.colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Foreground sliding tile
+          SlideTransition(position: _slideAnimation, child: tileContent),
+        ],
       ),
     );
   }
+}
 
-  Widget _btn({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: color, size: 20),
-        onPressed: onTap,
-        constraints: BoxConstraints.tight(const Size(40, 40)),
+// Circular action button for swipe actions
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.onPressed,
+    required this.primaryColor,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color primaryColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: primaryColor.withValues(alpha: 0.15),
+            border: Border.all(
+              color: primaryColor.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(icon, color: primaryColor, size: 22),
+        ),
       ),
     );
   }

@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
+import 'package:rxdart/rxdart.dart';
+import 'dart:ui' as ui;
 
 /// Firestore repo (canonical storage is always user/solo),
 /// with optional workspace *context* tagging on writes.
@@ -31,6 +33,10 @@ class EnvelopeRepo {
   final fs.FirebaseFirestore _db;
   final String _userId;
   String? _workspaceId; // null => Solo mode
+
+  final Map<String, String> _userDisplayNameCache = {};
+  final Map<String, String> _userNicknameCache =
+      {}; // For future nickname feature
 
   // --------- Public getters ----------
   fs.FirebaseFirestore get db => _db;
@@ -90,6 +96,56 @@ class EnvelopeRepo {
     await _colRegistryEnvelopes().doc(envelopeId).delete().catchError((_) {});
   }
 
+  // Fetch display name for a user (with caching)
+  // Fetch display name for a user (with caching and nickname support)
+  Future<String> getUserDisplayName(String userId) async {
+    // Check cache first
+    if (_userDisplayNameCache.containsKey(userId)) {
+      return _userDisplayNameCache[userId]!;
+    }
+
+    // Check if current user has set a nickname for this person
+    try {
+      final currentUserDoc = await _db.collection('users').doc(_userId).get();
+      if (currentUserDoc.exists) {
+        final nicknames =
+            (currentUserDoc.data()?['nicknames'] as Map<String, dynamic>?) ??
+            {};
+        final nickname = nicknames[userId] as String?;
+        if (nickname != null && nickname.isNotEmpty) {
+          _userDisplayNameCache[userId] = nickname;
+          return nickname;
+        }
+      }
+    } catch (e) {
+      // Fall through to regular display name
+    }
+
+    // Fetch actual display name from user's document
+    try {
+      final userDoc = await _db.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        final displayName =
+            (userDoc.data()?['displayName'] as String?) ?? 'Unknown User';
+        _userDisplayNameCache[userId] = displayName;
+        return displayName;
+      }
+    } catch (e) {
+      // Silently fail
+    }
+
+    _userDisplayNameCache[userId] = 'Unknown User';
+    return 'Unknown User';
+  }
+
+  // Clear cached display name (call when nickname changes)
+  void clearUserDisplayNameCache(String userId) {
+    _userDisplayNameCache.remove(userId);
+  }
+
+  // Check if envelope belongs to current user
+  bool isMyEnvelope(Envelope envelope) => envelope.userId == _userId;
+
   /// Stream registry entries (for transfer pickers, etc.)
   Stream<List<Map<String, dynamic>>> get workspaceRegistryStream {
     if (!inWorkspace) {
@@ -104,18 +160,60 @@ class EnvelopeRepo {
 
   // --------------------------------- Streams ---------------------------------
   Stream<List<Envelope>> get envelopesStream {
-    return _colEnvelopes()
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map(
-          (s) => s.docs
+    // Solo mode: just return own envelopes
+    if (!inWorkspace) {
+      return _colEnvelopes()
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map(
+            (s) => s.docs
+                .map(
+                  (d) => Envelope.fromFirestore(
+                    d as fs.DocumentSnapshot<Map<String, dynamic>>,
+                  ),
+                )
+                .toList(),
+          );
+    }
+
+    // Workspace mode: combine streams from all members
+    return _db.collection('workspaces').doc(_workspaceId).snapshots().switchMap(
+      (workspaceSnap) {
+        if (!workspaceSnap.exists) {
+          return Stream.value(<Envelope>[]);
+        }
+
+        final workspaceData = workspaceSnap.data();
+        final members =
+            (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+        if (members.isEmpty) {
+          return Stream.value(<Envelope>[]);
+        }
+
+        // Create a stream for each member's envelopes
+        final memberStreams = members.keys.map((memberId) {
+          return _db
+              .collection('users')
+              .doc(memberId)
+              .collection('solo')
+              .doc('data')
+              .collection('envelopes')
+              .orderBy('createdAt', descending: false)
+              .snapshots()
               .map(
-                (d) => Envelope.fromFirestore(
-                  d as fs.DocumentSnapshot<Map<String, dynamic>>,
-                ),
-              )
-              .toList(),
-        );
+                (snap) => snap.docs
+                    .map((doc) => Envelope.fromFirestore(doc))
+                    .toList(),
+              );
+        }).toList();
+
+        // Combine all member streams into one
+        return CombineLatestStream.list(
+          memberStreams,
+        ).map((listOfLists) => listOfLists.expand((list) => list).toList());
+      },
+    );
   }
 
   Stream<List<EnvelopeGroup>> get groupsStream {
@@ -136,18 +234,56 @@ class EnvelopeRepo {
   }
 
   Stream<List<Transaction>> get transactionsStream {
-    return _colTxs()
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map(
-          (s) => s.docs
-              .map(
-                (d) => Transaction.fromFirestore(
-                  d as fs.DocumentSnapshot<Map<String, dynamic>>,
-                ),
-              )
-              .toList(),
-        );
+    // Solo mode: just your transactions
+    if (!inWorkspace) {
+      return _colTxs()
+          .orderBy('date', descending: true)
+          .snapshots()
+          .map(
+            (s) => s.docs
+                .map(
+                  (d) => Transaction.fromFirestore(
+                    d as fs.DocumentSnapshot<Map<String, dynamic>>,
+                  ),
+                )
+                .toList(),
+          );
+    }
+
+    // Workspace mode: fetch transactions from all workspace members
+    return _db.collection('workspaces').doc(_workspaceId).snapshots().asyncMap((
+      workspaceSnap,
+    ) async {
+      if (!workspaceSnap.exists) return <Transaction>[];
+
+      final workspaceData = workspaceSnap.data();
+      final members =
+          (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+      if (members.isEmpty) return <Transaction>[];
+
+      final List<Transaction> allTransactions = [];
+
+      for (final memberId in members.keys) {
+        final memberTxsSnap = await _db
+            .collection('users')
+            .doc(memberId)
+            .collection('solo')
+            .doc('data')
+            .collection('transactions')
+            .orderBy('date', descending: true)
+            .get();
+
+        for (final doc in memberTxsSnap.docs) {
+          allTransactions.add(Transaction.fromFirestore(doc));
+        }
+      }
+
+      // Sort all transactions by date
+      allTransactions.sort((a, b) => b.date.compareTo(a.date));
+
+      return allTransactions;
+    });
   }
 
   // ------------------------------ Workspace ----------------------------------
@@ -155,6 +291,12 @@ class EnvelopeRepo {
   /// writes with workspaceId for context/filtering.
   Future<void> setWorkspace(String? newWorkspaceId) async {
     _workspaceId = (newWorkspaceId?.isEmpty ?? true) ? null : newWorkspaceId;
+
+    // Store the workspaceId on the user document so we know they're in a workspace
+    await _db.collection('users').doc(_userId).set({
+      'workspaceId': _workspaceId,
+      'updatedAt': fs.FieldValue.serverTimestamp(),
+    }, fs.SetOptions(merge: true));
   }
 
   // -------------------------------- Envelopes --------------------------------
@@ -195,6 +337,9 @@ class EnvelopeRepo {
     required double startingAmount,
     double? targetAmount,
     String? groupId,
+    String? subtitle,
+    bool autoFillEnabled = false,
+    double? autoFillAmount,
   }) async {
     final doc = _colEnvelopes().doc();
 
@@ -244,6 +389,10 @@ class EnvelopeRepo {
         'targetOwnerId': null,
         'targetOwnerDisplayName': null,
         'targetEnvelopeName': null,
+        'emoji': null, // defaults to null
+        'subtitle': subtitle,
+        'autoFillEnabled': autoFillEnabled,
+        'autoFillAmount': autoFillAmount,
       });
     }
 
@@ -265,7 +414,11 @@ class EnvelopeRepo {
     required String envelopeId,
     String? name,
     double? targetAmount,
+    String? emoji, // ADD THIS
+    String? subtitle, // ADD THIS
     String? groupId,
+    bool? autoFillEnabled,
+    double? autoFillAmount,
   }) async {
     final updateData = <String, dynamic>{
       'updatedAt': fs.FieldValue.serverTimestamp(),
@@ -273,6 +426,11 @@ class EnvelopeRepo {
     if (name != null) updateData['name'] = name;
     if (groupId != null) updateData['groupId'] = groupId;
     if (targetAmount != null) updateData['targetAmount'] = targetAmount;
+    if (emoji != null) updateData['emoji'] = emoji; // ADD THIS
+    if (subtitle != null) updateData['subtitle'] = subtitle; // ADD THIS
+    if (autoFillEnabled != null)
+      updateData['autoFillEnabled'] = autoFillEnabled;
+    if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
 
     await _colEnvelopes().doc(envelopeId).update(updateData);
 
@@ -438,14 +596,34 @@ class EnvelopeRepo {
       });
 
       // Update both balances (values already mutated on Envelope models)
-      batch.update(_colEnvelopes().doc(from.id), {
-        'currentAmount': from.currentAmount,
-        'updatedAt': fs.FieldValue.serverTimestamp(),
-      });
-      batch.update(_colEnvelopes().doc(to.id), {
-        'currentAmount': to.currentAmount,
-        'updatedAt': fs.FieldValue.serverTimestamp(),
-      });
+      // Update both balances in their respective owner's collections
+      batch.update(
+        _db
+            .collection('users')
+            .doc(fromOwnerId)
+            .collection('solo')
+            .doc('data')
+            .collection('envelopes')
+            .doc(from.id),
+        {
+          'currentAmount': from.currentAmount,
+          'updatedAt': fs.FieldValue.serverTimestamp(),
+        },
+      );
+
+      batch.update(
+        _db
+            .collection('users')
+            .doc(toOwnerId)
+            .collection('solo')
+            .doc('data')
+            .collection('envelopes')
+            .doc(to.id),
+        {
+          'currentAmount': to.currentAmount,
+          'updatedAt': fs.FieldValue.serverTimestamp(),
+        },
+      );
 
       await batch.commit();
 

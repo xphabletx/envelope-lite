@@ -295,20 +295,32 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 6),
-                            ...filteredEnvelopes.map(
-                              (e) => _circleRow(
-                                label: e.name,
-                                selected: selectedIds.contains(e.id),
-                                onChanged: (v) => setState(() {
-                                  _didApplyExplicitInitialSelection =
-                                      true; // <-- add
+                            ...filteredEnvelopes.map((e) {
+                              final isMyEnvelope =
+                                  e.userId == widget.repo.currentUserId;
+                              return FutureBuilder<String>(
+                                future: widget.repo.getUserDisplayName(
+                                  e.userId,
+                                ),
+                                builder: (context, snapshot) {
+                                  final ownerName = snapshot.data ?? '';
+                                  final displayLabel = isMyEnvelope
+                                      ? e.name
+                                      : '$ownerName - ${e.name}';
 
-                                  v
-                                      ? selectedIds.add(e.id)
-                                      : selectedIds.remove(e.id);
-                                }),
-                              ),
-                            ),
+                                  return _circleRow(
+                                    label: displayLabel,
+                                    selected: selectedIds.contains(e.id),
+                                    onChanged: (v) => setState(() {
+                                      _didApplyExplicitInitialSelection = true;
+                                      v
+                                          ? selectedIds.add(e.id)
+                                          : selectedIds.remove(e.id);
+                                    }),
+                                  );
+                                },
+                              );
+                            }),
 
                             const Divider(height: 24),
 
@@ -389,63 +401,116 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                               )
                             else
                               ...shownTxs.map((t) {
-                                final envName =
-                                    envMap[t.envelopeId] ?? 'Unknown';
-                                final isTransfer =
-                                    t.type == TransactionType.transfer;
+                                return FutureBuilder<Map<String, String>>(
+                                  future: _getUserNamesForTransaction(t),
+                                  builder: (context, snapshot) {
+                                    final userNames = snapshot.data ?? {};
 
-                                String title;
-                                if (isTransfer) {
-                                  final peer =
-                                      envMap[t.transferPeerEnvelopeId ?? ''] ??
-                                      'Unknown';
-                                  title =
-                                      (t.transferDirection ==
-                                          TransferDirection.in_)
-                                      ? 'Transfer From $peer'
-                                      : 'Transfer To $peer';
-                                } else if (t.type == TransactionType.deposit) {
-                                  title = 'Deposit on $envName';
-                                } else {
-                                  title = 'Withdrawal on $envName';
-                                }
+                                    final envName =
+                                        envMap[t.envelopeId] ?? 'Unknown';
+                                    final isTransfer =
+                                        t.type == TransactionType.transfer;
+                                    final isMyEnvelope =
+                                        envelopes
+                                            .firstWhere(
+                                              (e) => e.id == t.envelopeId,
+                                              orElse: () => Envelope(
+                                                id: '',
+                                                name: '',
+                                                userId: '',
+                                              ),
+                                            )
+                                            .userId ==
+                                        widget.repo.currentUserId;
 
-                                final amountStr = _signed(t);
-                                final color = _col(t);
+                                    String title;
+                                    String? subtitle = t.description.isNotEmpty
+                                        ? t.description
+                                        : null;
 
-                                return ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(title),
-                                  subtitle: (t.description.isNotEmpty)
-                                      ? Text(
-                                          t.description,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        )
-                                      : null,
-                                  trailing: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        amountStr,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: color,
-                                        ),
+                                    if (isTransfer) {
+                                      // Show source and target with owner names
+                                      final sourceOwner =
+                                          userNames['source'] ?? 'Unknown';
+                                      final targetOwner =
+                                          userNames['target'] ?? 'Unknown';
+                                      final sourceName =
+                                          t.sourceEnvelopeName ?? 'Unknown';
+                                      final targetName =
+                                          t.targetEnvelopeName ?? 'Unknown';
+
+                                      if (t.transferDirection ==
+                                          TransferDirection.in_) {
+                                        // Money coming IN
+                                        title =
+                                            '$sourceOwner: $sourceName → $targetOwner: $targetName';
+                                      } else {
+                                        // Money going OUT
+                                        title =
+                                            '$sourceOwner: $sourceName → $targetOwner: $targetName';
+                                      }
+                                    } else {
+                                      // Deposit or Withdrawal
+                                      final ownerName =
+                                          userNames['owner'] ?? '';
+                                      final prefix = isMyEnvelope
+                                          ? ''
+                                          : '$ownerName: ';
+
+                                      if (t.type == TransactionType.deposit) {
+                                        title = '${prefix}Deposit on $envName';
+                                      } else {
+                                        title =
+                                            '${prefix}Withdrawal on $envName';
+                                      }
+                                    }
+
+                                    final amountStr = _signed(t);
+                                    final color = _col(t);
+
+                                    return ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        title,
+                                        style: const TextStyle(fontSize: 14),
                                       ),
-                                      Text(
-                                        DateFormat(
-                                          'MMM dd, HH:mm',
-                                        ).format(t.date),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade600,
-                                        ),
+                                      subtitle: subtitle != null
+                                          ? Text(
+                                              subtitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                            )
+                                          : null,
+                                      trailing: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            amountStr,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: color,
+                                            ),
+                                          ),
+                                          Text(
+                                            DateFormat(
+                                              'MMM dd, HH:mm',
+                                            ).format(t.date),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    );
+                                  },
                                 );
                               }),
                           ],
@@ -536,5 +601,30 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
       case TransactionType.transfer:
         return Colors.blue.shade800;
     }
+  }
+
+  Future<Map<String, String>> _getUserNamesForTransaction(Transaction t) async {
+    final Map<String, String> names = {};
+
+    if (t.type == TransactionType.transfer) {
+      // Get both source and target owner names
+      if (t.sourceOwnerId != null) {
+        names['source'] = await widget.repo.getUserDisplayName(
+          t.sourceOwnerId!,
+        );
+      }
+      if (t.targetOwnerId != null) {
+        names['target'] = await widget.repo.getUserDisplayName(
+          t.targetOwnerId!,
+        );
+      }
+    } else {
+      // Get single owner name for deposit/withdrawal
+      if (t.ownerId != null) {
+        names['owner'] = await widget.repo.getUserDisplayName(t.ownerId!);
+      }
+    }
+
+    return names;
   }
 }

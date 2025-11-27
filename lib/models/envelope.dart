@@ -8,6 +8,12 @@ class Envelope {
   double currentAmount;
   double? targetAmount; // Optional target
   String? groupId;
+  final String? emoji;
+  final String? subtitle;
+  final bool
+  autoFillEnabled; // NEW: Is this envelope included in Pay Day auto-fill?
+  final double?
+  autoFillAmount; // NEW: Amount to add on Pay Day (user must set manually)
 
   // NOTE: isShared is determined by the workspace model, but included for simplicity
   final bool isShared;
@@ -19,6 +25,10 @@ class Envelope {
     this.currentAmount = 0.0,
     this.targetAmount,
     this.groupId,
+    this.emoji,
+    this.subtitle,
+    this.autoFillEnabled = false, // NEW: Default to not auto-filling
+    this.autoFillAmount, // NEW: Default to null (must be set by user)
     this.isShared = true,
   });
 
@@ -29,6 +39,10 @@ class Envelope {
     double? currentAmount,
     double? targetAmount,
     String? groupId,
+    String? emoji,
+    String? subtitle,
+    bool? autoFillEnabled,
+    double? autoFillAmount,
     bool? isShared,
   }) {
     return Envelope(
@@ -38,6 +52,10 @@ class Envelope {
       currentAmount: currentAmount ?? this.currentAmount,
       targetAmount: targetAmount ?? this.targetAmount,
       groupId: groupId ?? this.groupId,
+      emoji: emoji ?? this.emoji,
+      subtitle: subtitle ?? this.subtitle,
+      autoFillEnabled: autoFillEnabled ?? this.autoFillEnabled,
+      autoFillAmount: autoFillAmount ?? this.autoFillAmount,
       isShared: isShared ?? this.isShared,
     );
   }
@@ -49,6 +67,10 @@ class Envelope {
       'currentAmount': currentAmount,
       'targetAmount': targetAmount,
       'groupId': groupId,
+      'emoji': emoji,
+      'subtitle': subtitle,
+      'autoFillEnabled': autoFillEnabled,
+      'autoFillAmount': autoFillAmount,
       'isShared': isShared,
     };
   }
@@ -75,6 +97,12 @@ class Envelope {
           ? null
           : _toDouble(data['targetAmount']),
       groupId: data['groupId'] as String?,
+      emoji: data['emoji'] as String?,
+      subtitle: data['subtitle'] as String?,
+      autoFillEnabled: (data['autoFillEnabled'] as bool?) ?? false,
+      autoFillAmount: (data['autoFillAmount'] == null)
+          ? null
+          : _toDouble(data['autoFillAmount']),
       isShared: (data['isShared'] as bool?) ?? true,
     );
   }

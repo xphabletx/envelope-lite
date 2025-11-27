@@ -7,7 +7,10 @@ import '../services/run_migrations_once.dart';
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
-  static final GoogleSignIn _google = GoogleSignIn(scopes: ['email']);
+  static final GoogleSignIn _google = GoogleSignIn(
+    scopes: <String>['email'],
+    signInOption: SignInOption.standard,
+  );
 
   /// Sign in with Google (returns the Firebase [UserCredential])
   static Future<UserCredential> signInWithGoogle() async {

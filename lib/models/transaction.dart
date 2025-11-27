@@ -19,6 +19,15 @@ class Transaction {
   final String? transferLinkId; // shared id linking the pair
   final TransferDirection? transferDirection; // in_ (credit) or out_ (debit)
 
+  // --- Owner/envelope metadata for rich display ---
+  final String? ownerId; // Owner of THIS envelope (for deposit/withdrawal)
+  final String? sourceOwnerId; // Owner of source envelope (for transfers)
+  final String? targetOwnerId; // Owner of target envelope (for transfers)
+  final String? sourceEnvelopeName; // Name of source envelope (for transfers)
+  final String? targetEnvelopeName; // Name of target envelope (for transfers)
+  final String? sourceOwnerDisplayName; // Display name of source owner
+  final String? targetOwnerDisplayName; // Display name of target owner
+
   Transaction({
     required this.id,
     required this.envelopeId,
@@ -30,6 +39,13 @@ class Transaction {
     this.transferPeerEnvelopeId,
     this.transferLinkId,
     this.transferDirection,
+    this.ownerId,
+    this.sourceOwnerId,
+    this.targetOwnerId,
+    this.sourceEnvelopeName,
+    this.targetEnvelopeName,
+    this.sourceOwnerDisplayName,
+    this.targetOwnerDisplayName,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,6 +59,13 @@ class Transaction {
       'transferPeerEnvelopeId': transferPeerEnvelopeId,
       'transferLinkId': transferLinkId,
       'transferDirection': transferDirection?.name,
+      'ownerId': ownerId,
+      'sourceOwnerId': sourceOwnerId,
+      'targetOwnerId': targetOwnerId,
+      'sourceEnvelopeName': sourceEnvelopeName,
+      'targetEnvelopeName': targetEnvelopeName,
+      'sourceOwnerDisplayName': sourceOwnerDisplayName,
+      'targetOwnerDisplayName': targetOwnerDisplayName,
     };
   }
 
@@ -61,6 +84,13 @@ class Transaction {
       transferPeerEnvelopeId: data['transferPeerEnvelopeId'] as String?,
       transferLinkId: data['transferLinkId'] as String?,
       transferDirection: _parseDirection(data['transferDirection']),
+      ownerId: data['ownerId'] as String?,
+      sourceOwnerId: data['sourceOwnerId'] as String?,
+      targetOwnerId: data['targetOwnerId'] as String?,
+      sourceEnvelopeName: data['sourceEnvelopeName'] as String?,
+      targetEnvelopeName: data['targetEnvelopeName'] as String?,
+      sourceOwnerDisplayName: data['sourceOwnerDisplayName'] as String?,
+      targetOwnerDisplayName: data['targetOwnerDisplayName'] as String?,
     );
   }
 
