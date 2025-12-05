@@ -1,8 +1,12 @@
 // lib/screens/workspace_gate.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/localization_service.dart';
 
 class WorkspaceGate extends StatefulWidget {
   const WorkspaceGate({
@@ -66,7 +70,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       // Get current user ID from Firebase Auth
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) {
-        throw Exception('No user logged in');
+        throw Exception(tr('error_no_user_logged_in'));
       }
 
       final ref = _db.collection('workspaces').doc();
@@ -86,7 +90,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Workspace created. Share this code: $code'),
+          content: Text('${tr('workspace_created_success')} $code'),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -95,9 +99,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       if (mounted) Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error creating workspace: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tr('error_creating_workspace')}: $e')),
+      );
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -113,7 +117,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       // Get current user ID
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) {
-        throw Exception('No user logged in');
+        throw Exception(tr('error_no_user_logged_in'));
       }
 
       final snap = await _db
@@ -125,7 +129,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       if (!mounted) return;
       if (snap.docs.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No workspace found for that code')),
+          SnackBar(content: Text(tr('error_workspace_not_found'))),
         );
         return;
       }
@@ -139,9 +143,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error joining workspace: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tr('error_joining_workspace')}: $e')),
+      );
     } finally {
       if (mounted) setState(() => _joining = false);
     }
@@ -160,13 +164,13 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Workspace name updated.')));
+      ).showSnackBar(SnackBar(content: Text(tr('workspace_name_updated'))));
       Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save name: $e')));
+      ).showSnackBar(SnackBar(content: Text('${tr('error_saving_name')}: $e')));
     } finally {
       if (mounted) setState(() => _savingName = false);
     }
@@ -192,22 +196,22 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Set Nickname for $currentName'),
+        title: Text('${tr('workspace_set_nickname_for')} $currentName'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This nickname is only visible to you.',
+              tr('workspace_nickname_privacy_note'),
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: nicknameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nickname',
-                hintText: 'e.g. Girl, Babe, Partner',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: tr('workspace_nickname'),
+                hintText: tr('workspace_nickname_hint'),
+                border: const OutlineInputBorder(),
               ),
               autofocus: true,
             ),
@@ -216,11 +220,11 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(tr('cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, nicknameCtrl.text.trim()),
-            child: const Text('Save'),
+            child: Text(tr('save')),
           ),
         ],
       ),
@@ -237,7 +241,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.isEmpty ? 'Nickname cleared' : 'Nickname saved: $result',
+            result.isEmpty
+                ? tr('workspace_nickname_cleared')
+                : '${tr('workspace_nickname_saved')}: $result',
           ),
         ),
       );
@@ -246,9 +252,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
       if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save nickname: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tr('error_saving_nickname')}: $e')),
+      );
     }
   }
 
@@ -265,7 +271,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          inManageMode ? 'Workspace Settings' : 'Start or Join Workspace',
+          inManageMode
+              ? tr('workspace_settings')
+              : tr('workspace_start_or_join'),
         ),
         elevation: 0,
         automaticallyImplyLeading: true,
@@ -285,9 +293,14 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                     icon: _creating
                         ? loadingIndicator
                         : const Icon(Icons.add_business),
-                    label: Text(
-                      _creating ? 'Creating...' : 'Create New Shared Workspace',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _creating
+                            ? tr('workspace_creating')
+                            : tr('workspace_create_new'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ),
@@ -297,9 +310,12 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                 ),
 
                 // --- Join Workspace ---
-                const Text(
-                  'Or join an existing one:',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                Text(
+                  tr('workspace_join_existing'),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -308,8 +324,8 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                   maxLength: 6,
                   enabled: !_creating && !_joining,
                   textCapitalization: TextCapitalization.characters,
-                  decoration: const InputDecoration(
-                    labelText: 'Enter 6-digit Join Code',
+                  decoration: InputDecoration(
+                    labelText: tr('workspace_enter_code'),
                     hintText: 'e.g. ABC123',
                     counterText: '',
                   ),
@@ -320,9 +336,14 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                   child: ElevatedButton.icon(
                     onPressed: _creating || _joining ? null : _join,
                     icon: _joining ? loadingIndicator : const Icon(Icons.login),
-                    label: Text(
-                      _joining ? 'Joining...' : 'Join Workspace',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _joining
+                            ? tr('workspace_joining')
+                            : tr('workspace_join_button'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ),
@@ -338,7 +359,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Join Code (immutable)',
+                          tr('workspace_join_code_label'),
                           style: TextStyle(
                             color: Colors.grey.shade700,
                             fontWeight: FontWeight.w600,
@@ -351,16 +372,16 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _displayNameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Display name (optional)',
-                      hintText: 'e.g. Team Love',
+                    decoration: InputDecoration(
+                      labelText: tr('workspace_display_name_optional'),
+                      hintText: tr('workspace_display_name_hint'),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Shown as "CODE (Display name)". Joining always uses CODE.',
+                      tr('workspace_display_name_explanation'),
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ),
@@ -379,7 +400,10 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                               ),
                             )
                           : const Icon(Icons.save),
-                      label: Text(_savingName ? 'Saving...' : 'Save'),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_savingName ? tr('saving') : tr('save')),
+                      ),
                     ),
                   ),
 
@@ -392,7 +416,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Workspace Members',
+                          tr('workspace_members_title'),
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -425,7 +449,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                         return Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            'No members yet',
+                            tr('workspace_no_members'),
                             style: TextStyle(color: Colors.grey.shade600),
                           ),
                         );
@@ -442,7 +466,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                               final displayName =
                                   (userData?['displayName'] as String?) ??
                                   (userData?['email'] as String?) ??
-                                  'Unknown User';
+                                  tr('unknown_user');
                               final email =
                                   (userData?['email'] as String?) ?? '';
 
@@ -474,8 +498,10 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                                     ),
                                   ),
                                   subtitle: Text(
-                                    isMe ? '$email (You)' : email,
-                                    style: TextStyle(fontSize: 12),
+                                    isMe
+                                        ? '$email (${tr('workspace_you')})'
+                                        : email,
+                                    style: const TextStyle(fontSize: 12),
                                   ),
                                   trailing: isMe
                                       ? null
@@ -488,7 +514,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                                             memberId,
                                             displayName,
                                           ),
-                                          tooltip: 'Set nickname',
+                                          tooltip: tr(
+                                            'workspace_set_nickname_tooltip',
+                                          ),
                                         ),
                                 ),
                               );

@@ -1,22 +1,35 @@
+// lib/widgets/envelope_creator.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+// REMOVED unused google_fonts import
 import '../services/envelope_repo.dart';
+import '../services/group_repo.dart';
+import '../models/envelope_group.dart';
+import '../screens/add_scheduled_payment_screen.dart';
+import '../widgets/group_editor.dart' as editor;
+import '../services/localization_service.dart';
+import '../providers/font_provider.dart';
 
 Future<void> showEnvelopeCreator(
   BuildContext context, {
   required EnvelopeRepo repo,
+  required GroupRepo groupRepo,
 }) async {
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _EnvelopeCreatorSheet(repo: repo),
+    builder: (_) => _EnvelopeCreatorSheet(repo: repo, groupRepo: groupRepo),
   );
 }
 
 class _EnvelopeCreatorSheet extends StatefulWidget {
-  const _EnvelopeCreatorSheet({required this.repo});
+  const _EnvelopeCreatorSheet({required this.repo, required this.groupRepo});
   final EnvelopeRepo repo;
+  final GroupRepo groupRepo;
 
   @override
   State<_EnvelopeCreatorSheet> createState() => _EnvelopeCreatorSheetState();
@@ -41,12 +54,24 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
 
   // Auto-fill state
   bool _autoFillEnabled = false;
+  bool _addScheduledPayment = false;
+
+  // Binder selection state
+  String? _selectedBinderId;
+  List<EnvelopeGroup> _binders = [];
+  bool _bindersLoaded = false;
+
+  // Emoji selection state
+  String? _selectedEmoji;
 
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+
+    // Load binders
+    _loadBinders();
 
     // Auto-focus the name field when the sheet opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,6 +109,140 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
     });
   }
 
+  Future<void> _loadBinders() async {
+    try {
+      final snapshot = await widget.groupRepo.groupsCol().get();
+      final allBinders = snapshot.docs
+          .map((doc) => EnvelopeGroup.fromFirestore(doc))
+          .toList();
+
+      // Deduplicate by ID
+      final uniqueBinders = <String, EnvelopeGroup>{};
+      for (final binder in allBinders) {
+        uniqueBinders[binder.id] = binder;
+      }
+
+      setState(() {
+        _binders = uniqueBinders.values.toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+        _bindersLoaded = true;
+      });
+    } catch (e) {
+      print('Error loading binders: $e');
+      setState(() => _bindersLoaded = true);
+    }
+  }
+
+  Future<void> _createNewBinder() async {
+    await editor.showGroupEditor(
+      context: context,
+      groupRepo: widget.groupRepo,
+      envelopeRepo: widget.repo,
+    );
+    // Reload binders after creation
+    await _loadBinders();
+  }
+
+  Future<void> _pickEmoji() async {
+    final controller = TextEditingController(text: _selectedEmoji ?? '');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          tr('appearance_choose_emoji'),
+          style: fontProvider.getTextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr('appearance_emoji_instructions'),
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                maxLength: 1,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 60),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
+                onChanged: (value) {
+                  if (value.characters.length > 1) {
+                    controller.text = value.characters.first;
+                    controller.selection = TextSelection.fromPosition(
+                      TextPosition(offset: controller.text.length),
+                    );
+                  }
+                },
+                onSubmitted: (value) {
+                  Navigator.pop(context);
+                  final emoji = value.characters.isEmpty
+                      ? null
+                      : value.characters.first;
+                  setState(() => _selectedEmoji = emoji);
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _selectedEmoji = null);
+            },
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('remove'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('cancel'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              final emoji = controller.text.characters.isEmpty
+                  ? null
+                  : controller.text.characters.first;
+              setState(() => _selectedEmoji = emoji);
+            },
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('save'),
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -108,9 +267,9 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
 
     if (widget.repo.db == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Database not initialized.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('error_db_not_initialized'))));
       return;
     }
 
@@ -125,7 +284,7 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
       if (parsed == null || parsed < 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid starting amount')),
+          SnackBar(content: Text(tr('error_invalid_starting_amount'))),
         );
         return;
       }
@@ -141,7 +300,7 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Invalid target')));
+        ).showSnackBar(SnackBar(content: Text(tr('error_invalid_target'))));
         return;
       }
       target = parsed;
@@ -154,20 +313,16 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
       if (rawAutoFill.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Please enter an auto-fill amount or disable auto-fill',
-            ),
-          ),
+          SnackBar(content: Text(tr('error_autofill_amount_required'))),
         );
         return;
       }
       final parsed = double.tryParse(rawAutoFill);
       if (parsed == null || parsed <= 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid auto-fill amount')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr('error_invalid_autofill'))));
         return;
       }
       autoFillAmount = parsed;
@@ -175,26 +330,42 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
 
     setState(() => _saving = true);
     try {
-      await widget.repo.createEnvelope(
+      final envelopeId = await widget.repo.createEnvelope(
         name: name,
         startingAmount: start,
         targetAmount: target,
         subtitle: subtitle.isEmpty ? null : subtitle,
+        emoji: _selectedEmoji, // Pass emoji to create method
         autoFillEnabled: _autoFillEnabled,
         autoFillAmount: autoFillAmount,
+        groupId: _selectedBinderId,
       );
 
       if (!mounted) return;
       Navigator.of(context).pop(); // close the sheet
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Envelope created successfully')),
-      );
+
+      // If user wants to add scheduled payment, open that screen
+      if (_addScheduledPayment && envelopeId != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddScheduledPaymentScreen(
+              repo: widget.repo,
+              preselectedEnvelopeId: envelopeId,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr('success_envelope_created'))));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error creating envelope: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tr('error_creating_envelope')}: $e')),
+      );
     }
   }
 
@@ -202,267 +373,469 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final media = MediaQuery.of(context);
-    final maxHeight = media.size.height * 0.9;
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
-      constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(26), blurRadius: 10),
-        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: media.viewInsets.bottom + 16,
-            top: 16,
-          ),
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'New Envelope',
-                        style: GoogleFonts.caveat(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).maybePop(),
-                      ),
-                    ],
+                  Icon(
+                    Icons.mail_outline,
+                    size: 28,
+                    color: theme.colorScheme.primary,
                   ),
-                  const SizedBox(height: 10),
-
-                  // Name
-                  TextFormField(
-                    controller: _nameCtrl,
-                    focusNode: _nameFocus,
-                    autofocus: true,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Name'),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Please enter a name'
-                        : null,
-                    onEditingComplete: () => _subtitleFocus.requestFocus(),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Subtitle (optional)
-                  TextFormField(
-                    controller: _subtitleCtrl,
-                    focusNode: _subtitleFocus,
-                    textCapitalization: TextCapitalization.sentences,
-                    textInputAction: TextInputAction.next,
-                    maxLength: 50,
-                    decoration: InputDecoration(
-                      labelText: 'Subtitle (optional)',
-                      hintText: 'e.g., "Weekly shopping"',
-                      hintStyle: GoogleFonts.caveat(
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey,
-                      ),
-                      prefixIcon: const Icon(Icons.edit_note),
-                    ),
-                    onEditingComplete: () => _amountFocus.requestFocus(),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Starting amount
-                  TextFormField(
-                    controller: _amtCtrl,
-                    focusNode: _amountFocus,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Starting amount (£)',
-                      hintText: 'e.g. 0.00',
-                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-                    ),
-                    validator: (v) {
-                      final s = (v ?? '').trim();
-                      if (s.isEmpty) return null; // allowed → treated as 0.00
-                      final d = double.tryParse(s);
-                      if (d == null || d < 0) return 'Enter a valid amount';
-                      return null;
-                    },
-                    onEditingComplete: () => _targetFocus.requestFocus(),
-                    onTap: () {
-                      _amtCtrl.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _amtCtrl.text.length,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Target
-                  TextFormField(
-                    controller: _targetCtrl,
-                    focusNode: _targetFocus,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: 'Target (optional) (£)',
-                      hintText: 'e.g. 1000.00',
-                      prefixIcon: Icon(Icons.flag_outlined),
-                    ),
-                    onEditingComplete: () {
-                      if (_autoFillEnabled) {
-                        _autoFillAmountFocus.requestFocus();
-                      } else {
-                        _handleSave();
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Auto-fill section
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withAlpha(51),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      tr('envelope_new'),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.monetization_on,
-                              color: theme.colorScheme.secondary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Pay Day Auto-Fill',
-                              style: GoogleFonts.caveat(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            const Spacer(),
-                            Switch(
-                              value: _autoFillEnabled,
-                              onChanged: (value) {
-                                setState(() => _autoFillEnabled = value);
-                              },
-                              activeColor: theme.colorScheme.secondary,
-                            ),
-                          ],
-                        ),
-                        if (_autoFillEnabled) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'This envelope will be automatically filled on Pay Day',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withAlpha(179),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _autoFillAmountCtrl,
-                            focusNode: _autoFillAmountFocus,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            textInputAction: TextInputAction.done,
-                            decoration: InputDecoration(
-                              labelText: 'Amount to add each Pay Day (£)',
-                              hintText: 'e.g. 50.00',
-                              prefixIcon: Icon(
-                                Icons.add_circle_outline,
-                                color: theme.colorScheme.secondary,
-                              ),
-                              filled: true,
-                              fillColor: theme.scaffoldBackgroundColor,
-                            ),
-                            validator: (v) {
-                              if (!_autoFillEnabled) return null;
-                              final s = (v ?? '').trim();
-                              if (s.isEmpty) {
-                                return 'Enter auto-fill amount or disable auto-fill';
-                              }
-                              final d = double.tryParse(s);
-                              if (d == null || d <= 0) {
-                                return 'Enter a valid amount';
-                              }
-                              return null;
-                            },
-                            onEditingComplete: _handleSave,
-                            onTap: () {
-                              _autoFillAmountCtrl.selection = TextSelection(
-                                baseOffset: 0,
-                                extentOffset: _autoFillAmountCtrl.text.length,
-                              );
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
                   ),
-                  const SizedBox(height: 16),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      icon: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(Icons.mail_outline),
-                      label: Text(
-                        'Create Envelope',
-                        style: GoogleFonts.caveat(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      onPressed: _saving ? null : _handleSave,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 16),
+
+            // Scrollable form content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  bottom: media.viewInsets.bottom + 24,
+                ),
+                physics: const ClampingScrollPhysics(),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name field
+                      TextField(
+                        controller: _nameCtrl,
+                        focusNode: _nameFocus,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: tr('envelope_name'),
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.mail),
+                        ),
+                        onEditingComplete: () => _subtitleFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Emoji picker
+                      InkWell(
+                        onTap: _pickEmoji,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: theme.colorScheme.outline,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.emoji_emotions),
+                              const SizedBox(width: 16),
+                              Text(
+                                tr('emoji'),
+                                style: fontProvider.getTextStyle(fontSize: 18),
+                              ),
+                              const Spacer(),
+                              Text(
+                                _selectedEmoji ?? '📨',
+                                style: const TextStyle(fontSize: 32),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Subtitle field
+                      TextField(
+                        controller: _subtitleCtrl,
+                        focusNode: _subtitleFocus,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.next,
+                        maxLength: 50,
+                        // FIX: Use .copyWith() instead of passing fontStyle parameter
+                        style: fontProvider
+                            .getTextStyle(fontSize: 18)
+                            .copyWith(fontStyle: FontStyle.italic),
+                        decoration: InputDecoration(
+                          labelText: tr('envelope_subtitle_optional'),
+                          labelStyle: fontProvider.getTextStyle(fontSize: 16),
+                          hintText: tr('envelope_subtitle_hint'),
+                          // FIX: Use .copyWith() here as well
+                          hintStyle: fontProvider
+                              .getTextStyle(fontSize: 16, color: Colors.grey)
+                              .copyWith(fontStyle: FontStyle.italic),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.notes),
+                        ),
+                        onEditingComplete: () => _amountFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Starting amount field
+                      TextField(
+                        controller: _amtCtrl,
+                        focusNode: _amountFocus,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        textInputAction: TextInputAction.next,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: tr('envelope_starting_amount'),
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                          hintText: 'e.g. 0.00',
+                          hintStyle: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.account_balance_wallet),
+                        ),
+                        onEditingComplete: () => _targetFocus.requestFocus(),
+                        onTap: () {
+                          _amtCtrl.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _amtCtrl.text.length,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Target field
+                      TextField(
+                        controller: _targetCtrl,
+                        focusNode: _targetFocus,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        textInputAction: TextInputAction.done,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: tr('envelope_target_amount'),
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                          hintText: 'e.g. 1000.00',
+                          hintStyle: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.flag),
+                        ),
+                        onEditingComplete: () {
+                          if (_autoFillEnabled) {
+                            _autoFillAmountFocus.requestFocus();
+                          } else {
+                            _handleSave();
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      Divider(color: theme.colorScheme.outline),
+                      const SizedBox(height: 16),
+
+                      // Binder selection section
+                      if (_bindersLoaded) ...[
+                        Text(
+                          tr('binder'),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String?>(
+                                value: _selectedBinderId,
+                                decoration: InputDecoration(
+                                  labelText: tr('envelope_add_to_binder'),
+                                  labelStyle: fontProvider.getTextStyle(
+                                    fontSize: 16,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  prefixIcon: const Icon(Icons.folder),
+                                ),
+                                items: [
+                                  DropdownMenuItem(
+                                    value: null,
+                                    child: Text(
+                                      tr('envelope_no_binder'),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ),
+                                  ..._binders.map((binder) {
+                                    final binderColor =
+                                        GroupColors.getThemedColor(
+                                          binder.colorName,
+                                          theme.colorScheme,
+                                        );
+                                    return DropdownMenuItem(
+                                      value: binder.id,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (binder.emoji != null) ...[
+                                            Text(
+                                              binder.emoji!,
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          Flexible(
+                                            child: Text(
+                                              binder.name,
+                                              style: fontProvider.getTextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: binderColor,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (value) {
+                                  setState(() => _selectedBinderId = value);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: Icon(
+                                Icons.add_circle,
+                                color: theme.colorScheme.secondary,
+                              ),
+                              tooltip: tr('group_create_binder_tooltip'),
+                              onPressed: _createNewBinder,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Divider(color: theme.colorScheme.outline),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Auto-fill section
+                      Text(
+                        tr('group_pay_day_auto'),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: _autoFillEnabled,
+                        onChanged: (value) {
+                          setState(() => _autoFillEnabled = value);
+                        },
+                        title: Text(
+                          tr('envelope_enable_autofill'),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text(
+                          tr('envelope_autofill_subtitle'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ),
+                      if (_autoFillEnabled) ...[
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _autoFillAmountCtrl,
+                          focusNode: _autoFillAmountFocus,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          textInputAction: TextInputAction.done,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: tr('envelope_autofill_amount'),
+                            labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                            hintText: 'e.g. 50.00',
+                            hintStyle: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: const Icon(Icons.autorenew),
+                            helperText: tr('envelope_autofill_helper'),
+                            helperStyle: fontProvider.getTextStyle(
+                              fontSize: 14,
+                            ),
+                          ),
+                          onEditingComplete: _handleSave,
+                          onTap: () {
+                            _autoFillAmountCtrl.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: _autoFillAmountCtrl.text.length,
+                            );
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+
+                      Divider(color: theme.colorScheme.outline),
+                      const SizedBox(height: 16),
+
+                      // Schedule Payment section
+                      Text(
+                        tr('envelope_schedule_payment'),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        value: _addScheduledPayment,
+                        onChanged: (value) {
+                          setState(() => _addScheduledPayment = value ?? false);
+                        },
+                        title: Text(
+                          tr('envelope_add_recurring_payment'),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text(
+                          tr('envelope_recurring_payment_subtitle'),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                        secondary: Icon(
+                          Icons.calendar_today,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Create button
+                      FilledButton(
+                        onPressed: _saving ? null : _handleSave,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  tr('envelope_create_button'),
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,8 +1,11 @@
 // lib/screens/onboarding_flow.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/user_service.dart';
 import '../providers/theme_provider.dart';
+import '../providers/font_provider.dart';
+import '../providers/app_preferences_provider.dart';
 import '../theme/app_themes.dart';
 
 class OnboardingFlow extends StatefulWidget {
@@ -19,6 +22,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   String? _photoURL;
   String _displayName = '';
   String _selectedTheme = AppThemes.latteId;
+  String _selectedFont =
+      FontProvider.systemDefaultId; // Start with system default
+  String _selectedLanguage = 'en'; // Placeholder
+  String _selectedCurrency = 'GBP'; // Placeholder
 
   Future<void> _completeOnboarding() async {
     // Create user profile in Firebase
@@ -28,10 +35,20 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       selectedTheme: _selectedTheme,
     );
 
-    // Update theme provider
+    // Update providers
     if (mounted) {
       final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
       await themeProvider.setTheme(_selectedTheme);
+
+      final fontProvider = Provider.of<FontProvider>(context, listen: false);
+      await fontProvider.setFont(_selectedFont);
+
+      final prefsProvider = Provider.of<AppPreferencesProvider>(
+        context,
+        listen: false,
+      );
+      await prefsProvider.setLanguage(_selectedLanguage);
+      await prefsProvider.setCurrency(_selectedCurrency);
     }
 
     // Mark onboarding complete
@@ -41,7 +58,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   void _nextStep() {
-    if (_currentStep < 2) {
+    if (_currentStep < 5) {
       setState(() => _currentStep++);
     } else {
       _completeOnboarding();
@@ -69,6 +86,24 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       _ThemePickerStep(
         selectedTheme: _selectedTheme,
         onThemeSelected: (themeId) => setState(() => _selectedTheme = themeId),
+        onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      _FontPickerStep(
+        selectedFont: _selectedFont,
+        onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
+        onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      _LanguagePickerStep(
+        selectedLanguage: _selectedLanguage,
+        onLanguageSelected: (lang) => setState(() => _selectedLanguage = lang),
+        onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      _CurrencyPickerStep(
+        selectedCurrency: _selectedCurrency,
+        onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
         onComplete: _completeOnboarding,
         onBack: _previousStep,
       ),
@@ -254,13 +289,13 @@ class _ThemePickerStep extends StatelessWidget {
   const _ThemePickerStep({
     required this.selectedTheme,
     required this.onThemeSelected,
-    required this.onComplete,
+    required this.onNext,
     required this.onBack,
   });
 
   final String selectedTheme;
   final Function(String) onThemeSelected;
-  final VoidCallback onComplete;
+  final VoidCallback onNext;
   final VoidCallback onBack;
 
   @override
@@ -281,8 +316,12 @@ class _ThemePickerStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'You can change this anytime in Settings',
-            style: Theme.of(context).textTheme.bodyLarge,
+            'Your theme and font will be applied once you complete setup',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
@@ -391,6 +430,305 @@ class _ThemePickerStep extends StatelessWidget {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
+                  onPressed: onNext,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// Step 4: Font Picker
+class _FontPickerStep extends StatelessWidget {
+  const _FontPickerStep({
+    required this.selectedFont,
+    required this.onFontSelected,
+    required this.onNext,
+    required this.onBack,
+  });
+
+  final String selectedFont;
+  final Function(String) onFontSelected;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final fonts = FontProvider.getAllFonts();
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const SizedBox(height: 32),
+          Text(
+            'Choose Your Font',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'This will be used throughout the app',
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          Expanded(
+            child: ListView.builder(
+              itemCount: fonts.length,
+              itemBuilder: (context, index) {
+                final font = fonts[index];
+                final isSelected = selectedFont == font.id;
+
+                // Get sample text style for this font
+                TextStyle sampleStyle;
+                switch (font.id) {
+                  case FontProvider.caveatId:
+                    sampleStyle = GoogleFonts.caveat(fontSize: 24);
+                    break;
+                  case FontProvider.indieFlowerId:
+                    sampleStyle = GoogleFonts.indieFlower(fontSize: 24);
+                    break;
+                  case FontProvider.robotoId:
+                    sampleStyle = GoogleFonts.roboto(fontSize: 24);
+                    break;
+                  case FontProvider.openSansId:
+                    sampleStyle = GoogleFonts.openSans(fontSize: 24);
+                    break;
+                  case FontProvider.systemDefaultId:
+                  default:
+                    sampleStyle = const TextStyle(fontSize: 24);
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    leading: isSelected
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 32,
+                          )
+                        : const Icon(Icons.radio_button_unchecked, size: 32),
+                    title: Text('The Quick Brown Fox', style: sampleStyle),
+                    subtitle: Text(
+                      '${font.name} - ${font.description}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    onTap: () => onFontSelected(font.id),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onBack,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: onNext,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// Step 5: Language Picker (Placeholder)
+class _LanguagePickerStep extends StatelessWidget {
+  const _LanguagePickerStep({
+    required this.selectedLanguage,
+    required this.onLanguageSelected,
+    required this.onNext,
+    required this.onBack,
+  });
+
+  final String selectedLanguage;
+  final Function(String) onLanguageSelected;
+  final VoidCallback onNext;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.language, size: 120, color: Colors.grey),
+          const SizedBox(height: 32),
+          Text(
+            'Select Language',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Currently only English is supported',
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 48),
+          Card(
+            child: ListTile(
+              leading: const Text('🇬🇧', style: TextStyle(fontSize: 32)),
+              title: const Text('English'),
+              subtitle: const Text('Default language'),
+              trailing: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 32,
+              ),
+              onTap: () {},
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onBack,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: onNext,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Step 6: Currency Picker (Placeholder)
+class _CurrencyPickerStep extends StatelessWidget {
+  const _CurrencyPickerStep({
+    required this.selectedCurrency,
+    required this.onCurrencySelected,
+    required this.onComplete,
+    required this.onBack,
+  });
+
+  final String selectedCurrency;
+  final Function(String) onCurrencySelected;
+  final VoidCallback onComplete;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.attach_money, size: 120, color: Colors.grey),
+          const SizedBox(height: 32),
+          Text(
+            'Select Currency',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Currently only GBP (£) is supported',
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 48),
+          Card(
+            child: ListTile(
+              leading: const Text('£', style: TextStyle(fontSize: 32)),
+              title: const Text('British Pound (GBP)'),
+              subtitle: const Text('Default currency'),
+              trailing: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 32,
+              ),
+              onTap: () {},
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onBack,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
                   onPressed: onComplete,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -403,7 +741,6 @@ class _ThemePickerStep extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );

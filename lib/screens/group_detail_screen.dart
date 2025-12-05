@@ -1,6 +1,7 @@
-// lib/screens/group_detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
@@ -8,7 +9,8 @@ import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../widgets/envelope_tile.dart';
 import '../widgets/group_editor.dart' as editor;
-import '../screens/envelopes_detail_screen.dart';
+import 'envelope/envelopes_detail_screen.dart';
+import 'stats_history_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   const GroupDetailScreen({
@@ -29,29 +31,39 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   final currency = NumberFormat.currency(symbol: '£');
 
-  // selection for bulk actions
   bool isMulti = false;
   final selected = <String>{};
 
-  // date range for transactions section
-  DateTime start = DateTime.now().subtract(const Duration(days: 30));
-  DateTime end = DateTime.now().add(
-    const Duration(hours: 1),
-  ); // include "today"
+  // Month navigation
+  late DateTime _viewingMonth;
 
-  Future<void> _pickRange() async {
-    final r = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: start, end: end),
-    );
-    if (r != null) {
-      setState(() {
-        start = DateTime(r.start.year, r.start.month, r.start.day);
-        end = DateTime(r.end.year, r.end.month, r.end.day, 23, 59, 59, 999);
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _viewingMonth = DateTime.now();
+  }
+
+  void _previousMonth() {
+    setState(() {
+      _viewingMonth = DateTime(_viewingMonth.year, _viewingMonth.month - 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _viewingMonth = DateTime(_viewingMonth.year, _viewingMonth.month + 1);
+    });
+  }
+
+  void _goToCurrentMonth() {
+    setState(() {
+      _viewingMonth = DateTime.now();
+    });
+  }
+
+  bool _isCurrentMonth() {
+    final now = DateTime.now();
+    return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
   }
 
   void _toggle(String id) {
@@ -66,41 +78,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     });
   }
 
-  Future<void> _renameGroup() async {
-    final ctrl = TextEditingController(text: widget.group.name);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Rename Group'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Group name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      final name = ctrl.text.trim();
-      if (name.isEmpty) return;
-      await widget.groupRepo.renameGroup(groupId: widget.group.id, name: name);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Group renamed')));
-    }
-  }
-
-  Future<void> _editMembership() async {
+  Future<void> _openSettings() async {
     await editor.showGroupEditor(
       context: context,
       groupRepo: widget.groupRepo,
@@ -109,49 +87,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
-  Future<void> _deleteGroupConfirm(List<Envelope> inGroupEnvelopes) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Group?'),
-        content: Text(
-          'This will remove the group "${widget.group.name}".\n\n'
-          'Envelopes remain, but their group will be cleared.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    // Clear all memberships then delete the group
-    await widget.envelopeRepo.updateGroupMembership(
-      groupId: widget.group.id,
-      newEnvelopeIds: <String>{},
-      allEnvelopesStream: widget.envelopeRepo.envelopesStream,
-    );
-    await widget.groupRepo.deleteGroup(groupId: widget.group.id);
-
-    if (!mounted) return;
-    Navigator.pop(context);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Group deleted')));
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final groupColor = GroupColors.getThemedColor(
+      widget.group.colorName ?? 'Primary',
+      theme.colorScheme,
+    );
+
     return StreamBuilder<List<Envelope>>(
-      stream: widget.envelopeRepo.envelopesStream,
+      stream: widget.envelopeRepo.envelopesStream(),
       builder: (_, sEnv) {
         final envs = sEnv.data ?? [];
         final inGroup = envs.where((e) => e.groupId == widget.group.id).toList()
@@ -169,9 +114,29 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           builder: (_, sTx) {
             final txs = sTx.data ?? [];
             final groupIds = inGroup.map((e) => e.id).toSet();
+
+            // Filter transactions for the viewing month
+            final monthStart = DateTime(
+              _viewingMonth.year,
+              _viewingMonth.month,
+              1,
+            );
+            final monthEnd = DateTime(
+              _viewingMonth.year,
+              _viewingMonth.month + 1,
+              0,
+              23,
+              59,
+              59,
+            );
+
             final shownTxs = txs.where((t) {
               final inChosen = groupIds.contains(t.envelopeId);
-              final inRange = !t.date.isBefore(start) && t.date.isBefore(end);
+              final inRange =
+                  t.date.isAfter(
+                    monthStart.subtract(const Duration(seconds: 1)),
+                  ) &&
+                  t.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
               return inChosen && inRange;
             }).toList()..sort((a, b) => b.date.compareTo(a.date));
 
@@ -181,217 +146,467 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             final totWdr = shownTxs
                 .where((t) => t.type == TransactionType.withdrawal)
                 .fold<double>(0, (s, t) => s + t.amount);
-            final totTrnOut = shownTxs
-                .where(
-                  (t) =>
-                      t.type == TransactionType.transfer &&
-                      t.transferDirection == TransferDirection.out_,
-                )
-                .fold<double>(0, (s, t) => s + t.amount);
 
             return Scaffold(
-              appBar: AppBar(
-                title: Text(
-                  widget.group.name,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Rename group',
-                    icon: const Icon(Icons.edit),
-                    onPressed: _renameGroup,
-                  ),
-                  IconButton(
-                    tooltip: 'Edit membership',
-                    icon: const Icon(Icons.people_alt),
-                    onPressed: _editMembership,
-                  ),
-                  IconButton(
-                    tooltip: 'Delete group',
-                    icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    onPressed: () => _deleteGroupConfirm(inGroup),
-                  ),
-                ],
-              ),
-              body:
-                  (sEnv.connectionState == ConnectionState.waiting &&
-                      envs.isEmpty)
-                  ? const Center(child: CircularProgressIndicator())
-                  : CustomScrollView(
-                      slivers: [
-                        // ===== Header stats =====
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: _StatsHeader(
-                              count: inGroup.length,
-                              totalSaved: totSaved,
-                              totalTarget: totTarget,
-                              percent: pct,
-                              totDep: totDep,
-                              totWdr: totWdr,
-                              totTrnOut: totTrnOut,
-                              onPickRange: _pickRange,
-                              rangeLabel:
-                                  '${DateFormat('MMM d, yyyy').format(start)} — ${DateFormat('MMM d, yyyy').format(end)}',
-                              currency: currency,
-                            ),
+              backgroundColor: theme.scaffoldBackgroundColor,
+              body: CustomScrollView(
+                slivers: [
+                  // Gorgeous App Bar
+                  SliverAppBar(
+                    expandedHeight: 200,
+                    pinned: true,
+                    backgroundColor: groupColor,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [groupColor, groupColor.withAlpha(204)],
                           ),
                         ),
-
-                        // ===== Envelopes in group =====
-                        SliverToBoxAdapter(
+                        child: SafeArea(
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                            child: Row(
+                            padding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                const Text(
-                                  'Envelopes in this Group',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 64,
+                                      height: 64,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withAlpha(51),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 3,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          widget.group.emoji ?? '📁',
+                                          style: const TextStyle(fontSize: 36),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.group.name,
+                                            style: GoogleFonts.caveat(
+                                              fontSize: 38,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${inGroup.length} envelopes',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const Spacer(),
-                                if (isMulti)
-                                  TextButton(
-                                    onPressed: () => setState(() {
-                                      selected.clear();
-                                      isMulti = false;
-                                    }),
-                                    child: const Text('Cancel'),
-                                  ),
                               ],
                             ),
                           ),
                         ),
-                        SliverList.separated(
-                          itemBuilder: (_, i) {
-                            final e = inGroup[i];
-                            final isSel = selected.contains(e.id);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: EnvelopeTile(
-                                envelope: e,
-                                allEnvelopes: envs,
-                                isSelected: isSel,
-                                onLongPress: () => _toggle(e.id),
-                                onTap: isMulti
-                                    ? () => _toggle(e.id)
-                                    : () {
-                                        // open details screen (keeps parity with home)
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => /* reuse existing */
-                                                EnvelopeDetailScreen(
-                                                  envelope: e,
-                                                  repo: widget.envelopeRepo,
-                                                ),
-                                          ),
-                                        );
-                                      },
+                      ),
+                    ),
+                    actions: [
+                      // Stats/History button
+                      IconButton(
+                        icon: const Icon(Icons.bar_chart, color: Colors.white),
+                        tooltip: 'View full history',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => StatsHistoryScreen(
                                 repo: widget.envelopeRepo,
-                                isMultiSelectMode: isMulti,
-                              ),
-                            );
-                          },
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemCount: inGroup.length,
-                        ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-                        // ===== Transactions =====
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: const Text(
-                              'Transactions',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                initialGroupIds: {widget.group.id},
+                                title: '${widget.group.name} - History',
                               ),
                             ),
-                          ),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Colors.white),
+                        onPressed: _openSettings,
+                        tooltip: 'Group Settings',
+                      ),
+                    ],
+                  ),
+
+                  // Stats Header
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: groupColor.withAlpha(51),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        if (shownTxs.isEmpty)
-                          const SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(
-                                child: Text(
-                                  'No transactions in this range.',
-                                  style: TextStyle(color: Colors.grey),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _StatColumn(
+                                  label: 'Total Saved',
+                                  value: currency.format(totSaved),
+                                  color: groupColor,
+                                  large: true,
+                                ),
+                                _StatColumn(
+                                  label: 'Target',
+                                  value: currency.format(totTarget),
+                                  color: theme.colorScheme.onSurface.withAlpha(
+                                    179,
+                                  ),
+                                ),
+                                _StatColumn(
+                                  label: 'Progress',
+                                  value: '${pct.toStringAsFixed(0)}%',
+                                  color: groupColor,
+                                  large: true,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: LinearProgressIndicator(
+                                value: totTarget > 0
+                                    ? (totSaved / totTarget).clamp(0.0, 1.0)
+                                    : 0.0,
+                                minHeight: 12,
+                                backgroundColor: Colors.grey.shade200,
+                                valueColor: AlwaysStoppedAnimation(groupColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Envelopes Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Envelopes',
+                            style: GoogleFonts.caveat(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (isMulti)
+                            TextButton(
+                              onPressed: () => setState(() {
+                                selected.clear();
+                                isMulti = false;
+                              }),
+                              child: Text(
+                                'Cancel',
+                                style: GoogleFonts.caveat(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                          )
-                        else
-                          SliverList.separated(
-                            itemBuilder: (_, i) {
-                              final t = shownTxs[i];
-                              final label = switch (t.type) {
-                                TransactionType.deposit =>
-                                  'Deposit on ${_envName(t.envelopeId, inGroup)}',
-                                TransactionType.withdrawal =>
-                                  'Withdrawal on ${_envName(t.envelopeId, inGroup)}',
-                                TransactionType.transfer =>
-                                  (t.transferDirection == TransferDirection.in_)
-                                      ? 'Transfer From ${_envName(t.transferPeerEnvelopeId, inGroup)}'
-                                      : 'Transfer To ${_envName(t.transferPeerEnvelopeId, inGroup)}',
-                              };
-                              final color = _col(t);
-                              final signed = _signed(t);
+                        ],
+                      ),
+                    ),
+                  ),
 
-                              return ListTile(
-                                dense: true,
-                                title: Text(label),
-                                subtitle: t.description.isNotEmpty
-                                    ? Text(
-                                        t.description,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      )
-                                    : null,
-                                trailing: Column(
+                  if (inGroup.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.mail_outline,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No envelopes in this group',
+                                style: GoogleFonts.caveat(
+                                  fontSize: 24,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap settings to add envelopes',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverList.separated(
+                        itemBuilder: (_, i) {
+                          final e = inGroup[i];
+                          final isSel = selected.contains(e.id);
+                          return EnvelopeTile(
+                            envelope: e,
+                            allEnvelopes: envs,
+                            isSelected: isSel,
+                            onLongPress: () => _toggle(e.id),
+                            onTap: isMulti
+                                ? () => _toggle(e.id)
+                                : () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EnvelopeDetailScreen(
+                                          envelopeId: e.id,
+                                          repo: widget.envelopeRepo,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            repo: widget.envelopeRepo,
+                            isMultiSelectMode: isMulti,
+                          );
+                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemCount: inGroup.length,
+                      ),
+                    ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                  // Month navigation bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildMonthNavigationBar(theme),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                  // Transactions stats for the month
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _StatColumn(
+                              label: 'Deposited',
+                              value: currency.format(totDep),
+                              color: Colors.green.shade700,
+                            ),
+                            _StatColumn(
+                              label: 'Withdrawn',
+                              value: currency.format(totWdr),
+                              color: Colors.red.shade700,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                  // Transactions Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Transactions',
+                        style: GoogleFonts.caveat(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  if (shownTxs.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.receipt_long_outlined,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No transactions this month',
+                                style: GoogleFonts.caveat(
+                                  fontSize: 24,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverList.separated(
+                        itemBuilder: (_, i) {
+                          final t = shownTxs[i];
+                          final envName = _envName(t.envelopeId, inGroup);
+                          final label = switch (t.type) {
+                            TransactionType.deposit => 'Deposit → $envName',
+                            TransactionType.withdrawal =>
+                              'Withdrawal → $envName',
+                            TransactionType.transfer =>
+                              (t.transferDirection == TransferDirection.in_)
+                                  ? 'Transfer From ${_envName(t.transferPeerEnvelopeId, inGroup)}'
+                                  : 'Transfer To ${_envName(t.transferPeerEnvelopeId, inGroup)}',
+                          };
+                          final color = _col(t);
+                          final signed = _signed(t);
+                          final icon = _icon(t);
+
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: color.withAlpha(26),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(icon, color: color, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        label,
+                                        style: GoogleFonts.caveat(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (t.description.isNotEmpty)
+                                        Text(
+                                          t.description,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme.colorScheme.onSurface
+                                                .withAlpha(153),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
                                       signed,
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: color,
+                                        fontSize: 16,
                                       ),
                                     ),
                                     Text(
-                                      DateFormat(
-                                        'MMM dd, HH:mm',
-                                      ).format(t.date),
+                                      DateFormat('MMM dd').format(t.date),
                                       style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
+                                        fontSize: 11,
+                                        color: theme.colorScheme.onSurface
+                                            .withAlpha(128),
                                       ),
                                     ),
                                   ],
                                 ),
-                              );
-                            },
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
-                            itemCount: shownTxs.length,
-                          ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-                      ],
+                              ],
+                            ),
+                          );
+                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemCount: shownTxs.length,
+                      ),
                     ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                ],
+              ),
               floatingActionButton: isMulti
                   ? FloatingActionButton.extended(
-                      backgroundColor: Colors.black,
+                      backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                       icon: const Icon(Icons.delete_forever),
-                      label: Text('Delete (${selected.length})'),
+                      label: Text(
+                        'Delete (${selected.length})',
+                        style: GoogleFonts.caveat(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () async {
                         await widget.envelopeRepo.deleteEnvelopes(selected);
                         setState(() {
@@ -400,21 +615,90 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         });
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Deleted envelopes')),
+                          const SnackBar(content: Text('Envelopes deleted')),
                         );
                       },
                     )
                   : FloatingActionButton.extended(
-                      backgroundColor: Colors.black,
+                      backgroundColor: groupColor,
                       foregroundColor: Colors.white,
-                      icon: const Icon(Icons.people_alt),
-                      label: const Text('Edit Membership'),
-                      onPressed: _editMembership,
+                      icon: const Icon(Icons.settings),
+                      label: Text(
+                        'Edit Group',
+                        style: GoogleFonts.caveat(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: _openSettings,
                     ),
             );
           },
         );
       },
+    );
+  }
+
+  // Month navigation bar with arrows
+  Widget _buildMonthNavigationBar(ThemeData theme) {
+    final monthName = DateFormat('MMMM yyyy').format(_viewingMonth);
+    final isCurrentMonth = _isCurrentMonth();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          // Previous month button
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _previousMonth,
+            color: theme.colorScheme.primary,
+          ),
+
+          // Current month label (tappable to return to current month)
+          Expanded(
+            child: InkWell(
+              onTap: isCurrentMonth ? null : _goToCurrentMonth,
+              child: Column(
+                children: [
+                  Text(
+                    monthName,
+                    style: GoogleFonts.caveat(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (!isCurrentMonth)
+                    Text(
+                      'Tap to return to current month',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // Next month button (disabled if current or future)
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: isCurrentMonth ? null : _nextMonth,
+            color: isCurrentMonth
+                ? theme.colorScheme.onSurface.withOpacity(0.3)
+                : theme.colorScheme.primary,
+          ),
+        ],
+      ),
     );
   }
 
@@ -442,148 +726,62 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Color _col(Transaction t) {
     switch (t.type) {
       case TransactionType.deposit:
-        return Colors.green.shade800;
+        return Colors.green.shade700;
       case TransactionType.withdrawal:
-        return Colors.red.shade800;
+        return Colors.red.shade700;
       case TransactionType.transfer:
-        return Colors.blue.shade800;
+        return Colors.blue.shade700;
+    }
+  }
+
+  IconData _icon(Transaction t) {
+    switch (t.type) {
+      case TransactionType.deposit:
+        return Icons.arrow_downward;
+      case TransactionType.withdrawal:
+        return Icons.arrow_upward;
+      case TransactionType.transfer:
+        return Icons.swap_horiz;
     }
   }
 }
 
-class _StatsHeader extends StatelessWidget {
-  const _StatsHeader({
-    required this.count,
-    required this.totalSaved,
-    required this.totalTarget,
-    required this.percent,
-    required this.totDep,
-    required this.totWdr,
-    required this.totTrnOut,
-    required this.onPickRange,
-    required this.rangeLabel,
-    required this.currency,
-  });
+class _StatColumn extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final bool large;
 
-  final int count;
-  final double totalSaved;
-  final double totalTarget;
-  final double percent;
-  final double totDep;
-  final double totWdr;
-  final double totTrnOut;
-  final VoidCallback onPickRange;
-  final String rangeLabel;
-  final NumberFormat currency;
+  const _StatColumn({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.large = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final pctStr = '${percent.isFinite ? percent.toStringAsFixed(1) : '0.0'}%';
-
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          children: [
-            // Top row: count + date range
-            Row(
-              children: [
-                Text(
-                  '$count envelopes',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const Spacer(),
-                InkWell(
-                  onTap: onPickRange,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_month, size: 18),
-                      const SizedBox(width: 6),
-                      Text(
-                        rangeLabel,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const Icon(Icons.arrow_drop_down),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Totals + progress
-            Row(
-              children: [
-                Expanded(
-                  child: _statTile(
-                    'Total Saved',
-                    currency.format(totalSaved),
-                    bold: true,
-                  ),
-                ),
-                Expanded(
-                  child: _statTile(
-                    'Total Target',
-                    currency.format(totalTarget),
-                  ),
-                ),
-                Expanded(child: _statTile('To Target', pctStr, bold: true)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: totalTarget > 0
-                    ? (totalSaved / totalTarget).clamp(0.0, 1.0)
-                    : 0.0,
-                minHeight: 8,
-                backgroundColor: Colors.grey.shade200,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.black),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _statTile(
-                    'Deposited',
-                    currency.format(totDep),
-                    bold: true,
-                  ),
-                ),
-                Expanded(
-                  child: _statTile('Withdrawn', currency.format(totWdr)),
-                ),
-                Expanded(
-                  child: _statTile(
-                    'Transferred Out',
-                    currency.format(totTrnOut),
-                  ),
-                ),
-              ],
-            ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.caveat(
+            fontSize: large ? 24 : 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
-
-  Widget _statTile(String k, String v, {bool bold = false}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(k, style: TextStyle(color: Colors.grey.shade600)),
-      const SizedBox(height: 4),
-      Text(
-        v,
-        style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w600),
-      ),
-    ],
-  );
 }

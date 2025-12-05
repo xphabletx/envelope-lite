@@ -15,6 +15,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _pass = TextEditingController();
   bool _busy = false;
   String? _error;
+  bool _obscurePassword = true; // Password visibility toggle
 
   @override
   void dispose() {
@@ -34,8 +35,7 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     try {
-      await AuthService.signInWithGoogle(); // runs migrations internally
-      // AuthGate will route onward automatically.
+      await AuthService.signInWithGoogle();
     } on FirebaseAuthException catch (e) {
       final msg = e.message ?? 'Authentication error.';
       setState(() => _error = msg);
@@ -117,6 +117,8 @@ class _SignInScreenState extends State<SignInScreen> {
 
     String? sheetError;
     bool sheetBusy = false;
+    bool obscurePass = true;
+    bool obscureConfirm = true;
 
     String? emailValidator(String? v) {
       final val = (v ?? '').trim();
@@ -170,7 +172,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           password: passCtrl.text,
                           displayName: null,
                         );
-                        if (!ctx2.mounted) return; // guard ctx2 after await
+                        if (!ctx2.mounted) return;
                         Navigator.of(ctx2).pop();
                         _showSnack('Account created. You are signed in.');
                       } on FirebaseAuthException catch (e) {
@@ -217,11 +219,11 @@ class _SignInScreenState extends State<SignInScreen> {
                           const Text(
                             'Create Account',
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           Form(
                             key: formKey,
                             child: Column(
@@ -230,28 +232,59 @@ class _SignInScreenState extends State<SignInScreen> {
                                   controller: emailCtrl,
                                   keyboardType: TextInputType.emailAddress,
                                   textCapitalization: TextCapitalization.none,
+                                  style: const TextStyle(fontSize: 16),
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
+                                    labelStyle: TextStyle(fontSize: 16),
                                   ),
                                   validator: emailValidator,
                                   textInputAction: TextInputAction.next,
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 16),
                                 TextFormField(
                                   controller: passCtrl,
-                                  obscureText: true,
-                                  decoration: const InputDecoration(
+                                  obscureText: obscurePass,
+                                  style: const TextStyle(fontSize: 16),
+                                  decoration: InputDecoration(
                                     labelText: 'Password',
+                                    labelStyle: const TextStyle(fontSize: 16),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        obscurePass
+                                            ? Icons.visibility_off
+                                            : Icons.visibility,
+                                      ),
+                                      onPressed: () {
+                                        setSheet(
+                                          () => obscurePass = !obscurePass,
+                                        );
+                                      },
+                                    ),
                                   ),
                                   validator: passValidator,
                                   textInputAction: TextInputAction.next,
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 16),
                                 TextFormField(
                                   controller: confirmCtrl,
-                                  obscureText: true,
-                                  decoration: const InputDecoration(
+                                  obscureText: obscureConfirm,
+                                  style: const TextStyle(fontSize: 16),
+                                  decoration: InputDecoration(
                                     labelText: 'Confirm Password',
+                                    labelStyle: const TextStyle(fontSize: 16),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        obscureConfirm
+                                            ? Icons.visibility_off
+                                            : Icons.visibility,
+                                      ),
+                                      onPressed: () {
+                                        setSheet(
+                                          () =>
+                                              obscureConfirm = !obscureConfirm,
+                                        );
+                                      },
+                                    ),
                                   ),
                                   validator: confirmValidator,
                                   onFieldSubmitted: (_) => onCreate(),
@@ -260,28 +293,24 @@ class _SignInScreenState extends State<SignInScreen> {
                             ),
                           ),
                           if (sheetError != null) ...[
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color.fromARGB(
-                                  255,
-                                  0,
-                                  0,
-                                  0,
-                                ).withValues(alpha: 0.08),
+                                color: Colors.red.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 sheetError!,
                                 style: const TextStyle(
-                                  color: Color.fromARGB(255, 0, 0, 0),
+                                  color: Colors.red,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
                           SizedBox(
                             width: double.infinity,
                             height: 48,
@@ -296,7 +325,10 @@ class _SignInScreenState extends State<SignInScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Text('Create account'),
+                                  : const Text(
+                                      'Create account',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
                             ),
                           ),
                         ],
@@ -316,122 +348,257 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final busy = _busy;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        title: const Text('Sign in', style: TextStyle(color: Colors.black)),
+    // Get the app's current theme but override font to system default
+    final appTheme = Theme.of(context);
+    final signInTheme = appTheme.copyWith(
+      textTheme: appTheme.textTheme.apply(
+        fontFamily: null, // Force system default
+        bodyColor: appTheme.colorScheme.onSurface,
+        displayColor: appTheme.colorScheme.onSurface,
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-          return SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_error != null)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color.fromARGB(
-                                255,
-                                0,
-                                0,
-                                0,
-                              ).withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(8),
+      inputDecorationTheme: appTheme.inputDecorationTheme.copyWith(
+        labelStyle: TextStyle(
+          fontSize: 18,
+          fontFamily: null,
+          color: appTheme.colorScheme.onSurface,
+        ),
+        hintStyle: TextStyle(
+          fontSize: 18,
+          fontFamily: null,
+          color: appTheme.colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      ),
+    );
+
+    return Theme(
+      data: signInTheme,
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          title: Text(
+            'Sign in',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              fontFamily: null, // System default
+              color: appTheme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_error != null)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.red.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 16,
+                                  fontFamily: null,
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(
-                                color: Color.fromARGB(255, 0, 0, 0),
+                          TextField(
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            textCapitalization: TextCapitalization.none,
+                            textInputAction: TextInputAction.next,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontFamily: null,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              labelStyle: TextStyle(
+                                fontSize: 18,
+                                fontFamily: null,
+                              ),
+                            ),
+                            onSubmitted: (_) =>
+                                FocusScope.of(context).nextFocus(),
+                          ),
+                          const SizedBox(height: 20),
+                          TextField(
+                            controller: _pass,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontFamily: null,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              labelStyle: const TextStyle(
+                                fontSize: 18,
+                                fontFamily: null,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  size: 24,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                            onSubmitted: (_) => _signInEmail(),
+                          ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: busy ? null : _forgotPassword,
+                              child: const Text(
+                                'Forgot password?',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontFamily: null,
+                                ),
                               ),
                             ),
                           ),
-                        TextField(
-                          controller: _email,
-                          keyboardType: TextInputType.emailAddress,
-                          textCapitalization: TextCapitalization.none,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          onSubmitted: (_) =>
-                              FocusScope.of(context).nextFocus(),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _pass,
-                          obscureText: true,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: 'Password',
-                          ),
-                          onSubmitted: (_) => _signInEmail(),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: busy ? null : _forgotPassword,
-                            child: const Text('Forgot password?'),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: busy ? null : _signInEmail,
-                                child: const Text('Sign in'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: busy ? null : _signInEmail,
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(
+                                      0,
+                                      56,
+                                    ), // Increased from 52
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: const Text(
+                                      'Sign in',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontFamily: null,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: busy
-                                    ? null
-                                    : _openCreateAccountSheet,
-                                child: const Text('Create account'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: busy
+                                      ? null
+                                      : _openCreateAccountSheet,
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(
+                                      0,
+                                      56,
+                                    ), // Increased from 52
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: const Text(
+                                      'Create account',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontFamily: null,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 48,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(
-                              Icons.g_mobiledata,
-                              size: 28,
-                              color: Colors.black,
-                            ),
-                            label: const Text('Continue with Google'),
-                            onPressed: busy ? null : _withGoogle,
+                            ],
                           ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          'Solo Mode is automatic after sign-in. If you’ve joined a workspace before, we’ll reopen it.',
-                          style: TextStyle(color: Colors.grey.shade700),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color: appTheme.colorScheme.onSurface
+                                      .withValues(alpha: 0.3),
+                                  thickness: 1,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: appTheme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: null,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color: appTheme.colorScheme.onSurface
+                                      .withValues(alpha: 0.3),
+                                  thickness: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            height: 56, // Increased from 52
+                            child: OutlinedButton.icon(
+                              icon: Icon(
+                                Icons.g_mobiledata,
+                                size: 32,
+                                color: appTheme.colorScheme.onSurface,
+                              ),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: const Text(
+                                  'Continue with Google',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontFamily: null,
+                                  ),
+                                ),
+                              ),
+                              onPressed: busy ? null : _withGoogle,
+                            ),
+                          ),
+                          const Spacer(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,11 +1,18 @@
+// lib/widgets/envelope_tile.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+// REMOVED unused google_fonts import
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/envelope.dart';
 import '../services/envelope_repo.dart';
 import 'emoji_pie_chart.dart';
 import 'quick_action_modal.dart';
 import '../models/transaction.dart';
+import '../services/localization_service.dart';
+import '../providers/font_provider.dart';
 
 class EnvelopeTile extends StatefulWidget {
   const EnvelopeTile({
@@ -39,6 +46,9 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   late Animation<Offset> _slideAnimation;
   bool _isRevealed = false;
 
+  // FIX: Calculate dynamic offset based on button widths (3 buttons * 48px + 2 gaps * 6px + padding = 164px)
+  static const double _actionButtonsWidth = 164.0;
+
   @override
   void initState() {
     super.initState();
@@ -50,9 +60,10 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       duration: const Duration(milliseconds: 250),
     );
 
+    // Animation from 0 to 1 (we'll calculate pixel offset in the builder)
     _slideAnimation = Tween<Offset>(
       begin: Offset.zero,
-      end: const Offset(-0.45, 0),
+      end: const Offset(-1.0, 0),
     ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
   }
 
@@ -96,18 +107,25 @@ class _EnvelopeTileState extends State<EnvelopeTile>
 
   Future<void> _pickEmoji() async {
     final controller = TextEditingController(text: _customEmoji ?? '');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Choose emoji'),
+        title: Text(
+          tr('appearance_choose_emoji'),
+          style: fontProvider.getTextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Tap the box below and select an emoji from your keyboard',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              Text(
+                tr('appearance_emoji_instructions'),
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -153,11 +171,23 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 emoji: null,
               );
             },
-            child: const Text('Remove'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('remove'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('cancel'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -171,7 +201,16 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 emoji: emoji,
               );
             },
-            child: const Text('Save'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('save'),
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -180,30 +219,67 @@ class _EnvelopeTileState extends State<EnvelopeTile>
 
   Future<void> _editSubtitle() async {
     final controller = TextEditingController(text: _subtitle ?? '');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add subtitle'),
+        title: Text(
+          tr('envelope_add_subtitle'),
+          style: fontProvider.getTextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'e.g., "Weekly shopping"',
-            border: OutlineInputBorder(),
+          // FIX: Use .copyWith instead of parameter
+          style: fontProvider
+              .getTextStyle(fontSize: 18)
+              .copyWith(fontStyle: FontStyle.italic),
+          decoration: InputDecoration(
+            hintText: tr('envelope_subtitle_hint'),
+            // FIX: Use .copyWith instead of parameter
+            hintStyle: fontProvider
+                .getTextStyle(fontSize: 16, color: Colors.grey)
+                .copyWith(fontStyle: FontStyle.italic),
+            border: const OutlineInputBorder(),
           ),
           maxLength: 50,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, ''),
-            child: const Text('Clear'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('clear'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('cancel'),
+                style: fontProvider.getTextStyle(fontSize: 18),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Save'),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                tr('save'),
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -237,6 +313,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(symbol: '£');
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     final isMyEnvelope = widget.envelope.userId == widget.repo.currentUserId;
     final showOwnerLabel = widget.repo.inWorkspace && !isMyEnvelope;
@@ -305,7 +382,8 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                             widget.envelope.userId,
                           ),
                           builder: (context, snapshot) {
-                            final ownerName = snapshot.data ?? 'Unknown';
+                            final ownerName =
+                                snapshot.data ?? tr('unknown_user');
                             return Text(
                               ownerName,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -317,7 +395,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                         ),
                       Text(
                         widget.envelope.name,
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,
@@ -342,11 +420,15 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                   onTap: _editSubtitle,
                   child: Text(
                     '"$_subtitle"',
-                    style: GoogleFonts.caveat(
-                      fontSize: 16,
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
+                    // FIX: Use .copyWith instead of parameter
+                    style: fontProvider
+                        .getTextStyle(fontSize: 16)
+                        .copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -450,8 +532,21 @@ class _EnvelopeTileState extends State<EnvelopeTile>
               ),
             ),
           ),
-          // Foreground sliding tile
-          SlideTransition(position: _slideAnimation, child: tileContent),
+          // Foreground sliding tile - FIX: Convert animation value to pixel offset
+          AnimatedBuilder(
+            animation: _slideAnimation,
+            builder: (context, child) {
+              // Calculate actual pixel offset: animation value (-1.0) * button width (164px) = -164px
+              final pixelOffset = Offset(
+                _slideAnimation.value.dx * _actionButtonsWidth,
+                0,
+              );
+              return Transform.translate(
+                offset: pixelOffset,
+                child: tileContent,
+              );
+            },
+          ),
         ],
       ),
     );

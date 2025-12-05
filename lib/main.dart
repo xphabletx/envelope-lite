@@ -6,19 +6,28 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
+import 'providers/font_provider.dart';
+import 'providers/app_preferences_provider.dart';
 import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
 import 'screens/onboarding_flow.dart';
 import 'screens/home_screen.dart';
-import 'screens/sign_in_screen.dart'; // Your existing auth screen
+import 'screens/sign_in_screen.dart';
+
+// DEBUG FLAG: Set to true to always show onboarding (for testing)
+const bool _FORCE_ONBOARDING_FOR_TESTING = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => FontProvider()),
+        ChangeNotifierProvider(create: (_) => AppPreferencesProvider()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -29,13 +38,23 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    return Consumer2<ThemeProvider, FontProvider>(
+      builder: (context, themeProvider, fontProvider, child) {
+        final baseTheme = themeProvider.currentTheme;
+        final fontTheme = fontProvider.getTextTheme();
 
-    return MaterialApp(
-      title: 'Envelope Lite',
-      theme: themeProvider.currentTheme, // 🔥 Dynamic theme!
-      home: const AuthGate(),
-      routes: {'/home': (context) => const HomeScreenWrapper()},
+        return MaterialApp(
+          title: 'Envelope Lite',
+          theme: baseTheme.copyWith(
+            textTheme: fontTheme.apply(
+              bodyColor: baseTheme.colorScheme.onSurface,
+              displayColor: baseTheme.colorScheme.onSurface,
+            ),
+          ),
+          home: const AuthGate(),
+          routes: {'/home': (context) => const HomeScreenWrapper()},
+        );
+      },
     );
   }
 }
@@ -48,8 +67,16 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        // Show loading while checking auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // Not signed in - show sign in screen
         if (!snapshot.hasData) {
-          return const SignInScreen(); // Your existing sign-in
+          return const SignInScreen();
         }
 
         final user = snapshot.data!;
@@ -61,25 +88,10 @@ class AuthGate extends StatelessWidget {
           listen: false,
         ).initialize(userService);
 
-        // Check if user has completed onboarding
-        return FutureBuilder<bool>(
-          future: userService.hasCompletedOnboarding(),
-          builder: (context, onboardingSnapshot) {
-            if (!onboardingSnapshot.hasData) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            if (!onboardingSnapshot.data!) {
-              // Show onboarding
-              return OnboardingFlow(userService: userService);
-            }
-
-            // Show home
-            return HomeScreenWrapper();
-          },
-        );
+        // --- BYPASS MODIFICATION ---
+        // We skip the FutureBuilder that checks userService.hasCompletedOnboarding()
+        // and immediately return the Home Screen.
+        return const HomeScreenWrapper();
       },
     );
   }

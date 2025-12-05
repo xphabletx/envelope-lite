@@ -1,3 +1,4 @@
+// lib/services/group_repo.dart
 import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 import 'envelope_repo.dart';
 
@@ -11,13 +12,11 @@ class GroupRepo {
   String? get _workspaceId => _envelopeRepo.workspaceId;
   String get _userId => _envelopeRepo.currentUserId!;
 
-  fs.CollectionReference<Map<String, dynamic>> _groupsCol() {
-    if (_inWorkspace) {
+  fs.CollectionReference<Map<String, dynamic>> groupsCol() {
+    if (_inWorkspace && _workspaceId != null) {
       return _db
-          .collection('users')
-          .doc(_userId)
-          .collection('solo')
-          .doc('data')
+          .collection('workspaces')
+          .doc(_workspaceId)
           .collection('groups');
     } else {
       return _db
@@ -29,28 +28,47 @@ class GroupRepo {
     }
   }
 
-  Future<String> createGroup({required String name}) async {
-    final ref = _groupsCol().doc();
+  Future<String> createGroup({
+    required String name,
+    String? emoji,
+    String? colorName,
+    bool? payDayEnabled, // NEW
+  }) async {
+    final ref = groupsCol().doc();
     await ref.set({
       'id': ref.id,
       'name': name,
+      'userId': _userId,
+      'emoji': emoji ?? '📁',
+      'colorName': colorName ?? 'Primary',
+      'payDayEnabled': payDayEnabled ?? false, // NEW
       'createdAt': fs.FieldValue.serverTimestamp(),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
     return ref.id;
   }
 
-  Future<void> renameGroup({
+  Future<void> updateGroup({
     required String groupId,
-    required String name,
+    String? name,
+    String? emoji,
+    String? colorName,
+    bool? payDayEnabled, // NEW
   }) async {
-    await _groupsCol().doc(groupId).update({
-      'name': name,
+    final updateData = <String, dynamic>{
       'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (name != null) updateData['name'] = name;
+    if (emoji != null) updateData['emoji'] = emoji;
+    if (colorName != null) updateData['colorName'] = colorName;
+    if (payDayEnabled != null)
+      updateData['payDayEnabled'] = payDayEnabled; // NEW
+
+    await groupsCol().doc(groupId).update(updateData);
   }
 
   Future<void> deleteGroup({required String groupId}) async {
-    await _groupsCol().doc(groupId).delete();
+    await groupsCol().doc(groupId).delete();
   }
 }

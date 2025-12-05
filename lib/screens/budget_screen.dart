@@ -1,9 +1,16 @@
+// lib/screens/budget_screen.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart'; // NEW IMPORT
+import 'package:google_fonts/google_fonts.dart'; // Kept as requested
 import 'package:intl/intl.dart';
 import '../models/envelope.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
+import '../services/localization_service.dart';
+import '../providers/font_provider.dart'; // NEW IMPORT
 
 class BudgetScreen extends StatelessWidget {
   const BudgetScreen({super.key, required this.repo});
@@ -42,9 +49,10 @@ class BudgetScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currencyFormatter = NumberFormat.currency(symbol: '£');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return StreamBuilder<List<Envelope>>(
-      stream: repo.envelopesStream,
+      stream: repo.envelopesStream(),
       builder: (context, envSnapshot) {
         final envelopes = envSnapshot.data ?? [];
 
@@ -83,8 +91,9 @@ class BudgetScreen extends StatelessWidget {
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
                 title: Text(
-                  'Budget Overview',
-                  style: GoogleFonts.caveat(
+                  tr('budget_overview_title'),
+                  // UPDATED: FontProvider
+                  style: fontProvider.getTextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
@@ -122,8 +131,9 @@ class BudgetScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Total Saved',
-                            style: GoogleFonts.caveat(
+                            tr('budget_total_saved'),
+                            // UPDATED: FontProvider
+                            style: fontProvider.getTextStyle(
                               fontSize: 24,
                               color: Colors.white.withAlpha(230),
                               fontWeight: FontWeight.bold,
@@ -142,7 +152,7 @@ class BudgetScreen extends StatelessWidget {
                           Row(
                             children: [
                               Text(
-                                'Target: ${currencyFormatter.format(totalTarget)}',
+                                '${tr('budget_target')}: ${currencyFormatter.format(totalTarget)}',
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: Colors.white.withAlpha(204),
@@ -176,8 +186,9 @@ class BudgetScreen extends StatelessWidget {
 
                     // This Month Stats
                     Text(
-                      'This Month',
-                      style: GoogleFonts.caveat(
+                      tr('budget_this_month'),
+                      // UPDATED: FontProvider
+                      style: fontProvider.getTextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -189,7 +200,7 @@ class BudgetScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _StatCard(
-                            title: 'Income',
+                            title: tr('budget_income'),
                             amount: monthlyStats['deposits']!,
                             color: Colors.green,
                             icon: Icons.arrow_downward,
@@ -199,7 +210,7 @@ class BudgetScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _StatCard(
-                            title: 'Spent',
+                            title: tr('budget_spent'),
                             amount: monthlyStats['withdrawals']!,
                             color: Colors.red,
                             icon: Icons.arrow_upward,
@@ -229,8 +240,9 @@ class BudgetScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Net Change',
-                            style: GoogleFonts.caveat(
+                            tr('budget_net_change'),
+                            // UPDATED: FontProvider
+                            style: fontProvider.getTextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color: monthlyStats['netChange']! >= 0
@@ -258,8 +270,9 @@ class BudgetScreen extends StatelessWidget {
 
                     // Envelope Progress
                     Text(
-                      'Envelope Progress',
-                      style: GoogleFonts.caveat(
+                      tr('budget_envelope_progress'),
+                      // UPDATED: FontProvider
+                      style: fontProvider.getTextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -276,19 +289,19 @@ class BudgetScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           _ProgressRow(
-                            label: 'Total Envelopes',
+                            label: tr('budget_total_envelopes'),
                             value: '${envelopes.length}',
                             theme: theme,
                           ),
                           const Divider(height: 24),
                           _ProgressRow(
-                            label: 'With Targets',
+                            label: tr('budget_with_targets'),
                             value: '${envelopesWithTargets.length}',
                             theme: theme,
                           ),
                           const Divider(height: 24),
                           _ProgressRow(
-                            label: 'Fully Funded',
+                            label: tr('budget_fully_funded'),
                             value: '$fullyFundedCount',
                             theme: theme,
                             valueColor: Colors.green.shade700,
@@ -301,8 +314,9 @@ class BudgetScreen extends StatelessWidget {
 
                     // Top Envelopes by Balance
                     Text(
-                      'Top 5 Envelopes',
-                      style: GoogleFonts.caveat(
+                      tr('budget_top_envelopes'),
+                      // UPDATED: FontProvider
+                      style: fontProvider.getTextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -331,7 +345,8 @@ class BudgetScreen extends StatelessWidget {
                                     ),
                                     title: Text(
                                       envelope.name,
-                                      style: GoogleFonts.caveat(
+                                      // UPDATED: FontProvider
+                                      style: fontProvider.getTextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -379,6 +394,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -396,7 +412,8 @@ class _StatCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: GoogleFonts.caveat(
+                // UPDATED: FontProvider
+                style: fontProvider.getTextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: color,

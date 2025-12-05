@@ -9,6 +9,7 @@ class AppThemes {
   static const String lavenderID = 'lavender_dreams';
   static const String mintId = 'mint_fresh';
   static const String monoId = 'monochrome';
+  static const String singularityId = 'singularity';
 
   // Get theme by ID
   static ThemeData getTheme(String themeId) {
@@ -23,6 +24,8 @@ class AppThemes {
         return mintFresh;
       case monoId:
         return monochrome;
+      case singularityId:
+        return singularity;
       default:
         return latteLove;
     }
@@ -41,6 +44,8 @@ class AppThemes {
         return 'Mint Fresh';
       case monoId:
         return 'Monochrome';
+      case singularityId:
+        return 'Singularity';
       default:
         return 'Latte Love';
     }
@@ -83,6 +88,13 @@ class AppThemes {
         description: 'Classic black, white, and greys',
         primaryColor: const Color(0xFF424242),
         surfaceColor: const Color(0xFFE8E8E8),
+      ),
+      ThemeOption(
+        id: singularityId,
+        name: 'Singularity',
+        description: 'Deep space blues and cosmic teal',
+        primaryColor: const Color(0xFF00BCD4),
+        surfaceColor: const Color(0xFF1A2332),
       ),
     ];
   }
@@ -279,6 +291,52 @@ class AppThemes {
       color: const Color(0xFFE8E8E8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+  );
+
+  // 6. SINGULARITY (Dark mode - Deep space blues and cosmic teal)
+  static final ThemeData singularity = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFF00BCD4), // Cosmic teal
+      secondary: Color(0xFF2196F3), // Space blue
+      surface: Color(0xFF1A2332), // Dark blue-grey
+      onPrimary: Color(0xFF0A1929), // Very dark blue
+      onSecondary: Colors.white,
+      onSurface: Colors.white, // White text
+      background: Color(0xFF0A1929), // Deep space blue
+    ),
+    scaffoldBackgroundColor: const Color(0xFF0A1929),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF0A1929),
+      elevation: 0,
+      titleTextStyle: TextStyle(
+        fontFamily: 'Caveat',
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+      iconTheme: IconThemeData(color: Color(0xFF00BCD4)),
+    ),
+    textTheme: GoogleFonts.caveatTextTheme().copyWith(
+      bodyLarge: const TextStyle(color: Colors.white),
+      bodyMedium: const TextStyle(color: Color(0xFFB0BEC5)),
+      titleLarge: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    ),
+    cardTheme: CardThemeData(
+      color: const Color(0xFF1A2332),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: Color(0xFF0A1929),
+      selectedItemColor: Color(0xFF00BCD4),
+      unselectedItemColor: Color(0xFF546E7A),
     ),
   );
 }

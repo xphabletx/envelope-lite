@@ -1,48 +1,63 @@
 // lib/screens/home_screen.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // NEW IMPORT
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' as fs;
-import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts/google_fonts.dart'; // Kept as requested
 
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/run_migrations_once.dart';
 import '../services/user_service.dart';
+import '../providers/font_provider.dart'; // NEW IMPORT
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/calculator_widget.dart';
+import '../widgets/partner_visibility_toggle.dart';
+import '../widgets/partner_badge.dart';
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
 import '../models/user_profile.dart';
-import '../providers/theme_provider.dart';
 
-import '../theme/app_themes.dart';
+import '../services/workspace_helper.dart';
+import '../services/localization_service.dart';
 
-import 'envelopes_detail_screen.dart';
-import 'workspace_gate.dart';
+import '../screens/envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
 import 'settings_screen.dart';
-import 'pay_day_screen.dart';
-import 'calendar_screen.dart';
+import 'pay_day_preview_screen.dart';
+import 'calendar_screen_v2.dart';
 import 'budget_screen.dart';
+import 'groups_home_screen.dart';
 
-// Unified SpeedDial child style
+// Themed SpeedDial child style (matches envelope detail screen)
 SpeedDialChild sdChild({
+  required BuildContext context,
   required IconData icon,
   required String label,
   required VoidCallback onTap,
 }) {
+  final theme = Theme.of(context);
+  final iconColor = theme.colorScheme.onPrimaryContainer;
+  final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
   return SpeedDialChild(
-    child: Icon(icon, color: Colors.black),
-    backgroundColor: Colors.grey.shade200,
+    child: Icon(icon, color: iconColor),
+    backgroundColor: theme.colorScheme.primaryContainer,
     label: label,
-    labelBackgroundColor: Colors.white,
+    // UPDATED: Use FontProvider
+    labelStyle: fontProvider.getTextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+    ),
+    labelBackgroundColor: theme.colorScheme.surface,
     onTap: onTap,
   );
 }
@@ -107,93 +122,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<String?> _fetchWorkspaceName(String id) async {
-    try {
-      final snap = await widget.repo.db.collection('workspaces').doc(id).get();
-      if (!snap.exists) return null;
-      final data = snap.data();
-
-      // Prefer displayName over name (joinCode)
-      final displayName = (data?['displayName'] as String?)?.trim();
-      if (displayName?.isNotEmpty == true) {
-        return displayName;
-      }
-
-      // Fallback to name (which is the join code)
-      return (data?['name'] as String?)?.trim();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _openWorkspaceGate() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (gateCtx) => WorkspaceGate(
-          onJoined: (wsId) async {
-            // Set repo context first
-            await widget.repo.setWorkspace(wsId);
-
-            // Try to fetch a friendly name
-            final fetchedName = await _fetchWorkspaceName(wsId);
-            setState(() {
-              _workspaceName = fetchedName;
-            });
-
-            // Persist both id + name locally
-            await _saveWorkspaceSelection(id: wsId, name: fetchedName);
-
-            // Start listening to workspace changes
-            _listenToWorkspaceChanges(wsId);
-
-            if (!mounted) return;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('Joined workspace.')));
-          },
-        ),
-      ),
-    );
-  }
-
-  Future<void> _leaveWorkspace() async {
-    final wsId = widget.repo.workspaceId;
-
-    if (wsId != null) {
-      // Remove yourself from the workspace members list
-      try {
-        await widget.repo.db.collection('workspaces').doc(wsId).update({
-          'members.${widget.repo.currentUserId}': fs.FieldValue.delete(),
-        });
-      } catch (e) {
-        // Workspace might not exist anymore, ignore error
-      }
-    }
-
-    await _saveWorkspaceSelection(id: null, name: null);
-    widget.repo.setWorkspace(null);
-
-    if (!mounted) return;
-    setState(() => _workspaceName = null);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Left workspace. Now in Solo Mode.')),
-    );
-  }
-
-  String get _workspaceLabel {
-    if (!widget.repo.inWorkspace) return 'Solo Mode';
-
-    // Show displayName if set, otherwise show the join code
-    if (_workspaceName?.isNotEmpty == true) {
-      return _workspaceName!;
-    }
-
-    // Fallback to join code
-    final id = widget.repo.workspaceId!;
-    final short = id.length > 6 ? id.substring(0, 6) : id;
-    return short;
-  }
-
   void _listenToWorkspaceChanges(String workspaceId) {
     widget.repo.db.collection('workspaces').doc(workspaceId).snapshots().listen(
       (snap) {
@@ -224,13 +152,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // ADD THIS LINE
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     final pages = <Widget>[
       _AllEnvelopes(repo: widget.repo, groupRepo: _groupRepo),
-      _GroupsPage(repo: widget.repo, groupRepo: _groupRepo),
+      GroupsHomeScreen(repo: widget.repo, groupRepo: _groupRepo),
       BudgetScreen(repo: widget.repo),
-      CalendarScreen(repo: widget.repo),
+      CalendarScreenV2(repo: widget.repo),
     ];
 
     return Scaffold(
@@ -241,23 +170,25 @@ class _HomeScreenState extends State<HomeScreen> {
             widget.repo.currentUserId,
           ).userProfileStream,
           builder: (context, snapshot) {
-            final displayName = snapshot.data?.displayName ?? 'Team Envelopes';
+            final displayName =
+                snapshot.data?.displayName ?? tr('your_envelopes');
             return Text(
               displayName,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Colors.black,
+              // UPDATED: Use FontProvider
+              style: fontProvider.getTextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
               ),
             );
           },
         ),
         elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
         actions: [
-          // Settings cog
           IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings, color: Colors.black),
+            tooltip: tr('settings'),
+            icon: Icon(Icons.settings, color: theme.colorScheme.primary),
             onPressed: _openSettings,
           ),
         ],
@@ -269,31 +200,33 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey.shade600,
         elevation: 8,
         type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: GoogleFonts.caveat(
+        // UPDATED: Use FontProvider
+        selectedLabelStyle: fontProvider.getTextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
-        unselectedLabelStyle: GoogleFonts.caveat(fontSize: 14),
-        items: const [
+        // UPDATED: Use FontProvider
+        unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.mail_outline),
-            activeIcon: Icon(Icons.mail),
-            label: 'Envelopes',
+            icon: const Icon(Icons.mail_outline),
+            activeIcon: const Icon(Icons.mail),
+            label: tr('home_envelopes_tab'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.people_alt_outlined),
-            activeIcon: Icon(Icons.people_alt),
-            label: 'Groups',
+            icon: const Icon(Icons.folder_open_outlined),
+            activeIcon: const Icon(Icons.folder_copy),
+            label: tr('home_groups_tab'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: Icon(Icons.account_balance_wallet),
-            label: 'Budget',
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: const Icon(Icons.account_balance_wallet),
+            label: tr('home_budget_tab'),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            activeIcon: Icon(Icons.calendar_today),
-            label: 'Calendar',
+            icon: const Icon(Icons.calendar_today_outlined),
+            activeIcon: const Icon(Icons.calendar_today),
+            label: tr('home_calendar_tab'),
           ),
         ],
         currentIndex: _selectedIndex,
@@ -316,8 +249,8 @@ class _AllEnvelopes extends StatefulWidget {
 class _AllEnvelopesState extends State<_AllEnvelopes> {
   bool isMulti = false;
   final selected = <String>{};
-
   String _sortBy = 'name';
+  bool _showPartnerEnvelopes = true; // NEW: Partner visibility toggle
 
   void _toggle(String id) {
     setState(() {
@@ -342,7 +275,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
       barrierDismissible: true,
       builder: (dialogContext) {
         final calcKey = GlobalKey<CalculatorWidgetState>();
-
         if (_calcDisplay != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             calcKey.currentState?.restoreState(
@@ -353,7 +285,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
             );
           });
         }
-
         return WillPopScope(
           onWillPop: () async {
             final state = calcKey.currentState;
@@ -374,8 +305,8 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   void _openDetails(Envelope envelope) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            EnvelopeDetailScreen(envelope: envelope, repo: widget.repo),
+        builder: (_) =>
+            EnvelopeDetailScreen(envelopeId: envelope.id, repo: widget.repo),
       ),
     );
   }
@@ -395,25 +326,25 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   }
 
   void _openPayDayScreen() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PayDayScreen(repo: widget.repo)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            PayDayPreviewScreen(repo: widget.repo, groupRepo: widget.groupRepo),
+      ),
+    );
   }
 
   List<Envelope> _sortEnvelopes(List<Envelope> envelopes) {
     final sorted = envelopes.toList();
-
     switch (_sortBy) {
       case 'name':
         sorted.sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
         break;
-
       case 'balance':
         sorted.sort((a, b) => b.currentAmount.compareTo(a.currentAmount));
         break;
-
       case 'target':
         sorted.sort((a, b) {
           final aTarget = a.targetAmount ?? 0;
@@ -421,7 +352,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
           return bTarget.compareTo(aTarget);
         });
         break;
-
       case 'percent':
         sorted.sort((a, b) {
           final aPercent = (a.targetAmount != null && a.targetAmount! > 0)
@@ -434,43 +364,45 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
         });
         break;
     }
-
     return sorted;
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // ADD THIS LINE
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return StreamBuilder<List<Envelope>>(
-      stream: widget.repo.envelopesStream,
+      stream: widget.repo.envelopesStream(
+        showPartnerEnvelopes: _showPartnerEnvelopes,
+      ),
       builder: (c1, s1) {
         final envs = s1.data ?? [];
         return StreamBuilder<List<EnvelopeGroup>>(
           stream: widget.repo.groupsStream,
           builder: (c2, s2) {
-            final _unusedGroups = s2.data ?? const <EnvelopeGroup>[];
             return StreamBuilder<List<Transaction>>(
               stream: widget.repo.transactionsStream,
               builder: (c3, s3) {
-                final _ = s3.data ?? [];
-
                 final sortedEnvs = _sortEnvelopes(envs);
-
                 return Scaffold(
                   appBar: AppBar(
                     title: Row(
                       children: [
-                        // Pay Day button
                         ElevatedButton.icon(
                           onPressed: _openPayDayScreen,
                           icon: const Icon(Icons.monetization_on, size: 20),
-                          label: Text(
-                            'PAY DAY',
-                            style: GoogleFonts.caveat(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 22,
-                              color: Colors.white,
+                          label: FittedBox(
+                            // UPDATED: FittedBox
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              tr('home_pay_day_button'),
+                              // UPDATED: FontProvider
+                              style: fontProvider.getTextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -490,103 +422,26 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                     ),
                     elevation: 0,
                     actions: [
-                      // Sort dropdown
                       PopupMenuButton<String>(
-                        tooltip: 'Sort by',
+                        tooltip: tr('sort_by'),
                         icon: const Icon(Icons.sort, color: Colors.black),
-                        onSelected: (value) {
-                          setState(() {
-                            _sortBy = value;
-                          });
-                        },
+                        onSelected: (value) => setState(() => _sortBy = value),
                         itemBuilder: (context) => [
                           PopupMenuItem(
                             value: 'name',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.sort_by_alpha,
-                                  color: _sortBy == 'name'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'A-Z',
-                                  style: TextStyle(
-                                    fontWeight: _sortBy == 'name'
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Text(tr('sort_az')),
                           ),
                           PopupMenuItem(
                             value: 'balance',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.monetization_on,
-                                  color: _sortBy == 'balance'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Highest Balance',
-                                  style: TextStyle(
-                                    fontWeight: _sortBy == 'balance'
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Text(tr('sort_balance')),
                           ),
                           PopupMenuItem(
                             value: 'target',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.flag,
-                                  color: _sortBy == 'target'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Highest Target',
-                                  style: TextStyle(
-                                    fontWeight: _sortBy == 'target'
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Text(tr('sort_target')),
                           ),
                           PopupMenuItem(
                             value: 'percent',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.percent,
-                                  color: _sortBy == 'percent'
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '% to Target',
-                                  style: TextStyle(
-                                    fontWeight: _sortBy == 'percent'
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Text(tr('sort_percent')),
                           ),
                         ],
                       ),
@@ -599,40 +454,135 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                   ),
                   body: sortedEnvs.isEmpty && !s1.hasData
                       ? const Center(child: CircularProgressIndicator())
-                      : ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                          children: sortedEnvs.map((e) {
-                            final isSel = selected.contains(e.id);
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: EnvelopeTile(
-                                envelope: e,
-                                allEnvelopes: envs,
-                                isSelected: isSel,
-                                onLongPress: () => _toggle(e.id),
-                                onTap: isMulti
-                                    ? () => _toggle(e.id)
-                                    : () => _openDetails(e),
-                                repo: widget.repo,
-                                isMultiSelectMode: isMulti,
+                      : Column(
+                          children: [
+                            // Partner visibility toggle (only in workspace)
+                            if (widget.repo.inWorkspace)
+                              PartnerVisibilityToggle(
+                                isEnvelopes: true,
+                                onChanged: (show) {
+                                  setState(() => _showPartnerEnvelopes = show);
+                                },
                               ),
-                            );
-                          }).toList(),
+
+                            // Envelope list
+                            Expanded(
+                              child: sortedEnvs.isEmpty
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.mail_outline,
+                                            size: 80,
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            tr('home_no_envelopes'),
+                                            // UPDATED: FontProvider
+                                            style: fontProvider.getTextStyle(
+                                              fontSize: 28,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            tr('home_create_first'),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : ListView(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        16,
+                                        16,
+                                        96,
+                                      ),
+                                      children: sortedEnvs.map((e) {
+                                        final isSel = selected.contains(e.id);
+                                        final isPartner = isPartnerEnvelope(
+                                          e.userId,
+                                          widget.repo.currentUserId,
+                                        );
+
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12.0,
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              EnvelopeTile(
+                                                envelope: e,
+                                                allEnvelopes: envs,
+                                                isSelected: isSel,
+                                                onLongPress: () =>
+                                                    _toggle(e.id),
+                                                onTap: isMulti
+                                                    ? () => _toggle(e.id)
+                                                    : () => _openDetails(e),
+                                                repo: widget.repo,
+                                                isMultiSelectMode: isMulti,
+                                              ),
+                                              // Partner badge
+                                              if (isPartner)
+                                                Positioned(
+                                                  top: 8,
+                                                  right: 8,
+                                                  child: FutureBuilder<String>(
+                                                    future:
+                                                        WorkspaceHelper.getUserDisplayName(
+                                                          e.userId,
+                                                          widget
+                                                              .repo
+                                                              .currentUserId,
+                                                        ),
+                                                    builder:
+                                                        (context, snapshot) {
+                                                          return PartnerBadge(
+                                                            partnerName:
+                                                                snapshot.data ??
+                                                                'Partner',
+                                                            size:
+                                                                PartnerBadgeSize
+                                                                    .small,
+                                                          );
+                                                        },
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                          ],
                         ),
                   floatingActionButton: SpeedDial(
                     icon: isMulti ? Icons.check : Icons.add,
                     activeIcon: Icons.close,
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
                     overlayColor: Colors.black,
                     overlayOpacity: 0.5,
                     spacing: 12,
                     spaceBetweenChildren: 8,
+                    buttonSize: const Size(56, 56),
+                    childrenButtonSize: const Size(56, 56),
+                    renderOverlay: true,
                     children: isMulti
                         ? [
                             sdChild(
+                              context: context,
                               icon: Icons.delete_forever,
-                              label: 'Delete (${selected.length})',
+                              label:
+                                  '${tr('delete')} (${selected.length})', // Interpolation kept
                               onTap: () async {
                                 await widget.repo.deleteEnvelopes(selected);
                                 setState(() {
@@ -642,8 +592,9 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                               },
                             ),
                             sdChild(
+                              context: context,
                               icon: Icons.cancel,
-                              label: 'Cancel Selection',
+                              label: tr('cancel_selection'),
                               onTap: () => setState(() {
                                 selected.clear();
                                 isMulti = false;
@@ -652,28 +603,33 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                           ]
                         : [
                             sdChild(
+                              context: context,
                               icon: Icons.calculate,
-                              label: 'Calculator',
+                              label: tr('calculator'),
                               onTap: () => _openCalculator(),
                             ),
                             sdChild(
+                              context: context,
                               icon: Icons.people_alt,
-                              label: 'New Group',
+                              label: tr('group_new'),
                               onTap: _openGroupCreator,
                             ),
                             sdChild(
+                              context: context,
                               icon: Icons.mail_outline,
-                              label: 'New Envelope',
+                              label: tr('envelope_new'),
                               onTap: () async {
                                 await showEnvelopeCreator(
                                   context,
                                   repo: widget.repo,
+                                  groupRepo: widget.groupRepo,
                                 );
                               },
                             ),
                             sdChild(
+                              context: context,
                               icon: Icons.edit_note,
-                              label: 'Enter Multi-Select Mode',
+                              label: tr('multi_select_mode'),
                               onTap: () => setState(() => isMulti = true),
                             ),
                           ],
@@ -684,228 +640,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
           },
         );
       },
-    );
-  }
-}
-
-// ====== Groups ======
-class _GroupsPage extends StatelessWidget {
-  const _GroupsPage({required this.repo, required this.groupRepo});
-  final EnvelopeRepo repo;
-  final GroupRepo groupRepo;
-
-  Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs) {
-    final inGroup = envs.where((e) => e.groupId == g.id).toList();
-    final totTarget = inGroup.fold(0.0, (s, e) => s + (e.targetAmount ?? 0));
-    final totSaved = inGroup.fold(0.0, (s, e) => s + e.currentAmount);
-    final pct = totTarget > 0
-        ? (totSaved / totTarget).clamp(0.0, 1.0) * 100
-        : 0.0;
-
-    final overallTotalSaved = envs.fold(0.0, (s, e) => s + e.currentAmount);
-    final overallGroupPercent = overallTotalSaved > 0
-        ? (totSaved / overallTotalSaved) * 100
-        : 0.0;
-
-    return {
-      'count': inGroup.length,
-      'totalTarget': totTarget,
-      'totalSaved': totSaved,
-      'percentSaved': pct,
-      'overallGroupPercent': overallGroupPercent,
-    };
-  }
-
-  void _openGroupStatement(
-    BuildContext context,
-    EnvelopeGroup group,
-    List<Envelope> envs,
-    List<Transaction> txs,
-  ) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => StatsHistoryScreen(repo: repo)));
-  }
-
-  Future<void> _openGroupEditor(
-    BuildContext context,
-    EnvelopeGroup? group,
-  ) async {
-    await editor.showGroupEditor(
-      context: context,
-      groupRepo: groupRepo,
-      envelopeRepo: repo,
-      group: group,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(symbol: '£');
-    return StreamBuilder<List<Envelope>>(
-      stream: repo.envelopesStream,
-      builder: (_, s1) {
-        final envs = s1.data ?? [];
-        return StreamBuilder<List<EnvelopeGroup>>(
-          stream: repo.groupsStream,
-          builder: (_, s2) {
-            final groups = s2.data ?? [];
-            return StreamBuilder<List<Transaction>>(
-              stream: repo.transactionsStream,
-              builder: (_, s3) {
-                final txs = s3.data ?? [];
-
-                return Scaffold(
-                  appBar: AppBar(
-                    title: const Text(
-                      'Envelope Groups',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    elevation: 0,
-                  ),
-                  body: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: groups.map((g) {
-                      final st = _statsFor(g, envs);
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.black,
-                            child: Text(
-                              g.name.isNotEmpty ? g.name[0] : '?',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
-                          title: Text(
-                            g.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            '${st['count']} envelopes | ${(st['percentSaved'] as double).toStringAsFixed(1)}% to target',
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                currency.format(st['totalSaved']),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              Text(
-                                '${(st['overallGroupPercent'] as double).toStringAsFixed(1)}% of total',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          onTap: () =>
-                              _openGroupStatement(context, g, envs, txs),
-                          onLongPress: () => _openGroupEditor(context, g),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  floatingActionButton: SpeedDial(
-                    icon: Icons.add,
-                    activeIcon: Icons.close,
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    spacing: 12,
-                    spaceBetweenChildren: 8,
-                    children: [
-                      SpeedDialChild(
-                        child: const Icon(
-                          Icons.people_alt,
-                          color: Colors.black,
-                        ),
-                        backgroundColor: Colors.grey.shade200,
-                        label: 'New Group',
-                        labelBackgroundColor: Colors.white,
-                        onTap: () => _openGroupEditor(context, null),
-                      ),
-                      SpeedDialChild(
-                        child: const Icon(Icons.edit_note, color: Colors.black),
-                        backgroundColor: Colors.grey.shade200,
-                        label: 'Edit/Delete Groups',
-                        labelBackgroundColor: Colors.white,
-                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Long-press a group to edit/delete.'),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// ====== Budget Placeholder ======
-class _BudgetPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.account_balance_wallet, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Budget Overview',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Coming soon!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ====== Calendar Placeholder ======
-class _CalendarPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_today, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Calendar',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Coming soon!',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-        ],
-      ),
     );
   }
 }

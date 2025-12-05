@@ -1,3 +1,7 @@
+// lib/screens/theme_picker_screen.dart
+// FONT PROVIDER INTEGRATED: NO GoogleFonts.caveat() calls found, skipped changes.
+// No imports added as file doesn't use custom fonts.
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
