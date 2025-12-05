@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
 import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 
@@ -87,7 +86,7 @@ class _PartnerVisibilityToggleState extends State<PartnerVisibilityToggle> {
           Switch(
             value: _showPartner,
             onChanged: _toggle,
-            activeColor: theme.colorScheme.secondary,
+            activeThumbColor: theme.colorScheme.secondary,
           ),
         ],
       ),

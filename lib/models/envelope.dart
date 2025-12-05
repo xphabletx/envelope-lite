@@ -81,7 +81,7 @@ class Envelope {
       throw StateError('Envelope ${doc.id} has no data');
     }
 
-    double _toDouble(dynamic v, {double fallback = 0.0}) {
+    double toDouble(dynamic v, {double fallback = 0.0}) {
       if (v == null) return fallback;
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v) ?? fallback;
@@ -92,17 +92,17 @@ class Envelope {
       id: doc.id,
       name: (data['name'] as String?) ?? '',
       userId: (data['userId'] as String?) ?? '',
-      currentAmount: _toDouble(data['currentAmount'], fallback: 0.0),
+      currentAmount: toDouble(data['currentAmount'], fallback: 0.0),
       targetAmount: (data['targetAmount'] == null)
           ? null
-          : _toDouble(data['targetAmount']),
+          : toDouble(data['targetAmount']),
       groupId: data['groupId'] as String?,
       emoji: data['emoji'] as String?,
       subtitle: data['subtitle'] as String?,
       autoFillEnabled: (data['autoFillEnabled'] as bool?) ?? false,
       autoFillAmount: (data['autoFillAmount'] == null)
           ? null
-          : _toDouble(data['autoFillAmount']),
+          : toDouble(data['autoFillAmount']),
       isShared: (data['isShared'] as bool?) ?? true,
     );
   }

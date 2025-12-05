@@ -1,10 +1,10 @@
 // lib/screens/pay_day_preview_screen.dart
 // FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
 // All button text wrapped in FittedBox to prevent wrapping
+// CLEANUP: Removed all debug print statements
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../models/envelope.dart';
@@ -47,14 +47,8 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
   ) {
     if (envelopeCheckedState.isNotEmpty) return; // Already initialized
 
-    print('🔍 PAY DAY DEBUG:');
-    print('Total envelopes: ${allEnvelopes.length}');
-    print('Total groups: ${allGroups.length}');
-
     // NEW LOGIC: Show binder if payDayEnabled=true OR has ANY auto-fill envelopes
     for (final group in allGroups) {
-      print('Group: ${group.name} - payDayEnabled: ${group.payDayEnabled}');
-
       // Check if this binder has ANY envelopes with auto-fill
       final hasAutoFillEnvelopes = allEnvelopes.any(
         (env) =>
@@ -74,9 +68,6 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
         for (final env in allEnvelopes) {
           if (env.groupId == group.id) {
             final isAutoPay = env.autoFillEnabled && env.autoFillAmount != null;
-            print(
-              '  - ${env.name}: autoFillEnabled=${env.autoFillEnabled}, amount=${env.autoFillAmount}',
-            );
             // Envelope checkbox: checked if auto-fill is enabled
             envelopeCheckedState[env.id] = isAutoPay;
             if (isAutoPay) {
@@ -92,17 +83,11 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
     // Initialize individual envelopes (not in any binder) with auto-pay
     for (final env in allEnvelopes) {
       if (env.groupId == null || env.groupId!.isEmpty) {
-        print(
-          'Individual envelope: ${env.name} - autoFillEnabled=${env.autoFillEnabled}, amount=${env.autoFillAmount}',
-        );
         if (env.autoFillEnabled && env.autoFillAmount != null) {
           envelopeCheckedState[env.id] = true;
         }
       }
     }
-
-    print('Envelopes in preview: ${envelopeCheckedState.length}');
-    print('Binders in preview: ${binderCheckedState.length}');
   }
 
   void _toggleBinder(String binderId, List<Envelope> allEnvelopes) {
@@ -390,10 +375,12 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: groupColor.withAlpha(26),
+                              // FIX: withOpacity -> withValues
+                              color: groupColor.withValues(alpha: 0.26),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: groupColor.withAlpha(77),
+                                // FIX: withOpacity -> withValues
+                                color: groupColor.withValues(alpha: 0.77),
                               ),
                             ),
                             child: Column(
@@ -430,8 +417,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                             '${currency.format(binderChecked)} / ${currency.format(binderPossible)}',
                                             style: TextStyle(
                                               fontSize: 14,
+                                              // FIX: withOpacity -> withValues
                                               color: theme.colorScheme.onSurface
-                                                  .withAlpha(179),
+                                                  .withValues(alpha: 0.7),
                                             ),
                                           ),
                                         ],
@@ -448,8 +436,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                       'Binder auto-fill is off but envelopes are set to auto-fill',
                                       style: TextStyle(
                                         fontSize: 12,
+                                        // FIX: withOpacity -> withValues
                                         color: theme.colorScheme.onSurface
-                                            .withAlpha(128),
+                                            .withValues(alpha: 0.5),
                                         fontStyle: FontStyle.italic,
                                       ),
                                     ),
@@ -476,8 +465,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
+                                    // FIX: withOpacity -> withValues
                                     color: isChecked
-                                        ? groupColor.withAlpha(13)
+                                        ? groupColor.withValues(alpha: 0.13)
                                         : Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -563,7 +553,10 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                           color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: theme.colorScheme.primary.withAlpha(77),
+                            // FIX: withOpacity -> withValues
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.77,
+                            ),
                           ),
                         ),
                         child: Row(
@@ -611,7 +604,6 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                     onPressed: () => _openAddModal(allEnvelopes, allGroups),
                     icon: const Icon(Icons.add_circle_outline),
                     label: FittedBox(
-                      // UPDATED: FittedBox
                       fit: BoxFit.scaleDown,
                       child: Text(
                         'Add envelope or binder',
@@ -644,7 +636,6 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                       )
                     : const Icon(Icons.check_circle),
                 label: FittedBox(
-                  // UPDATED: FittedBox
                   fit: BoxFit.scaleDown,
                   child: Text(
                     _loading ? 'Processing...' : 'Confirm Pay Day',
@@ -752,7 +743,8 @@ class _PayDaySuccessDialogState extends State<_PayDaySuccessDialog>
               // UPDATED: FontProvider
               style: fontProvider.getTextStyle(
                 fontSize: 20,
-                color: theme.colorScheme.onSurface.withAlpha(179),
+                // FIX: withOpacity -> withValues
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
               textAlign: TextAlign.center,
             ),

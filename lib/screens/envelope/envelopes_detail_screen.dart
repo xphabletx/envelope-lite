@@ -1,10 +1,10 @@
 // lib/screens/envelope/envelopes_detail_screen.dart
 // FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
 // All button text wrapped in FittedBox to prevent wrapping
+// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../../../models/envelope.dart';
@@ -300,7 +300,10 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        // FIX: withOpacity -> withValues
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
@@ -332,7 +335,10 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       tr('envelope_return_current_month'),
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        // FIX: withOpacity -> withValues
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -346,7 +352,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                ? theme.colorScheme.onSurface.withOpacity(0.3)
+                // FIX: withOpacity -> withValues
+                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
                 : theme.colorScheme.primary,
           ),
         ],
@@ -561,16 +568,19 @@ class _BinderInfoRow extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: binderColor.withOpacity(0.1),
+              // FIX: withOpacity -> withValues
+              color: binderColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: binderColor.withOpacity(0.3)),
+              // FIX: withOpacity -> withValues
+              border: Border.all(color: binderColor.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: binderColor.withOpacity(0.2),
+                    // FIX: withOpacity -> withValues
+                    color: binderColor.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.folder, size: 20, color: binderColor),
@@ -584,7 +594,10 @@ class _BinderInfoRow extends StatelessWidget {
                         tr('envelope_in_binder'),
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          // FIX: withOpacity -> withValues
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 2),

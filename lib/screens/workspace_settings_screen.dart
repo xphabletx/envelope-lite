@@ -3,8 +3,7 @@
 // All button text wrapped in FittedBox to prevent wrapping
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
@@ -12,7 +11,7 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import 'workspace_gate.dart';
 import '../services/localization_service.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../providers/font_provider.dart';
 
 class WorkspaceSettingsScreen extends StatefulWidget {
   const WorkspaceSettingsScreen({
@@ -92,7 +91,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
             (userData?['displayName'] as String?) ?? tr('unknown_user');
         final email = (userData?['email'] as String?) ?? '';
 
-        // Get nickname
         final nickname = await WorkspaceHelper.getUserDisplayName(
           memberId,
           widget.currentUserId,
@@ -123,7 +121,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       builder: (context) => AlertDialog(
         title: Text(
           tr('workspace_leave_confirm'),
-          // UPDATED: FontProvider
           style: fontProvider.getTextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -134,24 +131,17 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: FittedBox(
-              // UPDATED: FittedBox
               fit: BoxFit.scaleDown,
-              child: Text(
-                tr('cancel'),
-                // UPDATED: FontProvider
-                style: fontProvider.getTextStyle(),
-              ),
+              child: Text(tr('cancel'), style: fontProvider.getTextStyle()),
             ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: FittedBox(
-              // UPDATED: FittedBox
               fit: BoxFit.scaleDown,
               child: Text(
                 tr('workspace_leave_button'),
-                // UPDATED: FontProvider
                 style: fontProvider.getTextStyle(),
               ),
             ),
@@ -204,7 +194,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
         appBar: AppBar(
           title: Text(
             tr('workspace_settings'),
-            // UPDATED: FontProvider
             style: fontProvider.getTextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
@@ -221,7 +210,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       appBar: AppBar(
         title: Text(
           tr('workspace_settings'),
-          // UPDATED: FontProvider
           style: fontProvider.getTextStyle(
             fontSize: 32,
             fontWeight: FontWeight.bold,
@@ -250,7 +238,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
     );
   }
 
-  // TAB 1: Sharing (My Envelopes & Binders)
   Widget _buildSharingTab() {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
@@ -259,7 +246,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       children: [
         Text(
           tr('workspace_my_envelopes'),
-          // UPDATED: FontProvider
           style: fontProvider.getTextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -294,7 +280,8 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
               child: Column(
                 children: myEnvelopes.map((env) {
                   return CheckboxListTile(
-                    value: env.isShared ?? true,
+                    // FIX: Removed ?? true because env.isShared is non-nullable
+                    value: env.isShared,
                     onChanged: (value) async {
                       await widget.repo.updateEnvelope(
                         envelopeId: env.id,
@@ -311,7 +298,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           env.name,
-                          // UPDATED: FontProvider
                           style: fontProvider.getTextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -320,14 +306,13 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                       ],
                     ),
                     subtitle: Text(
-                      (env.isShared ?? true)
+                      // FIX: Removed ?? true here as well
+                      env.isShared
                           ? tr('workspace_visible_to_partner')
                           : tr('workspace_hidden_from_partner'),
                       style: TextStyle(
                         fontSize: 12,
-                        color: (env.isShared ?? true)
-                            ? Colors.green
-                            : Colors.grey,
+                        color: env.isShared ? Colors.green : Colors.grey,
                       ),
                     ),
                   );
@@ -339,7 +324,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
         const SizedBox(height: 32),
         Text(
           tr('workspace_my_binders'),
-          // UPDATED: FontProvider
           style: fontProvider.getTextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -376,9 +360,8 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
               child: Column(
                 children: myGroups.map((group) {
                   return CheckboxListTile(
-                    value: group.isShared ?? true,
+                    value: group.isShared,
                     onChanged: (value) async {
-                      // TODO: Add updateGroup isShared param
                       await FirebaseFirestore.instance
                           .collection('workspaces')
                           .doc(widget.workspaceId)
@@ -395,7 +378,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           group.name,
-                          // UPDATED: FontProvider
                           style: fontProvider.getTextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -404,14 +386,12 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                       ],
                     ),
                     subtitle: Text(
-                      (group.isShared ?? true)
+                      group.isShared
                           ? tr('workspace_visible_to_partner')
                           : tr('workspace_hidden_from_partner'),
                       style: TextStyle(
                         fontSize: 12,
-                        color: (group.isShared ?? true)
-                            ? Colors.green
-                            : Colors.grey,
+                        color: group.isShared ? Colors.green : Colors.grey,
                       ),
                     ),
                   );
@@ -424,7 +404,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
     );
   }
 
-  // TAB 2: Members
   Widget _buildMembersTab() {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
@@ -452,7 +431,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
               ),
               title: Text(
                 member.nickname ?? member.displayName,
-                // UPDATED: FontProvider
                 style: fontProvider.getTextStyle(
                   fontSize: 20,
                   fontWeight: member.isCurrentUser
@@ -489,7 +467,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       builder: (context) => AlertDialog(
         title: Text(
           '${tr('workspace_set_nickname_for')} ${member.displayName}',
-          // UPDATED: FontProvider
           style: fontProvider.getTextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -519,25 +496,15 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: FittedBox(
-              // UPDATED: FittedBox
               fit: BoxFit.scaleDown,
-              child: Text(
-                tr('cancel'),
-                // UPDATED: FontProvider
-                style: fontProvider.getTextStyle(),
-              ),
+              child: Text(tr('cancel'), style: fontProvider.getTextStyle()),
             ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, nicknameCtrl.text.trim()),
             child: FittedBox(
-              // UPDATED: FittedBox
               fit: BoxFit.scaleDown,
-              child: Text(
-                tr('save'),
-                // UPDATED: FontProvider
-                style: fontProvider.getTextStyle(),
-              ),
+              child: Text(tr('save'), style: fontProvider.getTextStyle()),
             ),
           ),
         ],
@@ -567,7 +534,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
         ),
       );
 
-      _loadData(); // Refresh
+      _loadData();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -576,7 +543,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
     }
   }
 
-  // TAB 3: Workspace
   Widget _buildWorkspaceTab() {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
@@ -592,7 +558,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
             ),
             title: Text(
               _workspaceName,
-              // UPDATED: FontProvider
               style: fontProvider.getTextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -612,7 +577,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
             leading: const Icon(Icons.exit_to_app, color: Colors.red),
             title: Text(
               tr('workspace_leave_button'),
-              // UPDATED: FontProvider
               style: fontProvider.getTextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -641,7 +605,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                     const SizedBox(width: 8),
                     Text(
                       tr('workspace_about_title'),
-                      // UPDATED: FontProvider
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -668,8 +631,6 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
     );
   }
 }
-
-// === MISSING CLASS DEFINITION ADDED BELOW ===
 
 class WorkspaceMember {
   final String userId;

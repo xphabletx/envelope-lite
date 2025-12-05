@@ -265,14 +265,6 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
       return;
     }
 
-    if (widget.repo.db == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('error_db_not_initialized'))));
-      return;
-    }
-
     final name = _nameCtrl.text.trim();
     final subtitle = _subtitleCtrl.text.trim();
 
@@ -345,7 +337,7 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
       Navigator.of(context).pop(); // close the sheet
 
       // If user wants to add scheduled payment, open that screen
-      if (_addScheduledPayment && envelopeId != null) {
+      if (_addScheduledPayment) {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -611,7 +603,7 @@ class _EnvelopeCreatorSheetState extends State<_EnvelopeCreatorSheet> {
                           children: [
                             Expanded(
                               child: DropdownButtonFormField<String?>(
-                                value: _selectedBinderId,
+                                initialValue: _selectedBinderId,
                                 decoration: InputDecoration(
                                   labelText: tr('envelope_add_to_binder'),
                                   labelStyle: fontProvider.getTextStyle(

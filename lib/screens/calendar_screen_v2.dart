@@ -4,7 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart'; // Kept as requested
+// Kept as requested
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../models/scheduled_payment.dart';
@@ -156,9 +156,9 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
 
   String _formatGroupDate(DateTime date) {
     String suffix = 'th';
-    if (date.day % 10 == 1 && date.day != 11)
+    if (date.day % 10 == 1 && date.day != 11) {
       suffix = 'st';
-    else if (date.day % 10 == 2 && date.day != 12)
+    } else if (date.day % 10 == 2 && date.day != 12)
       suffix = 'nd';
     else if (date.day % 10 == 3 && date.day != 13)
       suffix = 'rd';

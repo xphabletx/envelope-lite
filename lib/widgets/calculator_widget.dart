@@ -90,7 +90,7 @@ class CalculatorWidgetState extends State<CalculatorWidget> {
           return;
         } else if (['+', '-', '×', '÷'].contains(value)) {
           // Operator pressed - continue with result
-          _expression = _display + ' ' + value + ' ';
+          _expression = '$_display $value ';
           _display = '0';
           _justCalculated = false;
           return;
@@ -106,7 +106,7 @@ class CalculatorWidgetState extends State<CalculatorWidget> {
           final fullExpression = _expression + _display;
           final result = _evaluate(fullExpression);
           // Show the full expression on screen briefly
-          _expression = fullExpression + ' =';
+          _expression = '$fullExpression =';
           _display = _formatNumber(result);
           _justCalculated = true;
 

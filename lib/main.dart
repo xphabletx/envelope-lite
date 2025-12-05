@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,12 +11,8 @@ import 'providers/font_provider.dart';
 import 'providers/app_preferences_provider.dart';
 import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
-import 'screens/onboarding_flow.dart';
 import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
-
-// DEBUG FLAG: Set to true to always show onboarding (for testing)
-const bool _FORCE_ONBOARDING_FOR_TESTING = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,9 +85,7 @@ class AuthGate extends StatelessWidget {
           listen: false,
         ).initialize(userService);
 
-        // --- BYPASS MODIFICATION ---
-        // We skip the FutureBuilder that checks userService.hasCompletedOnboarding()
-        // and immediately return the Home Screen.
+        // Bypass onboarding check, go straight to home
         return const HomeScreenWrapper();
       },
     );

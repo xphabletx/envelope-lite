@@ -177,9 +177,8 @@ class EnvelopeRepo {
                 return snap.docs
                     .map((doc) => Envelope.fromFirestore(doc))
                     // Filter out envelopes where shared=false (if not mine)
-                    .where(
-                      (env) => env.userId == _userId || (env.isShared ?? true),
-                    ) // Default to shared
+                    // Note: isShared is non-nullable boolean in model
+                    .where((env) => env.userId == _userId || env.isShared)
                     .toList();
               });
         }).toList();
@@ -407,8 +406,9 @@ class EnvelopeRepo {
     if (targetAmount != null) updateData['targetAmount'] = targetAmount;
     if (emoji != null) updateData['emoji'] = emoji;
     if (subtitle != null) updateData['subtitle'] = subtitle;
-    if (autoFillEnabled != null)
+    if (autoFillEnabled != null) {
       updateData['autoFillEnabled'] = autoFillEnabled;
+    }
     if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
     if (isShared != null) updateData['isShared'] = isShared; // NEW
 
@@ -833,5 +833,22 @@ class EnvelopeRepo {
       await batch.commit();
       i = end;
     }
+  }
+
+  // ============= EXPORT / HELPER METHODS =============
+
+  /// Fetch all envelopes once (for CSV export)
+  Future<List<Envelope>> getAllEnvelopes() {
+    return envelopesStream().first;
+  }
+
+  /// Fetch all transactions once (for CSV export)
+  Future<List<Transaction>> getAllTransactions() {
+    return transactionsStream.first;
+  }
+
+  /// Fetch transactions for a specific envelope once
+  Future<List<Transaction>> getTransactions(String envelopeId) {
+    return transactionsForEnvelope(envelopeId).first;
   }
 }

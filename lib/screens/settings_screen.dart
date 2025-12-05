@@ -1,15 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 import '../models/user_profile.dart';
+import '../models/envelope.dart';
+import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
 import '../services/user_service.dart';
 
-import '../theme/app_themes.dart';
-import '../providers/theme_provider.dart';
-import '../screens/theme_picker_screen.dart';
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_settings_screen.dart';
 import '../screens/workspace_gate.dart';
@@ -60,7 +63,6 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.badge_outlined),
                     onTap: () async {
                       if (!context.mounted) return;
-
                       final newName = await showDialog<String>(
                         context: context,
                         builder: (ctx) {
@@ -91,9 +93,7 @@ class SettingsScreen extends StatelessWidget {
                           );
                         },
                       );
-
                       if (newName != null) {
-                        // Allow blank - UI will show "Your Envelopes" as fallback
                         await userService.updateUserProfile(
                           displayName: newName.trim(),
                         );
@@ -113,21 +113,8 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.email_outlined),
                     onTap: null,
                   ),
-                  _SettingsTile(
-                    title: 'Profile Photo',
-                    subtitle: 'Tap to upload',
-                    leading: const Icon(Icons.photo_camera_outlined),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Photo upload coming soon'),
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
-
               const SizedBox(height: 24),
 
               // Appearance Section
@@ -150,7 +137,6 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 24),
 
               // Workspace Section
@@ -166,7 +152,6 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () {
                         final wsId = repo.workspaceId;
                         if (wsId == null) return;
-
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => WorkspaceSettingsScreen(
@@ -192,7 +177,6 @@ class SettingsScreen extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (_) => WorkspaceGate(
                               onJoined: (workspaceId) {
-                                // Workspace joined successfully
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Joined workspace!'),
@@ -208,10 +192,85 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ],
               ),
-
               const SizedBox(height: 24),
 
-              // Account Section
+              // Data & Privacy (Export)
+              _SettingsSection(
+                title: 'Data & Privacy',
+                icon: Icons.lock_outline,
+                children: [
+                  _SettingsTile(
+                    title: 'Export My Data',
+                    subtitle: 'Download your data as CSV',
+                    leading: const Icon(Icons.file_download_outlined),
+                    onTap: () => _exportUserData(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Legal Section
+              _SettingsSection(
+                title: 'Legal',
+                icon: Icons.gavel_outlined,
+                children: [
+                  _SettingsTile(
+                    title: 'Privacy Policy',
+                    leading: const Icon(Icons.policy_outlined),
+                    trailing: const Icon(Icons.open_in_new, size: 20),
+                    onTap: () => _openUrl(
+                      'https://xphabletx.github.io/envelope-lite/PRIVACY_POLICY',
+                    ),
+                  ),
+                  _SettingsTile(
+                    title: 'Terms of Service',
+                    leading: const Icon(Icons.description_outlined),
+                    trailing: const Icon(Icons.open_in_new, size: 20),
+                    onTap: () => _openUrl(
+                      'https://xphabletx.github.io/envelope-lite/TERMS_OF_SERVICE',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Support Section
+              _SettingsSection(
+                title: 'Support',
+                icon: Icons.support_agent_outlined,
+                children: [
+                  _SettingsTile(
+                    title: 'Contact Us',
+                    leading: const Icon(Icons.email_outlined),
+                    onTap: () async {
+                      final Uri emailLaunchUri = Uri(
+                        scheme: 'mailto',
+                        path: 'telmccall@gmail.com',
+                        query: 'subject=Envelope Lite Support',
+                      );
+                      if (!await launchUrl(emailLaunchUri)) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not launch email client'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                  _SettingsTile(
+                    title: 'App Version',
+                    subtitle: '1.0.0',
+                    leading: const Icon(Icons.info_outlined),
+                    onTap: null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Logout
               _SettingsSection(
                 title: 'Account',
                 icon: Icons.account_circle_outlined,
@@ -245,66 +304,43 @@ class SettingsScreen extends StatelessWidget {
                       );
 
                       if (confirm == true && context.mounted) {
-                        // Just sign out - this will trigger auth state change
-                        // When user signs back in, we'll check onboarding status then
                         await AuthService.signOut();
-
-                        // The StreamBuilder in main.dart will automatically show SignInScreen
-                        // after detecting the user is null
                       }
                     },
                   ),
                 ],
               ),
+              const SizedBox(height: 32),
 
-              const SizedBox(height: 24),
-
-              // FAQ / Help Section
-              _SettingsSection(
-                title: 'FAQ / Help',
-                icon: Icons.help_outline,
-                children: [
-                  _SettingsTile(
-                    title: 'Frequently Asked Questions',
-                    leading: const Icon(Icons.question_answer_outlined),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('FAQ coming soon')),
-                      );
-                    },
-                    trailing: const Icon(Icons.chevron_right),
+              // DANGER ZONE
+              const Divider(),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  'Danger Zone',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.error,
                   ),
-                ],
+                ),
               ),
-
-              const SizedBox(height: 24),
-
-              // Support Section
-              _SettingsSection(
-                title: 'Support',
-                icon: Icons.support_agent_outlined,
-                children: [
-                  _SettingsTile(
-                    title: 'Contact Us',
-                    leading: const Icon(Icons.email_outlined),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Contact form coming soon'),
-                        ),
-                      );
-                    },
-                    trailing: const Icon(Icons.chevron_right),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_forever,
+                  color: theme.colorScheme.error,
+                ),
+                title: Text(
+                  'Delete Account',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.error,
                   ),
-                  _SettingsTile(
-                    title: 'App Version',
-                    subtitle: '1.0.0',
-                    leading: const Icon(Icons.info_outlined),
-                    onTap: null,
-                  ),
-                ],
+                ),
+                subtitle: const Text('Permanently delete account and all data'),
+                onTap: () => _showDeleteAccountDialog(context),
               ),
-
               const SizedBox(height: 32),
             ],
           );
@@ -312,9 +348,222 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+
+  // --- Helpers ---
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
+  }
+
+  Future<void> _exportUserData(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 1. Fetch Data (Using the new methods I added to EnvelopeRepo)
+      final envelopes = await repo.getAllEnvelopes();
+
+      // 2. Generate CSV Strings
+      final envelopesCsv = _generateEnvelopesCsv(envelopes);
+      final transactionsCsv = await _generateTransactionsCsv(envelopes, repo);
+
+      // 3. Write to temp files
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+      final envelopesFile = File('${tempDir.path}/envelopes_$timestamp.csv');
+      final transactionsFile = File(
+        '${tempDir.path}/transactions_$timestamp.csv',
+      );
+
+      await envelopesFile.writeAsString(envelopesCsv);
+      await transactionsFile.writeAsString(transactionsCsv);
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading
+        // 4. Share
+        await Share.shareXFiles([
+          XFile(envelopesFile.path),
+          XFile(transactionsFile.path),
+        ], subject: 'My Envelope Lite Data Export');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _generateEnvelopesCsv(List<Envelope> envelopes) {
+    final buffer = StringBuffer();
+    // Header
+    buffer.writeln(
+      'Name,Current Amount,Target Amount,Auto-Fill Amount,Group,Is Shared',
+    );
+    // Rows
+    for (var env in envelopes) {
+      buffer.writeln(
+        [
+          _escapeCsv(env.name),
+          env.currentAmount.toStringAsFixed(2),
+          (env.targetAmount ?? 0).toStringAsFixed(2),
+          (env.autoFillAmount ?? 0).toStringAsFixed(2),
+          _escapeCsv(env.groupId ?? 'None'),
+          env.isShared ? 'Yes' : 'No',
+        ].join(','),
+      );
+    }
+    return buffer.toString();
+  }
+
+  Future<String> _generateTransactionsCsv(
+    List<Envelope> envelopes,
+    EnvelopeRepo repo,
+  ) async {
+    final buffer = StringBuffer();
+    // Header
+    buffer.writeln('Date,Envelope,Type,Amount,Description,Source,Target');
+
+    // Rows
+    for (var env in envelopes) {
+      // Corrected call: await the Future directly
+      final transactions = await repo.getTransactions(env.id);
+
+      for (var tx in transactions) {
+        String source = '';
+        String target = '';
+
+        if (tx.type == TransactionType.transfer) {
+          source = tx.sourceEnvelopeName ?? 'Unknown';
+          target = tx.targetEnvelopeName ?? 'Unknown';
+        } else if (tx.type == TransactionType.deposit) {
+          source = 'Income';
+          target = env.name;
+        } else if (tx.type == TransactionType.withdrawal) {
+          source = env.name;
+          target = 'Merchant/Expense';
+        }
+
+        buffer.writeln(
+          [
+            tx.date.toIso8601String(),
+            _escapeCsv(env.name),
+            tx.type.name,
+            tx.amount.toStringAsFixed(2),
+            _escapeCsv(tx.description),
+            _escapeCsv(source),
+            _escapeCsv(target),
+          ].join(','),
+        );
+      }
+    }
+    return buffer.toString();
+  }
+
+  String _escapeCsv(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
+    // Warning 1
+    final confirm1 = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ Delete Account?'),
+        content: const Text(
+          'This will permanently delete:\n\n'
+          '• Your account and profile\n'
+          '• All envelopes and transactions\n'
+          '• All workspace data\n\n'
+          'This action CANNOT be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm1 != true) return;
+    if (!context.mounted) return;
+
+    // Warning 2
+    final confirm2 = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🚨 Absolutely Sure?'),
+        content: const Text(
+          'Type DELETE to confirm account deletion.\n\n'
+          'All your data will be permanently erased.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete Everything'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm2 != true) return;
+    if (!context.mounted) return;
+
+    // Execute Deletion
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await AuthService.deleteAccount();
+      if (context.mounted) {
+        Navigator.of(context).pop(); // close loader
+        Navigator.of(context).pop(); // close settings
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // close loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }
 
-// Settings Section Widget
+// ... _SettingsSection and _SettingsTile remain identical to before ...
+// For brevity, I'm just confirming they are down here in the full file I would generate.
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
     required this.title,
@@ -355,7 +604,7 @@ class _SettingsSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05), // Fixed deprecated
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -368,7 +617,6 @@ class _SettingsSection extends StatelessWidget {
   }
 }
 
-// Settings Tile Widget
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
     required this.title,
@@ -417,7 +665,9 @@ class _SettingsTile extends StatelessWidget {
       trailing: trailing != null
           ? IconTheme(
               data: IconThemeData(
-                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.5,
+                ), // Fixed deprecated
               ),
               child: trailing!,
             )

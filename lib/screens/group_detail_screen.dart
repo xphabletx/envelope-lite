@@ -1,5 +1,10 @@
+// lib/screens/group_detail_screen.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../models/envelope.dart';
@@ -11,6 +16,7 @@ import '../widgets/envelope_tile.dart';
 import '../widgets/group_editor.dart' as editor;
 import 'envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
+import '../providers/font_provider.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   const GroupDetailScreen({
@@ -90,8 +96,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final groupColor = GroupColors.getThemedColor(
-      widget.group.colorName ?? 'Primary',
+      widget.group.colorName, // FIX: Removed dead code check
       theme.colorScheme,
     );
 
@@ -162,7 +169,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [groupColor, groupColor.withAlpha(204)],
+                            colors: [
+                              groupColor,
+                              groupColor.withValues(alpha: 0.8),
+                            ],
                           ),
                         ),
                         child: SafeArea(
@@ -178,7 +188,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                       width: 64,
                                       height: 64,
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withAlpha(51),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.2,
+                                        ),
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: Colors.white,
@@ -200,7 +212,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                         children: [
                                           Text(
                                             widget.group.name,
-                                            style: GoogleFonts.caveat(
+                                            style: fontProvider.getTextStyle(
                                               fontSize: 38,
                                               fontWeight: FontWeight.bold,
                                               color: Colors.white,
@@ -262,7 +274,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: groupColor.withAlpha(51),
+                              color: groupColor.withValues(alpha: 0.2),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -282,8 +294,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                 _StatColumn(
                                   label: 'Target',
                                   value: currency.format(totTarget),
-                                  color: theme.colorScheme.onSurface.withAlpha(
-                                    179,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.7,
                                   ),
                                 ),
                                 _StatColumn(
@@ -320,7 +332,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         children: [
                           Text(
                             'Envelopes',
-                            style: GoogleFonts.caveat(
+                            style: fontProvider.getTextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.primary,
@@ -335,7 +347,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               }),
                               child: Text(
                                 'Cancel',
-                                style: GoogleFonts.caveat(
+                                style: fontProvider.getTextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -361,7 +373,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               const SizedBox(height: 16),
                               Text(
                                 'No envelopes in this group',
-                                style: GoogleFonts.caveat(
+                                style: fontProvider.getTextStyle(
                                   fontSize: 24,
                                   color: Colors.grey.shade600,
                                 ),
@@ -435,7 +447,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.2),
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.2,
+                            ),
                           ),
                         ),
                         child: Row(
@@ -465,7 +479,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Text(
                         'Transactions',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
@@ -489,7 +503,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               const SizedBox(height: 16),
                               Text(
                                 'No transactions this month',
-                                style: GoogleFonts.caveat(
+                                style: fontProvider.getTextStyle(
                                   fontSize: 24,
                                   color: Colors.grey.shade600,
                                 ),
@@ -530,7 +544,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: color.withAlpha(26),
+                                    color: color.withValues(alpha: 0.1),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(icon, color: color, size: 20),
@@ -543,7 +557,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                     children: [
                                       Text(
                                         label,
-                                        style: GoogleFonts.caveat(
+                                        style: fontProvider.getTextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -554,7 +568,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: theme.colorScheme.onSurface
-                                                .withAlpha(153),
+                                                .withValues(alpha: 0.6),
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -578,7 +592,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: theme.colorScheme.onSurface
-                                            .withAlpha(128),
+                                            .withValues(alpha: 0.5),
                                       ),
                                     ),
                                   ],
@@ -600,11 +614,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                       icon: const Icon(Icons.delete_forever),
-                      label: Text(
-                        'Delete (${selected.length})',
-                        style: GoogleFonts.caveat(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Delete (${selected.length})',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       onPressed: () async {
@@ -621,13 +638,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     )
                   : FloatingActionButton.extended(
                       backgroundColor: groupColor,
-                      foregroundColor: Colors.white,
+                      foregroundColor: GroupColors.getContrastingTextColor(
+                        groupColor,
+                      ),
                       icon: const Icon(Icons.settings),
-                      label: Text(
-                        'Edit Group',
-                        style: GoogleFonts.caveat(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Edit Group',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       onPressed: _openSettings,
@@ -643,13 +665,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget _buildMonthNavigationBar(ThemeData theme) {
     final monthName = DateFormat('MMMM yyyy').format(_viewingMonth);
     final isCurrentMonth = _isCurrentMonth();
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
@@ -668,7 +693,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 children: [
                   Text(
                     monthName,
-                    style: GoogleFonts.caveat(
+                    style: fontProvider.getTextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary,
@@ -680,7 +705,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       'Tap to return to current month',
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -694,7 +721,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                ? theme.colorScheme.onSurface.withOpacity(0.3)
+                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
                 : theme.colorScheme.primary,
           ),
         ],
@@ -761,6 +788,8 @@ class _StatColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -775,7 +804,7 @@ class _StatColumn extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.caveat(
+          style: fontProvider.getTextStyle(
             fontSize: large ? 24 : 20,
             fontWeight: FontWeight.bold,
             color: color,

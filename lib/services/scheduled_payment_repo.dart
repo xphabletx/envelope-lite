@@ -100,8 +100,9 @@ class ScheduledPaymentRepo {
     if (name != null) updateData['name'] = name;
     if (description != null) updateData['description'] = description;
     if (amount != null) updateData['amount'] = amount;
-    if (startDate != null)
+    if (startDate != null) {
       updateData['startDate'] = Timestamp.fromDate(startDate);
+    }
     if (frequencyValue != null) updateData['frequencyValue'] = frequencyValue;
     if (frequencyUnit != null) updateData['frequencyUnit'] = frequencyUnit.name;
     if (colorName != null) updateData['colorName'] = colorName;

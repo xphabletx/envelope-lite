@@ -1,10 +1,9 @@
 // lib/screens/groups_home_screen.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-// All button text wrapped in FittedBox to prevent wrapping
+// FIX: Removed redundant null check on group.colorName
+// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart'; // Kept as requested
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../models/envelope.dart';
@@ -19,7 +18,7 @@ import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
 import 'pay_day_preview_screen.dart';
 import '../services/localization_service.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../providers/font_provider.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -38,7 +37,7 @@ class GroupsHomeScreen extends StatefulWidget {
 class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  bool _showPartnerBinders = true; // NEW: Partner visibility toggle
+  bool _showPartnerBinders = true;
 
   Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
@@ -90,12 +89,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
         return StreamBuilder<List<EnvelopeGroup>>(
           stream: widget.repo.groupsStream,
           builder: (_, s2) {
-            // Filter groups based on partner visibility toggle
             final allGroups = s2.data ?? [];
             final groups = allGroups.where((g) {
-              // Always show my groups
               if (g.userId == widget.repo.currentUserId) return true;
-              // Show partner groups only if toggle is on AND group is shared
               if (!_showPartnerBinders) return false;
               return (g.isShared ?? true);
             }).toList();
@@ -120,11 +116,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                         },
                         icon: const Icon(Icons.monetization_on, size: 20),
                         label: FittedBox(
-                          // UPDATED: FittedBox
                           fit: BoxFit.scaleDown,
                           child: Text(
                             tr('home_pay_day_button'),
-                            // UPDATED: FontProvider
                             style: fontProvider.getTextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 22,
@@ -152,7 +146,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                 ),
                 body: Column(
                   children: [
-                    // Partner visibility toggle (only in workspace)
                     if (widget.repo.inWorkspace)
                       PartnerVisibilityToggle(
                         isEnvelopes: false,
@@ -174,7 +167,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             const SizedBox(height: 16),
                             Text(
                               tr('group_no_binders'),
-                              // UPDATED: FontProvider
                               style: fontProvider.getTextStyle(
                                 fontSize: 28,
                                 color: Colors.grey.shade600,
@@ -199,11 +191,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                   foregroundColor: Colors.white,
                   icon: const Icon(Icons.add),
                   label: FittedBox(
-                    // UPDATED: FittedBox
                     fit: BoxFit.scaleDown,
                     child: Text(
                       tr('group_create_binder'),
-                      // UPDATED: FontProvider
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -220,7 +210,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               appBar: AppBar(
                 title: Text(
                   tr('group_binders_title'),
-                  // UPDATED: FontProvider
                   style: fontProvider.getTextStyle(
                     fontSize: 38,
                     fontWeight: FontWeight.bold,
@@ -232,7 +221,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               ),
               body: Column(
                 children: [
-                  // Partner visibility toggle (only in workspace)
                   if (widget.repo.inWorkspace)
                     PartnerVisibilityToggle(
                       isEnvelopes: false,
@@ -241,7 +229,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                       },
                     ),
 
-                  // Page indicator
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
@@ -264,8 +251,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                               : null,
                         ),
                         Text(
-                          '${_currentPage + 1} of ${groups.length}', // Interpolation kept
-                          // UPDATED: FontProvider
+                          '${_currentPage + 1} of ${groups.length}',
                           style: fontProvider.getTextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -292,7 +278,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                     ),
                   ),
 
-                  // Binder page view
                   Expanded(
                     child: PageView.builder(
                       controller: _pageController,
@@ -307,6 +292,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             stats['envelopes'] as List<Envelope>;
                         final totalSaved = stats['totalSaved'] as double;
 
+                        // FIX: Removed redundant ?? 'Primary'
                         final groupColor = GroupColors.getThemedColor(
                           group.colorName,
                           theme.colorScheme,
@@ -326,7 +312,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                           groupColor,
                         );
 
-                        // Check if this is a partner's binder
                         final isPartner =
                             group.userId != widget.repo.currentUserId;
 
@@ -350,7 +335,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                 theme: theme,
                                 repo: widget.repo,
                               ),
-                              // Partner badge
                               if (isPartner)
                                 Positioned(
                                   top: 12,
@@ -382,11 +366,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                 foregroundColor: Colors.white,
                 icon: const Icon(Icons.add),
                 label: FittedBox(
-                  // UPDATED: FittedBox
                   fit: BoxFit.scaleDown,
                   child: Text(
                     tr('group_create_binder'),
-                    // UPDATED: FontProvider
                     style: fontProvider.getTextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -403,7 +385,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   }
 }
 
-// Binder spread widget
 class _BinderSpread extends StatefulWidget {
   final EnvelopeGroup group;
   final Color groupColor;
@@ -449,7 +430,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
     if (_selectedIndex == index) {
       _tapCount++;
       if (_tapCount == 2) {
-        // Second tap - open detail
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -459,13 +439,11 @@ class _BinderSpreadState extends State<_BinderSpread> {
             ),
           ),
         );
-        // Reset
         setState(() {
           _tapCount = 0;
         });
       }
     } else {
-      // First tap or different envelope
       setState(() {
         _selectedIndex = index;
         _tapCount = 1;
@@ -487,7 +465,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: widget.groupColor.withAlpha(51),
+            // FIX: withOpacity -> withValues
+            color: widget.groupColor.withValues(alpha: 0.2),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -497,7 +476,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
         borderRadius: BorderRadius.circular(20),
         child: Row(
           children: [
-            // LEFT PAGE - Dynamic envelope stack
             Expanded(
               flex: 1,
               child: Container(
@@ -515,7 +493,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             const SizedBox(height: 12),
                             Text(
                               tr('home_no_envelopes'),
-                              // UPDATED: FontProvider
                               style: fontProvider.getTextStyle(
                                 fontSize: 20,
                                 color: Colors.grey.shade500,
@@ -539,7 +516,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 const SizedBox(width: 6),
                                 Text(
                                   tr('home_envelopes_tab'),
-                                  // UPDATED: FontProvider
                                   style: fontProvider.getTextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -549,8 +525,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               ],
                             ),
                             const SizedBox(height: 16),
-
-                            // Dynamic fan stack
                             Expanded(
                               child: _DynamicEnvelopeStack(
                                 envelopes: widget.envelopes,
@@ -569,7 +543,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
               ),
             ),
 
-            // BINDER SPINE
             Container(
               width: 3,
               decoration: BoxDecoration(
@@ -577,15 +550,15 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    widget.groupColor.withAlpha(77),
-                    widget.groupColor.withAlpha(153),
-                    widget.groupColor.withAlpha(77),
+                    // FIX: withOpacity -> withValues
+                    widget.groupColor.withValues(alpha: 0.3),
+                    widget.groupColor.withValues(alpha: 0.6),
+                    widget.groupColor.withValues(alpha: 0.3),
                   ],
                 ),
               ),
             ),
 
-            // RIGHT PAGE - Group info with optional selected envelope
             Expanded(
               flex: 1,
               child: Container(
@@ -595,10 +568,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Top section
                     Column(
                       children: [
-                        // Group emoji
                         Container(
                           width: 55,
                           height: 55,
@@ -618,11 +589,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           ),
                         ),
                         const SizedBox(height: 6),
-
-                        // Group name
                         Text(
                           widget.group.name,
-                          // UPDATED: FontProvider
                           style: fontProvider.getTextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -633,16 +601,15 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
-
-                        // Group total (clean, no box)
                         Column(
                           children: [
                             Text(
                               tr('group_binder_total'),
                               style: TextStyle(
                                 fontSize: 8,
+                                // FIX: withOpacity -> withValues
                                 color: widget.theme.colorScheme.onSurface
-                                    .withAlpha(153),
+                                    .withValues(alpha: 0.6),
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.5,
                               ),
@@ -652,7 +619,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 widget.currency.format(widget.totalSaved),
-                                // UPDATED: FontProvider
                                 style: fontProvider.getTextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
@@ -665,21 +631,23 @@ class _BinderSpreadState extends State<_BinderSpread> {
                       ],
                     ),
 
-                    // Selected envelope section (if any)
                     if (selectedEnvelope != null)
                       Column(
                         children: [
-                          Divider(color: widget.groupColor.withAlpha(77)),
+                          // FIX: withOpacity -> withValues
+                          Divider(
+                            color: widget.groupColor.withValues(alpha: 0.3),
+                          ),
                           const SizedBox(height: 8),
                           Icon(
                             Icons.mail,
                             size: 20,
-                            color: widget.groupColor.withAlpha(128),
+                            // FIX: withOpacity -> withValues
+                            color: widget.groupColor.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             selectedEnvelope.name,
-                            // UPDATED: FontProvider
                             style: fontProvider.getTextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -708,8 +676,9 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             tr('tap_again_for_details'),
                             style: TextStyle(
                               fontSize: 9,
+                              // FIX: withOpacity -> withValues
                               color: widget.theme.colorScheme.onSurface
-                                  .withAlpha(128),
+                                  .withValues(alpha: 0.5),
                               fontStyle: FontStyle.italic,
                             ),
                             textAlign: TextAlign.center,
@@ -717,7 +686,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         ],
                       ),
 
-                    // Bottom section - Action buttons
                     Column(
                       children: [
                         SizedBox(
@@ -725,7 +693,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: widget.groupColor,
-                              // FIX: Use contrasting color for text/icon
                               foregroundColor:
                                   GroupColors.getContrastingTextColor(
                                     widget.groupColor,
@@ -737,11 +704,9 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             ),
                             icon: const Icon(Icons.edit, size: 16),
                             label: FittedBox(
-                              // UPDATED: FittedBox
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 tr('edit'),
-                                // UPDATED: FontProvider
                                 style: fontProvider.getTextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -771,11 +736,9 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               color: widget.groupColor,
                             ),
                             label: FittedBox(
-                              // UPDATED: FittedBox
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 tr('group_history'),
-                                // UPDATED: FontProvider
                                 style: fontProvider.getTextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -799,7 +762,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
   }
 }
 
-// Dynamic envelope stack with smart overlap
 class _DynamicEnvelopeStack extends StatelessWidget {
   final List<Envelope> envelopes;
   final int? selectedIndex;
@@ -830,25 +792,16 @@ class _DynamicEnvelopeStack extends StatelessWidget {
         final availableHeight = constraints.maxHeight;
         final envelopeCount = envelopes.length;
 
-        // Calculate dynamic spacing
         final envelopeHeight = 50.0;
-
-        // Calculate spacing needed to fit all envelopes
         double spacing;
         if (envelopeCount == 1) {
           spacing = 0;
         } else {
-          // Total height needed = first envelope full height + (remaining * peek height)
-          // availableHeight = envelopeHeight + ((envelopeCount - 1) * spacing)
-          // Solve for spacing
           final remainingSpace = availableHeight - envelopeHeight;
           spacing = remainingSpace / (envelopeCount - 1);
-
-          // Clamp between reasonable values
           spacing = spacing.clamp(20.0, envelopeHeight + 8);
         }
 
-        // Reorder: selected first, then rest
         final orderedEnvelopes = <MapEntry<int, Envelope>>[];
         if (selectedIndex != null && selectedIndex! < envelopes.length) {
           orderedEnvelopes.add(
@@ -887,12 +840,16 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                     border: Border.all(
                       color: isSelected
                           ? groupColor
-                          : groupColor.withAlpha(128),
+                          // FIX: withOpacity -> withValues
+                          : groupColor.withValues(alpha: 0.5),
                       width: isSelected ? 3 : 2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: groupColor.withAlpha(isSelected ? 51 : 26),
+                        // FIX: withOpacity -> withValues
+                        color: groupColor.withValues(
+                          alpha: isSelected ? 0.2 : 0.1,
+                        ),
                         blurRadius: isSelected ? 6 : 3,
                         offset: Offset(0, isSelected ? 3 : 1),
                       ),
@@ -905,7 +862,6 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                           envelope.name.length > 14
                               ? '${envelope.name.substring(0, 14)}...'
                               : envelope.name,
-                          // UPDATED: FontProvider
                           style: fontProvider.getTextStyle(
                             fontSize: 16,
                             fontWeight: isSelected

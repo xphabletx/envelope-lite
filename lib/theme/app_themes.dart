@@ -304,8 +304,7 @@ class AppThemes {
       surface: Color(0xFF1A2332), // Dark blue-grey
       onPrimary: Color(0xFF0A1929), // Very dark blue
       onSecondary: Colors.white,
-      onSurface: Colors.white, // White text
-      background: Color(0xFF0A1929), // Deep space blue
+      onSurface: Colors.white, // Deep space blue
     ),
     scaffoldBackgroundColor: const Color(0xFF0A1929),
     appBarTheme: const AppBarTheme(

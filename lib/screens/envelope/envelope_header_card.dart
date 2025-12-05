@@ -1,7 +1,13 @@
+// lib/screens/envelope/envelope_header_card.dart
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// FIX: Removed dead null check on theme.colorScheme.tertiary
+// FIX: .withOpacity -> .withValues(alpha: )
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/envelope.dart';
+import '../../../providers/font_provider.dart';
 
 class EnvelopeHeaderCard extends StatelessWidget {
   const EnvelopeHeaderCard({super.key, required this.envelope, this.onTap});
@@ -13,6 +19,7 @@ class EnvelopeHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currencyFormatter = NumberFormat.currency(symbol: '£');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     // Calculate progress percentage
     final progress = envelope.targetAmount != null && envelope.targetAmount! > 0
@@ -48,7 +55,7 @@ class EnvelopeHeaderCard extends StatelessWidget {
             // Current Amount (large)
             Text(
               currencyFormatter.format(envelope.currentAmount),
-              style: GoogleFonts.caveat(
+              style: fontProvider.getTextStyle(
                 fontSize: 48,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
@@ -60,9 +67,10 @@ class EnvelopeHeaderCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 'of ${currencyFormatter.format(envelope.targetAmount!)}',
-                style: GoogleFonts.caveat(
+                style: fontProvider.getTextStyle(
                   fontSize: 24,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  // FIX: withOpacity -> withValues
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(height: 4),
@@ -84,11 +92,15 @@ class EnvelopeHeaderCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   envelope.subtitle!,
-                  style: GoogleFonts.caveat(
-                    fontSize: 18,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
-                    fontStyle: FontStyle.italic,
-                  ),
+                  style: fontProvider
+                      .getTextStyle(
+                        fontSize: 18,
+                        // FIX: withOpacity -> withValues
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      )
+                      .copyWith(fontStyle: FontStyle.italic),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -115,8 +127,8 @@ class EnvelopeHeaderCard extends StatelessWidget {
                     label: payDaysUntilTarget == 1
                         ? '1 pay day to target'
                         : '$payDaysUntilTarget pay days to target',
-                    color:
-                        theme.colorScheme.tertiary ?? theme.colorScheme.primary,
+                    // FIX: Removed ?? theme.colorScheme.primary because tertiary is non-nullable
+                    color: theme.colorScheme.tertiary,
                   ),
               ],
             ),
@@ -144,9 +156,11 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        // FIX: withOpacity -> withValues
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        // FIX: withOpacity -> withValues
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -176,27 +190,23 @@ class _RealisticEnvelope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dimensions for "Bank Note" aspect ratio
     const envelopeWidth = 320.0;
     const envelopeHeight = 160.0;
     const flapHeight = 90.0;
     const emojiSize = 42.0;
 
-    // Define color variations for depth based on the theme's primary color
     final HSLColor primaryHSL = HSLColor.fromColor(primaryColor);
     final Color backBodyColor = primaryHSL.withLightness(0.85).toColor();
-    // Top flap is slightly lighter to catch "light"
     final Color topFlapColor = primaryHSL.withLightness(0.88).toColor();
-    // Bottom flap is slightly darker to show it's "inside" or under the top flap
     final Color bottomFlapColor = primaryHSL.withLightness(0.82).toColor();
 
     return SizedBox(
       width: envelopeWidth,
-      height: envelopeHeight + 40, // Increased extra space for deeper shadow
+      height: envelopeHeight + 40,
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
-          // LAYER 1: The Main Body Background (Rectangular base)
+          // LAYER 1: The Main Body Background
           Positioned(
             top: flapHeight * 0.35,
             child: Container(
@@ -210,7 +220,8 @@ class _RealisticEnvelope extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2), // Darker shadow
+                    // FIX: withOpacity -> withValues
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 15,
                     offset: const Offset(0, 8),
                   ),
@@ -219,15 +230,15 @@ class _RealisticEnvelope extends StatelessWidget {
             ),
           ),
 
-          // LAYER 2: The Bottom Pocket Flap (The new part!)
-          // This is painted over the background body
+          // LAYER 2: The Bottom Pocket Flap
           Positioned(
             top: flapHeight * 0.35,
             child: CustomPaint(
               size: Size(envelopeWidth, envelopeHeight - (flapHeight * 0.35)),
               painter: BottomPocketPainter(
                 color: bottomFlapColor,
-                shadowColor: primaryColor.withOpacity(0.3),
+                // FIX: withOpacity -> withValues
+                shadowColor: primaryColor.withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -237,41 +248,47 @@ class _RealisticEnvelope extends StatelessWidget {
             top: 0,
             child: PhysicalShape(
               color: topFlapColor,
-              elevation: 14.0, // Increased elevation for more depth
-              shadowColor: primaryColor.withOpacity(0.6), // Stronger shadow
+              elevation: 14.0,
+              // FIX: withOpacity -> withValues
+              shadowColor: primaryColor.withValues(alpha: 0.6),
               clipper: _EnvelopeFlapClipper(flapHeight: flapHeight),
               child: Container(
                 height: flapHeight,
                 width: envelopeWidth,
                 decoration: BoxDecoration(
-                  // Subtle gradient to make the flap look curved
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.white.withOpacity(0.5), Colors.transparent],
+                    colors: [
+                      // FIX: withOpacity -> withValues
+                      Colors.white.withValues(alpha: 0.5),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
               ),
             ),
           ),
 
-          // LAYER 4: The Emoji Sticker (Raised higher with deeper shadow)
+          // LAYER 4: The Emoji Sticker
           Positioned(
-            top: flapHeight - (emojiSize / 1.1), // Raised position slightly
+            top: flapHeight - (emojiSize / 1.1),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
+                // FIX: withOpacity -> withValues
+                color: Colors.white.withValues(alpha: 0.95),
                 shape: BoxShape.circle,
                 boxShadow: [
-                  // Deeper, multi-layered shadow for a "floating" sticker effect
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    // FIX: withOpacity -> withValues
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 6,
                     offset: const Offset(0, 3),
                   ),
                   BoxShadow(
-                    color: primaryColor.withOpacity(0.3),
+                    // FIX: withOpacity -> withValues
+                    color: primaryColor.withValues(alpha: 0.3),
                     blurRadius: 12,
                     spreadRadius: -2,
                     offset: const Offset(0, 6),
@@ -287,7 +304,6 @@ class _RealisticEnvelope extends StatelessWidget {
   }
 }
 
-// Painter for the bottom triangular pocket
 class BottomPocketPainter extends CustomPainter {
   final Color color;
   final Color shadowColor;
@@ -301,19 +317,12 @@ class BottomPocketPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path();
-    // Start at bottom left
     path.moveTo(0, size.height);
-    // Draw to bottom right
     path.lineTo(size.width, size.height);
-    // Draw up to the center point, slightly below the top edge of this layer
     path.lineTo(size.width / 2, size.height * 0.15);
-    // Close back to bottom left
     path.close();
 
-    // Draw a subtle shadow underneath the top edge of this pocket
-    // to separate it from the inside of the envelope
     canvas.drawShadow(path.shift(const Offset(0, -2)), shadowColor, 4, false);
-
     canvas.drawPath(path, paint);
   }
 
@@ -321,7 +330,6 @@ class BottomPocketPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Custom Clipper for the top flap
 class _EnvelopeFlapClipper extends CustomClipper<Path> {
   final double flapHeight;
 
@@ -330,19 +338,18 @@ class _EnvelopeFlapClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    path.moveTo(0, 0); // Top left
-    path.lineTo(size.width, 0); // Top right
+    path.moveTo(0, 0);
+    path.lineTo(size.width, 0);
 
-    // Draw down to the bottom center tip with a soft curve
     path.lineTo(size.width / 2 + 15, flapHeight - 6);
     path.quadraticBezierTo(
       size.width / 2,
-      flapHeight + 6, // Control point below tip
+      flapHeight + 6,
       size.width / 2 - 15,
-      flapHeight - 6, // End point
+      flapHeight - 6,
     );
 
-    path.lineTo(0, 0); // Back to top left
+    path.lineTo(0, 0);
     path.close();
     return path;
   }

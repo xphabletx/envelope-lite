@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 
 /// Badge to display on partner's envelopes/binders

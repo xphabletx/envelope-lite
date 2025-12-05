@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart'; // Kept as requested
+// Kept as requested
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -458,7 +458,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                 ),
                                 Switch(
                                   value: myOnly,
-                                  activeColor: Colors.black,
+                                  activeThumbColor: Colors.black,
                                   onChanged: (v) => setState(() => myOnly = v),
                                 ),
                               ],

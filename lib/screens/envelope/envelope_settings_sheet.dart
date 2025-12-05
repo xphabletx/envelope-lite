@@ -281,7 +281,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String?>(
-                            value: _selectedBinderId,
+                            initialValue: _selectedBinderId,
                             decoration: InputDecoration(
                               labelText: 'Add to Binder',
                               labelStyle: GoogleFonts.caveat(fontSize: 16),

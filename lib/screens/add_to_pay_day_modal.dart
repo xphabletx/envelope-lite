@@ -1,10 +1,13 @@
 // lib/screens/add_to_pay_day_modal.dart
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
+// All button text wrapped in FittedBox to prevent wrapping
+// REMOVED unused currency variable
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
+import '../providers/font_provider.dart';
 
 class PayDayAddition {
   final String? envelopeId;
@@ -79,7 +82,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currency = NumberFormat.currency(symbol: '£');
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     // Filter out already displayed items
     final availableEnvelopes = widget.allEnvelopes.where((env) {
@@ -119,7 +122,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
             children: [
               Text(
                 'Add to Pay Day',
-                style: GoogleFonts.caveat(
+                style: fontProvider.getTextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
@@ -145,7 +148,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                   if (availableBinders.isNotEmpty) ...[
                     Text(
                       'Binders',
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -173,8 +176,9 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
+                          // FIX: withOpacity -> withValues
                           color: isSelected
-                              ? groupColor.withAlpha(26)
+                              ? groupColor.withValues(alpha: 0.26)
                               : theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
@@ -209,7 +213,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                                   children: [
                                     Text(
                                       group.name,
-                                      style: GoogleFonts.caveat(
+                                      style: fontProvider.getTextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -236,7 +240,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                   if (availableEnvelopes.isNotEmpty) ...[
                     Text(
                       'Envelopes',
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -293,7 +297,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                                   Expanded(
                                     child: Text(
                                       env.name,
-                                      style: GoogleFonts.caveat(
+                                      style: fontProvider.getTextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -344,7 +348,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                           const SizedBox(height: 16),
                           Text(
                             'All items already added!',
-                            style: GoogleFonts.caveat(
+                            style: fontProvider.getTextStyle(
                               fontSize: 24,
                               color: Colors.grey.shade600,
                             ),
@@ -374,11 +378,14 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: Text(
-              'Add to Pay Day',
-              style: GoogleFonts.caveat(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Add to Pay Day',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),

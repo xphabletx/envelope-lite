@@ -1,16 +1,16 @@
 // lib/widgets/group_editor.dart
 // FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
 // All button text wrapped in FittedBox to prevent wrapping
+// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../services/group_repo.dart';
 import '../services/envelope_repo.dart';
 import '../models/envelope_group.dart';
 import '../models/envelope.dart';
 import '../services/localization_service.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../providers/font_provider.dart';
 
 Future<void> showGroupEditor({
   required BuildContext context,
@@ -230,8 +230,9 @@ Future<void> showGroupEditor({
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              groupIdentityColor.withOpacity(0.3),
-                              bgTint.withOpacity(0.3),
+                              // FIX: withOpacity -> withValues
+                              groupIdentityColor.withValues(alpha: 0.3),
+                              bgTint.withValues(alpha: 0.3),
                             ],
                           ),
                         ),
@@ -451,9 +452,10 @@ Future<void> showGroupEditor({
                                       Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
+                                          // FIX: withOpacity -> withValues
                                           color: payDayEnabled
                                               ? theme.colorScheme.secondary
-                                                    .withOpacity(0.1)
+                                                    .withValues(alpha: 0.1)
                                               : Colors.grey.shade100,
                                           borderRadius: BorderRadius.circular(
                                             12,
@@ -670,7 +672,8 @@ Future<void> showGroupEditor({
                             color: theme.scaffoldBackgroundColor,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                // FIX: withOpacity -> withValues
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 10,
                                 offset: const Offset(0, -2),
                               ),
@@ -757,7 +760,7 @@ Future<void> showGroupEditor({
                                                           .envelopesStream(),
                                                 );
                                             await groupRepo.deleteGroup(
-                                              groupId: editingGroupId!,
+                                              groupId: editingGroupId,
                                             );
                                             if (ctx.mounted) {
                                               Navigator.pop(ctx);

@@ -596,7 +596,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                   Switch(
                     value: _isAutomatic,
                     onChanged: (value) => setState(() => _isAutomatic = value),
-                    activeColor: theme.colorScheme.secondary,
+                    activeThumbColor: theme.colorScheme.secondary,
                   ),
                 ],
               ),

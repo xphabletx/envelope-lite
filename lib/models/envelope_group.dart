@@ -86,10 +86,6 @@ class EnvelopeGroup {
 }
 
 /// UPDATED: Hybrid system with Inverted Logic for Dark Binders
-/// - Black Binder: Identity is WHITE (Text/Spine) on DARK background
-/// - Brown Binder: Identity is CREAM (Text/Spine) on WALNUT background
-/// - Grey Binder: Preserved as is (Medium Grey on Dark Grey)
-/// - Others: Standard Pastel (Vibrant Identity on Light Pastel background)
 class GroupColors {
   // --- DEFINITIONS ---
 
@@ -109,9 +105,6 @@ class GroupColors {
 
   // --- METHODS ---
 
-  /// Returns the "Identity" color.
-  /// For dark binders, this returns the LIGHT text color so that
-  /// UI elements using this color (text, spines, buttons) pop against the dark BG.
   static Color getThemedColor(String? colorName, ColorScheme theme) {
     final safeName = colorName ?? 'Primary';
 
@@ -121,7 +114,6 @@ class GroupColors {
       case 'Secondary':
         return theme.secondary;
 
-      // Standard Colors
       case 'Red':
         return const Color(0xFFE53935);
       case 'Orange':
@@ -137,15 +129,13 @@ class GroupColors {
       case 'Pink':
         return const Color(0xFFD81B60);
 
-      // Special Inverted Binders
       case 'Brown':
-        return _brownIdentity; // Returns Cream
+        return _brownIdentity;
       case 'Black':
-        return _blackIdentity; // Returns White
+        return _blackIdentity;
       case 'Grey':
-        return _greyIdentity; // Returns Grey
+        return _greyIdentity;
 
-      // Legacy
       case 'Rose':
         return const Color(0xFFE91E63);
       case 'Coral':
@@ -166,86 +156,98 @@ class GroupColors {
     }
   }
 
-  /// Get contrasting text color for a given background
   static Color getContrastingTextColor(Color backgroundColor) {
     final luminance = backgroundColor.computeLuminance();
     return luminance > 0.5 ? const Color(0xFF212121) : Colors.white;
   }
 
-  /// Get background tint
   static Color getBackgroundTint(Color groupColor) {
-    // INVERTED LOGIC: If Identity is White/Cream, give Dark BG
-    if (groupColor.value == _blackIdentity.value) return _blackBg;
-    if (groupColor.value == _brownIdentity.value) return _brownBg;
-    if (groupColor.value == _greyIdentity.value) return _greyBg;
+    // FIX: Use toARGB32() instead of .value
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
+      return _blackBg;
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return _brownBg;
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return _greyBg;
+    }
 
-    // STANDARD LOGIC: Light Pastel
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.95).withSaturation(0.25).toColor();
   }
 
-  /// Get envelope card color
   static Color getEnvelopeCardColor(Color groupColor) {
-    // INVERTED LOGIC
-    if (groupColor.value == _blackIdentity.value)
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
       return const Color(0xFF2C2C2C);
-    if (groupColor.value == _brownIdentity.value)
-      return const Color(0xFF5D4037); // Slightly lighter Walnut
-    if (groupColor.value == _greyIdentity.value) return const Color(0xFF616161);
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return const Color(0xFF5D4037);
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return const Color(0xFF616161);
+    }
 
-    // STANDARD LOGIC
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.92).withSaturation(0.30).toColor();
   }
 
-  /// Get left page color
   static Color getLeftPageColor(Color groupColor) {
-    // INVERTED LOGIC
-    if (groupColor.value == _blackIdentity.value)
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
       return const Color(0xFF1E1E1E);
-    if (groupColor.value == _brownIdentity.value)
-      return const Color(0xFF3E2723); // Dark Walnut
-    if (groupColor.value == _greyIdentity.value) return const Color(0xFF424242);
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return const Color(0xFF3E2723);
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return const Color(0xFF424242);
+    }
 
-    // STANDARD LOGIC
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.94).withSaturation(0.28).toColor();
   }
 
-  /// Get right page color
   static Color getRightPageColor(Color groupColor) {
-    // INVERTED LOGIC
-    if (groupColor.value == _blackIdentity.value)
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
       return const Color(0xFF121212);
-    if (groupColor.value == _brownIdentity.value)
-      return const Color(0xFF321F1B); // Darker Walnut
-    if (groupColor.value == _greyIdentity.value) return const Color(0xFF303030);
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return const Color(0xFF321F1B);
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return const Color(0xFF303030);
+    }
 
-    // STANDARD LOGIC
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.93).withSaturation(0.32).toColor();
   }
 
-  /// Get border color
   static Color getBorderColor(Color groupColor) {
-    // INVERTED LOGIC: Border is same as Identity (Light)
-    if (groupColor.value == _blackIdentity.value) return _blackIdentity;
-    if (groupColor.value == _brownIdentity.value) return _brownIdentity;
-    if (groupColor.value == _greyIdentity.value) return Colors.white70;
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
+      return _blackIdentity;
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return _brownIdentity;
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return Colors.white70;
+    }
 
-    // STANDARD LOGIC: Darker border
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.50).withSaturation(0.70).toColor();
   }
 
-  /// Get accent text color
   static Color getAccentTextColor(Color groupColor) {
-    // INVERTED LOGIC: Text is Identity (Light)
-    if (groupColor.value == _blackIdentity.value) return _blackIdentity;
-    if (groupColor.value == _brownIdentity.value) return _brownIdentity;
-    if (groupColor.value == _greyIdentity.value) return Colors.white;
+    if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
+      return _blackIdentity;
+    }
+    if (groupColor.toARGB32() == _brownIdentity.toARGB32()) {
+      return _brownIdentity;
+    }
+    if (groupColor.toARGB32() == _greyIdentity.toARGB32()) {
+      return Colors.white;
+    }
 
-    // STANDARD LOGIC: Dark Text
     final hsl = HSLColor.fromColor(groupColor);
     return hsl.withLightness(0.35).toColor();
   }

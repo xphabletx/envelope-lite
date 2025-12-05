@@ -4,7 +4,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../../../models/envelope.dart';
 import '../../../../../services/envelope_repo.dart';
@@ -259,7 +258,7 @@ class _TransferModalState extends State<TransferModal> {
 
               // Target envelope picker
               DropdownButtonFormField<String?>(
-                value: _selectedTargetEnvelopeId,
+                initialValue: _selectedTargetEnvelopeId,
                 decoration: InputDecoration(
                   labelText: tr('transfer_to_envelope'),
                   border: OutlineInputBorder(

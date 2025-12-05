@@ -10,7 +10,7 @@ class GroupRepo {
 
   bool get _inWorkspace => _envelopeRepo.inWorkspace;
   String? get _workspaceId => _envelopeRepo.workspaceId;
-  String get _userId => _envelopeRepo.currentUserId!;
+  String get _userId => _envelopeRepo.currentUserId;
 
   fs.CollectionReference<Map<String, dynamic>> groupsCol() {
     if (_inWorkspace && _workspaceId != null) {
@@ -62,8 +62,9 @@ class GroupRepo {
     if (name != null) updateData['name'] = name;
     if (emoji != null) updateData['emoji'] = emoji;
     if (colorName != null) updateData['colorName'] = colorName;
-    if (payDayEnabled != null)
+    if (payDayEnabled != null) {
       updateData['payDayEnabled'] = payDayEnabled; // NEW
+    }
 
     await groupsCol().doc(groupId).update(updateData);
   }
