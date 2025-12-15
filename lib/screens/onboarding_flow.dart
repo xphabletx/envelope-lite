@@ -7,6 +7,7 @@ import '../providers/theme_provider.dart';
 import '../providers/font_provider.dart';
 import '../providers/app_preferences_provider.dart';
 import '../theme/app_themes.dart';
+import '../providers/locale_provider.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key, required this.userService});
@@ -43,12 +44,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       final fontProvider = Provider.of<FontProvider>(context, listen: false);
       await fontProvider.setFont(_selectedFont);
 
-      final prefsProvider = Provider.of<AppPreferencesProvider>(
+      // NEW: Initialize LocaleProvider
+      final localeProvider = Provider.of<LocaleProvider>(
         context,
         listen: false,
       );
-      await prefsProvider.setLanguage(_selectedLanguage);
-      await prefsProvider.setCurrency(_selectedCurrency);
+      await localeProvider.setLanguage(_selectedLanguage);
+      await localeProvider.setCurrency(_selectedCurrency);
     }
 
     // Mark onboarding complete
@@ -573,7 +575,7 @@ class _FontPickerStep extends StatelessWidget {
   }
 }
 
-// Step 5: Language Picker (Placeholder)
+// Step 5: Language Picker (FIXED OVERFLOW)
 class _LanguagePickerStep extends StatelessWidget {
   const _LanguagePickerStep({
     required this.selectedLanguage,
@@ -589,41 +591,94 @@ class _LanguagePickerStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.language, size: 120, color: Colors.grey),
-          const SizedBox(height: 32),
-          Text(
-            'Select Language',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Currently only English is supported',
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          Card(
-            child: ListTile(
-              leading: const Text('🇬🇧', style: TextStyle(fontSize: 32)),
-              title: const Text('English'),
-              subtitle: const Text('Default language'),
-              trailing: const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 32,
+          // Expanded wrapping SingleChildScrollView allows content to scroll and fill available space
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  const Icon(Icons.language, size: 120, color: Colors.grey),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Select Language',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Choose your preferred language',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+
+                  // Language dropdown
+                  ...LocaleProvider.supportedLanguages.map((lang) {
+                    final code = lang['code']!;
+                    final isSelected = selectedLanguage == code;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: isSelected ? 4 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline.withValues(
+                                  alpha: 0.2,
+                                ),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        leading: Text(
+                          lang['flag']!,
+                          style: const TextStyle(fontSize: 32),
+                        ),
+                        title: Text(
+                          lang['name']!,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check_circle,
+                                color: theme.colorScheme.primary,
+                                size: 32,
+                              )
+                            : null,
+                        onTap: () => onLanguageSelected(code),
+                      ),
+                    );
+                  }),
+                ],
               ),
-              onTap: () {},
             ),
           ),
-          const Spacer(),
+
+          // Fixed Bottom Buttons
+          const SizedBox(height: 16), // Padding between list and buttons
           Row(
             children: [
               Expanded(
@@ -635,7 +690,7 @@ class _LanguagePickerStep extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Back'),
+                  child: Text('Back', style: fontProvider.getTextStyle()),
                 ),
               ),
               const SizedBox(width: 16),
@@ -649,7 +704,12 @@ class _LanguagePickerStep extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Continue'),
+                  child: Text(
+                    'Continue',
+                    style: fontProvider.getTextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -660,7 +720,7 @@ class _LanguagePickerStep extends StatelessWidget {
   }
 }
 
-// Step 6: Currency Picker (Placeholder)
+// Step 6: Currency Picker (FIXED OVERFLOW PROACTIVELY)
 class _CurrencyPickerStep extends StatelessWidget {
   const _CurrencyPickerStep({
     required this.selectedCurrency,
@@ -676,41 +736,119 @@ class _CurrencyPickerStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.attach_money, size: 120, color: Colors.grey),
-          const SizedBox(height: 32),
-          Text(
-            'Select Currency',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Currently only GBP (£) is supported',
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          Card(
-            child: ListTile(
-              leading: const Text('£', style: TextStyle(fontSize: 32)),
-              title: const Text('British Pound (GBP)'),
-              subtitle: const Text('Default currency'),
-              trailing: const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 32,
+          // Expanded wrapping SingleChildScrollView allows content to scroll and fill available space
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 32),
+                  const Icon(Icons.attach_money, size: 120, color: Colors.grey),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Select Currency',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Choose your preferred currency',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+
+                  // Currency dropdown
+                  ...LocaleProvider.supportedCurrencies.map((currency) {
+                    final code = currency['code']!;
+                    final isSelected = selectedCurrency == code;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: isSelected ? 4 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline.withValues(
+                                  alpha: 0.2,
+                                ),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        leading: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.1,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              currency['symbol']!,
+                              style: TextStyle(
+                                fontSize: 24,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          currency['name']!,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        subtitle: Text(
+                          code,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check_circle,
+                                color: theme.colorScheme.primary,
+                                size: 32,
+                              )
+                            : null,
+                        onTap: () => onCurrencySelected(code),
+                      ),
+                    );
+                  }),
+                ],
               ),
-              onTap: () {},
             ),
           ),
-          const Spacer(),
+
+          // Fixed Bottom Buttons
+          const SizedBox(height: 16), // Padding between list and buttons
           Row(
             children: [
               Expanded(
@@ -722,7 +860,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Back'),
+                  child: Text('Back', style: fontProvider.getTextStyle()),
                 ),
               ),
               const SizedBox(width: 16),
@@ -736,7 +874,12 @@ class _CurrencyPickerStep extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Get Started 🎉'),
+                  child: Text(
+                    'Get Started 🎉',
+                    style: fontProvider.getTextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],

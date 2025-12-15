@@ -1,60 +1,270 @@
 // lib/screens/workspace_gate.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-// All button text wrapped in FittedBox to prevent wrapping
-
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../services/localization_service.dart';
+import '../services/envelope_repo.dart';
+import '../services/workspace_helper.dart';
+import '../providers/font_provider.dart';
+import 'workspace_settings_screen.dart';
 
 class WorkspaceGate extends StatefulWidget {
   const WorkspaceGate({
     super.key,
     required this.onJoined,
-    this.workspaceId, // if provided, show Manage section (rename)
+    this.workspaceId,
+    this.repo,
   });
 
   final ValueChanged<String> onJoined;
   final String? workspaceId;
+  final EnvelopeRepo? repo;
 
   @override
   State<WorkspaceGate> createState() => _WorkspaceGateState();
 }
 
 class _WorkspaceGateState extends State<WorkspaceGate> {
-  final _db = FirebaseFirestore.instance;
   final _joinCtrl = TextEditingController();
-
-  bool _creating = false;
-  bool _joining = false;
-
-  // Manage mode fields
   final _displayNameCtrl = TextEditingController();
-  String? _joinCodeForManage;
-  bool _savingName = false;
-  bool _loadedManage = false;
+
+  // New Flow Logic
+  void _initiateCreate() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkspaceSharingSelectionScreen(
+          mode: WorkspaceSharingMode.create,
+          repo: widget.repo,
+          onComplete: (workspaceId) async {
+            // CRITICAL FIX: Set workspace on repo AND SharedPreferences
+            final repo = widget.repo;
+            if (repo != null) {
+              await repo.setWorkspace(workspaceId);
+              await WorkspaceHelper.setActiveWorkspaceId(workspaceId);
+            }
+
+            widget.onJoined(workspaceId);
+            if (mounted) _navigateToSettings(workspaceId);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _initiateJoin() {
+    final code = _joinCtrl.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkspaceSharingSelectionScreen(
+          mode: WorkspaceSharingMode.join,
+          joinCode: code,
+          repo: widget.repo,
+          onComplete: (workspaceId) async {
+            // CRITICAL FIX: Set workspace on repo AND SharedPreferences
+            final repo = widget.repo;
+            if (repo != null) {
+              await repo.setWorkspace(workspaceId);
+              await WorkspaceHelper.setActiveWorkspaceId(workspaceId);
+            }
+
+            widget.onJoined(workspaceId);
+            if (mounted) _navigateToSettings(workspaceId);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _navigateToSettings(String workspaceId) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final repo =
+        widget.repo ??
+        EnvelopeRepo.firebase(
+          FirebaseFirestore.instance,
+          userId: currentUserId,
+          workspaceId: workspaceId, // Pass workspace ID here
+        );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkspaceSettingsScreen(
+          workspaceId: workspaceId,
+          currentUserId: currentUserId,
+          repo: repo,
+          onWorkspaceLeft: () => Navigator.pop(context),
+          showJoinCodeInitially: true,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.workspaceId != null) {
+      return const Center(child: Text("Manage Mode Placeholder"));
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text(tr('workspace_start_or_join')), elevation: 0),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _initiateCreate,
+                  icon: const Icon(Icons.add_business),
+                  label: Text(
+                    tr('workspace_create_new'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 30.0),
+                child: Divider(color: Colors.black26),
+              ),
+              Text(
+                tr('workspace_join_existing'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _joinCtrl,
+                textAlign: TextAlign.center,
+                maxLength: 6,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  // UPPERCASE FIX: Force all input to uppercase
+                  UpperCaseTextFormatter(),
+                ],
+                decoration: InputDecoration(
+                  labelText: tr('workspace_enter_code'),
+                  hintText: 'ABC123',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _initiateJoin,
+                  icon: const Icon(Icons.login),
+                  label: Text(
+                    tr('workspace_join_button'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// UPPERCASE FIX: Text formatter to force uppercase
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
+
+// --- SHARING SELECTION SCREEN ---
+
+enum WorkspaceSharingMode { create, join }
+
+class WorkspaceSharingSelectionScreen extends StatefulWidget {
+  final WorkspaceSharingMode mode;
+  final String? joinCode;
+  final EnvelopeRepo? repo;
+  final Function(String workspaceId) onComplete;
+
+  const WorkspaceSharingSelectionScreen({
+    super.key,
+    required this.mode,
+    this.joinCode,
+    this.repo,
+    required this.onComplete,
+  });
+
+  @override
+  State<WorkspaceSharingSelectionScreen> createState() =>
+      _WorkspaceSharingSelectionScreenState();
+}
+
+class _WorkspaceSharingSelectionScreenState
+    extends State<WorkspaceSharingSelectionScreen> {
+  final _db = FirebaseFirestore.instance;
+  bool _loading = true;
+  bool _processing = false;
+
+  // Set of IDs to HIDE. If ID is here, isShared = false.
+  final Set<String> _hiddenEnvelopeIds = {};
+  final Set<String> _hiddenGroupIds = {};
+  bool _hideFutureEnvelopes = false; // New Checkbox
+
+  List<DocumentSnapshot> _myEnvelopes = [];
+  List<DocumentSnapshot> _myGroups = [];
 
   @override
   void initState() {
     super.initState();
-    if (widget.workspaceId != null) {
-      _loadManageData(widget.workspaceId!);
-    }
+    _fetchMyData();
   }
 
-  Future<void> _loadManageData(String wsId) async {
+  Future<void> _fetchMyData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
     try {
-      final snap = await _db.collection('workspaces').doc(wsId).get();
-      if (!snap.exists) return;
-      final data = snap.data() ?? {};
-      _joinCodeForManage = (data['joinCode'] as String?)?.trim();
-      _displayNameCtrl.text =
-          ((data['displayName'] ?? data['name']) as String? ?? '').trim();
-    } catch (_) {
-      // swallow; keep UI usable
-    } finally {
-      if (mounted) setState(() => _loadedManage = true);
+      final envSnap = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('solo')
+          .doc('data')
+          .collection('envelopes')
+          .get();
+      final groupSnap = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('solo')
+          .doc('data')
+          .collection('groups')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _myEnvelopes = envSnap.docs;
+          _myGroups = groupSnap.docs;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching data: $e");
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -64,474 +274,219 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     return List.generate(n, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  Future<void> _create() async {
-    setState(() => _creating = true);
+  Future<void> _finish() async {
+    setState(() => _processing = true);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
     try {
-      // Get current user ID from Firebase Auth
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId == null) {
-        throw Exception(tr('error_no_user_logged_in'));
+      String workspaceId = '';
+
+      // 1. Create or Join Workspace
+      if (widget.mode == WorkspaceSharingMode.create) {
+        final code = _randomCode(6);
+        final ref = _db.collection('workspaces').doc();
+        await ref.set({
+          'joinCode': code,
+          'displayName': 'My Workspace',
+          'name': code,
+          'createdAt': FieldValue.serverTimestamp(),
+          'members': {uid: true},
+        });
+        workspaceId = ref.id;
+      } else {
+        final snap = await _db
+            .collection('workspaces')
+            .where('joinCode', isEqualTo: widget.joinCode)
+            .limit(1)
+            .get();
+        if (snap.docs.isEmpty) throw Exception(tr('error_workspace_not_found'));
+        final doc = snap.docs.first;
+        await doc.reference.update({'members.$uid': true});
+        workspaceId = doc.id;
       }
 
-      final ref = _db.collection('workspaces').doc();
-      final code = _randomCode(6);
+      // 2. Update Sharing Preferences (Batch)
+      final batch = _db.batch();
 
-      // Create workspace with the creator as first member
-      await ref.set({
-        'joinCode': code,
-        'displayName': '',
-        'name': code,
-        'createdAt': FieldValue.serverTimestamp(),
-        'members': {
-          currentUserId: true, // Add creator to members
-        },
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${tr('workspace_created_success')} $code'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-
-      widget.onJoined(ref.id);
-      if (mounted) Navigator.of(context).maybePop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${tr('error_creating_workspace')}: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _creating = false);
-    }
-  }
-
-  Future<void> _join() async {
-    final code = _joinCtrl.text.trim().toUpperCase();
-    if (code.isEmpty) return;
-
-    setState(() => _joining = true);
-
-    try {
-      // Get current user ID
-      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId == null) {
-        throw Exception(tr('error_no_user_logged_in'));
+      for (var doc in _myEnvelopes) {
+        final hide = _hiddenEnvelopeIds.contains(doc.id);
+        batch.update(doc.reference, {'isShared': !hide});
+      }
+      for (var doc in _myGroups) {
+        final hide = _hiddenGroupIds.contains(doc.id);
+        batch.update(doc.reference, {'isShared': !hide});
       }
 
-      final snap = await _db
-          .collection('workspaces')
-          .where('joinCode', isEqualTo: code)
-          .limit(1)
-          .get();
-
-      if (!mounted) return;
-      if (snap.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('error_workspace_not_found'))),
-        );
-        return;
-      }
-
-      final doc = snap.docs.first;
-
-      // Add current user to workspace members
-      await doc.reference.update({'members.$currentUserId': true});
-
-      widget.onJoined(doc.id);
-      Navigator.of(context).maybePop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${tr('error_joining_workspace')}: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _joining = false);
-    }
-  }
-
-  Future<void> _saveDisplayName() async {
-    final wsId = widget.workspaceId;
-    if (wsId == null) return;
-
-    final friendly = _displayNameCtrl.text.trim();
-    setState(() => _savingName = true);
-    try {
-      await _db.collection('workspaces').doc(wsId).update({
-        'displayName': friendly,
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('workspace_name_updated'))));
-      Navigator.of(context).maybePop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${tr('error_saving_name')}: $e')));
-    } finally {
-      if (mounted) setState(() => _savingName = false);
-    }
-  }
-
-  Future<void> _editNickname(String userId, String currentName) async {
-    final nicknameCtrl = TextEditingController();
-
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) return;
-
-    try {
-      final userDoc = await _db.collection('users').doc(currentUserId).get();
-      final userData = userDoc.data();
-      final nicknames = (userData?['nicknames'] as Map<String, dynamic>?) ?? {};
-      nicknameCtrl.text = (nicknames[userId] as String?) ?? '';
-    } catch (_) {
-      // Ignore, start with empty
-    }
-
-    if (!mounted) return;
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${tr('workspace_set_nickname_for')} $currentName'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr('workspace_nickname_privacy_note'),
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nicknameCtrl,
-              decoration: InputDecoration(
-                labelText: tr('workspace_nickname'),
-                hintText: tr('workspace_nickname_hint'),
-                border: const OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(tr('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, nicknameCtrl.text.trim()),
-            child: Text(tr('save')),
-          ),
-        ],
-      ),
-    );
-
-    if (result == null) return;
-
-    try {
-      await _db.collection('users').doc(currentUserId).set({
-        'nicknames': {userId: result.isEmpty ? FieldValue.delete() : result},
+      // 3. Save "Hide Future" Preference
+      batch.set(_db.collection('users').doc(uid), {
+        'workspacePreferences': {'hideFutureEnvelopes': _hideFutureEnvelopes},
       }, SetOptions(merge: true));
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.isEmpty
-                ? tr('workspace_nickname_cleared')
-                : '${tr('workspace_nickname_saved')}: $result',
-          ),
-        ),
-      );
+      await batch.commit();
 
-      // Force rebuild to fetch new nickname immediately
-      if (mounted) setState(() {});
+      if (mounted) widget.onComplete(workspaceId);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${tr('error_saving_nickname')}: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _processing = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final loadingIndicator = const SizedBox(
-      width: 20,
-      height: 20,
-      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-    );
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
-    final inManageMode = widget.workspaceId != null;
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          inManageMode
-              ? tr('workspace_settings')
-              : tr('workspace_start_or_join'),
-        ),
-        elevation: 0,
-        automaticallyImplyLeading: true,
+        title: Text(tr('workspace_sharing_setup')),
+        scrolledUnderElevation: 0,
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!inManageMode) ...[
-                // --- Create Workspace ---
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _creating || _joining ? null : _create,
-                    icon: _creating
-                        ? loadingIndicator
-                        : const Icon(Icons.add_business),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _creating
-                            ? tr('workspace_creating')
-                            : tr('workspace_create_new'),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 30.0),
-                  child: Divider(color: Colors.black26),
-                ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              tr('workspace_select_to_hide'),
+              style: fontProvider.getTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
 
-                // --- Join Workspace ---
-                Text(
-                  tr('workspace_join_existing'),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _joinCtrl,
-                  textAlign: TextAlign.center,
-                  maxLength: 6,
-                  enabled: !_creating && !_joining,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    labelText: tr('workspace_enter_code'),
-                    hintText: 'e.g. ABC123',
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _creating || _joining ? null : _join,
-                    icon: _joining ? loadingIndicator : const Icon(Icons.login),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _joining
-                            ? tr('workspace_joining')
-                            : tr('workspace_join_button'),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                // ----------------- Manage current workspace -----------------
-                if (!_loadedManage)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
-                  )
-                else ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          tr('workspace_join_code_label'),
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Chip(label: Text(_joinCodeForManage ?? '—')),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _displayNameCtrl,
-                    decoration: InputDecoration(
-                      labelText: tr('workspace_display_name_optional'),
-                      hintText: tr('workspace_display_name_hint'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
+          // HIDE FUTURE TOGGLE
+          SwitchListTile(
+            title: Text(
+              tr('workspace_hide_future') ?? 'Hide future envelopes by default',
+            ),
+            value: _hideFutureEnvelopes,
+            onChanged: (val) => setState(() => _hideFutureEnvelopes = val),
+            activeColor: theme.colorScheme.primary,
+          ),
+          const Divider(),
+
+          Expanded(
+            child: (_myEnvelopes.isEmpty && _myGroups.isEmpty)
+                ? Center(
                     child: Text(
-                      tr('workspace_display_name_explanation'),
+                      "No items to share",
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _savingName ? null : _saveDisplayName,
-                      icon: _savingName
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(Icons.save),
-                      label: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(_savingName ? tr('saving') : tr('save')),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-                  const Divider(),
-                  const SizedBox(height: 16),
-
-                  // --- MEMBERS SECTION ---
-                  Row(
+                  )
+                : ListView(
                     children: [
-                      Expanded(
-                        child: Text(
-                          tr('workspace_members_title'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: _db
-                        .collection('workspaces')
-                        .doc(widget.workspaceId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final workspaceData =
-                          snapshot.data?.data() as Map<String, dynamic>?;
-                      final members =
-                          (workspaceData?['members']
-                              as Map<String, dynamic>?) ??
-                          {};
-
-                      if (members.isEmpty) {
-                        return Padding(
+                      if (_myGroups.isNotEmpty) ...[
+                        Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            tr('workspace_no_members'),
-                            style: TextStyle(color: Colors.grey.shade600),
+                            tr('binders'),
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        );
-                      }
-
-                      return Column(
-                        children: members.keys.map((memberId) {
-                          return FutureBuilder<DocumentSnapshot>(
-                            future: _db.collection('users').doc(memberId).get(),
-                            builder: (context, userSnapshot) {
-                              final userData =
-                                  userSnapshot.data?.data()
-                                      as Map<String, dynamic>?;
-                              final displayName =
-                                  (userData?['displayName'] as String?) ??
-                                  (userData?['email'] as String?) ??
-                                  tr('unknown_user');
-                              final email =
-                                  (userData?['email'] as String?) ?? '';
-
-                              final currentUserId =
-                                  FirebaseAuth.instance.currentUser?.uid;
-                              final isMe = memberId == currentUserId;
-
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: Colors.blue.shade100,
-                                    child: Text(
-                                      displayName.isNotEmpty
-                                          ? displayName[0].toUpperCase()
-                                          : '?',
-                                      style: TextStyle(
-                                        color: Colors.blue.shade800,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    displayName,
-                                    style: TextStyle(
-                                      fontWeight: isMe
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    isMe
-                                        ? '$email (${tr('workspace_you')})'
-                                        : email,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  trailing: isMe
-                                      ? null
-                                      : IconButton(
-                                          icon: const Icon(
-                                            Icons.edit,
-                                            size: 20,
-                                          ),
-                                          onPressed: () => _editNickname(
-                                            memberId,
-                                            displayName,
-                                          ),
-                                          tooltip: tr(
-                                            'workspace_set_nickname_tooltip',
-                                          ),
-                                        ),
-                                ),
-                              );
-                            }, // ← This closes FutureBuilder builder
-                          ); // ← This closes FutureBuilder
-                        }).toList(), // ← This closes map
-                      ); // ← This closes Column
-                    }, // ← This closes StreamBuilder builder
-                  ), // ← This closes StreamBuilder
-                ], // ← This closes the "else" block for manage mode
-              ], // ← This closes the main children list
-            ], // Column
-          ), // SingleChildScrollView
-        ), // Center
-      ), // body
-    ); // Scaffold
-  } // build
-}  // class
+                        ),
+                        ..._myGroups.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final isHidden = _hiddenGroupIds.contains(doc.id);
+                          return CheckboxListTile(
+                            value: isHidden,
+                            title: Text(data['name'] ?? 'Unnamed'),
+                            secondary: Text(data['emoji'] ?? '📁'),
+                            subtitle: Text(
+                              isHidden ? "Private" : "Shared",
+                              style: TextStyle(
+                                color: isHidden ? Colors.red : Colors.green,
+                              ),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _hiddenGroupIds.add(doc.id);
+                                } else {
+                                  _hiddenGroupIds.remove(doc.id);
+                                }
+                              });
+                            },
+                          );
+                        }),
+                      ],
+                      if (_myEnvelopes.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            tr('envelopes'),
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ..._myEnvelopes.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final isHidden = _hiddenEnvelopeIds.contains(doc.id);
+                          return CheckboxListTile(
+                            value: isHidden,
+                            title: Text(data['name'] ?? 'Unnamed'),
+                            secondary: const Icon(Icons.mail_outline),
+                            subtitle: Text(
+                              isHidden ? "Private" : "Shared",
+                              style: TextStyle(
+                                color: isHidden ? Colors.red : Colors.green,
+                              ),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _hiddenEnvelopeIds.add(doc.id);
+                                } else {
+                                  _hiddenEnvelopeIds.remove(doc.id);
+                                }
+                              });
+                            },
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _processing ? null : _finish,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: _processing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        widget.mode == WorkspaceSharingMode.create
+                            ? tr('workspace_create_confirm')
+                            : tr('workspace_join_confirm'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

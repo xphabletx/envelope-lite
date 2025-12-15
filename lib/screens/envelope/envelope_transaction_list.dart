@@ -1,7 +1,12 @@
+// lib/screens/envelope/envelope_transaction_list.dart
+// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
+// FONT PROVIDER INTEGRATED: Removed GoogleFonts
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/transaction.dart';
+import '../../../providers/font_provider.dart';
 
 class EnvelopeTransactionList extends StatelessWidget {
   const EnvelopeTransactionList({
@@ -85,6 +90,7 @@ class _TransactionGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,7 +100,8 @@ class _TransactionGroup extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
             groupName,
-            style: GoogleFonts.caveat(
+            // UPDATED: FontProvider
+            style: fontProvider.getTextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.primary,
@@ -127,6 +134,7 @@ class _TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final currencyFormatter = NumberFormat.currency(symbol: '£');
 
     // Determine transaction display based on type
@@ -179,9 +187,13 @@ class _TransactionTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
+        // BUG FIX: Use theme surface color instead of hardcoded/white
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+        // FIX: withOpacity -> withValues
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+        ),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -189,7 +201,8 @@ class _TransactionTile extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            // FIX: withOpacity -> withValues
+            color: color.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color, size: 20),
@@ -203,9 +216,11 @@ class _TransactionTile extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   subtitle,
-                  style: GoogleFonts.caveat(
+                  // UPDATED: FontProvider
+                  style: fontProvider.getTextStyle(
                     fontSize: 14,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    // FIX: withOpacity -> withValues
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               )
@@ -227,7 +242,8 @@ class _TransactionTile extends StatelessWidget {
               DateFormat('HH:mm').format(transaction.date),
               style: TextStyle(
                 fontSize: 11,
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                // FIX: withOpacity -> withValues
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -244,6 +260,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Padding(
       padding: const EdgeInsets.all(48),
@@ -252,14 +269,17 @@ class _EmptyState extends StatelessWidget {
           Icon(
             Icons.receipt_long_outlined,
             size: 64,
-            color: theme.colorScheme.onSurface.withOpacity(0.3),
+            // FIX: withOpacity -> withValues
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'No transactions yet',
-            style: GoogleFonts.caveat(
+            // UPDATED: FontProvider
+            style: fontProvider.getTextStyle(
               fontSize: 24,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              // FIX: withOpacity -> withValues
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 8),
@@ -267,7 +287,8 @@ class _EmptyState extends StatelessWidget {
             'Add money to get started!',
             style: TextStyle(
               fontSize: 14,
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
+              // FIX: withOpacity -> withValues
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
             ),
             textAlign: TextAlign.center,
           ),

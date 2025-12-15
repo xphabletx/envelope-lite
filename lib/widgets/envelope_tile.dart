@@ -1,10 +1,8 @@
 // lib/widgets/envelope_tile.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-// All button text wrapped in FittedBox to prevent wrapping
+// FIXED - removed defaultEmoji parameter
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-// REMOVED unused google_fonts import
 import 'package:intl/intl.dart';
 import '../models/envelope.dart';
 import '../services/envelope_repo.dart';
@@ -13,6 +11,10 @@ import 'quick_action_modal.dart';
 import '../models/transaction.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../services/workspace_helper.dart';
+import 'emoji_picker_sheet.dart';
+// TUTORIAL IMPORT
+import '../services/tutorial_controller.dart';
 
 class EnvelopeTile extends StatefulWidget {
   const EnvelopeTile({
@@ -46,7 +48,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   late Animation<Offset> _slideAnimation;
   bool _isRevealed = false;
 
-  // FIX: Calculate dynamic offset based on button widths (3 buttons * 48px + 2 gaps * 6px + padding = 164px)
   static const double _actionButtonsWidth = 164.0;
 
   @override
@@ -60,7 +61,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       duration: const Duration(milliseconds: 250),
     );
 
-    // Animation from 0 to 1 (we'll calculate pixel offset in the builder)
     _slideAnimation = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(-1.0, 0),
@@ -70,7 +70,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   @override
   void didUpdateWidget(EnvelopeTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Update local state if envelope data changes
     if (oldWidget.envelope.emoji != widget.envelope.emoji) {
       _customEmoji = widget.envelope.emoji;
     }
@@ -105,116 +104,24 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     }
   }
 
+  // FIXED: Removed defaultEmoji parameter
   Future<void> _pickEmoji() async {
-    final controller = TextEditingController(text: _customEmoji ?? '');
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    await showDialog(
+    final result = await showEmojiPickerSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          tr('appearance_choose_emoji'),
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                tr('appearance_emoji_instructions'),
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLength: 1,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 60),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
-                onChanged: (value) {
-                  if (value.characters.length > 1) {
-                    controller.text = value.characters.first;
-                    controller.selection = TextSelection.fromPosition(
-                      TextPosition(offset: controller.text.length),
-                    );
-                  }
-                },
-                onSubmitted: (value) {
-                  Navigator.pop(context);
-                  final emoji = value.characters.isEmpty
-                      ? null
-                      : value.characters.first;
-                  setState(() => _customEmoji = emoji);
-                  widget.repo.updateEnvelope(
-                    envelopeId: widget.envelope.id,
-                    emoji: emoji,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => _customEmoji = null);
-              widget.repo.updateEnvelope(
-                envelopeId: widget.envelope.id,
-                emoji: null,
-              );
-            },
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('remove'),
-                style: fontProvider.getTextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('cancel'),
-                style: fontProvider.getTextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              final emoji = controller.text.characters.isEmpty
-                  ? null
-                  : controller.text.characters.first;
-              setState(() => _customEmoji = emoji);
-              widget.repo.updateEnvelope(
-                envelopeId: widget.envelope.id,
-                emoji: emoji,
-              );
-            },
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('save'),
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      initialEmoji: _customEmoji,
     );
+
+    if (result != null) {
+      setState(() {
+        // If result is empty string, that means reset/clear
+        _customEmoji = result.isEmpty ? null : result;
+      });
+
+      await widget.repo.updateEnvelope(
+        envelopeId: widget.envelope.id,
+        emoji: result.isEmpty ? null : result,
+      );
+    }
   }
 
   Future<void> _editSubtitle() async {
@@ -233,13 +140,11 @@ class _EnvelopeTileState extends State<EnvelopeTile>
         ),
         content: TextField(
           controller: controller,
-          // FIX: Use .copyWith instead of parameter
           style: fontProvider
               .getTextStyle(fontSize: 18)
               .copyWith(fontStyle: FontStyle.italic),
           decoration: InputDecoration(
             hintText: tr('envelope_subtitle_hint'),
-            // FIX: Use .copyWith instead of parameter
             hintStyle: fontProvider
                 .getTextStyle(fontSize: 16, color: Colors.grey)
                 .copyWith(fontStyle: FontStyle.italic),
@@ -316,7 +221,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     final isMyEnvelope = widget.envelope.userId == widget.repo.currentUserId;
-    final showOwnerLabel = widget.repo.inWorkspace && !isMyEnvelope;
 
     double? percentage;
     if (widget.envelope.targetAmount != null &&
@@ -328,7 +232,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
           );
     }
 
-    // Main tile content
     final tileContent = Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -376,20 +279,28 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (showOwnerLabel)
-                        FutureBuilder<String>(
-                          future: widget.repo.getUserDisplayName(
-                            widget.envelope.userId,
-                          ),
+                      if (!isMyEnvelope)
+                        FutureBuilder<bool>(
+                          future: WorkspaceHelper.isCurrentlyInWorkspace(),
                           builder: (context, snapshot) {
-                            final ownerName =
-                                snapshot.data ?? tr('unknown_user');
-                            return Text(
-                              ownerName,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontSize: 11,
+                            final inWorkspace = snapshot.data ?? false;
+                            if (!inWorkspace) return const SizedBox.shrink();
+
+                            return FutureBuilder<String>(
+                              future: widget.repo.getUserDisplayName(
+                                widget.envelope.userId,
                               ),
+                              builder: (context, nameSnapshot) {
+                                final ownerName =
+                                    nameSnapshot.data ?? tr('unknown_user');
+                                return Text(
+                                  ownerName,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontSize: 11,
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -420,7 +331,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                   onTap: _editSubtitle,
                   child: Text(
                     '"$_subtitle"',
-                    // FIX: Use .copyWith instead of parameter
                     style: fontProvider
                         .getTextStyle(fontSize: 16)
                         .copyWith(
@@ -466,7 +376,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       ),
     );
 
-    // If multi-select mode is active, disable swipe
     if (widget.isMultiSelectMode) {
       return GestureDetector(
         onTap: widget.onTap,
@@ -475,11 +384,54 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       );
     }
 
-    // Otherwise, wrap in swipeable stack with action buttons
     return GestureDetector(
-      onHorizontalDragEnd: (details) {
+      onHorizontalDragEnd: (details) async {
         if (details.primaryVelocity != null) {
           if (details.primaryVelocity!.abs() > 300) {
+            // TUTORIAL LOGIC
+            // Check if we need to advance the tutorial on swipe
+            final tutorialController = Provider.of<TutorialController>(
+              context,
+              listen: false,
+            );
+
+            // UPDATED: Use swipeGesture (new step name) and show completion dialog
+            if (tutorialController.isActive &&
+                tutorialController.currentStep == TutorialStep.swipeGesture) {
+              // Advance tutorial
+              await tutorialController.nextStep();
+
+              // Show completion dialog
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dialogContext) => AlertDialog(
+                    title: Row(
+                      children: const [
+                        Text('Tutorial Complete! '),
+                        Text('🎉', style: TextStyle(fontSize: 24)),
+                      ],
+                    ),
+                    content: const Text(
+                      'You\'re all set! Feel free to explore Envelope Lite.\n\n'
+                      'Need help? Check Settings → Help anytime!',
+                    ),
+                    actions: [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          tutorialController.complete();
+                        },
+                        child: const Text('Get Started!'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            }
+
+            // Normal swipe logic
             _toggleReveal();
           }
         }
@@ -494,7 +446,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       onLongPress: widget.onLongPress,
       child: Stack(
         children: [
-          // Background action buttons
           Positioned.fill(
             child: Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -532,11 +483,9 @@ class _EnvelopeTileState extends State<EnvelopeTile>
               ),
             ),
           ),
-          // Foreground sliding tile - FIX: Convert animation value to pixel offset
           AnimatedBuilder(
             animation: _slideAnimation,
             builder: (context, child) {
-              // Calculate actual pixel offset: animation value (-1.0) * button width (164px) = -164px
               final pixelOffset = Offset(
                 _slideAnimation.value.dx * _actionButtonsWidth,
                 0,
@@ -553,7 +502,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   }
 }
 
-// Circular action button for swipe actions
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.icon,

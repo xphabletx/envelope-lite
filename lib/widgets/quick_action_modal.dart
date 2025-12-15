@@ -3,11 +3,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart'; // NEW IMPORT
 import '../models/envelope.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
 import 'calculator_widget.dart';
+import '../providers/font_provider.dart'; // NEW IMPORT
+import '../utils/calculator_helper.dart';
 
 class QuickActionModal extends StatefulWidget {
   const QuickActionModal({
@@ -43,14 +45,11 @@ class _QuickActionModalState extends State<QuickActionModal> {
   }
 
   void _showCalculator() async {
-    final result = await showDialog<double>(
-      context: context,
-      builder: (context) => const Dialog(child: CalculatorWidget()),
-    );
+    final result = await CalculatorHelper.showCalculator(context);
 
     if (result != null && mounted) {
       setState(() {
-        _amountController.text = result.toStringAsFixed(2);
+        _amountController.text = result;
       });
     }
   }
@@ -127,6 +126,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isTransfer = widget.type == TransactionType.transfer;
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     String title;
     IconData icon;
@@ -171,7 +171,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3), // FIX
+                color: theme.colorScheme.outline.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -184,7 +184,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1), // FIX
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color),
@@ -192,7 +192,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
               const SizedBox(width: 12),
               Text(
                 title,
-                style: GoogleFonts.caveat(
+                // UPDATED: FontProvider
+                style: fontProvider.getTextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onSurface,
@@ -207,7 +208,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: GoogleFonts.caveat(
+            // UPDATED: FontProvider
+            style: fontProvider.getTextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
@@ -238,7 +240,14 @@ class _QuickActionModalState extends State<QuickActionModal> {
               items: widget.allEnvelopes
                   .where((e) => e.id != widget.envelope.id)
                   .map(
-                    (e) => DropdownMenuItem(value: e.id, child: Text(e.name)),
+                    (e) => DropdownMenuItem(
+                      value: e.id,
+                      child: Text(
+                        e.name,
+                        // UPDATED: FontProvider
+                        style: fontProvider.getTextStyle(fontSize: 16),
+                      ),
+                    ),
                   )
                   .toList(),
               onChanged: (v) => setState(() => _selectedTargetId = v),
@@ -257,6 +266,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
+            // UPDATED: FontProvider
+            style: fontProvider.getTextStyle(fontSize: 16),
           ),
 
           const SizedBox(height: 16),
@@ -279,8 +290,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                ), // FIX
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -320,7 +331,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
                   )
                 : Text(
                     'Confirm',
-                    style: GoogleFonts.caveat(
+                    // UPDATED: FontProvider
+                    style: fontProvider.getTextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),

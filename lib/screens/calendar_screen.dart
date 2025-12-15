@@ -1,18 +1,17 @@
-// lib/screens/calendar_screen_v2.dart
+// lib/screens/calendar/calendar_screen.dart
 // FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
 // All button text wrapped in FittedBox to prevent wrapping
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
-// Kept as requested
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../models/scheduled_payment.dart';
-import '../services/envelope_repo.dart';
-import '../services/scheduled_payment_repo.dart';
+import '../../models/scheduled_payment.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
 import 'add_scheduled_payment_screen.dart';
-import '../services/localization_service.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../../services/localization_service.dart';
+import '../../providers/font_provider.dart';
 
 class _PaymentOccurrence {
   final ScheduledPayment payment;
@@ -258,6 +257,8 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
+                // CRITICAL FIX: Prevent color bleeding on scroll
+                scrolledUnderElevation: 0,
                 title: Text(
                   tr('calendar_title'),
                   // UPDATED: FontProvider

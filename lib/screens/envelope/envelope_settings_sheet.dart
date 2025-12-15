@@ -1,11 +1,17 @@
+// lib/screens/envelope/envelope_settings_sheet.dart
+// COMPLETE FILE WITH NEW EMOJI PICKER INTEGRATED
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../models/envelope.dart';
-import '../../../models/envelope_group.dart';
-import '../../../services/envelope_repo.dart';
-import '../../../services/group_repo.dart';
-import '../../../widgets/group_editor.dart' as editor;
+import '../../models/envelope.dart';
+import '../../models/envelope_group.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/group_repo.dart';
+import '../../widgets/group_editor.dart' as editor;
+import '../../providers/font_provider.dart';
+import '../add_scheduled_payment_screen.dart';
+import '../../widgets/emoji_picker_sheet.dart';
 
 class EnvelopeSettingsSheet extends StatefulWidget {
   const EnvelopeSettingsSheet({
@@ -89,14 +95,28 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       groupRepo: widget.groupRepo,
       envelopeRepo: widget.repo,
     );
-    // Reload binders after creation
     setState(() => _bindersLoaded = false);
     await _loadBinders();
+  }
+
+  // NEW: Use reusable emoji picker
+  Future<void> _showEmojiPicker(Envelope envelope) async {
+    final result = await showEmojiPickerSheet(
+      context: context,
+      initialEmoji: _selectedEmoji ?? envelope.emoji,
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedEmoji = result.isEmpty ? null : result;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
@@ -161,7 +181,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     Expanded(
                       child: Text(
                         'Envelope Settings',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
@@ -183,13 +203,13 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   children: [
                     TextField(
                       controller: _nameController,
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                       decoration: InputDecoration(
                         labelText: 'Envelope Name',
-                        labelStyle: GoogleFonts.caveat(fontSize: 18),
+                        labelStyle: fontProvider.getTextStyle(fontSize: 18),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -212,7 +232,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             const SizedBox(width: 16),
                             Text(
                               'Emoji',
-                              style: GoogleFonts.caveat(fontSize: 18),
+                              style: fontProvider.getTextStyle(fontSize: 18),
                             ),
                             const Spacer(),
                             Text(
@@ -226,19 +246,16 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _subtitleController,
-                      style: GoogleFonts.caveat(
-                        fontSize: 18,
-                        fontStyle: FontStyle.italic,
-                      ),
+                      style: fontProvider
+                          .getTextStyle(fontSize: 18)
+                          .copyWith(fontStyle: FontStyle.italic),
                       decoration: InputDecoration(
                         labelText: 'Subtitle (optional)',
-                        labelStyle: GoogleFonts.caveat(fontSize: 16),
+                        labelStyle: fontProvider.getTextStyle(fontSize: 16),
                         hintText: 'e.g., "Weekly shopping"',
-                        hintStyle: GoogleFonts.caveat(
-                          fontSize: 16,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey,
-                        ),
+                        hintStyle: fontProvider
+                            .getTextStyle(fontSize: 16, color: Colors.grey)
+                            .copyWith(fontStyle: FontStyle.italic),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -252,13 +269,13 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                       decoration: InputDecoration(
                         labelText: 'Target Amount (£)',
-                        labelStyle: GoogleFonts.caveat(fontSize: 18),
+                        labelStyle: fontProvider.getTextStyle(fontSize: 18),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -270,7 +287,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 16),
                     Text(
                       'Binder',
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -281,10 +298,12 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String?>(
-                            initialValue: _selectedBinderId,
+                            value: _selectedBinderId,
                             decoration: InputDecoration(
                               labelText: 'Add to Binder',
-                              labelStyle: GoogleFonts.caveat(fontSize: 16),
+                              labelStyle: fontProvider.getTextStyle(
+                                fontSize: 16,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -295,7 +314,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                 value: null,
                                 child: Text(
                                   'No Binder',
-                                  style: GoogleFonts.caveat(fontSize: 18),
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                  ),
                                 ),
                               ),
                               ..._binders.map((binder) {
@@ -318,7 +339,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                       Flexible(
                                         child: Text(
                                           binder.name,
-                                          style: GoogleFonts.caveat(
+                                          style: fontProvider.getTextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
                                             color: binderColor,
@@ -346,12 +367,62 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 24),
+                    Divider(color: theme.colorScheme.outline),
+                    const SizedBox(height: 16),
+
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.1,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.calendar_today,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      title: Text(
+                        'Schedule Payment',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Set up recurring deposits/withdrawals',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddScheduledPaymentScreen(
+                              repo: widget.repo,
+                              preselectedEnvelopeId: envelope.id,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 24),
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
                     Text(
                       'Pay Day Auto-Fill',
-                      style: GoogleFonts.caveat(
+                      style: fontProvider.getTextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -364,7 +435,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           setState(() => _autoFillEnabled = value),
                       title: Text(
                         'Enable Auto-Fill',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -373,7 +444,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         'Automatically add money on pay day',
                         style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
                     ),
@@ -384,19 +457,19 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                         decoration: InputDecoration(
                           labelText: 'Auto-Fill Amount (£)',
-                          labelStyle: GoogleFonts.caveat(fontSize: 18),
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                           prefixIcon: const Icon(Icons.autorenew),
                           helperText: 'Amount to add each pay day',
-                          helperStyle: GoogleFonts.caveat(fontSize: 14),
+                          helperStyle: fontProvider.getTextStyle(fontSize: 14),
                         ),
                       ),
                     ],
@@ -422,7 +495,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             )
                           : Text(
                               'Save Changes',
-                              style: GoogleFonts.caveat(
+                              style: fontProvider.getTextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -442,7 +515,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                       child: Text(
                         'Delete Envelope',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Colors.red.shade600,
@@ -480,7 +553,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ? double.tryParse(_autoFillAmountController.text)
           : null;
 
-      // Build update map manually to handle null groupId properly
       final Map<String, dynamic> updates = {
         'name': _nameController.text.trim(),
         'emoji': _selectedEmoji,
@@ -489,28 +561,24 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Handle subtitle: delete if empty, update if not
       if (_subtitleController.text.trim().isEmpty) {
         updates['subtitle'] = FieldValue.delete();
       } else {
         updates['subtitle'] = _subtitleController.text.trim();
       }
 
-      // Handle groupId: delete if null (No Binder), update if set
       if (_selectedBinderId == null) {
         updates['groupId'] = FieldValue.delete();
       } else {
         updates['groupId'] = _selectedBinderId;
       }
 
-      // Handle autoFillAmount: delete if disabled or empty, update if set
       if (_autoFillEnabled && autoFillAmount != null) {
         updates['autoFillAmount'] = autoFillAmount;
       } else {
         updates['autoFillAmount'] = FieldValue.delete();
       }
 
-      // Direct Firestore update to properly handle deletes
       await widget.repo.db
           .collection('users')
           .doc(widget.repo.currentUserId)
@@ -520,13 +588,12 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           .doc(widget.envelopeId)
           .update(updates);
 
-      // Small delay to ensure Firestore propagates the change
       await Future.delayed(const Duration(milliseconds: 300));
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Envelope updated successfully')),
+          const SnackBar(content: Text('Changes saved successfully')),
         );
       }
     } catch (e) {
@@ -543,12 +610,16 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   }
 
   Future<void> _confirmDelete(Envelope envelope) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
           'Delete Envelope?',
-          style: GoogleFonts.caveat(fontSize: 24, fontWeight: FontWeight.bold),
+          style: fontProvider.getTextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           'Are you sure you want to delete "${envelope.name}"? This will also delete all associated transactions. This action cannot be undone.',
@@ -557,14 +628,17 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.caveat(fontSize: 18)),
+            child: Text(
+              'Cancel',
+              style: fontProvider.getTextStyle(fontSize: 18),
+            ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             child: Text(
               'Delete',
-              style: GoogleFonts.caveat(
+              style: fontProvider.getTextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -596,51 +670,5 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         }
       }
     }
-  }
-
-  void _showEmojiPicker(Envelope envelope) {
-    final controller = TextEditingController(
-      text: _selectedEmoji ?? envelope.emoji ?? '',
-    );
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Choose Emoji',
-          style: GoogleFonts.caveat(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(fontSize: 48),
-          textAlign: TextAlign.center,
-          decoration: InputDecoration(
-            hintText: '💰',
-            hintStyle: TextStyle(fontSize: 48, color: Colors.grey.shade400),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          maxLength: 2,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.caveat(fontSize: 18)),
-          ),
-          FilledButton(
-            onPressed: () {
-              setState(() => _selectedEmoji = controller.text.trim());
-              Navigator.pop(context);
-            },
-            child: Text(
-              'Done',
-              style: GoogleFonts.caveat(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

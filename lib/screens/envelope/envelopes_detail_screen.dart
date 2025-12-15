@@ -1,10 +1,6 @@
 // lib/screens/envelope/envelopes_detail_screen.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-// All button text wrapped in FittedBox to prevent wrapping
-// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
-
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../../../models/envelope.dart';
@@ -12,7 +8,8 @@ import '../../../models/envelope_group.dart';
 import '../../../models/transaction.dart';
 import '../../../services/envelope_repo.dart';
 import '../../../services/group_repo.dart';
-import '../../../widgets/calculator_widget.dart';
+// NEW: Import the target helper
+import '../../../utils/target_helper.dart';
 import '../stats_history_screen.dart';
 import 'envelope_header_card.dart';
 import 'envelope_transaction_list.dart';
@@ -22,7 +19,10 @@ import 'modals/deposit_modal.dart';
 import 'modals/withdraw_modal.dart';
 import 'modals/transfer_modal.dart';
 import '../../../services/localization_service.dart';
-import '../../../providers/font_provider.dart'; // NEW IMPORT
+import '../../../providers/font_provider.dart';
+import '../../utils/calculator_helper.dart';
+import 'modern_envelope_header_card.dart';
+// TUTORIAL IMPORT REMOVED
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -39,16 +39,44 @@ class EnvelopeDetailScreen extends StatefulWidget {
 }
 
 class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
-  // Current month being viewed (defaults to now)
   late DateTime _viewingMonth;
   final _scrollController = ScrollController();
   double _savedScrollOffset = 0.0;
+
+  // TUTORIAL KEYS
+  final GlobalKey _envelopeCardKey = GlobalKey();
+  final GlobalKey _transactionListKey = GlobalKey();
+  final GlobalKey _fabKey = GlobalKey();
+  final GlobalKey _settingsKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _viewingMonth = DateTime.now();
     _scrollController.addListener(_saveScrollOffset);
+    _checkTutorial();
+  }
+
+  Future<void> _checkTutorial() async {
+    // TODO: Implement Detail Screen tutorial logic with new TutorialController
+    /*
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    final phase = await TutorialService.getCurrentPhase();
+
+    if (phase == TutorialPhase.homeWithEnvelope && mounted) {
+      // Advance to detail phase
+      await TutorialService.setPhase(TutorialPhase.envelopeDetail);
+
+      TutorialService.showEnvelopeDetailTutorial(
+        context,
+        envelopeCardKey: _envelopeCardKey,
+        transactionListKey: _transactionListKey,
+        fabKey: _fabKey,
+        settingsKey: _settingsKey,
+      );
+    }
+    */
   }
 
   void _saveScrollOffset() {
@@ -92,14 +120,18 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   }
 
   void _goToCurrentMonth() {
-    setState(() {
-      _viewingMonth = DateTime.now();
-    });
+    setState(() => _viewingMonth = DateTime.now());
   }
 
   bool _isCurrentMonth() {
     final now = DateTime.now();
     return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
+  }
+
+  void _onBottomNavTap(int index) {
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil('/home', (route) => false, arguments: index);
   }
 
   @override
@@ -110,17 +142,10 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
       builder: (context, envelopeSnapshot) {
-        if (envelopeSnapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
         if (!envelopeSnapshot.hasData) {
           return Scaffold(
             appBar: AppBar(),
-            body: Center(child: Text(tr('error_envelope_not_found'))),
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -131,7 +156,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           builder: (context, txSnapshot) {
             final allTransactions = txSnapshot.data ?? [];
 
-            // Filter transactions for the viewing month
+            // Filter transactions logic
             final monthStart = DateTime(
               _viewingMonth.year,
               _viewingMonth.month,
@@ -145,7 +170,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
               59,
               59,
             );
-
             final monthTransactions = allTransactions.where((tx) {
               return tx.date.isAfter(
                     monthStart.subtract(const Duration(seconds: 1)),
@@ -158,13 +182,13 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
+                scrolledUnderElevation: 0,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.pop(context),
                 ),
                 title: Text(
                   envelope.name,
-                  // UPDATED: FontProvider
                   style: fontProvider.getTextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -172,9 +196,11 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   ),
                 ),
                 actions: [
-                  // Stats/History button
                   IconButton(
-                    icon: const Icon(Icons.bar_chart),
+                    icon: Icon(
+                      Icons.bar_chart,
+                      color: theme.colorScheme.primary,
+                    ),
                     tooltip: tr('envelope_view_history_tooltip'),
                     onPressed: () {
                       Navigator.push(
@@ -189,10 +215,12 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       );
                     },
                   ),
-
-                  // Settings button
                   IconButton(
-                    icon: const Icon(Icons.settings),
+                    key: _settingsKey, // TUTORIAL KEY
+                    icon: Icon(
+                      Icons.settings,
+                      color: theme.colorScheme.primary,
+                    ),
                     tooltip: tr('settings'),
                     onPressed: () => _showSettings(context, envelope),
                   ),
@@ -203,37 +231,32 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                 controller: _scrollController,
                 child: Column(
                   children: [
-                    // Envelope header card (original design)
-                    EnvelopeHeaderCard(envelope: envelope),
+                    ModernEnvelopeHeaderCard(
+                      key: _envelopeCardKey,
+                      envelope: envelope,
+                      repo: widget.repo, // <--- Add this
+                    ),
+
+                    // NEW: Target Status Section
+                    if (envelope.targetDate != null &&
+                        (envelope.targetAmount ?? 0) > envelope.currentAmount)
+                      _TargetStatusCard(envelope: envelope),
 
                     const SizedBox(height: 16),
-
-                    // "In Binder" info row (if applicable)
                     if (envelope.groupId != null)
                       _BinderInfoRow(
                         binderId: envelope.groupId!,
                         repo: widget.repo,
                       ),
-
                     if (envelope.groupId != null) const SizedBox(height: 16),
-
-                    // Month navigation bar
                     _buildMonthNavigationBar(theme),
-
                     const SizedBox(height: 8),
-
-                    // Transaction list for the month
                     EnvelopeTransactionList(
-                      key: ValueKey(
-                        'transactions_${_viewingMonth.month}_${_viewingMonth.year}',
-                      ),
+                      key: _transactionListKey, // TUTORIAL KEY
                       transactions: monthTransactions,
-                      onTransactionTap: (tx) {
-                        // Optional: Show transaction details
-                      },
+                      onTransactionTap: (tx) {},
                     ),
-
-                    const SizedBox(height: 140), // Space for FAB + bottom nav
+                    const SizedBox(height: 140),
                   ],
                 ),
               ),
@@ -243,13 +266,13 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                 unselectedItemColor: Colors.grey.shade600,
                 elevation: 8,
                 type: BottomNavigationBarType.fixed,
-                // UPDATED: FontProvider
                 selectedLabelStyle: fontProvider.getTextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
-                // UPDATED: FontProvider
                 unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+                currentIndex: 0,
+                onTap: _onBottomNavTap,
                 items: [
                   BottomNavigationBarItem(
                     icon: const Icon(Icons.mail_outline),
@@ -272,11 +295,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                     label: tr('home_calendar_tab'),
                   ),
                 ],
-                currentIndex: 0,
-                onTap: (index) {
-                  // Navigate back to home with selected index
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
               ),
               floatingActionButton: _buildThemedFAB(context, envelope, theme),
               floatingActionButtonLocation:
@@ -288,7 +306,10 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     );
   }
 
-  // Month navigation bar with arrows
+  void _showCalculator(BuildContext context) async {
+    await CalculatorHelper.showCalculator(context);
+  }
+
   Widget _buildMonthNavigationBar(ThemeData theme) {
     final monthName = DateFormat('MMMM yyyy').format(_viewingMonth);
     final isCurrentMonth = _isCurrentMonth();
@@ -300,21 +321,15 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        // FIX: withOpacity -> withValues
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Row(
         children: [
-          // Previous month button
           IconButton(
             icon: const Icon(Icons.chevron_left),
             onPressed: _previousMonth,
             color: theme.colorScheme.primary,
           ),
-
-          // Current month label (tappable to return to current month)
           Expanded(
             child: InkWell(
               onTap: isCurrentMonth ? null : _goToCurrentMonth,
@@ -322,7 +337,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                 children: [
                   Text(
                     monthName,
-                    // UPDATED: FontProvider
                     style: fontProvider.getTextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -335,10 +349,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       tr('envelope_return_current_month'),
                       style: TextStyle(
                         fontSize: 11,
-                        // FIX: withOpacity -> withValues
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
-                        ),
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -346,14 +357,11 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
               ),
             ),
           ),
-
-          // Next month button (disabled if current or future)
           IconButton(
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                // FIX: withOpacity -> withValues
-                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
+                ? theme.colorScheme.onSurface.withOpacity(0.3)
                 : theme.colorScheme.primary,
           ),
         ],
@@ -361,17 +369,16 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     );
   }
 
-  // Themed FAB with SpeedDial
   Widget _buildThemedFAB(
     BuildContext context,
     Envelope envelope,
     ThemeData theme,
   ) {
-    // Use consistent icon color across all buttons
     final iconColor = theme.colorScheme.onPrimaryContainer;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return SpeedDial(
+      key: _fabKey, // TUTORIAL KEY
       icon: Icons.add,
       activeIcon: Icons.close,
       backgroundColor: theme.colorScheme.primary,
@@ -388,7 +395,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           child: Icon(Icons.add_circle, color: iconColor),
           backgroundColor: theme.colorScheme.primaryContainer,
           label: tr('action_add_money'),
-          // UPDATED: FontProvider
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -400,7 +406,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           child: Icon(Icons.remove_circle, color: iconColor),
           backgroundColor: theme.colorScheme.primaryContainer,
           label: tr('action_take_money'),
-          // UPDATED: FontProvider
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -412,7 +417,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           child: Icon(Icons.swap_horiz, color: iconColor),
           backgroundColor: theme.colorScheme.primaryContainer,
           label: tr('action_move_money'),
-          // UPDATED: FontProvider
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -424,7 +428,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           child: Icon(Icons.calculate, color: iconColor),
           backgroundColor: theme.colorScheme.primaryContainer,
           label: tr('calculator'),
-          // UPDATED: FontProvider
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -438,7 +441,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
 
   void _showSettings(BuildContext context, Envelope envelope) {
     final groupRepo = GroupRepo(widget.repo.db, widget.repo);
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -515,16 +517,59 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
       ),
     );
   }
+}
 
-  void _showCalculator(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const Dialog(child: CalculatorWidget()),
+class _TargetStatusCard extends StatelessWidget {
+  const _TargetStatusCard({required this.envelope});
+  final Envelope envelope;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final suggestion = TargetHelper.getSuggestionText(envelope);
+    final daysLeft = TargetHelper.getDaysRemaining(envelope);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.track_changes, color: theme.colorScheme.secondary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  suggestion,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                Text(
+                  daysLeft > 0 ? '$daysLeft days remaining' : 'Target due',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSecondaryContainer.withOpacity(
+                      0.8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Binder info row (shown below header if envelope is in a binder)
 class _BinderInfoRow extends StatelessWidget {
   const _BinderInfoRow({required this.binderId, required this.repo});
 
@@ -568,19 +613,16 @@ class _BinderInfoRow extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              // FIX: withOpacity -> withValues
-              color: binderColor.withValues(alpha: 0.1),
+              color: binderColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              // FIX: withOpacity -> withValues
-              border: Border.all(color: binderColor.withValues(alpha: 0.3)),
+              border: Border.all(color: binderColor.withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    // FIX: withOpacity -> withValues
-                    color: binderColor.withValues(alpha: 0.2),
+                    color: binderColor.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.folder, size: 20, color: binderColor),
@@ -594,10 +636,7 @@ class _BinderInfoRow extends StatelessWidget {
                         tr('envelope_in_binder'),
                         style: TextStyle(
                           fontSize: 12,
-                          // FIX: withOpacity -> withValues
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -613,7 +652,6 @@ class _BinderInfoRow extends StatelessWidget {
                           Expanded(
                             child: Text(
                               binder.name,
-                              // UPDATED: FontProvider
                               style: fontProvider.getTextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,

@@ -1,3 +1,4 @@
+// lib/screens/settings_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart'; // Needed for TutorialController
 
 import '../models/user_profile.dart';
 import '../models/envelope.dart';
@@ -12,6 +15,10 @@ import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
 import '../services/user_service.dart';
+// NEW: Import the security service
+import '../services/account_security_service.dart';
+// TUTORIAL IMPORT - UPDATED
+import '../services/tutorial_controller.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_settings_screen.dart';
@@ -260,11 +267,46 @@ class SettingsScreen extends StatelessWidget {
                     },
                     trailing: const Icon(Icons.chevron_right),
                   ),
+                  // TUTORIAL RESET BUTTON - UPDATED
                   _SettingsTile(
-                    title: 'App Version',
-                    subtitle: '1.0.0',
-                    leading: const Icon(Icons.info_outlined),
-                    onTap: null,
+                    title: 'Replay Tutorial',
+                    subtitle: 'Show the onboarding tour again',
+                    leading: const Icon(Icons.help_outline),
+                    onTap: () async {
+                      // Using the new controller reset logic
+                      context.read<TutorialController>().reset();
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Tutorial reset! Return to home to start again',
+                            ),
+                          ),
+                        );
+                        // Navigate back to home
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
+                      }
+                    },
+                  ),
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      String versionText = 'Loading...';
+                      if (snapshot.hasData) {
+                        versionText =
+                            '${snapshot.data!.version} (${snapshot.data!.buildNumber})';
+                      }
+
+                      return _SettingsTile(
+                        title: 'App Version',
+                        subtitle: versionText,
+                        leading: const Icon(Icons.info_outlined),
+                        onTap: null,
+                      );
+                    },
                   ),
                 ],
               ),
@@ -339,7 +381,11 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 subtitle: const Text('Permanently delete account and all data'),
-                onTap: () => _showDeleteAccountDialog(context),
+                onTap: () async {
+                  // NEW: Use the service instead of manual code
+                  final securityService = AccountSecurityService();
+                  await securityService.deleteAccount(context);
+                },
               ),
               const SizedBox(height: 32),
             ],
@@ -366,14 +412,10 @@ class SettingsScreen extends StatelessWidget {
     );
 
     try {
-      // 1. Fetch Data (Using the new methods I added to EnvelopeRepo)
       final envelopes = await repo.getAllEnvelopes();
-
-      // 2. Generate CSV Strings
       final envelopesCsv = _generateEnvelopesCsv(envelopes);
       final transactionsCsv = await _generateTransactionsCsv(envelopes, repo);
 
-      // 3. Write to temp files
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
 
@@ -386,8 +428,7 @@ class SettingsScreen extends StatelessWidget {
       await transactionsFile.writeAsString(transactionsCsv);
 
       if (context.mounted) {
-        Navigator.of(context).pop(); // Close loading
-        // 4. Share
+        Navigator.of(context).pop();
         await Share.shareXFiles([
           XFile(envelopesFile.path),
           XFile(transactionsFile.path),
@@ -395,7 +436,7 @@ class SettingsScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.of(context).pop(); // Close loading
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Export failed: $e'),
@@ -408,11 +449,9 @@ class SettingsScreen extends StatelessWidget {
 
   String _generateEnvelopesCsv(List<Envelope> envelopes) {
     final buffer = StringBuffer();
-    // Header
     buffer.writeln(
       'Name,Current Amount,Target Amount,Auto-Fill Amount,Group,Is Shared',
     );
-    // Rows
     for (var env in envelopes) {
       buffer.writeln(
         [
@@ -433,12 +472,9 @@ class SettingsScreen extends StatelessWidget {
     EnvelopeRepo repo,
   ) async {
     final buffer = StringBuffer();
-    // Header
     buffer.writeln('Date,Envelope,Type,Amount,Description,Source,Target');
 
-    // Rows
     for (var env in envelopes) {
-      // Corrected call: await the Future directly
       final transactions = await repo.getTransactions(env.id);
 
       for (var tx in transactions) {
@@ -478,92 +514,8 @@ class SettingsScreen extends StatelessWidget {
     }
     return value;
   }
-
-  Future<void> _showDeleteAccountDialog(BuildContext context) async {
-    // Warning 1
-    final confirm1 = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('⚠️ Delete Account?'),
-        content: const Text(
-          'This will permanently delete:\n\n'
-          '• Your account and profile\n'
-          '• All envelopes and transactions\n'
-          '• All workspace data\n\n'
-          'This action CANNOT be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm1 != true) return;
-    if (!context.mounted) return;
-
-    // Warning 2
-    final confirm2 = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🚨 Absolutely Sure?'),
-        content: const Text(
-          'Type DELETE to confirm account deletion.\n\n'
-          'All your data will be permanently erased.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete Everything'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm2 != true) return;
-    if (!context.mounted) return;
-
-    // Execute Deletion
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      await AuthService.deleteAccount();
-      if (context.mounted) {
-        Navigator.of(context).pop(); // close loader
-        Navigator.of(context).pop(); // close settings
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop(); // close loader
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 }
 
-// ... _SettingsSection and _SettingsTile remain identical to before ...
-// For brevity, I'm just confirming they are down here in the full file I would generate.
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
     required this.title,
@@ -604,7 +556,8 @@ class _SettingsSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05), // Fixed deprecated
+                // FIXED: Modernize deprecation
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -665,9 +618,10 @@ class _SettingsTile extends StatelessWidget {
       trailing: trailing != null
           ? IconTheme(
               data: IconThemeData(
+                // FIXED: Modernize deprecation
                 color: theme.colorScheme.onSurfaceVariant.withValues(
                   alpha: 0.5,
-                ), // Fixed deprecated
+                ),
               ),
               child: trailing!,
             )

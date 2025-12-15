@@ -12,6 +12,13 @@ class WorkspaceHelper {
     return prefs.getString('last_workspace_id');
   }
 
+  /// BUG FIX: explicit check for workspace existence
+  /// Returns true if user is currently in a valid workspace
+  static Future<bool> isCurrentlyInWorkspace() async {
+    final workspaceId = await getActiveWorkspaceId();
+    return workspaceId != null && workspaceId.isNotEmpty;
+  }
+
   /// Set active workspace ID
   static Future<void> setActiveWorkspaceId(String? workspaceId) async {
     final prefs = await SharedPreferences.getInstance();

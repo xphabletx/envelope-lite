@@ -1,11 +1,13 @@
+// lib/screens/calendar/add_scheduled_payment_screen.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../models/envelope.dart';
-import '../models/envelope_group.dart';
-import '../models/scheduled_payment.dart';
-import '../services/envelope_repo.dart';
-import '../services/scheduled_payment_repo.dart';
+import '../../models/envelope.dart';
+import '../../models/envelope_group.dart';
+import '../../models/scheduled_payment.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
+import '../../providers/font_provider.dart';
 
 class AddScheduledPaymentScreen extends StatefulWidget {
   const AddScheduledPaymentScreen({
@@ -25,7 +27,6 @@ class AddScheduledPaymentScreen extends StatefulWidget {
 class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   late final ScheduledPaymentRepo _paymentRepo;
 
-  // Form fields
   String? _selectedEnvelopeId;
   String? _selectedGroupId;
   final _descriptionCtrl = TextEditingController();
@@ -47,7 +48,6 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
       widget.repo.currentUserId,
     );
 
-    // Preselect envelope if provided
     if (widget.preselectedEnvelopeId != null) {
       _selectedEnvelopeId = widget.preselectedEnvelopeId;
     }
@@ -61,7 +61,6 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   }
 
   Future<void> _save() async {
-    // Validation
     if (_selectedEnvelopeId == null && _selectedGroupId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an envelope or group')),
@@ -95,7 +94,6 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
     setState(() => _saving = true);
 
     try {
-      // Get envelope/group name
       String name;
       if (_selectedEnvelopeId != null) {
         final envelopes = await widget.repo.envelopesStream().first;
@@ -151,6 +149,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -163,8 +162,8 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
         ),
         title: Text(
           'Schedule Payment',
-          style: GoogleFonts.caveat(
-            fontSize: 32,
+          style: fontProvider.getTextStyle(
+            fontSize: 28, // Reduced slightly from 32 for better fit
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.primary,
           ),
@@ -175,11 +174,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Select Envelope or Group
             Text(
               'What to pay?',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -200,7 +198,9 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                         color: theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: theme.colorScheme.primary.withAlpha(77),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                       child: DropdownButton<String>(
@@ -208,7 +208,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                         underline: const SizedBox(),
                         hint: Text(
                           'Select envelope or group',
-                          style: GoogleFonts.caveat(fontSize: 18),
+                          style: fontProvider.getTextStyle(fontSize: 18),
                         ),
                         value: _selectedEnvelopeId != null
                             ? 'env_$_selectedEnvelopeId'
@@ -216,13 +216,12 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                                   ? 'grp_$_selectedGroupId'
                                   : null),
                         items: [
-                          // Envelopes
                           if (envelopes.isNotEmpty)
                             DropdownMenuItem(
                               enabled: false,
                               child: Text(
                                 'ENVELOPES',
-                                style: GoogleFonts.caveat(
+                                style: fontProvider.getTextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: theme.colorScheme.primary,
@@ -241,13 +240,14 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     e.name,
-                                    style: GoogleFonts.caveat(fontSize: 18),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          // Groups
                           if (groups.isNotEmpty)
                             DropdownMenuItem(
                               enabled: false,
@@ -255,7 +255,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
                                   'GROUPS',
-                                  style: GoogleFonts.caveat(
+                                  style: fontProvider.getTextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: theme.colorScheme.primary,
@@ -272,7 +272,9 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     g.name,
-                                    style: GoogleFonts.caveat(fontSize: 18),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -301,11 +303,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 24),
 
-            // Description
             Text(
               'Description (optional)',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -313,9 +314,13 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionCtrl,
+              style: fontProvider.getTextStyle(fontSize: 18),
               decoration: InputDecoration(
                 hintText: 'e.g., Monthly rent payment',
-                hintStyle: GoogleFonts.caveat(fontSize: 16),
+                hintStyle: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -326,11 +331,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 24),
 
-            // Amount
             Text(
               'Amount',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -341,6 +345,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: '0.00',
                 prefixIcon: Icon(
@@ -353,16 +358,14 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 filled: true,
                 fillColor: theme.colorScheme.surface,
               ),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 24),
 
-            // Date Picker
             Text(
               'When?',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -383,8 +386,8 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 headerStyle: HeaderStyle(
                   formatButtonVisible: false,
                   titleCentered: true,
-                  titleTextStyle: GoogleFonts.caveat(
-                    fontSize: 20,
+                  titleTextStyle: fontProvider.getTextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
                   ),
@@ -395,9 +398,11 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                     shape: BoxShape.circle,
                   ),
                   todayDecoration: BoxDecoration(
-                    color: theme.colorScheme.secondary.withAlpha(77),
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.3),
                     shape: BoxShape.circle,
                   ),
+                  defaultTextStyle: fontProvider.getTextStyle(),
+                  weekendTextStyle: fontProvider.getTextStyle(),
                 ),
                 onDaySelected: (selectedDay, focusedDay) {
                   setState(() {
@@ -413,11 +418,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 24),
 
-            // Frequency
             Text(
               'How often?',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -433,13 +437,17 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 children: [
                   Row(
                     children: [
-                      Text('Every', style: GoogleFonts.caveat(fontSize: 20)),
+                      Text(
+                        'Every',
+                        style: fontProvider.getTextStyle(fontSize: 20),
+                      ),
                       const SizedBox(width: 12),
                       SizedBox(
                         width: 80,
                         child: TextField(
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
+                          style: fontProvider.getTextStyle(fontSize: 18),
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -469,7 +477,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                               value: unit,
                               child: Text(
                                 unit.name,
-                                style: GoogleFonts.caveat(fontSize: 18),
+                                style: fontProvider.getTextStyle(fontSize: 18),
                               ),
                             );
                           }).toList(),
@@ -485,11 +493,12 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _frequencyString,
-                    style: GoogleFonts.caveat(
-                      fontSize: 20,
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.secondary,
-                    ),
+                    style: fontProvider
+                        .getTextStyle(
+                          fontSize: 18,
+                          color: theme.colorScheme.secondary,
+                        )
+                        .copyWith(fontStyle: FontStyle.italic),
                   ),
                 ],
               ),
@@ -497,11 +506,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 24),
 
-            // Color Picker
             Text(
               'Color',
-              style: GoogleFonts.caveat(
-                fontSize: 24,
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -558,14 +566,13 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 24),
 
-            // Auto-execute toggle
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: theme.colorScheme.primary.withAlpha(77),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
@@ -578,7 +585,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                       children: [
                         Text(
                           'Auto-execute',
-                          style: GoogleFonts.caveat(
+                          style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
@@ -587,7 +594,9 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                           'Automatically process on due date',
                           style: TextStyle(
                             fontSize: 12,
-                            color: theme.colorScheme.onSurface.withAlpha(179),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
                       ],
@@ -604,7 +613,6 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             const SizedBox(height: 32),
 
-            // Save Button
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -628,7 +636,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                       )
                     : Text(
                         'Save Payment',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),

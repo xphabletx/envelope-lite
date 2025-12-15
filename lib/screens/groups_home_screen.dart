@@ -10,13 +10,13 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
-import '../services/workspace_helper.dart';
+import '../services/workspace_helper.dart'; // FIX: Import helper
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
 import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
-import 'pay_day_preview_screen.dart';
+import 'pay_day_settings_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 
@@ -336,20 +336,33 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                 repo: widget.repo,
                               ),
                               if (isPartner)
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: FutureBuilder<String>(
-                                    future: WorkspaceHelper.getUserDisplayName(
-                                      group.userId,
-                                      widget.repo.currentUserId,
-                                    ),
-                                    builder: (context, snapshot) {
-                                      return PartnerBadge(
-                                        partnerName: snapshot.data ?? 'Partner',
-                                      );
-                                    },
-                                  ),
+                                // BUG FIX: Wrapped partner badge in workspace check
+                                FutureBuilder<bool>(
+                                  future:
+                                      WorkspaceHelper.isCurrentlyInWorkspace(),
+                                  builder: (context, snapshot) {
+                                    final inWorkspace = snapshot.data ?? false;
+                                    if (!inWorkspace)
+                                      return const SizedBox.shrink();
+
+                                    return Positioned(
+                                      top: 12,
+                                      right: 12,
+                                      child: FutureBuilder<String>(
+                                        future:
+                                            WorkspaceHelper.getUserDisplayName(
+                                              group.userId,
+                                              widget.repo.currentUserId,
+                                            ),
+                                        builder: (context, nameSnapshot) {
+                                          return PartnerBadge(
+                                            partnerName:
+                                                nameSnapshot.data ?? 'Partner',
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
                                 ),
                             ],
                           ),

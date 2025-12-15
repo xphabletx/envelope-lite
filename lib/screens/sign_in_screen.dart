@@ -1,8 +1,11 @@
 // lib/screens/sign_in_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart'; // Needed for TutorialController
 
 import '../services/auth_service.dart';
+// TUTORIAL IMPORT - UPDATED
+import '../services/tutorial_controller.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -108,7 +111,7 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  // ---- CREATE ACCOUNT BOTTOM SHEET ----
+  // ---- CREATE ACCOUNT BOTTOM SHEET (FIXED UI) ----
   Future<void> _openCreateAccountSheet() async {
     final formKey = GlobalKey<FormState>();
     final emailCtrl = TextEditingController(text: _email.text.trim());
@@ -141,200 +144,281 @@ class _SignInScreenState extends State<SignInScreen> {
     }
 
     if (!mounted) return;
+
+    // Define a clean, light theme for the modal specifically
+    final modalTheme = ThemeData(
+      brightness: Brightness.light,
+      primaryColor: const Color(0xFF6D4C41), // Brownish
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF6D4C41),
+        surface: const Color(0xFFFFFBF5), // Warm white
+        onSurface: Colors.black87,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF6D4C41), width: 2),
+        ),
+        labelStyle: const TextStyle(color: Colors.black54),
+        hintStyle: const TextStyle(color: Colors.black38),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+      ),
+    );
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        // Enforce the light theme for the modal content
+        return Theme(
+          data: modalTheme,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: StatefulBuilder(
-                  builder: (ctx2, setSheet) {
-                    Future<void> onCreate() async {
-                      if (!formKey.currentState!.validate()) return;
-                      setSheet(() {
-                        sheetError = null;
-                        sheetBusy = true;
-                      });
-                      try {
-                        await AuthService.createWithEmail(
-                          email: emailCtrl.text.trim(),
-                          password: passCtrl.text,
-                          displayName: null,
-                        );
-                        if (!ctx2.mounted) return;
-                        Navigator.of(ctx2).pop();
-                        _showSnack('Account created. You are signed in.');
-                      } on FirebaseAuthException catch (e) {
-                        switch (e.code) {
-                          case 'email-already-in-use':
-                            sheetError = 'That email is already in use.';
-                            break;
-                          case 'invalid-email':
-                            sheetError = 'Invalid email format.';
-                            break;
-                          case 'operation-not-allowed':
-                            sheetError = 'Email/password sign-up is disabled.';
-                            break;
-                          case 'weak-password':
-                            sheetError = 'Password is too weak.';
-                            break;
-                          default:
-                            sheetError = e.message ?? 'Sign-up error.';
-                        }
-                        setSheet(() {});
-                        _showSnack(sheetError!);
-                      } catch (e) {
-                        sheetError = e.toString();
-                        setSheet(() {});
-                        _showSnack(sheetError!);
-                      } finally {
-                        setSheet(() => sheetBusy = false);
-                      }
-                    }
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFFBF5), // Warm neutral background
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: StatefulBuilder(
+                    builder: (ctx2, setSheet) {
+                      Future<void> onCreate() async {
+                        if (!formKey.currentState!.validate()) return;
+                        setSheet(() {
+                          sheetError = null;
+                          sheetBusy = true;
+                        });
+                        try {
+                          await AuthService.createWithEmail(
+                            email: emailCtrl.text.trim(),
+                            password: passCtrl.text,
+                            displayName: null,
+                          );
 
-                    return SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const Text(
-                            'Create Account',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Form(
-                            key: formKey,
-                            child: Column(
-                              children: [
-                                TextFormField(
-                                  controller: emailCtrl,
-                                  keyboardType: TextInputType.emailAddress,
-                                  textCapitalization: TextCapitalization.none,
-                                  style: const TextStyle(fontSize: 16),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                    labelStyle: TextStyle(fontSize: 16),
-                                  ),
-                                  validator: emailValidator,
-                                  textInputAction: TextInputAction.next,
+                          // IMPORTANT: Reset tutorial state for new users
+                          // This ensures the tutorial runs when they hit home
+                          if (mounted) {
+                            // Using read because we are inside a callback
+                            context.read<TutorialController>().reset();
+                          }
+
+                          if (!ctx2.mounted) return;
+                          Navigator.of(ctx2).pop();
+                          _showSnack('Account created. You are signed in.');
+                        } on FirebaseAuthException catch (e) {
+                          switch (e.code) {
+                            case 'email-already-in-use':
+                              sheetError = 'That email is already in use.';
+                              break;
+                            case 'invalid-email':
+                              sheetError = 'Invalid email format.';
+                              break;
+                            case 'operation-not-allowed':
+                              sheetError =
+                                  'Email/password sign-up is disabled.';
+                              break;
+                            case 'weak-password':
+                              sheetError = 'Password is too weak.';
+                              break;
+                            default:
+                              sheetError = e.message ?? 'Sign-up error.';
+                          }
+                          setSheet(() {});
+                        } catch (e) {
+                          sheetError = e.toString();
+                          setSheet(() {});
+                        } finally {
+                          setSheet(() => sheetBusy = false);
+                        }
+                      }
+
+                      return SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                margin: const EdgeInsets.only(bottom: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
-                                const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: passCtrl,
-                                  obscureText: obscurePass,
-                                  style: const TextStyle(fontSize: 16),
-                                  decoration: InputDecoration(
-                                    labelText: 'Password',
-                                    labelStyle: const TextStyle(fontSize: 16),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        obscurePass
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                      ),
-                                      onPressed: () {
-                                        setSheet(
-                                          () => obscurePass = !obscurePass,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  validator: passValidator,
-                                  textInputAction: TextInputAction.next,
-                                ),
-                                const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: confirmCtrl,
-                                  obscureText: obscureConfirm,
-                                  style: const TextStyle(fontSize: 16),
-                                  decoration: InputDecoration(
-                                    labelText: 'Confirm Password',
-                                    labelStyle: const TextStyle(fontSize: 16),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        obscureConfirm
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                      ),
-                                      onPressed: () {
-                                        setSheet(
-                                          () =>
-                                              obscureConfirm = !obscureConfirm,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  validator: confirmValidator,
-                                  onFieldSubmitted: (_) => onCreate(),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (sheetError != null) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                sheetError!,
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontSize: 14,
+                            ),
+                            Text(
+                              'Create Account',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: modalTheme.colorScheme.onSurface,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Start your journey with Envelope Lite',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: modalTheme.colorScheme.onSurface
+                                    .withOpacity(0.6),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 32),
+                            Form(
+                              key: formKey,
+                              child: Column(
+                                children: [
+                                  TextFormField(
+                                    controller: emailCtrl,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textCapitalization: TextCapitalization.none,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Email',
+                                    ),
+                                    validator: emailValidator,
+                                    textInputAction: TextInputAction.next,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextFormField(
+                                    controller: passCtrl,
+                                    obscureText: obscurePass,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Password',
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          obscurePass
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () {
+                                          setSheet(
+                                            () => obscurePass = !obscurePass,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    validator: passValidator,
+                                    textInputAction: TextInputAction.next,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextFormField(
+                                    controller: confirmCtrl,
+                                    obscureText: obscureConfirm,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'Confirm Password',
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          obscureConfirm
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () {
+                                          setSheet(
+                                            () => obscureConfirm =
+                                                !obscureConfirm,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    validator: confirmValidator,
+                                    onFieldSubmitted: (_) => onCreate(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (sheetError != null) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.red.withOpacity(0.3),
+                                  ),
                                 ),
+                                child: Text(
+                                  sheetError!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 32),
+                            SizedBox(
+                              height: 52,
+                              child: FilledButton(
+                                onPressed: sheetBusy ? null : onCreate,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6D4C41),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: sheetBusy
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Create Account',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: FilledButton(
-                              onPressed: sheetBusy ? null : onCreate,
-                              child: sheetBusy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Create account',
-                                      style: TextStyle(fontSize: 16),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

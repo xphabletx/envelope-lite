@@ -189,3 +189,108 @@ lib/widgets/calculator_widget.dart: Uses FlutterError.onError to suppress layout
 lib/widgets/envelope_tile.dart: Uses hardcoded layout math (_actionButtonsWidth = 164.0) for swipe animations. Action: Add comment warning that changing button size requires updating this constant.
 
 Redundant Modals: QuickActionModal (in Widgets) duplicates logic found in DepositModal, WithdrawModal, etc. (in Screens). Action: Long-term refactor to use a single modal system.
+
+## Recent Achievements (December 2025)
+
+### Bug Fixes Completed:
+- ✅ Calculator widget (floating overlay, proper context handling)
+- ✅ Theme flash on startup (Latte Love no longer appears)
+- ✅ Navigation regression from envelope detail
+- ✅ AppBar scroll bleeding (scrolledUnderElevation fix)
+- ✅ Stats/History screen (theme and font integration)
+- ✅ Emoji picker standardization (reusable bottom sheet widget)
+
+### New Features Implemented:
+- ✅ **Emoji Picker System**: Reusable `emoji_picker_sheet.dart` used across:
+  - Envelope tile (quick change)
+  - Envelope settings
+  - Group editor
+  - Appearance settings (target emoji)
+- ✅ **Calculator Helper**: Wrapper system for proper modal vs FAB usage
+- ✅ **Locale Provider**: Currency and language selection infrastructure
+  - Supports GBP, EUR, USD
+  - Infrastructure ready for German, French, Spanish, Italian
+  - Proper currency formatting with `intl` package
+
+### Store Compliance Progress:
+- ✅ Icon generation complete (transparent backgrounds, proper sizing)
+- ✅ Splash screen implementation
+- ⏳ Privacy policy (50% complete)
+- ⏳ Terms of service (pending)
+- ⏳ App Store screenshots (pending)
+
+### Localization Infrastructure:
+- ✅ LocaleProvider created for language/currency management
+- ✅ Onboarding updated with working currency dropdowns
+- ✅ `tr()` function used throughout codebase
+- ✅ 200+ strings in localization_service.dart
+- 📅 German translation planned for v1.1 (Feb 2025)
+
+### Planned Features:
+- 📅 **Interactive Tooltip System**: Guided onboarding tour (Post-launch Week 2)
+  - Uses `showcaseview` package
+  - 24 tooltips across key user journeys
+  - OnboardingTourService for persistence
+  - "Show Tour Again" option in settings
+
+### Technical Debt Acknowledged:
+- Calculator widget uses error suppression for layout overflow
+- QuickActionModal duplicates logic from separate modals
+- Some global functions need moving into class scope
+- Hardcoded layout constants in envelope_tile.dart swipe animations
+
+### Launch Timeline:
+- **January 10, 2025**: v1.0 Launch (English, 3 currencies)
+- **February 2025**: v1.1 (Tooltips, analytics integration)
+- **March 2025**: v1.2 (German translation if profitable)
+- **April-May 2025**: v1.3-1.4 (French, Spanish translations)
+
+### Revenue Model Finalized:
+- Hybrid subscription model:
+  - £6.99 one-time purchase (basic features)
+  - £12/year subscription (all features + Life OS discount)
+  - Testing both models to optimize conversion
+  - RevenueCat integration for payment processing
+```
+
+---
+
+## 💬 **FOR NEXT CHAT - ACTION PLAN**
+
+Here's what to include in your opening prompt for the new chat:
+```
+Context: We're finishing Envelope Lite v1.0 for Jan 10 launch. 
+Just completed bug fixes and emoji picker standardization.
+
+Current Status:
+- ✅ 5 complete files ready to copy (emoji pickers, stats screen)
+- ✅ Locale provider created (currency selection working)
+- ✅ Onboarding updates drafted (language/currency dropdowns)
+- ⏳ Need to implement tooltip system (24 tooltips mapped)
+
+Immediate Tasks:
+1. Test all 5 files from last session work correctly
+2. Implement tooltip flow in envelope_creator.dart
+3. Update context file with achievements
+4. Prepare for final pre-launch checklist
+
+Files Already Created (from previous session):
+- emoji_picker_sheet.dart (reusable widget)
+- envelope_tile_FIXED.dart
+- group_editor_COMPLETE.dart
+- envelope_settings_sheet_COMPLETE.dart
+- stats_history_screen_PATCHED.dart
+- locale_provider.dart
+- Calculator helper system
+
+Partner Testing Tonight:
+- All emoji pickers
+- Stats/history screen
+- Calculator functionality
+- Currency selection in onboarding
+
+Next Session Goals:
+- Implement 24-tooltip onboarding system
+- Final store compliance checks
+- Marketing materials preparation
+- Launch week planning

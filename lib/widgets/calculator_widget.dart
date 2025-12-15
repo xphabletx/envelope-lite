@@ -355,7 +355,9 @@ class CalculatorWidgetState extends State<CalculatorWidget> {
                         size: 18,
                         color: theme.colorScheme.onSurface,
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        Navigator.of(context, rootNavigator: true).pop();
+                      },
                       padding: const EdgeInsets.all(4),
                       constraints: const BoxConstraints(
                         minWidth: 28,

@@ -1,3 +1,4 @@
+// lib/models/envelope.dart
 // Defines the Envelope data structure, which is shared and used by the repository.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -7,6 +8,7 @@ class Envelope {
   final String userId; // The UID of the person who created the envelope
   double currentAmount;
   double? targetAmount; // Optional target
+  DateTime? targetDate; // NEW: Optional target date
   String? groupId;
   final String? emoji;
   final String? subtitle;
@@ -24,11 +26,12 @@ class Envelope {
     required this.userId,
     this.currentAmount = 0.0,
     this.targetAmount,
+    this.targetDate, // NEW
     this.groupId,
     this.emoji,
     this.subtitle,
-    this.autoFillEnabled = false, // NEW: Default to not auto-filling
-    this.autoFillAmount, // NEW: Default to null (must be set by user)
+    this.autoFillEnabled = false, // Default to not auto-filling
+    this.autoFillAmount, // Default to null (must be set by user)
     this.isShared = true,
   });
 
@@ -38,6 +41,7 @@ class Envelope {
     String? userId,
     double? currentAmount,
     double? targetAmount,
+    DateTime? targetDate, // NEW
     String? groupId,
     String? emoji,
     String? subtitle,
@@ -51,6 +55,7 @@ class Envelope {
       userId: userId ?? this.userId,
       currentAmount: currentAmount ?? this.currentAmount,
       targetAmount: targetAmount ?? this.targetAmount,
+      targetDate: targetDate ?? this.targetDate, // NEW
       groupId: groupId ?? this.groupId,
       emoji: emoji ?? this.emoji,
       subtitle: subtitle ?? this.subtitle,
@@ -66,6 +71,9 @@ class Envelope {
       'userId': userId,
       'currentAmount': currentAmount,
       'targetAmount': targetAmount,
+      'targetDate': targetDate != null
+          ? Timestamp.fromDate(targetDate!)
+          : null, // NEW
       'groupId': groupId,
       'emoji': emoji,
       'subtitle': subtitle,
@@ -96,6 +104,7 @@ class Envelope {
       targetAmount: (data['targetAmount'] == null)
           ? null
           : toDouble(data['targetAmount']),
+      targetDate: (data['targetDate'] as Timestamp?)?.toDate(), // NEW
       groupId: data['groupId'] as String?,
       emoji: data['emoji'] as String?,
       subtitle: data['subtitle'] as String?,
