@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
-import 'dart:ui' as ui;
 
 /// Custom tutorial overlay that highlights widgets with holes and shows tooltips
 class TutorialOverlay extends StatefulWidget {
@@ -187,7 +186,7 @@ class _TutorialOverlayState extends State<TutorialOverlay>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -223,7 +222,7 @@ class _TutorialOverlayState extends State<TutorialOverlay>
             style: TextStyle(
               fontSize: 16,
               height: 1.5,
-              color: theme.colorScheme.onSurface.withOpacity(0.8),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
             ),
           ),
           const SizedBox(height: 24),
@@ -294,7 +293,7 @@ class _HolePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withOpacity(0.75)
+      ..color = Colors.black.withValues(alpha: 0.75)
       ..style = PaintingStyle.fill;
 
     final holePaint = Paint()
@@ -316,7 +315,7 @@ class _HolePainter extends CustomPainter {
 
       // Draw border around hole
       final borderPaint = Paint()
-        ..color = Colors.white.withOpacity(0.5)
+        ..color = Colors.white.withValues(alpha: 0.5)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
       canvas.drawRRect(rrect, borderPaint);
@@ -405,7 +404,6 @@ class _TypedTextFieldState extends State<TypedTextField> {
     try {
       await _audioPlayer.play(AssetSource('sounds/$filename'), volume: 0.3);
     } catch (e) {
-      // Silently fail if sound doesn't exist
       debugPrint('Could not play sound: $filename');
     }
   }

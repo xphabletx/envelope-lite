@@ -8,12 +8,10 @@ import '../../../models/envelope_group.dart';
 import '../../../models/transaction.dart';
 import '../../../services/envelope_repo.dart';
 import '../../../services/group_repo.dart';
-// NEW: Import the target helper
+import '../../../services/account_repo.dart';
+import '../../../services/scheduled_payment_repo.dart'; // NEW IMPORT
 import '../../../utils/target_helper.dart';
-import '../stats_history_screen.dart';
-import 'envelope_header_card.dart';
 import 'envelope_transaction_list.dart';
-import 'envelope_settings_sheet.dart';
 import '../group_detail_screen.dart';
 import 'modals/deposit_modal.dart';
 import 'modals/withdraw_modal.dart';
@@ -22,7 +20,6 @@ import '../../../services/localization_service.dart';
 import '../../../providers/font_provider.dart';
 import '../../utils/calculator_helper.dart';
 import 'modern_envelope_header_card.dart';
-// TUTORIAL IMPORT REMOVED
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -47,7 +44,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   final GlobalKey _envelopeCardKey = GlobalKey();
   final GlobalKey _transactionListKey = GlobalKey();
   final GlobalKey _fabKey = GlobalKey();
-  final GlobalKey _settingsKey = GlobalKey();
 
   @override
   void initState() {
@@ -58,25 +54,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   }
 
   Future<void> _checkTutorial() async {
-    // TODO: Implement Detail Screen tutorial logic with new TutorialController
-    /*
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final phase = await TutorialService.getCurrentPhase();
-
-    if (phase == TutorialPhase.homeWithEnvelope && mounted) {
-      // Advance to detail phase
-      await TutorialService.setPhase(TutorialPhase.envelopeDetail);
-
-      TutorialService.showEnvelopeDetailTutorial(
-        context,
-        envelopeCardKey: _envelopeCardKey,
-        transactionListKey: _transactionListKey,
-        fabKey: _fabKey,
-        settingsKey: _settingsKey,
-      );
-    }
-    */
+    // Tutorial logic placeholder
   }
 
   void _saveScrollOffset() {
@@ -139,6 +117,12 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
+    // Initialize the ScheduledPaymentRepo
+    final scheduledPaymentRepo = ScheduledPaymentRepo(
+      widget.repo.db,
+      widget.repo.currentUserId,
+    );
+
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
       builder: (context, envelopeSnapshot) {
@@ -195,59 +179,44 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                     color: theme.colorScheme.primary,
                   ),
                 ),
-                actions: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.bar_chart,
-                      color: theme.colorScheme.primary,
-                    ),
-                    tooltip: tr('envelope_view_history_tooltip'),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => StatsHistoryScreen(
-                            repo: widget.repo,
-                            initialEnvelopeIds: {envelope.id},
-                            title: '${envelope.name} - ${tr('history')}',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  IconButton(
-                    key: _settingsKey, // TUTORIAL KEY
-                    icon: Icon(
-                      Icons.settings,
-                      color: theme.colorScheme.primary,
-                    ),
-                    tooltip: tr('settings'),
-                    onPressed: () => _showSettings(context, envelope),
-                  ),
-                ],
               ),
               body: SingleChildScrollView(
                 key: const PageStorageKey<String>('envelope_detail_scroll'),
                 controller: _scrollController,
                 child: Column(
                   children: [
+                    // ---------------------------------------------------
+                    // 1. THE VECTOR ENVELOPE (CustomPaint)
+                    // ---------------------------------------------------
                     ModernEnvelopeHeaderCard(
                       key: _envelopeCardKey,
                       envelope: envelope,
-                      repo: widget.repo, // <--- Add this
+                      repo: widget.repo,
+                      groupRepo: GroupRepo(widget.repo.db, widget.repo),
+                      accountRepo: AccountRepo(widget.repo.db, widget.repo),
+                      scheduledPaymentRepo: scheduledPaymentRepo, // PASSED HERE
                     ),
 
-                    // NEW: Target Status Section
+                    // ---------------------------------------------------
+                    // 2. TARGET STATUS CARD
+                    // ---------------------------------------------------
                     if (envelope.targetDate != null &&
                         (envelope.targetAmount ?? 0) > envelope.currentAmount)
                       _TargetStatusCard(envelope: envelope),
 
+                    // ---------------------------------------------------
+                    // 3. BINDER / GROUP INFO
+                    // ---------------------------------------------------
                     const SizedBox(height: 16),
                     if (envelope.groupId != null)
                       _BinderInfoRow(
                         binderId: envelope.groupId!,
                         repo: widget.repo,
                       ),
+
+                    // ---------------------------------------------------
+                    // 4. MONTH NAVIGATION & LIST
+                    // ---------------------------------------------------
                     if (envelope.groupId != null) const SizedBox(height: 16),
                     _buildMonthNavigationBar(theme),
                     const SizedBox(height: 8),
@@ -260,6 +229,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   ],
                 ),
               ),
+
               bottomNavigationBar: BottomNavigationBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 selectedItemColor: theme.colorScheme.primary,
@@ -282,7 +252,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   BottomNavigationBarItem(
                     icon: const Icon(Icons.folder_open_outlined),
                     activeIcon: const Icon(Icons.folder_copy),
-                    label: tr('home_groups_tab'),
+                    label: tr('home_binders_tab'),
                   ),
                   BottomNavigationBarItem(
                     icon: const Icon(Icons.account_balance_wallet_outlined),
@@ -321,7 +291,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
@@ -349,7 +321,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       tr('envelope_return_current_month'),
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -361,7 +335,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                ? theme.colorScheme.onSurface.withOpacity(0.3)
+                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
                 : theme.colorScheme.primary,
           ),
         ],
@@ -439,26 +413,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     );
   }
 
-  void _showSettings(BuildContext context, Envelope envelope) {
-    final groupRepo = GroupRepo(widget.repo.db, widget.repo);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: EnvelopeSettingsSheet(
-          envelopeId: envelope.id,
-          repo: widget.repo,
-          groupRepo: groupRepo,
-        ),
-      ),
-    );
-  }
-
   void _showDepositModal(BuildContext context, Envelope envelope) {
     showModalBottomSheet(
       context: context,
@@ -533,9 +487,11 @@ class _TargetStatusCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer.withOpacity(0.5),
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.3)),
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
@@ -556,8 +512,8 @@ class _TargetStatusCard extends StatelessWidget {
                   daysLeft > 0 ? '$daysLeft days remaining' : 'Target due',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSecondaryContainer.withOpacity(
-                      0.8,
+                    color: theme.colorScheme.onSecondaryContainer.withValues(
+                      alpha: 0.8,
                     ),
                   ),
                 ),
@@ -576,6 +532,20 @@ class _BinderInfoRow extends StatelessWidget {
   final String binderId;
   final EnvelopeRepo repo;
 
+  // FIXED: Explicit color overrides to match groups_home_screen
+  Color _getDisplayColor(String colorName, ColorScheme theme) {
+    switch (colorName) {
+      case 'Black':
+        return const Color(0xFF212121);
+      case 'Brown':
+        return const Color(0xFF5D4037);
+      case 'Grey':
+        return const Color(0xFF757575);
+      default:
+        return GroupColors.getThemedColor(colorName, theme);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -588,10 +558,12 @@ class _BinderInfoRow extends StatelessWidget {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
         final binder = snapshot.data!;
-        final binderColor = GroupColors.getThemedColor(
+        // Use the color override logic from groups_home_screen
+        final binderColor = _getDisplayColor(
           binder.colorName,
           theme.colorScheme,
         );
+        final binderBgColor = GroupColors.getEnvelopeCardColor(binderColor);
 
         return InkWell(
           onTap: () async {
@@ -613,16 +585,16 @@ class _BinderInfoRow extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: binderColor.withOpacity(0.1),
+              color: binderBgColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: binderColor.withOpacity(0.3)),
+              border: Border.all(color: binderColor.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: binderColor.withOpacity(0.2),
+                    color: binderBgColor.withValues(alpha: 0.3),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.folder, size: 20, color: binderColor),
@@ -636,7 +608,9 @@ class _BinderInfoRow extends StatelessWidget {
                         tr('envelope_in_binder'),
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 2),

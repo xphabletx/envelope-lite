@@ -386,7 +386,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 const Icon(Icons.emoji_emotions),
                                 const SizedBox(width: 16),
                                 Text(
-                                  tr('emoji'),
+                                  tr('Emoji'),
                                   style: fontProvider.getTextStyle(
                                     fontSize: 18,
                                   ),
@@ -521,7 +521,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         // Binder selection
                         if (_bindersLoaded) ...[
                           Text(
-                            tr('binder'),
+                            tr('Binder'),
                             style: fontProvider.getTextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,

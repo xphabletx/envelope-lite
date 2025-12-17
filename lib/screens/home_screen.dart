@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-// FIXED: Hide Transaction to prevent conflict with your model
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 
 import '../utils/calculator_helper.dart';
 
@@ -14,13 +12,14 @@ import '../services/run_migrations_once.dart';
 import '../services/user_service.dart';
 import '../services/auto_payment_service.dart';
 import '../providers/font_provider.dart';
+import '../services/account_repo.dart';
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
-// import '../widgets/tutorial_overlay.dart'; // TUTORIAL DISABLED
+import '../widgets/accounts/account_list_screen.dart'; // IMPORT ADDED
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -34,13 +33,12 @@ import '../services/tutorial_controller.dart';
 import '../screens/envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
 import 'settings_screen.dart';
-import 'pay_day_settings_screen.dart';
 import 'calendar_screen.dart';
 import 'budget_screen.dart';
 import 'groups_home_screen.dart';
-import 'pay_day_amount_screen.dart';
+import 'pay_day/pay_day_amount_screen.dart';
 
-// Themed SpeedDial child style - UPDATED to accept Key
+// Themed SpeedDial child style
 SpeedDialChild sdChild({
   required BuildContext context,
   required IconData icon,
@@ -70,10 +68,16 @@ const String kPrefsKeyWorkspace = 'last_workspace_id';
 const String kPrefsKeyWorkspaceName = 'last_workspace_name';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.repo, this.initialIndex = 0});
+  const HomeScreen({
+    super.key,
+    required this.repo,
+    this.initialIndex = 0,
+    this.projectionDate,
+  });
 
   final EnvelopeRepo repo;
   final int initialIndex;
+  final DateTime? projectionDate;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -90,10 +94,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _calendarTabKey = GlobalKey();
   final GlobalKey _statsTabKey = GlobalKey();
   final GlobalKey _budgetTabKey = GlobalKey();
-  // Used for target in Step 3
   final GlobalKey _firstEnvelopeKey = GlobalKey();
 
-  // SpeedDial controller for programmatic open/close
   final ValueNotifier<bool> _isSpeedDialOpen = ValueNotifier(false);
 
   GroupRepo get _groupRepo => GroupRepo(widget.repo.db, widget.repo);
@@ -103,34 +105,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _restoreLastWorkspaceName();
-
-    // TUTORIAL CHECK - DISABLED
-    /*
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final tutorialController = Provider.of<TutorialController>(
-        context,
-        listen: false,
-      );
-      await tutorialController.loadState();
-
-      debugPrint(
-        '🎯 Tutorial loaded. Current step: ${tutorialController.currentStep}',
-      );
-
-      // If tutorial not started and no envelopes exist, start it
-      if (tutorialController.currentStep == TutorialStep.notStarted) {
-        final hasEnvelopes = await _hasEnvelopes();
-        debugPrint('🎯 Has envelopes: $hasEnvelopes');
-        if (!hasEnvelopes) {
-          debugPrint('🎯 Starting tutorial!');
-          await tutorialController.start();
-          debugPrint(
-            '🎯 Tutorial started! New step: ${tutorialController.currentStep}',
-          );
-        }
-      }
-    });
-    */
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
@@ -171,23 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
   }
-
-  // TUTORIAL HELPER - DISABLED
-  /*
-  Future<bool> _hasEnvelopes() async {
-    try {
-      final snapshot = await widget.repo.db
-          .collection('users')
-          .doc(widget.repo.currentUserId)
-          .collection('envelopes')
-          .limit(1)
-          .get();
-      return snapshot.docs.isNotEmpty;
-    } catch (e) {
-      return false;
-    }
-  }
-  */
 
   Future<void> _restoreLastWorkspaceName() async {
     final prefs = await SharedPreferences.getInstance();
@@ -239,157 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ============================================================================
-  // TUTORIAL HELPER METHODS - DISABLED
-  // ============================================================================
-
-  /*
-  Future<void> _autoCreateTutorialEnvelope() async {
-    try {
-      debugPrint('🎯 Auto-creating tutorial envelope...');
-
-      final now = Timestamp.now();
-
-      // Create binder first
-      final binderData = {
-        'name': 'Savings Challenges',
-        'emoji': '🏦',
-        'color': Colors.green.value,
-        'payDayEnabled': true,
-        'createdAt': now,
-        'userId': widget.repo.currentUserId,
-      };
-
-      final binderRef = await widget.repo.db
-          .collection('users')
-          .doc(widget.repo.currentUserId)
-          .collection('groups')
-          .add(binderData);
-
-      // Create envelope
-      final envelopeData = {
-        'name': 'Savings',
-        'emoji': '💰',
-        'subtitle': 'For a rainy day',
-        'currentAmount': 0.0,
-        'targetAmount': 1000.0,
-        'payDayEnabled': true,
-        'payDayAmount': 100.0,
-        'groupId': binderRef.id,
-        'createdAt': now,
-        'updatedAt': now,
-        'userId': widget.repo.currentUserId,
-      };
-
-      await widget.repo.db
-          .collection('users')
-          .doc(widget.repo.currentUserId)
-          .collection('envelopes')
-          .add(envelopeData);
-
-      debugPrint('🎯 Tutorial envelope created! Waiting for confirmation...');
-
-      int retries = 0;
-      while (retries < 20) {
-        await Future.delayed(const Duration(milliseconds: 250));
-        if (mounted) setState(() {});
-        final exists = await _hasEnvelopes();
-        if (exists) return; 
-        retries++;
-      }
-    } catch (e) {
-      debugPrint('❌ Error: $e');
-    }
-  }
-
-  void _showCompletionDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Row(
-              children: const [
-                Text('Tutorial Complete! '),
-                Text('🎉', style: TextStyle(fontSize: 24)),
-              ],
-            ),
-            content: const Text(
-              'You\'re all set! Feel free to explore Envelope Lite.\n\n'
-              'Need help? Check Settings → Help anytime!',
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  Provider.of<TutorialController>(
-                    context,
-                    listen: false,
-                  ).complete();
-                },
-                child: const Text('Get Started!'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  GlobalKey? _getTargetKeyForCurrentStep(TutorialController controller) {
-    switch (controller.currentStep) {
-      case TutorialStep.envelopeCreated:
-      case TutorialStep.swipeGesture:
-        return _firstEnvelopeKey;
-      default:
-        return null;
-    }
-  }
-
-  String _getTitleForCurrentStep(TutorialController controller) {
-    switch (controller.currentStep) {
-      case TutorialStep.welcome:
-        return "Welcome to Envelope Lite! 🎉";
-      case TutorialStep.autoCreating:
-        return "Creating Your First Envelope...";
-      case TutorialStep.envelopeCreated:
-        return "Envelope Created! 💰";
-      case TutorialStep.swipeGesture:
-        return "Quick Actions";
-      case TutorialStep.complete:
-        return "You're All Set! 🎉";
-      default:
-        return "Tutorial";
-    }
-  }
-
-  String _getDescriptionForCurrentStep(TutorialController controller) {
-    switch (controller.currentStep) {
-      case TutorialStep.welcome:
-        return "Let's get you started! We'll create your first Savings envelope together. Ready?";
-
-      case TutorialStep.autoCreating:
-        return "Creating a Savings envelope with £1,000 target and £100 auto-fill...";
-
-      case TutorialStep.envelopeCreated:
-        return "Here's your new Savings envelope! It's organized in a 'Savings Challenges' binder.";
-
-      case TutorialStep.swipeGesture:
-        return "Swipe left or right on your envelope to quickly add or remove money!";
-
-      case TutorialStep.complete:
-        return "You're ready to go! Explore features anytime in Settings → Help.";
-
-      default:
-        return "";
-    }
-  }
-
-  String _getStepCounter(TutorialController controller) {
-    final step = controller.currentStep.index;
-    if (step == 0 || step >= TutorialStep.values.length - 1) return "";
-    return "$step/4";
-  }
-  */
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -402,7 +208,10 @@ class _HomeScreenState extends State<HomeScreen> {
         firstEnvelopeKey: _firstEnvelopeKey,
       ),
       GroupsHomeScreen(repo: widget.repo, groupRepo: _groupRepo),
-      BudgetScreen(repo: widget.repo),
+      BudgetScreen(
+        repo: widget.repo,
+        initialProjectionDate: widget.projectionDate,
+      ),
       CalendarScreenV2(repo: widget.repo),
     ];
 
@@ -434,6 +243,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 actions: [
+                  // NEW: Moved Account List (Wallet) icon here
+                  IconButton(
+                    icon: const Icon(Icons.account_balance_wallet, size: 28),
+                    tooltip: 'Manage Accounts',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AccountListScreen(envelopeRepo: widget.repo),
+                        ),
+                      );
+                    },
+                    color: theme.colorScheme.primary,
+                  ),
                   IconButton(
                     key: _statsTabKey,
                     icon: const Icon(Icons.bar_chart_sharp, size: 28),
@@ -510,24 +334,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     )
                   : null,
             ),
-
-            // TUTORIAL OVERLAY - DISABLED
-            /*
-            if (tutorialController.isActive &&
-                tutorialController.currentStep != TutorialStep.complete)
-              TutorialOverlay(
-                targetKey: _getTargetKeyForCurrentStep(tutorialController),
-                title: _getTitleForCurrentStep(tutorialController),
-                description: _getDescriptionForCurrentStep(tutorialController),
-                stepCounter: _getStepCounter(tutorialController),
-                onNext: () async {
-                  // ... tutorial logic ...
-                },
-                // ... other handlers ...
-                showSkipStep: true,
-                blockInteraction: false,
-              ),
-            */
           ],
         );
       },
@@ -556,8 +362,6 @@ class _AllEnvelopesFAB extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // tutorial logic removed for now
-    // final tutorialController = Provider.of<TutorialController>(context);
 
     final allEnvelopesState = context
         .findAncestorStateOfType<_AllEnvelopesState>();
@@ -713,8 +517,11 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   void _openPayDayScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            PayDayAmountScreen(repo: widget.repo, groupRepo: widget.groupRepo),
+        builder: (_) => PayDayAmountScreen(
+          repo: widget.repo,
+          groupRepo: widget.groupRepo,
+          accountRepo: AccountRepo(widget.repo.db, widget.repo),
+        ),
       ),
     );
   }

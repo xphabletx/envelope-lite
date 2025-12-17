@@ -7,9 +7,9 @@ class AppPreferencesProvider with ChangeNotifier {
   static const String _languageKey = 'selected_language';
   static const String _currencyKey = 'selected_currency';
 
-  String _celebrationEmoji = '🥰'; // Default
-  String _selectedLanguage = 'en'; // English (placeholder)
-  String _selectedCurrency = 'GBP'; // Pound Sterling (placeholder)
+  String _celebrationEmoji = '🥰';
+  String _selectedLanguage = 'en';
+  String _selectedCurrency = 'GBP';
 
   String get celebrationEmoji => _celebrationEmoji;
   String get selectedLanguage => _selectedLanguage;
@@ -48,7 +48,6 @@ class AppPreferencesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Currency symbol helper
   String getCurrencySymbol() {
     switch (_selectedCurrency) {
       case 'GBP':
@@ -62,7 +61,6 @@ class AppPreferencesProvider with ChangeNotifier {
     }
   }
 
-  // Language name helper
   static String getLanguageName(String code) {
     switch (code) {
       case 'en':
@@ -76,7 +74,6 @@ class AppPreferencesProvider with ChangeNotifier {
     }
   }
 
-  // Currency name helper
   static String getCurrencyName(String code) {
     switch (code) {
       case 'GBP':

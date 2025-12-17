@@ -12,10 +12,10 @@ import 'providers/font_provider.dart';
 import 'providers/app_preferences_provider.dart';
 import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
-import 'services/tutorial_controller.dart'; // Added
+import 'services/tutorial_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
-import 'screens/onboarding_flow.dart';
+import 'screens/onboarding/onboarding_flow.dart';
 import 'models/user_profile.dart';
 
 void main() async {
@@ -33,7 +33,7 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (_) => FontProvider()),
         ChangeNotifierProvider(create: (_) => AppPreferencesProvider()),
-        ChangeNotifierProvider(create: (_) => TutorialController()), // Added
+        ChangeNotifierProvider(create: (_) => TutorialController()),
       ],
       child: const MyApp(),
     ),
@@ -53,12 +53,27 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Envelope Lite',
           debugShowCheckedModeBanner: false,
+          // Apply the dynamic font to the dynamic theme
           theme: baseTheme.copyWith(
             textTheme: fontTheme.apply(
               bodyColor: baseTheme.colorScheme.onSurface,
               displayColor: baseTheme.colorScheme.onSurface,
             ),
           ),
+          // Global tap-to-dismiss keyboard behavior
+          builder: (context, child) {
+            return GestureDetector(
+              onTap: () {
+                // Unfocus any active text field when tapping outside
+                final currentFocus = FocusScope.of(context);
+                if (!currentFocus.hasPrimaryFocus &&
+                    currentFocus.focusedChild != null) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                }
+              },
+              child: child,
+            );
+          },
           routes: {'/home': (context) => const HomeScreenWrapper()},
           home: const AuthGate(),
         );
@@ -100,6 +115,7 @@ class AuthGate extends StatelessWidget {
             final profile = profileSnap.data;
 
             if (profile != null) {
+              // Initialize theme provider with user data if available
               Provider.of<ThemeProvider>(
                 context,
                 listen: false,

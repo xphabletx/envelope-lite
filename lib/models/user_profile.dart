@@ -20,14 +20,12 @@ class UserProfile {
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map, String uid) {
-    // Handle createdAt - could be Timestamp or int
     DateTime createdAtDate = DateTime.now();
     if (map['createdAt'] != null) {
       final createdAtValue = map['createdAt'];
       if (createdAtValue is int) {
         createdAtDate = DateTime.fromMillisecondsSinceEpoch(createdAtValue);
       } else {
-        // Firebase Timestamp object
         try {
           createdAtDate = (createdAtValue as dynamic).toDate();
         } catch (e) {

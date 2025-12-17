@@ -209,7 +209,7 @@ class _TransferModalState extends State<TransferModal> {
                           '${tr('from')}: ${widget.sourceEnvelopeName}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -231,7 +231,7 @@ class _TransferModalState extends State<TransferModal> {
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -355,7 +355,7 @@ class _TransferModalState extends State<TransferModal> {
                       const Spacer(),
                       Icon(
                         Icons.arrow_drop_down,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ],
                   ),

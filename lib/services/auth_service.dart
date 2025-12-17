@@ -1,3 +1,5 @@
+// lib/services/auth_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -12,7 +14,7 @@ class AuthService {
     signInOption: SignInOption.standard,
   );
 
-  // --- Sign In Methods (Unchanged) ---
+  // --- Sign In Methods ---
 
   static Future<UserCredential> signInWithGoogle() async {
     final googleUser = await _google.signIn();
@@ -87,12 +89,11 @@ class AuthService {
       await prefs.remove('last_workspace_id');
       await prefs.remove('last_workspace_name');
     } catch (e) {
-      // ignore: avoid_print
-      print('Error during sign out: $e');
+      debugPrint('Error during sign out: $e');
     }
   }
 
-  // --- ACCOUNT DELETION (Corrected Paths) ---
+  // --- ACCOUNT DELETION ---
 
   static Future<void> deleteAccount() async {
     final user = _auth.currentUser;
@@ -103,7 +104,6 @@ class AuthService {
 
     try {
       // 1. Define the data root path
-      // Path: users/{uid}/solo/data/
       final userSoloData = db
           .collection('users')
           .doc(uid)
@@ -131,8 +131,7 @@ class AuthService {
       // 5. Delete the data container doc ('solo/data')
       await userSoloData.delete();
 
-      // 6. Delete Scheduled Payments (if they exist at root level or elsewhere)
-      // Checking root collection 'scheduled_payments' inside user
+      // 6. Delete Scheduled Payments
       final scheduled = await db
           .collection('users')
           .doc(uid)
@@ -153,8 +152,7 @@ class AuthService {
       // 9. Delete Auth Account
       await user.delete();
     } catch (e) {
-      // ignore: avoid_print
-      print('❌ Error deleting account: $e');
+      debugPrint('❌ Error deleting account: $e');
       rethrow;
     }
   }

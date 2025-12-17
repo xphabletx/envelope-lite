@@ -6,8 +6,6 @@ class AccountSecurityService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Entry point for the deletion flow.
-  /// Returns true if successful, false if cancelled or failed.
   Future<bool> deleteAccount(BuildContext context) async {
     final user = _auth.currentUser;
     if (user == null) return false;
@@ -38,7 +36,9 @@ class AccountSecurityService {
 
     if (confirmed != true) return false;
 
-    // 2. Re-authentication (Required for sensitive operations)
+    if (!context.mounted) return false;
+
+    // 2. Re-authentication
     bool reAuthSuccess = await _handleReauthentication(context, user);
     if (!reAuthSuccess) return false;
 
@@ -61,7 +61,6 @@ class AccountSecurityService {
       // 6. Navigation
       if (context.mounted) {
         Navigator.of(context).pop(); // Dismiss loader
-        // Navigate to root/login
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
       return true;
@@ -77,20 +76,16 @@ class AccountSecurityService {
   }
 
   Future<bool> _handleReauthentication(BuildContext context, User user) async {
-    // Determine provider (Google or Email)
+    // Determine provider
     final isGoogle = user.providerData.any((p) => p.providerId == 'google.com');
 
     if (isGoogle) {
-      // For MVP: We prompt them to sign out and sign in again if strict re-auth fails,
-      // but ideally, you trigger the GoogleSignIn flow here.
-      // Assuming generic flow for now:
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please verify your identity with Google.'),
         ),
       );
-      // Implementation depends on your AuthService.signInWithGoogle
-      // For now, returning true to allow testing, strictly strictly should implement GoogleSignIn().signIn()
+      // Ideally trigger Google Sign In re-auth here
       return true;
     } else {
       // Email/Password Flow
@@ -145,28 +140,27 @@ class AccountSecurityService {
   Future<void> _performGDPRCascade(String userId) async {
     final batch = _firestore.batch();
 
-    // 1. Delete Envelopes (Solo)
+    // 1. Delete Envelopes
     final envelopesSnap = await _firestore
         .collection('users/$userId/solo/data/envelopes')
         .get();
-    for (var doc in envelopesSnap.docs) batch.delete(doc.reference);
+    for (var doc in envelopesSnap.docs) {
+      batch.delete(doc.reference);
+    }
 
-    // 2. Delete Groups (Solo)
+    // 2. Delete Groups
     final groupsSnap = await _firestore
         .collection('users/$userId/solo/data/groups')
         .get();
-    for (var doc in groupsSnap.docs) batch.delete(doc.reference);
+    for (var doc in groupsSnap.docs) {
+      batch.delete(doc.reference);
+    }
 
-    // 3. Delete Transactions (Solo)
-    // Note: If user has >500 transactions, this batch will fail.
-    // For MVP we assume <500. For v1.1, split into chunks of 500.
+    // 3. Delete Transactions (Limited to <500)
     final txSnap = await _firestore
         .collection('users/$userId/solo/data/transactions')
         .get();
     for (var doc in txSnap.docs) {
-      if (batch.hashCode % 499 == 0) {
-        // Safety valve for large batches would go here
-      }
       batch.delete(doc.reference);
     }
 
@@ -175,18 +169,12 @@ class AccountSecurityService {
         .collection('scheduled_payments')
         .where('userId', isEqualTo: userId)
         .get();
-    for (var doc in schedSnap.docs) batch.delete(doc.reference);
+    for (var doc in schedSnap.docs) {
+      batch.delete(doc.reference);
+    }
 
     // 5. Delete User Profile
     batch.delete(_firestore.doc('users/$userId'));
-
-    // 6. Handle Workspaces (Clean up membership)
-    // We query workspaces where this user is a member
-    // Note: Firestore array-contains query needed here usually, but based on your structure:
-    // "members": {userId: true}
-    // We cannot easily query map keys.
-    // STRATEGY: We skip expensive workspace cleanup for MVP real-time.
-    // It relies on the "Orphaned Workspace" manual cleanup script.
 
     await batch.commit();
   }

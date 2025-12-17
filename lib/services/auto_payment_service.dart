@@ -1,5 +1,5 @@
 // lib/services/auto_payment_service.dart
-import 'package:flutter/foundation.dart'; // FIXED: Added this import
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
@@ -106,8 +106,22 @@ class AutoPaymentService {
       case 'biweekly':
         return current.add(const Duration(days: 14));
       case 'monthly':
-        // Logic to handle Jan 31 -> Feb 28
-        return DateTime(current.year, current.month + 1, current.day);
+        // Handle month overflow (e.g. Jan 31 -> Feb 28)
+        final targetMonth = current.month + 1;
+        final targetYear = current.year + (targetMonth > 12 ? 1 : 0);
+        final normalizedMonth = targetMonth > 12 ? 1 : targetMonth;
+
+        final lastDayOfTargetMonth = DateTime(
+          targetYear,
+          normalizedMonth + 1,
+          0,
+        ).day;
+        final targetDay = current.day > lastDayOfTargetMonth
+            ? lastDayOfTargetMonth
+            : current.day;
+
+        return DateTime(targetYear, normalizedMonth, targetDay);
+
       case 'yearly':
         return DateTime(current.year + 1, current.month, current.day);
       default:

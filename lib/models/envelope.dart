@@ -1,24 +1,20 @@
 // lib/models/envelope.dart
-// Defines the Envelope data structure, which is shared and used by the repository.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Envelope {
   final String id;
   String name;
-  final String userId; // The UID of the person who created the envelope
+  final String userId;
   double currentAmount;
-  double? targetAmount; // Optional target
-  DateTime? targetDate; // NEW: Optional target date
+  double? targetAmount;
+  DateTime? targetDate;
   String? groupId;
   final String? emoji;
   final String? subtitle;
-  final bool
-  autoFillEnabled; // NEW: Is this envelope included in Pay Day auto-fill?
-  final double?
-  autoFillAmount; // NEW: Amount to add on Pay Day (user must set manually)
-
-  // NOTE: isShared is determined by the workspace model, but included for simplicity
+  final bool autoFillEnabled;
+  final double? autoFillAmount;
   final bool isShared;
+  final String? linkedAccountId;
 
   Envelope({
     required this.id,
@@ -26,13 +22,14 @@ class Envelope {
     required this.userId,
     this.currentAmount = 0.0,
     this.targetAmount,
-    this.targetDate, // NEW
+    this.targetDate,
     this.groupId,
     this.emoji,
     this.subtitle,
-    this.autoFillEnabled = false, // Default to not auto-filling
-    this.autoFillAmount, // Default to null (must be set by user)
+    this.autoFillEnabled = false,
+    this.autoFillAmount,
     this.isShared = true,
+    this.linkedAccountId,
   });
 
   Envelope copyWith({
@@ -41,13 +38,14 @@ class Envelope {
     String? userId,
     double? currentAmount,
     double? targetAmount,
-    DateTime? targetDate, // NEW
+    DateTime? targetDate,
     String? groupId,
     String? emoji,
     String? subtitle,
     bool? autoFillEnabled,
     double? autoFillAmount,
     bool? isShared,
+    String? linkedAccountId,
   }) {
     return Envelope(
       id: id ?? this.id,
@@ -55,13 +53,14 @@ class Envelope {
       userId: userId ?? this.userId,
       currentAmount: currentAmount ?? this.currentAmount,
       targetAmount: targetAmount ?? this.targetAmount,
-      targetDate: targetDate ?? this.targetDate, // NEW
+      targetDate: targetDate ?? this.targetDate,
       groupId: groupId ?? this.groupId,
       emoji: emoji ?? this.emoji,
       subtitle: subtitle ?? this.subtitle,
       autoFillEnabled: autoFillEnabled ?? this.autoFillEnabled,
       autoFillAmount: autoFillAmount ?? this.autoFillAmount,
       isShared: isShared ?? this.isShared,
+      linkedAccountId: linkedAccountId ?? this.linkedAccountId,
     );
   }
 
@@ -71,15 +70,14 @@ class Envelope {
       'userId': userId,
       'currentAmount': currentAmount,
       'targetAmount': targetAmount,
-      'targetDate': targetDate != null
-          ? Timestamp.fromDate(targetDate!)
-          : null, // NEW
+      'targetDate': targetDate != null ? Timestamp.fromDate(targetDate!) : null,
       'groupId': groupId,
       'emoji': emoji,
       'subtitle': subtitle,
       'autoFillEnabled': autoFillEnabled,
       'autoFillAmount': autoFillAmount,
       'isShared': isShared,
+      'linkedAccountId': linkedAccountId,
     };
   }
 
@@ -89,6 +87,7 @@ class Envelope {
       throw StateError('Envelope ${doc.id} has no data');
     }
 
+    // Helper to safely convert int/double/String to double
     double toDouble(dynamic v, {double fallback = 0.0}) {
       if (v == null) return fallback;
       if (v is num) return v.toDouble();
@@ -104,7 +103,7 @@ class Envelope {
       targetAmount: (data['targetAmount'] == null)
           ? null
           : toDouble(data['targetAmount']),
-      targetDate: (data['targetDate'] as Timestamp?)?.toDate(), // NEW
+      targetDate: (data['targetDate'] as Timestamp?)?.toDate(),
       groupId: data['groupId'] as String?,
       emoji: data['emoji'] as String?,
       subtitle: data['subtitle'] as String?,
@@ -113,6 +112,7 @@ class Envelope {
           ? null
           : toDouble(data['autoFillAmount']),
       isShared: (data['isShared'] as bool?) ?? true,
+      linkedAccountId: data['linkedAccountId'] as String?,
     );
   }
 }

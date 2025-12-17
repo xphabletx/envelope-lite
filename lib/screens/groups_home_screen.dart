@@ -1,7 +1,4 @@
 // lib/screens/groups_home_screen.dart
-// FIX: Removed redundant null check on group.colorName
-// DEPRECATION FIX: .withOpacity -> .withValues(alpha: )
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -10,15 +7,15 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
-import '../services/workspace_helper.dart'; // FIX: Import helper
+import '../services/workspace_helper.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
 import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
-import 'pay_day_settings_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../screens/pay_day/pay_day_preview_screen.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -68,6 +65,20 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     );
   }
 
+  // FIXED: Explicit color overrides to match the Editor
+  Color _getDisplayColor(String colorName, ColorScheme theme) {
+    switch (colorName) {
+      case 'Black':
+        return const Color(0xFF212121);
+      case 'Brown':
+        return const Color(0xFF5D4037);
+      case 'Grey':
+        return const Color(0xFF757575);
+      default:
+        return GroupColors.getThemedColor(colorName, theme);
+    }
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -93,7 +104,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             final groups = allGroups.where((g) {
               if (g.userId == widget.repo.currentUserId) return true;
               if (!_showPartnerBinders) return false;
-              return (g.isShared ?? true);
+              return g.isShared;
             }).toList();
 
             if (groups.isEmpty) {
@@ -153,7 +164,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                           setState(() => _showPartnerBinders = show);
                         },
                       ),
-
                     Expanded(
                       child: Center(
                         child: Column(
@@ -292,41 +302,30 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             stats['envelopes'] as List<Envelope>;
                         final totalSaved = stats['totalSaved'] as double;
 
-                        // FIX: Removed redundant ?? 'Primary'
-                        final groupColor = GroupColors.getThemedColor(
+                        // FIXED: Use the specific color overrides
+                        final groupColor = _getDisplayColor(
                           group.colorName,
                           theme.colorScheme,
                         );
-                        final textColor = GroupColors.getContrastingTextColor(
-                          groupColor,
-                        );
-                        final leftPageColor = GroupColors.getLeftPageColor(
-                          groupColor,
-                        );
-                        final rightPageColor = GroupColors.getRightPageColor(
-                          groupColor,
-                        );
-                        final envelopeCardColor =
-                            GroupColors.getEnvelopeCardColor(groupColor);
-                        final accentTextColor = GroupColors.getAccentTextColor(
-                          groupColor,
-                        );
+
+                        final paperColor = theme.colorScheme.surface;
+                        final paperTextColor = theme.colorScheme.onSurface;
 
                         final isPartner =
                             group.userId != widget.repo.currentUserId;
 
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           child: Stack(
                             children: [
                               _BinderSpread(
                                 group: group,
                                 groupColor: groupColor,
-                                textColor: textColor,
-                                leftPageColor: leftPageColor,
-                                rightPageColor: rightPageColor,
-                                envelopeCardColor: envelopeCardColor,
-                                accentTextColor: accentTextColor,
+                                paperColor: paperColor,
+                                paperTextColor: paperTextColor,
                                 envelopes: groupEnvelopes,
                                 totalSaved: totalSaved,
                                 currency: currency,
@@ -336,14 +335,14 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                 repo: widget.repo,
                               ),
                               if (isPartner)
-                                // BUG FIX: Wrapped partner badge in workspace check
                                 FutureBuilder<bool>(
                                   future:
                                       WorkspaceHelper.isCurrentlyInWorkspace(),
                                   builder: (context, snapshot) {
                                     final inWorkspace = snapshot.data ?? false;
-                                    if (!inWorkspace)
+                                    if (!inWorkspace) {
                                       return const SizedBox.shrink();
+                                    }
 
                                     return Positioned(
                                       top: 12,
@@ -401,11 +400,8 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
 class _BinderSpread extends StatefulWidget {
   final EnvelopeGroup group;
   final Color groupColor;
-  final Color textColor;
-  final Color leftPageColor;
-  final Color rightPageColor;
-  final Color envelopeCardColor;
-  final Color accentTextColor;
+  final Color paperColor;
+  final Color paperTextColor;
   final List<Envelope> envelopes;
   final double totalSaved;
   final NumberFormat currency;
@@ -417,11 +413,8 @@ class _BinderSpread extends StatefulWidget {
   const _BinderSpread({
     required this.group,
     required this.groupColor,
-    required this.textColor,
-    required this.leftPageColor,
-    required this.rightPageColor,
-    required this.envelopeCardColor,
-    required this.accentTextColor,
+    required this.paperColor,
+    required this.paperTextColor,
     required this.envelopes,
     required this.totalSaved,
     required this.currency,
@@ -474,302 +467,357 @@ class _BinderSpreadState extends State<_BinderSpread> {
 
     return Container(
       decoration: BoxDecoration(
-        color: widget.theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            // FIX: withOpacity -> withValues
-            color: widget.groupColor.withValues(alpha: 0.2),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: widget.theme.colorScheme.shadow.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+            spreadRadius: 2,
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 1,
-              child: Container(
-                decoration: BoxDecoration(color: widget.leftPageColor),
-                child: widget.envelopes.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.mail_outline,
-                              size: 48,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              tr('home_no_envelopes'),
-                              style: fontProvider.getTextStyle(
-                                fontSize: 20,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
+      child: Stack(
+        children: [
+          // LAYER 1: The "Leather" Binder Cover (Custom Paint)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _OpenBinderPainter(color: widget.groupColor),
+            ),
+          ),
+
+          // LAYER 2: The "Paper" Pages
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                // === LEFT PAGE (ENVELOPES) ===
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: widget.paperColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        bottomLeft: Radius.circular(8),
+                        topRight: Radius.circular(2),
+                        bottomRight: Radius.circular(2),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(1, 1),
                         ),
-                      )
-                    : Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      ],
+                    ),
+                    child: widget.envelopes.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.mail,
-                                  size: 16,
-                                  color: widget.accentTextColor,
+                                  Icons.mail_outline,
+                                  size: 48,
+                                  color: Colors.grey.shade400,
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(height: 12),
                                 Text(
-                                  tr('home_envelopes_tab'),
+                                  tr('home_no_envelopes'),
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: widget.accentTextColor,
+                                    fontSize: 16,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.mail,
+                                      size: 16,
+                                      color: widget.groupColor,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      tr('home_envelopes_tab'),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: widget.paperTextColor.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Expanded(
+                                  child: _DynamicEnvelopeStack(
+                                    envelopes: widget.envelopes,
+                                    selectedIndex: _selectedIndex,
+                                    groupColor: widget.groupColor,
+                                    paperColor: widget.paperColor,
+                                    paperTextColor: widget.paperTextColor,
+                                    currency: widget.currency,
+                                    onTap: _handleEnvelopeTap,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: _DynamicEnvelopeStack(
-                                envelopes: widget.envelopes,
-                                selectedIndex: _selectedIndex,
-                                groupColor: widget.groupColor,
-                                envelopeCardColor: widget.envelopeCardColor,
-                                accentTextColor: widget.accentTextColor,
-                                currency: widget.currency,
-                                theme: widget.theme,
-                                onTap: _handleEnvelopeTap,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
-
-            Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    // FIX: withOpacity -> withValues
-                    widget.groupColor.withValues(alpha: 0.3),
-                    widget.groupColor.withValues(alpha: 0.6),
-                    widget.groupColor.withValues(alpha: 0.3),
-                  ],
+                          ),
+                  ),
                 ),
-              ),
-            ),
 
-            Expanded(
-              flex: 1,
-              child: Container(
-                color: widget.rightPageColor,
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+                // === SPINE GAP ===
+                const SizedBox(width: 24),
+
+                // === RIGHT PAGE (INFO) ===
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: widget.paperColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(2),
+                        bottomLeft: Radius.circular(2),
+                        topRight: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(-1, 1),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          width: 55,
-                          height: 55,
-                          decoration: BoxDecoration(
-                            color: widget.envelopeCardColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: widget.groupColor,
-                              width: 2,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              widget.group.emoji ?? '📁',
-                              style: const TextStyle(fontSize: 26),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.group.name,
-                          style: fontProvider.getTextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: widget.accentTextColor,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
+                        // Binder Header
                         Column(
                           children: [
-                            Text(
-                              tr('group_binder_total'),
-                              style: TextStyle(
-                                fontSize: 8,
-                                // FIX: withOpacity -> withValues
-                                color: widget.theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.6),
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
+                            Container(
+                              width: 55,
+                              height: 55,
+                              decoration: BoxDecoration(
+                                color: widget.paperColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: widget.groupColor,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: widget.groupColor.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  widget.group.emoji ?? '📁',
+                                  style: const TextStyle(fontSize: 26),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                widget.currency.format(widget.totalSaved),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.group.name,
+                              style: fontProvider.getTextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: widget.paperTextColor,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: widget.groupColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    tr('group_binder_total'),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: widget.groupColor,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      widget.currency.format(widget.totalSaved),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: widget.groupColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Selected Envelope Details
+                        if (selectedEnvelope != null)
+                          Column(
+                            children: [
+                              Divider(
+                                color: widget.paperTextColor.withValues(
+                                  alpha: 0.1,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Icon(
+                                Icons.mail,
+                                size: 20,
+                                color: widget.groupColor.withValues(alpha: 0.7),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                selectedEnvelope.name,
                                 style: fontProvider.getTextStyle(
-                                  fontSize: 28,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
+                                  color: widget.paperTextColor,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  widget.currency.format(
+                                    selectedEnvelope.currentAmount,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.groupColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tr('tap_again_for_details'),
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: widget.paperTextColor.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+
+                        // Action Buttons
+                        Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: widget.groupColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.edit, size: 16),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    tr('edit'),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                onPressed: widget.onEdit,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                    color: widget.groupColor.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                    width: 1.5,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                icon: Icon(
+                                  Icons.analytics,
+                                  size: 16,
                                   color: widget.groupColor,
                                 ),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    tr('group_history'),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: widget.groupColor,
+                                    ),
+                                  ),
+                                ),
+                                onPressed: widget.onViewDetails,
                               ),
                             ),
                           ],
                         ),
                       ],
                     ),
-
-                    if (selectedEnvelope != null)
-                      Column(
-                        children: [
-                          // FIX: withOpacity -> withValues
-                          Divider(
-                            color: widget.groupColor.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(height: 8),
-                          Icon(
-                            Icons.mail,
-                            size: 20,
-                            // FIX: withOpacity -> withValues
-                            color: widget.groupColor.withValues(alpha: 0.5),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            selectedEnvelope.name,
-                            style: fontProvider.getTextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: widget.accentTextColor,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              widget.currency.format(
-                                selectedEnvelope.currentAmount,
-                              ),
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: widget.groupColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            tr('tap_again_for_details'),
-                            style: TextStyle(
-                              fontSize: 9,
-                              // FIX: withOpacity -> withValues
-                              color: widget.theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
-                              fontStyle: FontStyle.italic,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-
-                    Column(
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.groupColor,
-                              foregroundColor:
-                                  GroupColors.getContrastingTextColor(
-                                    widget.groupColor,
-                                  ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit, size: 16),
-                            label: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                tr('edit'),
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            onPressed: widget.onEdit,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: widget.groupColor,
-                                width: 2,
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: Icon(
-                              Icons.analytics,
-                              size: 16,
-                              color: widget.groupColor,
-                            ),
-                            label: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                tr('group_history'),
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.groupColor,
-                                ),
-                              ),
-                            ),
-                            onPressed: widget.onViewDetails,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -779,20 +827,18 @@ class _DynamicEnvelopeStack extends StatelessWidget {
   final List<Envelope> envelopes;
   final int? selectedIndex;
   final Color groupColor;
-  final Color envelopeCardColor;
-  final Color accentTextColor;
+  final Color paperColor;
+  final Color paperTextColor;
   final NumberFormat currency;
-  final ThemeData theme;
   final Function(int) onTap;
 
   const _DynamicEnvelopeStack({
     required this.envelopes,
     required this.selectedIndex,
     required this.groupColor,
-    required this.envelopeCardColor,
-    required this.accentTextColor,
+    required this.paperColor,
+    required this.paperTextColor,
     required this.currency,
-    required this.theme,
     required this.onTap,
   });
 
@@ -805,14 +851,14 @@ class _DynamicEnvelopeStack extends StatelessWidget {
         final availableHeight = constraints.maxHeight;
         final envelopeCount = envelopes.length;
 
-        final envelopeHeight = 50.0;
+        final envelopeHeight = 45.0; // Slightly smaller for dense look
         double spacing;
-        if (envelopeCount == 1) {
+        if (envelopeCount <= 1) {
           spacing = 0;
         } else {
           final remainingSpace = availableHeight - envelopeHeight;
           spacing = remainingSpace / (envelopeCount - 1);
-          spacing = spacing.clamp(20.0, envelopeHeight + 8);
+          spacing = spacing.clamp(15.0, envelopeHeight + 6);
         }
 
         final orderedEnvelopes = <MapEntry<int, Envelope>>[];
@@ -843,49 +889,54 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                 onTap: () => onTap(originalIndex),
                 child: Container(
                   height: envelopeHeight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: envelopeCardColor,
-                    borderRadius: BorderRadius.circular(10),
+                    color: paperColor,
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isSelected
                           ? groupColor
-                          // FIX: withOpacity -> withValues
-                          : groupColor.withValues(alpha: 0.5),
-                      width: isSelected ? 3 : 2,
+                          : groupColor.withValues(alpha: 0.3),
+                      width: isSelected ? 2 : 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        // FIX: withOpacity -> withValues
                         color: groupColor.withValues(
-                          alpha: isSelected ? 0.2 : 0.1,
+                          alpha: isSelected ? 0.2 : 0.05,
                         ),
-                        blurRadius: isSelected ? 6 : 3,
-                        offset: Offset(0, isSelected ? 3 : 1),
+                        blurRadius: isSelected ? 4 : 2,
+                        offset: const Offset(0, 1),
                       ),
                     ],
                   ),
+                  alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
-                          envelope.name.length > 14
-                              ? '${envelope.name.substring(0, 14)}...'
-                              : envelope.name,
+                          envelope.name,
                           style: fontProvider.getTextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: isSelected
                                 ? FontWeight.bold
-                                : FontWeight.w600,
-                            color: accentTextColor,
+                                : FontWeight.normal,
+                            color: paperTextColor.withValues(
+                              alpha: isSelected ? 1.0 : 0.8,
+                            ),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (isSelected)
+                        Text(
+                          currency.format(envelope.currentAmount),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: groupColor,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -896,4 +947,73 @@ class _DynamicEnvelopeStack extends StatelessWidget {
       },
     );
   }
+}
+
+// --- PAINTER: OPEN BINDER LOOK ---
+class _OpenBinderPainter extends CustomPainter {
+  final Color color;
+
+  _OpenBinderPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final hsl = HSLColor.fromColor(color);
+    final baseColor = color;
+    final darkerColor = hsl
+        .withLightness((hsl.lightness - 0.15).clamp(0.0, 1.0))
+        .toColor();
+    final lighterColor = hsl
+        .withLightness((hsl.lightness + 0.1).clamp(0.0, 1.0))
+        .toColor();
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      const Radius.circular(24),
+    );
+
+    // 1. Draw Main Body (Leather Texture Effect)
+    final bodyPaint = Paint()..color = baseColor;
+    canvas.drawRRect(rrect, bodyPaint);
+
+    // 2. Draw Spine (3D Cylinder Effect)
+    final spineWidth = 60.0;
+    final spineRect = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: spineWidth,
+      height: size.height,
+    );
+
+    final spineGradient = LinearGradient(
+      colors: [baseColor, darkerColor, lighterColor, darkerColor, baseColor],
+      stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+    );
+
+    final spinePaint = Paint()..shader = spineGradient.createShader(spineRect);
+
+    // Clip the spine to the rounded corners of the binder
+    canvas.save();
+    canvas.clipRRect(rrect);
+    canvas.drawRect(spineRect, spinePaint);
+
+    // Add vertical lines to spine to simulate ridges
+    final linePaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.1)
+      ..strokeWidth = 1;
+
+    canvas.drawLine(
+      Offset(size.width / 2 - 20, 0),
+      Offset(size.width / 2 - 20, size.height),
+      linePaint,
+    );
+    canvas.drawLine(
+      Offset(size.width / 2 + 20, 0),
+      Offset(size.width / 2 + 20, size.height),
+      linePaint,
+    );
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

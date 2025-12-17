@@ -59,7 +59,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
                 color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: theme.colorScheme.outline.withOpacity(0.2),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -148,7 +148,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
               height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.3),
+                color: Colors.grey.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -177,12 +177,12 @@ class AppearanceSettingsScreen extends StatelessWidget {
                   color: theme.colorScheme.surface,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.5),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -303,7 +303,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 itemCount: fonts.length,
-                separatorBuilder: (_, __) =>
+                separatorBuilder: (context, index) =>
                     const Divider(height: 1, indent: 20, endIndent: 20),
                 itemBuilder: (context, index) {
                   final font = fonts[index];
@@ -381,7 +381,7 @@ class _SettingsTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -401,12 +401,12 @@ class _SettingsTile extends StatelessWidget {
           subtitle,
           style: TextStyle(
             fontSize: 13,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         trailing: Icon(
           Icons.chevron_right,
-          color: theme.colorScheme.onSurface.withOpacity(0.3),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
         ),
         onTap: onTap,
       ),

@@ -1,21 +1,124 @@
+// lib/screens/envelope/modern_envelope_header_card.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../models/envelope.dart';
-import '../../../providers/font_provider.dart';
-import '../../../services/envelope_repo.dart';
-import '../../../services/group_repo.dart';
+import '../../models/envelope.dart';
+import '../../models/scheduled_payment.dart';
+import '../../providers/font_provider.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/group_repo.dart';
+import '../../services/account_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
+import '../add_scheduled_payment_screen.dart'; // Adjust path if necessary
 import 'envelope_settings_sheet.dart';
+import '../stats_history_screen.dart';
 
 class ModernEnvelopeHeaderCard extends StatelessWidget {
   const ModernEnvelopeHeaderCard({
     super.key,
     required this.envelope,
     required this.repo,
+    required this.groupRepo,
+    required this.accountRepo,
+    required this.scheduledPaymentRepo,
   });
 
   final Envelope envelope;
   final EnvelopeRepo repo;
+  final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
+  final ScheduledPaymentRepo scheduledPaymentRepo;
+
+  void _showScheduledPaymentsList(
+    BuildContext context,
+    List<ScheduledPayment> payments,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Scheduled Payments',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              if (payments.isEmpty)
+                const Text('No scheduled payments for this envelope.'),
+              ...payments.map(
+                (p) => ListTile(
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(p.name),
+                  subtitle: Text(
+                    'Due: ${DateFormat('d MMM yyyy').format(p.nextDueDate)}',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        NumberFormat.simpleCurrency(
+                          locale: 'en_GB',
+                        ).format(p.amount),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    // LINK: Edit existing payment
+                    Navigator.pop(context); // Close sheet
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddScheduledPaymentScreen(
+                          repo: repo,
+                          paymentToEdit: p, // Pass the payment for editing
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context); // Close sheet
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddScheduledPaymentScreen(
+                        repo: repo,
+                        preselectedEnvelopeId: envelope.id,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add Another Payment'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +152,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
 
     return Column(
       children: [
-        // 1. THE ENVELOPE (Visual Only)
+        // 1. THE ENVELOPE (Vector Paint + Data Overlay)
         Container(
           height: 240,
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -57,7 +160,6 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
             // The "Raised" Shadow effect
             boxShadow: [
               BoxShadow(
-                // FIX: Modernize deprecation
                 color: theme.colorScheme.shadow.withValues(alpha: 0.15),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
@@ -84,7 +186,6 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                   children: [
                     Text(
                       currency.format(envelope.currentAmount),
-                      // FIX: Use copyWith() for shadows since getTextStyle doesn't support it directly
                       style: fontProvider
                           .getTextStyle(
                             fontSize: 42,
@@ -105,9 +206,9 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                 ),
               ),
 
-              // LAYER 3: The "Wax Seal" Emoji (At the tip of the flap)
+              // LAYER 3: The "Wax Seal" Emoji
               Positioned(
-                top: 105, // Roughly 45% down where the flap tip lands
+                top: 100,
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -129,10 +230,10 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                 ),
               ),
 
-              // LAYER 4: Progress Bar (Near Bottom)
+              // LAYER 4: Progress Bar
               if (envelope.targetAmount != null)
                 Positioned(
-                  bottom: 30,
+                  bottom: 20,
                   left: 40,
                   right: 40,
                   child: Column(
@@ -148,12 +249,10 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                           minHeight: 8,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      // "50% of £1,000"
+                      const SizedBox(height: 12),
                       Text(
                         '${(progress * 100).toInt()}% of ${currency.format(envelope.targetAmount)}',
                         style: fontProvider.getTextStyle(
-                          // FIX: Modernize deprecation
                           color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -162,6 +261,56 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     ],
                   ),
                 ),
+
+              // LAYER 5: Icon Buttons on Envelope
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Row(
+                  children: [
+                    _EnvelopeIconButton(
+                      icon: Icons.bar_chart,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => StatsHistoryScreen(
+                              repo: repo,
+                              initialEnvelopeIds: {envelope.id},
+                              title: '${envelope.name} - History',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _EnvelopeIconButton(
+                      icon: Icons.settings,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
+                            ),
+                            child: EnvelopeSettingsSheet(
+                              envelopeId: envelope.id,
+                              repo: repo,
+                              groupRepo: groupRepo,
+                              accountRepo: accountRepo,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -169,65 +318,114 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
         // 2. THE CHIPS (Action Buttons)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              // Auto-Fill Chip -> Links to Settings
-              Expanded(
-                child: _InfoChip(
-                  icon: Icons.autorenew,
-                  label: envelope.autoFillEnabled
-                      ? 'Auto-fill: ${currency.format(envelope.autoFillAmount ?? 0)}'
-                      : 'Auto-fill Off',
-                  subLabel: 'Tap to configure',
-                  color: theme.colorScheme.secondaryContainer,
-                  textColor: theme.colorScheme.onSecondaryContainer,
-                  onTap: () {
-                    final groupRepo = GroupRepo(repo.db, repo);
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) => Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(20),
+          child: StreamBuilder<List<ScheduledPayment>>(
+            stream: scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id),
+            builder: (context, snapshot) {
+              final payments = snapshot.data ?? [];
+              final hasPayments = payments.isNotEmpty;
+              ScheduledPayment? nextPayment;
+
+              if (hasPayments) {
+                // Find nearest future payment
+                payments.sort((a, b) => a.nextDueDate.compareTo(b.nextDueDate));
+                nextPayment = payments.first;
+              }
+
+              return Row(
+                children: [
+                  // 1. Auto-Fill Chip
+                  Expanded(
+                    child: _InfoChip(
+                      icon: Icons.autorenew,
+                      label: envelope.autoFillEnabled
+                          ? 'Auto-fill: ${currency.format(envelope.autoFillAmount ?? 0)}'
+                          : 'Auto-fill Off',
+                      subLabel: 'Tap to configure',
+                      color: theme.colorScheme.secondaryContainer,
+                      textColor: theme.colorScheme.onSecondaryContainer,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
+                            ),
+                            child: EnvelopeSettingsSheet(
+                              envelopeId: envelope.id,
+                              repo: repo,
+                              groupRepo: groupRepo,
+                              accountRepo: accountRepo,
+                            ),
                           ),
-                        ),
-                        child: EnvelopeSettingsSheet(
-                          envelopeId: envelope.id,
-                          repo: repo,
-                          groupRepo: groupRepo,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
 
-              const SizedBox(width: 12),
+                  // 2. Target Chip
+                  Expanded(
+                    child: _InfoChip(
+                      icon: Icons.track_changes,
+                      label: payDayText ?? 'Set Target',
+                      subLabel: envelope.targetAmount != null
+                          ? 'Goal: ${currency.format(envelope.targetAmount)}'
+                          : 'Tap to set goal',
+                      color: theme.colorScheme.primaryContainer,
+                      textColor: theme.colorScheme.onPrimaryContainer,
+                      onTap: () {
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/home',
+                          (route) => false,
+                          arguments: 2, // Budget tab index
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
 
-              // Target Chip -> Links to Budget (Home Index 2)
-              Expanded(
-                child: _InfoChip(
-                  icon: Icons.track_changes,
-                  label: payDayText ?? 'Set Target',
-                  subLabel: envelope.targetAmount != null
-                      ? 'Goal: ${currency.format(envelope.targetAmount)}'
-                      : 'Tap to set goal',
-                  color: theme.colorScheme.primaryContainer,
-                  textColor: theme.colorScheme.onPrimaryContainer,
-                  onTap: () {
-                    // Navigate to Budget Tab (Index 2)
-                    Navigator.of(context).pushNamedAndRemoveUntil(
-                      '/home',
-                      (route) => false,
-                      arguments: 2, // 2 is typically the Budget tab index
-                    );
-                  },
-                ),
-              ),
-            ],
+                  // 3. Scheduled Payment Chip
+                  Expanded(
+                    child: _InfoChip(
+                      icon: Icons.calendar_month,
+                      label: hasPayments
+                          ? 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}'
+                          : 'Schedule: Off',
+                      subLabel: hasPayments
+                          // FIX: Added '!' to assert nextPayment is not null here
+                          ? currency.format(nextPayment!.amount)
+                          : 'Tap to add',
+                      color: hasPayments
+                          ? theme.colorScheme.tertiaryContainer
+                          : theme.colorScheme.surfaceContainerHighest,
+                      textColor: hasPayments
+                          ? theme.colorScheme.onTertiaryContainer
+                          : theme.colorScheme.onSurfaceVariant,
+                      onTap: () {
+                        if (hasPayments) {
+                          _showScheduledPaymentsList(context, payments);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AddScheduledPaymentScreen(
+                                repo: repo,
+                                preselectedEnvelopeId: envelope.id,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -262,7 +460,7 @@ class _InfoChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -273,7 +471,7 @@ class _InfoChip extends StatelessWidget {
                 style: TextStyle(
                   color: textColor,
                   fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -281,9 +479,8 @@ class _InfoChip extends StatelessWidget {
               Text(
                 subLabel,
                 style: TextStyle(
-                  // FIX: Modernize deprecation
                   color: textColor.withValues(alpha: 0.7),
-                  fontSize: 11,
+                  fontSize: 10,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -296,7 +493,7 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// --- NEW PAINTER: CLOSED ENVELOPE LOOK ---
+// --- PAINTER: CLOSED ENVELOPE LOOK ---
 class ClosedEnvelopePainter extends CustomPainter {
   final Color color;
 
@@ -306,14 +503,14 @@ class ClosedEnvelopePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final hsl = HSLColor.fromColor(color);
 
-    // Body (Medium-Dark - mimics the front face behind the flap)
+    // Body
     final bodyPaint = Paint()
       ..color = hsl
           .withLightness((hsl.lightness - 0.05).clamp(0.0, 1.0))
           .toColor()
       ..style = PaintingStyle.fill;
 
-    // Flap (Lightest - hits the light because it's on top)
+    // Flap
     final flapPaint = Paint()
       ..color = hsl
           .withLightness((hsl.lightness + 0.05).clamp(0.0, 1.0))
@@ -328,10 +525,8 @@ class ClosedEnvelopePainter extends CustomPainter {
     // 1. Draw Body
     canvas.drawRRect(rrect, bodyPaint);
 
-    // 2. Draw "Seam" lines for the bottom folds (Optional, subtle detail)
-    // This draws the "X" fold lines at the bottom of a closed envelope
+    // 2. Draw "Seam" lines
     final seamPaint = Paint()
-      // FIX: Modernize deprecation
       ..color = Colors.black.withValues(alpha: 0.05)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
@@ -342,33 +537,58 @@ class ClosedEnvelopePainter extends CustomPainter {
     seamPath.lineTo(size.width, size.height);
     canvas.drawPath(seamPath, seamPaint);
 
-    // 3. Draw Flap (Triangle pointing down)
-    // Since it's closed, the flap goes further down (~50-55%)
+    // 3. Draw Flap
     final flapPath = Path();
     flapPath.moveTo(0, 0);
     flapPath.lineTo(size.width, 0);
-
-    // Curve to tip
     flapPath.quadraticBezierTo(
       size.width / 2,
-      size.height * 0.55, // Control point
+      size.height * 0.55,
       size.width / 2,
-      size.height * 0.50, // Tip of flap (50% down)
+      size.height * 0.50,
     );
     flapPath.quadraticBezierTo(size.width / 2, size.height * 0.55, 0, 0);
     flapPath.close();
 
-    // Clip flap to rounded corners
     canvas.save();
     canvas.clipRRect(rrect);
-
-    // Drop shadow UNDER the flap to show it sits on top of the body
     canvas.drawShadow(flapPath, Colors.black, 6.0, true);
     canvas.drawPath(flapPath, flapPaint);
-
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// --- HELPER WIDGET: ENVELOPE ICON BUTTON ---
+class _EnvelopeIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _EnvelopeIconButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(12),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          child: Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
 }

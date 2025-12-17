@@ -32,7 +32,7 @@ class GroupRepo {
     required String name,
     String? emoji,
     String? colorName,
-    bool? payDayEnabled, // NEW
+    bool? payDayEnabled,
   }) async {
     final ref = groupsCol().doc();
     await ref.set({
@@ -41,7 +41,7 @@ class GroupRepo {
       'userId': _userId,
       'emoji': emoji ?? '📁',
       'colorName': colorName ?? 'Primary',
-      'payDayEnabled': payDayEnabled ?? false, // NEW
+      'payDayEnabled': payDayEnabled ?? false,
       'createdAt': fs.FieldValue.serverTimestamp(),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
@@ -53,7 +53,7 @@ class GroupRepo {
     String? name,
     String? emoji,
     String? colorName,
-    bool? payDayEnabled, // NEW
+    bool? payDayEnabled,
   }) async {
     final updateData = <String, dynamic>{
       'updatedAt': fs.FieldValue.serverTimestamp(),
@@ -63,7 +63,7 @@ class GroupRepo {
     if (emoji != null) updateData['emoji'] = emoji;
     if (colorName != null) updateData['colorName'] = colorName;
     if (payDayEnabled != null) {
-      updateData['payDayEnabled'] = payDayEnabled; // NEW
+      updateData['payDayEnabled'] = payDayEnabled;
     }
 
     await groupsCol().doc(groupId).update(updateData);

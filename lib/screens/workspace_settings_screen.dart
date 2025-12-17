@@ -7,7 +7,6 @@ import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
-import 'workspace_gate.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 
@@ -232,7 +231,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
           if (_joinCode.isNotEmpty)
             Container(
               width: double.infinity,
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha:0.1),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,

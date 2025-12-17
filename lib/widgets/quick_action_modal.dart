@@ -7,7 +7,6 @@ import 'package:provider/provider.dart'; // NEW IMPORT
 import '../models/envelope.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
-import 'calculator_widget.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 import '../utils/calculator_helper.dart';
 
@@ -230,7 +229,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
           if (isTransfer) ...[
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedTargetId,
+              initialValue: _selectedTargetId,
               decoration: InputDecoration(
                 labelText: 'To Envelope',
                 border: OutlineInputBorder(

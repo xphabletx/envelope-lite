@@ -1,4 +1,4 @@
-// Model for scheduled payments
+// lib/models/scheduled_payment.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum PaymentFrequencyUnit { days, weeks, months, years }
@@ -42,12 +42,10 @@ class ScheduledPayment {
   DateTime get nextDueDate {
     final baseDate = lastExecuted ?? startDate;
 
-    // If never executed, return the start date
     if (lastExecuted == null) {
       return startDate;
     }
 
-    // Otherwise calculate next occurrence from last execution
     switch (frequencyUnit) {
       case PaymentFrequencyUnit.days:
         return baseDate.add(Duration(days: frequencyValue));
@@ -80,7 +78,6 @@ class ScheduledPayment {
     return frequencyValue == 1 ? 'Every $unit' : 'Every $frequencyValue $unit';
   }
 
-  // Check if this payment links to an envelope or group
   bool get isEnvelopePayment => envelopeId != null;
   bool get isGroupPayment => groupId != null;
 
@@ -172,7 +169,7 @@ class ScheduledPayment {
   }
 }
 
-// Calendar color palette with cute names
+// Calendar color palette
 class CalendarColors {
   static const colors = {
     'Blusher': 0xFFF8BBD0,

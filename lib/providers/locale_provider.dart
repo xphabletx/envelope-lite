@@ -33,13 +33,11 @@ class LocaleProvider extends ChangeNotifier {
     {'code': 'USD', 'name': 'US Dollar', 'symbol': '\$'},
   ];
 
-  /// Initialize with user ID and load preferences from Firebase
   Future<void> initialize(String userId) async {
     _userId = userId;
     await _loadFromFirebase();
   }
 
-  /// Load user's language and currency preferences from Firebase
   Future<void> _loadFromFirebase() async {
     if (_userId == null) return;
 
@@ -63,7 +61,6 @@ class LocaleProvider extends ChangeNotifier {
     }
   }
 
-  /// Set language and persist to Firebase
   Future<void> setLanguage(String languageCode) async {
     if (_userId == null) return;
 
@@ -80,7 +77,6 @@ class LocaleProvider extends ChangeNotifier {
     }
   }
 
-  /// Set currency and persist to Firebase
   Future<void> setCurrency(String currencyCode) async {
     if (_userId == null) return;
 
@@ -98,7 +94,6 @@ class LocaleProvider extends ChangeNotifier {
     }
   }
 
-  /// Get currency symbol for code
   String _getCurrencySymbol(String code) {
     switch (code) {
       case 'GBP':
@@ -112,9 +107,7 @@ class LocaleProvider extends ChangeNotifier {
     }
   }
 
-  /// Format currency amount based on current locale
   String formatCurrency(double amount) {
-    // Map currency code to locale
     String locale;
     switch (_currencyCode) {
       case 'GBP':
@@ -139,7 +132,6 @@ class LocaleProvider extends ChangeNotifier {
     return formatter.format(amount);
   }
 
-  /// Get language name for code
   static String getLanguageName(String code) {
     final lang = supportedLanguages.firstWhere(
       (l) => l['code'] == code,
@@ -148,7 +140,6 @@ class LocaleProvider extends ChangeNotifier {
     return lang['name']!;
   }
 
-  /// Get language flag for code
   static String getLanguageFlag(String code) {
     final lang = supportedLanguages.firstWhere(
       (l) => l['code'] == code,
@@ -157,7 +148,6 @@ class LocaleProvider extends ChangeNotifier {
     return lang['flag']!;
   }
 
-  /// Get currency name for code
   static String getCurrencyName(String code) {
     final currency = supportedCurrencies.firstWhere(
       (c) => c['code'] == code,
@@ -166,7 +156,6 @@ class LocaleProvider extends ChangeNotifier {
     return currency['name']!;
   }
 
-  /// Get currency symbol for code (static)
   static String getCurrencySymbolStatic(String code) {
     final currency = supportedCurrencies.firstWhere(
       (c) => c['code'] == code,

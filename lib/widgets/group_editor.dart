@@ -34,7 +34,6 @@ Future<String?> showGroupEditor({
 
 class _GroupEditorScreen extends StatefulWidget {
   const _GroupEditorScreen({
-    super.key,
     required this.groupRepo,
     required this.envelopeRepo,
     this.group,
@@ -161,9 +160,53 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     }
   }
 
-  // FIXED: Logic updated to align with envelope_creator.
-  // If the current emoji is the default folder '📁', we pass null
-  // so the picker starts empty/ready for input.
+  // UPDATED: Confirmation Dialog for Delete
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('delete_binder_title')),
+        content: Text(
+          tr('delete_binder_confirm_msg'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('delete')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => saving = true);
+      try {
+        await widget.envelopeRepo.updateGroupMembership(
+          groupId: editingGroupId!,
+          newEnvelopeIds: {},
+          allEnvelopesStream: widget.envelopeRepo.envelopesStream(),
+        );
+        await widget.groupRepo.deleteGroup(groupId: editingGroupId!);
+        if (mounted) Navigator.pop(context);
+      } catch (e) {
+        setState(() => saving = false);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error deleting binder: $e')));
+        }
+      }
+    }
+  }
+
   Future<void> pickEmoji() async {
     final String? initial = selectedEmoji == '📁' ? null : selectedEmoji;
 
@@ -297,50 +340,58 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           Wrap(
                                             spacing: 8,
                                             runSpacing: 8,
-                                            children: GroupColors.colorNames.map((
-                                              colorName,
-                                            ) {
-                                              final color = _getPickerColor(
-                                                colorName,
-                                                theme.colorScheme,
-                                              );
-                                              final isSelected =
-                                                  selectedColor == colorName;
-                                              return GestureDetector(
-                                                onTap: () => setState(
-                                                  () =>
-                                                      selectedColor = colorName,
-                                                ),
-                                                child: Container(
-                                                  width: 36,
-                                                  height: 36,
-                                                  decoration: BoxDecoration(
-                                                    color: color,
-                                                    shape: BoxShape.circle,
-                                                    border: isSelected
-                                                        ? Border.all(
-                                                            color: Colors.black,
-                                                            width: 3,
-                                                          )
-                                                        : Border.all(
-                                                            color: Colors
-                                                                .grey
-                                                                .shade300,
-                                                          ),
-                                                  ),
-                                                  child: isSelected
-                                                      ? Icon(
-                                                          Icons.check,
-                                                          color:
-                                                              GroupColors.getContrastingTextColor(
-                                                                color,
+                                            // UPDATED: Filter out 'Gold' and 'Yellow'
+                                            children: GroupColors.colorNames
+                                                .where(
+                                                  (c) =>
+                                                      c != 'Gold' &&
+                                                      c != 'Yellow',
+                                                )
+                                                .map((colorName) {
+                                                  final color = _getPickerColor(
+                                                    colorName,
+                                                    theme.colorScheme,
+                                                  );
+                                                  final isSelected =
+                                                      selectedColor ==
+                                                      colorName;
+                                                  return GestureDetector(
+                                                    onTap: () => setState(
+                                                      () => selectedColor =
+                                                          colorName,
+                                                    ),
+                                                    child: Container(
+                                                      width: 36,
+                                                      height: 36,
+                                                      decoration: BoxDecoration(
+                                                        color: color,
+                                                        shape: BoxShape.circle,
+                                                        border: isSelected
+                                                            ? Border.all(
+                                                                color: Colors
+                                                                    .black,
+                                                                width: 3,
+                                                              )
+                                                            : Border.all(
+                                                                color: Colors
+                                                                    .grey
+                                                                    .shade300,
                                                               ),
-                                                          size: 20,
-                                                        )
-                                                      : null,
-                                                ),
-                                              );
-                                            }).toList(),
+                                                      ),
+                                                      child: isSelected
+                                                          ? Icon(
+                                                              Icons.check,
+                                                              color:
+                                                                  GroupColors.getContrastingTextColor(
+                                                                    color,
+                                                                  ),
+                                                              size: 20,
+                                                            )
+                                                          : null,
+                                                    ),
+                                                  );
+                                                })
+                                                .toList(),
                                           ),
                                         ],
                                       ),
@@ -465,7 +516,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 id: _draftId,
                                 name: "${widget.draftEnvelopeName} (New)",
                                 userId: widget.envelopeRepo.currentUserId,
-                                emoji: '📝',
+                                emoji: '📁',
                                 currentAmount: 0,
                               );
                               allEnvelopes.insert(0, draftEnv);
@@ -638,23 +689,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              onPressed: saving
-                                  ? null
-                                  : () async {
-                                      setState(() => saving = true);
-                                      await widget.envelopeRepo
-                                          .updateGroupMembership(
-                                            groupId: editingGroupId!,
-                                            newEnvelopeIds: {},
-                                            allEnvelopesStream: widget
-                                                .envelopeRepo
-                                                .envelopesStream(),
-                                          );
-                                      await widget.groupRepo.deleteGroup(
-                                        groupId: editingGroupId!,
-                                      );
-                                      if (mounted) Navigator.pop(context);
-                                    },
+                              // CHANGED: Now calls _confirmDelete
+                              onPressed: saving ? null : _confirmDelete,
                             ),
                           ),
                         ],

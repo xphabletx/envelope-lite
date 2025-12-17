@@ -42,6 +42,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     _viewingMonth = DateTime.now();
   }
 
+  // FIXED: Explicit color overrides to match groups_home_screen
+  Color _getDisplayColor(String colorName, ColorScheme theme) {
+    switch (colorName) {
+      case 'Black':
+        return const Color(0xFF212121);
+      case 'Brown':
+        return const Color(0xFF5D4037);
+      case 'Grey':
+        return const Color(0xFF757575);
+      default:
+        return GroupColors.getThemedColor(colorName, theme);
+    }
+  }
+
   void _toggle(String id) {
     setState(() {
       if (selected.contains(id)) {
@@ -80,7 +94,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final groupColor = GroupColors.getThemedColor(
+    // Use the color override logic from groups_home_screen
+    final groupColor = _getDisplayColor(
       widget.group.colorName,
       theme.colorScheme,
     );
@@ -102,39 +117,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         return StreamBuilder<List<Transaction>>(
           stream: widget.envelopeRepo.transactionsStream,
           builder: (_, sTx) {
-            final txs = sTx.data ?? [];
-            final groupIds = inGroup.map((e) => e.id).toSet();
-            final monthStart = DateTime(
-              _viewingMonth.year,
-              _viewingMonth.month,
-              1,
-            );
-            final monthEnd = DateTime(
-              _viewingMonth.year,
-              _viewingMonth.month + 1,
-              0,
-              23,
-              59,
-              59,
-            );
-
-            final shownTxs = txs.where((t) {
-              final inChosen = groupIds.contains(t.envelopeId);
-              final inRange =
-                  t.date.isAfter(
-                    monthStart.subtract(const Duration(seconds: 1)),
-                  ) &&
-                  t.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
-              return inChosen && inRange;
-            }).toList()..sort((a, b) => b.date.compareTo(a.date));
-
-            final totDep = shownTxs
-                .where((t) => t.type == TransactionType.deposit)
-                .fold<double>(0, (s, t) => s + t.amount);
-            final totWdr = shownTxs
-                .where((t) => t.type == TransactionType.withdrawal)
-                .fold<double>(0, (s, t) => s + t.amount);
-
             return Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               body: CustomScrollView(
@@ -270,17 +252,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: LinearProgressIndicator(
-                                value: totTarget > 0
-                                    ? (totSaved / totTarget).clamp(0.0, 1.0)
-                                    : 0.0,
-                                minHeight: 12,
-                                backgroundColor: Colors.grey.shade200,
-                                valueColor: AlwaysStoppedAnimation(groupColor),
-                              ),
-                            ),
+                            Builder(builder: (context) {
+                              final HSLColor hslColor = HSLColor.fromColor(groupColor);
+                              final HSLColor lighterColor =
+                                  hslColor.withLightness((hslColor.lightness + 0.4).clamp(0.0, 1.0));
+                              final Color lightGroupColor = lighterColor.toColor();
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: LinearProgressIndicator(
+                                  value: totTarget > 0
+                                      ? (totSaved / totTarget).clamp(0.0, 1.0)
+                                      : 0.0,
+                                  minHeight: 12,
+                                  backgroundColor: lightGroupColor,
+                                  valueColor: AlwaysStoppedAnimation(groupColor),
+                                ),
+                              );
+                            }),
                           ],
                         ),
                       ),
@@ -366,7 +354,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             isMultiSelectMode: isMulti,
                           );
                         },
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        separatorBuilder: (context, index) => const SizedBox(height: 12),
                         itemCount: inGroup.length,
                       ),
                     ),

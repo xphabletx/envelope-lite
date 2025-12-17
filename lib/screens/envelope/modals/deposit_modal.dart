@@ -155,7 +155,7 @@ class _DepositModalState extends State<DepositModal> {
                           widget.envelopeName,
                           style: TextStyle(
                             fontSize: 14,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -229,7 +229,7 @@ class _DepositModalState extends State<DepositModal> {
                       const Spacer(),
                       Icon(
                         Icons.arrow_drop_down,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ],
                   ),

@@ -1,3 +1,4 @@
+// lib/utils/calculator_helper.dart
 import 'package:flutter/material.dart';
 import '../widgets/calculator_widget.dart';
 
@@ -9,7 +10,6 @@ class CalculatorHelper {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       builder: (dialogContext) {
-        // Changed variable name
         return Stack(
           children: [
             CalculatorWidget(

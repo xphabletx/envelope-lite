@@ -29,7 +29,6 @@ class WorkspaceGate extends StatefulWidget {
 
 class _WorkspaceGateState extends State<WorkspaceGate> {
   final _joinCtrl = TextEditingController();
-  final _displayNameCtrl = TextEditingController();
 
   // New Flow Logic
   void _initiateCreate() {
@@ -367,11 +366,11 @@ class _WorkspaceSharingSelectionScreenState
           // HIDE FUTURE TOGGLE
           SwitchListTile(
             title: Text(
-              tr('workspace_hide_future') ?? 'Hide future envelopes by default',
+              tr('workspace_hide_future'),
             ),
             value: _hideFutureEnvelopes,
             onChanged: (val) => setState(() => _hideFutureEnvelopes = val),
-            activeColor: theme.colorScheme.primary,
+            activeTrackColor: theme.colorScheme.primary,
           ),
           const Divider(),
 

@@ -1,0 +1,229 @@
+// lib/screens/pay_day/add_to_pay_day_modal.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../models/envelope.dart';
+import '../../../models/envelope_group.dart';
+import '../../../providers/font_provider.dart';
+
+class PayDayAddition {
+  final String? envelopeId;
+  final String? binderId;
+  final double? customAmount;
+
+  PayDayAddition({this.envelopeId, this.binderId, this.customAmount});
+}
+
+class AddToPayDayModal extends StatefulWidget {
+  const AddToPayDayModal({
+    super.key,
+    required this.allEnvelopes,
+    required this.allGroups,
+    required this.alreadyDisplayedEnvelopes,
+    required this.alreadyDisplayedBinders,
+  });
+
+  final List<Envelope> allEnvelopes;
+  final List<EnvelopeGroup> allGroups;
+  final Set<String> alreadyDisplayedEnvelopes;
+  final Set<String> alreadyDisplayedBinders;
+
+  @override
+  State<AddToPayDayModal> createState() => _AddToPayDayModalState();
+}
+
+class _AddToPayDayModalState extends State<AddToPayDayModal> {
+  final Map<String, TextEditingController> _controllers = {};
+  String? _selectedType; // 'envelope' or 'binder'
+  String? _selectedId;
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addItem() {
+    if (_selectedId == null) return;
+
+    if (_selectedType == 'binder') {
+      Navigator.pop(
+        context,
+        PayDayAddition(binderId: _selectedId, customAmount: null),
+      );
+    } else {
+      Navigator.pop(
+        context,
+        PayDayAddition(envelopeId: _selectedId, customAmount: null),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    // Filter out items already in the list
+    final availableBinders = widget.allGroups
+        .where((g) => !widget.alreadyDisplayedBinders.contains(g.id))
+        .toList();
+
+    final availableEnvelopes = widget.allEnvelopes
+        .where((e) => !widget.alreadyDisplayedEnvelopes.contains(e.id))
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Add Item to Pay Day',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // BINDERS SECTION
+                  if (availableBinders.isNotEmpty) ...[
+                    Text(
+                      'Binders',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...availableBinders.map((binder) {
+                      return RadioListTile<String>(
+                        title: Text(
+                          binder.name,
+                          style: fontProvider.getTextStyle(fontSize: 16),
+                        ),
+                        secondary: Text(
+                          binder.emoji ?? '📁',
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                        value: binder.id,
+                        groupValue: _selectedId,
+                        toggleable: true,
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedType = 'binder';
+                            _selectedId = val;
+                          });
+                        },
+                      );
+                    }),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // ENVELOPES SECTION
+                  if (availableEnvelopes.isNotEmpty) ...[
+                    Text(
+                      'Envelopes',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...availableEnvelopes.map((env) {
+                      return RadioListTile<String>(
+                        title: Text(
+                          env.name,
+                          style: fontProvider.getTextStyle(fontSize: 16),
+                        ),
+                        secondary: Text(
+                          env.emoji ?? '✉️',
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                        value: env.id,
+                        groupValue: _selectedId,
+                        toggleable: true,
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedType = 'envelope';
+                            _selectedId = val;
+                          });
+                        },
+                      );
+                    }),
+                  ],
+
+                  if (availableBinders.isEmpty && availableEnvelopes.isEmpty)
+                    Center(
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 32),
+                          Icon(
+                            Icons.check_circle_outline,
+                            size: 48,
+                            color: Colors.green.withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'All items already added!',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 24,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Add button
+          ElevatedButton(
+            onPressed: (availableBinders.isEmpty && availableEnvelopes.isEmpty)
+                ? null
+                : _addItem,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Add to Pay Day',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

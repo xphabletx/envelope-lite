@@ -13,8 +13,7 @@ class FontProvider with ChangeNotifier {
   static const String openSansId = 'open_sans';
   static const String systemDefaultId = 'system_default';
 
-  String _currentFontId =
-      systemDefaultId; // CHANGED: default to system, not Caveat
+  String _currentFontId = systemDefaultId;
 
   String get currentFontId => _currentFontId;
 
@@ -24,9 +23,7 @@ class FontProvider with ChangeNotifier {
 
   Future<void> _loadFont() async {
     final prefs = await SharedPreferences.getInstance();
-    _currentFontId =
-        prefs.getString(_fontKey) ??
-        systemDefaultId; // CHANGED: default to system
+    _currentFontId = prefs.getString(_fontKey) ?? systemDefaultId;
     notifyListeners();
   }
 

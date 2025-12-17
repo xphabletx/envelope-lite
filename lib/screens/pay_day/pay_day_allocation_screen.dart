@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../models/envelope.dart';
-import '../services/envelope_repo.dart';
-import '../services/group_repo.dart';
-import '../providers/font_provider.dart';
+import '../../models/envelope.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/group_repo.dart';
+import '../../services/account_repo.dart';
+import '../../providers/font_provider.dart';
 import 'pay_day_stuffing_screen.dart';
 
 class PayDayAllocationScreen extends StatefulWidget {
@@ -13,12 +14,16 @@ class PayDayAllocationScreen extends StatefulWidget {
     super.key,
     required this.repo,
     required this.groupRepo,
+    required this.accountRepo,
     required this.totalAmount,
+    required this.accountId,
   });
 
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
   final double totalAmount;
+  final String accountId;
 
   @override
   State<PayDayAllocationScreen> createState() => _PayDayAllocationScreenState();
@@ -38,7 +43,6 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
 
   Future<void> _loadAutoPayEnvelopes() async {
     try {
-      // Use the SAME path structure as envelope_repo.dart
       final snapshot = await widget.repo.db
           .collection('users')
           .doc(widget.repo.currentUserId)
@@ -47,7 +51,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
           .collection('envelopes')
           .get();
 
-      // Filter in Dart for autoFillEnabled=true AND autoFillAmount>0
+      // Filter for autoFillEnabled=true AND autoFillAmount>0
       final envelopes = snapshot.docs
           .map((doc) => Envelope.fromFirestore(doc))
           .where(
@@ -112,9 +116,11 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
       MaterialPageRoute(
         builder: (_) => PayDayStuffingScreen(
           repo: widget.repo,
+          accountRepo: widget.accountRepo,
           allocations: allocations,
           envelopes: autoPayEnvelopes,
           totalAmount: widget.totalAmount,
+          accountId: widget.accountId,
         ),
       ),
     );
@@ -158,7 +164,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Auto-pay section header
+                // Header
                 Row(
                   children: [
                     Icon(
@@ -181,7 +187,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Show message if no auto-pay envelopes
+                // Empty state
                 if (autoPayEnvelopes.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(24),
@@ -220,7 +226,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                     ),
                   ),
 
-                // Auto-pay envelopes list
+                // List
                 ...autoPayEnvelopes.map((env) {
                   final amount = allocations[env.id] ?? 0.0;
                   return Container(
@@ -236,14 +242,11 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                     ),
                     child: Row(
                       children: [
-                        // Emoji
                         Text(
                           env.emoji ?? '📨',
                           style: const TextStyle(fontSize: 32),
                         ),
                         const SizedBox(width: 12),
-
-                        // Name
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,6 +256,9 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                                 style: fontProvider.getTextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
+                                  color: theme
+                                      .colorScheme
+                                      .secondary, // FIXED: Changed to secondary color
                                 ),
                               ),
                               if (env.subtitle != null &&
@@ -261,16 +267,15 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                                   env.subtitle!,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.6),
+                                    color: theme
+                                        .colorScheme
+                                        .secondary, // FIXED: Changed to secondary color
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
                             ],
                           ),
                         ),
-
-                        // Amount
                         Text(
                           currency.format(amount),
                           style: fontProvider.getTextStyle(
@@ -286,7 +291,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
 
                 const SizedBox(height: 24),
 
-                // Remaining amount display
+                // Remaining
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -342,7 +347,6 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
 
                 const SizedBox(height: 24),
 
-                // Info card about remaining funds
                 if (remainingAmount > 0)
                   Container(
                     padding: const EdgeInsets.all(16),

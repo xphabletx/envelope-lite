@@ -1,4 +1,4 @@
-// lib/screens/pay_day_preview_screen.dart
+// lib/screens/pay_day/pay_day_preview_screen.dart
 // FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
 // All button text wrapped in FittedBox to prevent wrapping
 // CLEANUP: Removed all debug print statements
@@ -7,12 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
 import 'package:intl/intl.dart';
 
-import '../models/envelope.dart';
-import '../models/envelope_group.dart';
-import '../services/envelope_repo.dart';
-import '../services/group_repo.dart';
+import '../../models/envelope.dart';
+import '../../models/envelope_group.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/group_repo.dart';
 import 'add_to_pay_day_modal.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../../providers/font_provider.dart'; // NEW IMPORT
 // TUTORIAL IMPORT REMOVED - Logic commented out below
 
 class PayDayPreviewScreen extends StatefulWidget {

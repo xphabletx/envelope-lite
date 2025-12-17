@@ -1,9 +1,7 @@
 // lib/widgets/partner_badge.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
-import '../providers/font_provider.dart'; // NEW IMPORT
+import 'package:provider/provider.dart';
+import '../providers/font_provider.dart';
 
 /// Badge to display on partner's envelopes/binders
 class PartnerBadge extends StatelessWidget {
@@ -29,10 +27,10 @@ class PartnerBadge extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondary.withAlpha(51),
+        color: theme.colorScheme.secondary.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.secondary.withAlpha(128),
+          color: theme.colorScheme.secondary.withValues(alpha: 0.5),
           width: 1,
         ),
       ),
@@ -47,7 +45,6 @@ class PartnerBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             partnerName,
-            // UPDATED: FontProvider
             style: fontProvider.getTextStyle(
               fontSize: fontSize,
               fontWeight: FontWeight.bold,

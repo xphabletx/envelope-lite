@@ -1,4 +1,4 @@
-// Defines the Transaction data structure with robust transfer linking.
+// lib/models/transaction.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum TransactionType { deposit, withdrawal, transfer }

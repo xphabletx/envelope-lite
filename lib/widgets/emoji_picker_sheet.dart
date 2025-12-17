@@ -44,67 +44,49 @@ Future<String?> showEmojiPickerSheet({
           Text(
             title ?? tr('appearance_choose_emoji'),
             style: fontProvider.getTextStyle(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             tr('appearance_emoji_instructions'),
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 14,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          Center(
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                  width: 2,
-                ),
+          // Big input field
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.3),
               ),
-              alignment: Alignment.center,
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 48),
-                // Allow a bit more space for compound emojis, but logic will trim
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  counterText: '',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.all(20),
-                ),
-                keyboardType: TextInputType.text,
-                onChanged: (value) {
-                  // If characters > 2, usually means user typed a new emoji.
-                  // Take the LAST entered character (grapheme cluster)
-                  if (value.characters.length > 1) {
-                    // This logic attempts to keep the NEWEST emoji typed
-                    // and discard the old one
-                    final newText = value.characters.last.toString();
-                    controller.value = TextEditingValue(
-                      text: newText,
-                      selection: TextSelection.collapsed(
-                        offset: newText.length,
-                      ),
-                    );
-                  }
-                },
-                // Select all on focus so typing replaces the existing one
-                onTap: () {
-                  controller.selection = TextSelection(
-                    baseOffset: 0,
-                    extentOffset: controller.text.length,
-                  );
-                },
+            ),
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 64),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
               ),
+              maxLength: 1,
+              onChanged: (value) {
+                if (value.isNotEmpty) {
+                  // Auto-close on selection if desired, or let them hit save
+                }
+              },
+              onSubmitted: (value) {
+                Navigator.pop(context, value);
+              },
             ),
           ),
 

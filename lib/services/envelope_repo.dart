@@ -9,8 +9,6 @@ import 'package:rxdart/rxdart.dart';
 
 /// Firestore repo (canonical storage is always user/solo),
 /// with optional workspace *context* tagging on writes.
-/// Nothing is ever "moved" when switching workspaces, so
-/// envelopes, groups, and transactions persist across modes.
 class EnvelopeRepo {
   EnvelopeRepo.firebase(this._db, {String? workspaceId, required String userId})
     : _workspaceId = (workspaceId?.isEmpty ?? true) ? null : workspaceId,
@@ -138,17 +136,14 @@ class EnvelopeRepo {
 
   // --------------------------------- Streams ---------------------------------
   /// Get envelopes stream with optional partner filtering
-  /// If showPartnerEnvelopes is false, only show current user's envelopes
   Stream<List<Envelope>> envelopesStream({bool showPartnerEnvelopes = true}) {
     if (!inWorkspace) {
-      // Solo mode: only show my envelopes
       return _colEnvelopes()
           .orderBy('createdAt', descending: false)
           .snapshots()
           .map((s) => s.docs.map((d) => Envelope.fromFirestore(d)).toList());
     }
 
-    // Workspace mode: combine streams from members
     return _db.collection('workspaces').doc(_workspaceId).snapshots().switchMap(
       (workspaceSnap) {
         if (!workspaceSnap.exists) return Stream.value(<Envelope>[]);
@@ -159,10 +154,9 @@ class EnvelopeRepo {
 
         if (members.isEmpty) return Stream.value(<Envelope>[]);
 
-        // Filter members based on showPartnerEnvelopes toggle
         final memberIds = showPartnerEnvelopes
             ? members.keys.toList()
-            : [_userId]; // Only show mine if toggle off
+            : [_userId];
 
         final memberStreams = memberIds.map((memberId) {
           return _db
@@ -176,8 +170,6 @@ class EnvelopeRepo {
               .map((snap) {
                 return snap.docs
                     .map((doc) => Envelope.fromFirestore(doc))
-                    // Filter out envelopes where shared=false (if not mine)
-                    // Note: isShared is non-nullable boolean in model
                     .where((env) => env.userId == _userId || env.isShared)
                     .toList();
               });
@@ -190,32 +182,24 @@ class EnvelopeRepo {
     );
   }
 
-  /// Legacy getter for backward compatibility (shows all envelopes)
   Stream<List<Envelope>> get envelopesStreamAll =>
       envelopesStream(showPartnerEnvelopes: true);
 
-  // FIX: Updated to support Workspace path + Correct Data Mapping
   Stream<List<EnvelopeGroup>> get groupsStream {
     fs.Query<Map<String, dynamic>> query;
 
     if (inWorkspace) {
-      // If in workspace, listen to the workspace groups collection
       query = _db
           .collection('workspaces')
           .doc(_workspaceId)
           .collection('groups')
           .orderBy('createdAt', descending: false);
     } else {
-      // Solo mode
       query = _colGroups().orderBy('createdAt', descending: false);
     }
 
     return query.snapshots().map(
-      (s) => s.docs
-          .map(
-            (doc) => EnvelopeGroup.fromFirestore(doc),
-          ) // FIX: Use factory to get color/emoji
-          .toList(),
+      (s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList(),
     );
   }
 
@@ -322,7 +306,6 @@ class EnvelopeRepo {
     final user = FirebaseAuth.instance.currentUser;
     final ownerDisplayName = user?.displayName ?? (user?.email ?? 'Me');
 
-    // FIX: Add subtitle, autoFillEnabled, and autoFillAmount to envelope document
     final data = {
       'id': doc.id,
       'name': name,
@@ -332,10 +315,10 @@ class EnvelopeRepo {
       'currentAmount': startingAmount,
       'targetAmount': targetAmount,
       'groupId': groupId,
-      'subtitle': subtitle, // FIX: Now saving subtitle to envelope
-      'emoji': emoji, // FIX: Now saving emoji to envelope
-      'autoFillEnabled': autoFillEnabled, // FIX: Now saving autoFill state
-      'autoFillAmount': autoFillAmount, // FIX: Now saving autoFill amount
+      'subtitle': subtitle,
+      'emoji': emoji,
+      'autoFillEnabled': autoFillEnabled,
+      'autoFillAmount': autoFillAmount,
       'isShared': inWorkspace,
       'workspaceId': _workspaceId,
       'createdAt': fs.FieldValue.serverTimestamp(),
@@ -344,7 +327,6 @@ class EnvelopeRepo {
 
     await doc.set(data);
 
-    // Create initial transaction if starting amount > 0
     if (startingAmount > 0) {
       final txDoc = _colTxs().doc();
       await txDoc.set({
@@ -396,7 +378,7 @@ class EnvelopeRepo {
     String? groupId,
     bool? autoFillEnabled,
     double? autoFillAmount,
-    bool? isShared, // NEW: Workspace sharing control
+    bool? isShared,
   }) async {
     final updateData = <String, dynamic>{
       'updatedAt': fs.FieldValue.serverTimestamp(),
@@ -410,7 +392,7 @@ class EnvelopeRepo {
       updateData['autoFillEnabled'] = autoFillEnabled;
     }
     if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
-    if (isShared != null) updateData['isShared'] = isShared; // NEW
+    if (isShared != null) updateData['isShared'] = isShared;
 
     await _colEnvelopes().doc(envelopeId).update(updateData);
 

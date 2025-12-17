@@ -17,7 +17,7 @@ class ThemeProvider extends ChangeNotifier {
 
   String get currentThemeId => _currentThemeId;
 
-  // FIXED (Bug 5): Global AppBar Bleed Fix
+  // FIXED: Global AppBar Bleed Fix
   // We force scrolledUnderElevation to 0 for WHATEVER theme is selected
   ThemeData get currentTheme {
     final theme = AppThemes.getTheme(_currentThemeId);

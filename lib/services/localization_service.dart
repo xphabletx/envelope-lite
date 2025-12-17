@@ -37,7 +37,7 @@ class LocalizationService {
     'tap_again_for_details': 'Tap again for details',
     'save_changes': 'Save Changes',
 
-    // --- DIALOGS (New) ---
+    // --- DIALOGS ---
     'delete_envelopes_title': 'Delete Envelopes?',
     'delete_envelopes_confirm':
         'Are you sure you want to delete this many envelopes:',
@@ -205,13 +205,9 @@ class LocalizationService {
   };
 }
 
-// Updated helper function to handle simple optional arguments
-// Usage: tr('key', args: ['arg1'])
 String tr(String key, {List<String>? args}) {
   String text = LocalizationService().getString(key);
   if (args != null && args.isNotEmpty) {
-    // Appends arguments for now since your strings don't have {} placeholders yet
-    // Or you can use specific placeholder logic if you add it later
     return "$text ${args.join(' ')}";
   }
   return text;

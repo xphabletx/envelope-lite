@@ -1,13 +1,14 @@
 // lib/screens/envelope/envelope_settings_sheet.dart
-// COMPLETE FILE WITH NEW EMOJI PICKER INTEGRATED
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
+import '../../models/account.dart'; // NEW
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
+import '../../services/account_repo.dart'; // NEW
 import '../../widgets/group_editor.dart' as editor;
 import '../../providers/font_provider.dart';
 import '../add_scheduled_payment_screen.dart';
@@ -19,11 +20,13 @@ class EnvelopeSettingsSheet extends StatefulWidget {
     required this.envelopeId,
     required this.repo,
     required this.groupRepo,
+    required this.accountRepo, // NEW
   });
 
   final String envelopeId;
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final AccountRepo accountRepo; // NEW
 
   @override
   State<EnvelopeSettingsSheet> createState() => _EnvelopeSettingsSheetState();
@@ -37,6 +40,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
 
   String? _selectedEmoji;
   String? _selectedBinderId;
+  String? _selectedAccountId; // NEW
   bool _autoFillEnabled = false;
   bool _isLoading = false;
   bool _initialized = false;
@@ -99,7 +103,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     await _loadBinders();
   }
 
-  // NEW: Use reusable emoji picker
   Future<void> _showEmojiPicker(Envelope envelope) async {
     final result = await showEmojiPickerSheet(
       context: context,
@@ -139,6 +142,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           _autoFillAmountController.text =
               envelope.autoFillAmount?.toStringAsFixed(2) ?? '';
           _selectedEmoji = envelope.emoji;
+          _selectedAccountId = envelope.linkedAccountId; // NEW
 
           if (envelope.groupId != null &&
               _binders.any((b) => b.id == envelope.groupId)) {
@@ -195,12 +199,18 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 8,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                  ),
                   physics: const ClampingScrollPhysics(),
                   children: [
+                    // NAME INPUT
                     TextField(
                       controller: _nameController,
                       style: fontProvider.getTextStyle(
@@ -217,6 +227,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // EMOJI PICKER
                     InkWell(
                       onTap: () => _showEmojiPicker(envelope),
                       borderRadius: BorderRadius.circular(12),
@@ -244,6 +256,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // SUBTITLE
                     TextField(
                       controller: _subtitleController,
                       style: fontProvider
@@ -264,6 +278,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       maxLines: 2,
                     ),
                     const SizedBox(height: 16),
+
+                    // TARGET AMOUNT
                     TextField(
                       controller: _targetController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -285,6 +301,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 24),
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
+
+                    // BINDER SELECTOR
                     Text(
                       'Binder',
                       style: fontProvider.getTextStyle(
@@ -298,7 +316,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String?>(
-                            value: _selectedBinderId,
+                            initialValue: _selectedBinderId,
                             decoration: InputDecoration(
                               labelText: 'Add to Binder',
                               labelStyle: fontProvider.getTextStyle(
@@ -372,6 +390,90 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
 
+                    // ACCOUNT LINKING SECTION (NEW)
+                    Text(
+                      'Account Link',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Where does money for this envelope come from?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<Account>>(
+                      stream: widget.accountRepo.accountsStream(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const LinearProgressIndicator();
+                        }
+                        final accounts = snapshot.data!;
+
+                        return DropdownButtonFormField<String?>(
+                          initialValue: _selectedAccountId,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.account_balance_wallet,
+                            ),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: null,
+                              child: Text(
+                                'Not linked',
+                                style: fontProvider.getTextStyle(fontSize: 16),
+                              ),
+                            ),
+                            ...accounts.map(
+                              (account) => DropdownMenuItem(
+                                value: account.id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      account.emoji ?? '💳',
+                                      style: const TextStyle(fontSize: 20),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        account.name,
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() => _selectedAccountId = val);
+                          },
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                    Divider(color: theme.colorScheme.outline),
+                    const SizedBox(height: 16),
+
+                    // SCHEDULE PAYMENT LINK
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Container(
@@ -420,6 +522,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 24),
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
+
+                    // AUTO-FILL SECTION
                     Text(
                       'Pay Day Auto-Fill',
                       style: fontProvider.getTextStyle(
@@ -474,6 +578,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                     ],
                     const SizedBox(height: 32),
+
+                    // SAVE BUTTON
                     FilledButton(
                       onPressed: _isLoading
                           ? null
@@ -502,6 +608,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             ),
                     ),
                     const SizedBox(height: 16),
+
+                    // DELETE BUTTON
                     OutlinedButton(
                       onPressed: _isLoading
                           ? null
@@ -559,6 +667,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         'targetAmount': targetAmount,
         'autoFillEnabled': _autoFillEnabled,
         'updatedAt': FieldValue.serverTimestamp(),
+        // Save Linked Account
+        'linkedAccountId': _selectedAccountId,
       };
 
       if (_subtitleController.text.trim().isEmpty) {

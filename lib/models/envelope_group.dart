@@ -113,7 +113,6 @@ class GroupColors {
         return theme.primary;
       case 'Secondary':
         return theme.secondary;
-
       case 'Red':
         return const Color(0xFFE53935);
       case 'Orange':
@@ -128,14 +127,12 @@ class GroupColors {
         return const Color(0xFF8E24AA);
       case 'Pink':
         return const Color(0xFFD81B60);
-
       case 'Brown':
         return _brownIdentity;
       case 'Black':
         return _blackIdentity;
       case 'Grey':
         return _greyIdentity;
-
       case 'Rose':
         return const Color(0xFFE91E63);
       case 'Coral':
@@ -150,7 +147,6 @@ class GroupColors {
         return const Color(0xFF1976D2);
       case 'Indigo':
         return const Color(0xFF303F9F);
-
       default:
         return theme.primary;
     }
@@ -162,7 +158,7 @@ class GroupColors {
   }
 
   static Color getBackgroundTint(Color groupColor) {
-    // FIX: Use toARGB32() instead of .value
+    // Using toARGB32 for strict integer comparison
     if (groupColor.toARGB32() == _blackIdentity.toARGB32()) {
       return _blackBg;
     }

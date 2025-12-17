@@ -14,10 +14,12 @@ class AddScheduledPaymentScreen extends StatefulWidget {
     super.key,
     required this.repo,
     this.preselectedEnvelopeId,
+    this.paymentToEdit, // NEW: Optional payment to edit
   });
 
   final EnvelopeRepo repo;
   final String? preselectedEnvelopeId;
+  final ScheduledPayment? paymentToEdit; // NEW
 
   @override
   State<AddScheduledPaymentScreen> createState() =>
@@ -37,6 +39,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   String _selectedColorName = 'Blusher';
   bool _isAutomatic = false;
   bool _saving = false;
+  bool _isEditing = false;
 
   DateTime _focusedDay = DateTime.now();
 
@@ -48,7 +51,22 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
       widget.repo.currentUserId,
     );
 
-    if (widget.preselectedEnvelopeId != null) {
+    // Initialize logic
+    if (widget.paymentToEdit != null) {
+      _isEditing = true;
+      final p = widget.paymentToEdit!;
+      _selectedEnvelopeId = p.envelopeId;
+      _selectedGroupId = p.groupId;
+      _descriptionCtrl.text = p.description ?? '';
+      _amountCtrl.text = p.amount
+          .toString(); // Removed toStringAsFixed to prevent trailing zeros if int
+      _selectedDate = p.nextDueDate; // Use next due date or startDate
+      _focusedDay = p.nextDueDate;
+      _frequencyValue = p.frequencyValue;
+      _frequencyUnit = p.frequencyUnit;
+      _selectedColorName = p.colorName;
+      _isAutomatic = p.isAutomatic;
+    } else if (widget.preselectedEnvelopeId != null) {
       _selectedEnvelopeId = widget.preselectedEnvelopeId;
     }
   }
@@ -58,6 +76,46 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
     _descriptionCtrl.dispose();
     _amountCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _delete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Schedule?'),
+        content: const Text(
+          'Are you sure you want to delete this scheduled payment?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      setState(() => _saving = true);
+      try {
+        await _paymentRepo.deleteScheduledPayment(widget.paymentToEdit!.id);
+        if (!mounted) return;
+        Navigator.pop(context); // Close screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Scheduled payment deleted')),
+        );
+      } catch (e) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -94,40 +152,72 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
     setState(() => _saving = true);
 
     try {
-      String name;
+      // Determine display name (Envelope name or Group name)
+      String name = 'Payment';
       if (_selectedEnvelopeId != null) {
+        // We need to fetch the name. Since this is async inside sync flow,
+        // ideally we grab it from snapshot or cache.
+        // For editing, we might keep old name or refresh it.
+        // Quick fetch:
         final envelopes = await widget.repo.envelopesStream().first;
         final envelope = envelopes.firstWhere(
           (e) => e.id == _selectedEnvelopeId,
+          orElse: () => envelopes.first, // Fallback
         );
         name = envelope.name;
-      } else {
+      } else if (_selectedGroupId != null) {
         final groups = await widget.repo.groupsStream.first;
-        final group = groups.firstWhere((g) => g.id == _selectedGroupId);
+        final group = groups.firstWhere(
+          (g) => g.id == _selectedGroupId,
+          orElse: () => groups.first,
+        );
         name = group.name;
       }
 
-      await _paymentRepo.createScheduledPayment(
-        envelopeId: _selectedEnvelopeId,
-        groupId: _selectedGroupId,
-        name: name,
-        description: _descriptionCtrl.text.trim().isEmpty
-            ? null
-            : _descriptionCtrl.text.trim(),
-        amount: amount,
-        startDate: _selectedDate!,
-        frequencyValue: _frequencyValue,
-        frequencyUnit: _frequencyUnit,
-        colorName: _selectedColorName,
-        colorValue: CalendarColors.getColorValue(_selectedColorName),
-        isAutomatic: _isAutomatic,
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scheduled payment created!')),
-      );
+      if (_isEditing) {
+        // UPDATE EXISTING
+        await _paymentRepo.updateScheduledPayment(
+          id: widget.paymentToEdit!.id,
+          name: name,
+          description: _descriptionCtrl.text.trim().isEmpty
+              ? null
+              : _descriptionCtrl.text.trim(),
+          amount: amount,
+          startDate: _selectedDate, // Update the date
+          frequencyValue: _frequencyValue,
+          frequencyUnit: _frequencyUnit,
+          colorName: _selectedColorName,
+          colorValue: CalendarColors.getColorValue(_selectedColorName),
+          isAutomatic: _isAutomatic,
+        );
+        if (!mounted) return;
+        Navigator.pop(context);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Payment updated!')));
+      } else {
+        // CREATE NEW
+        await _paymentRepo.createScheduledPayment(
+          envelopeId: _selectedEnvelopeId,
+          groupId: _selectedGroupId,
+          name: name,
+          description: _descriptionCtrl.text.trim().isEmpty
+              ? null
+              : _descriptionCtrl.text.trim(),
+          amount: amount,
+          startDate: _selectedDate!,
+          frequencyValue: _frequencyValue,
+          frequencyUnit: _frequencyUnit,
+          colorName: _selectedColorName,
+          colorValue: CalendarColors.getColorValue(_selectedColorName),
+          isAutomatic: _isAutomatic,
+        );
+        if (!mounted) return;
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Scheduled payment created!')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -161,13 +251,21 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Schedule Payment',
+          _isEditing ? 'Edit Schedule' : 'Schedule Payment',
           style: fontProvider.getTextStyle(
-            fontSize: 28, // Reduced slightly from 32 for better fit
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.primary,
           ),
         ),
+        actions: [
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: _saving ? null : _delete,
+              tooltip: 'Delete Schedule',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -210,6 +308,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                           'Select envelope or group',
                           style: fontProvider.getTextStyle(fontSize: 18),
                         ),
+                        // Determine value based on IDs
                         value: _selectedEnvelopeId != null
                             ? 'env_$_selectedEnvelopeId'
                             : (_selectedGroupId != null
@@ -363,7 +462,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
             const SizedBox(height: 24),
 
             Text(
-              'When?',
+              _isEditing ? 'Next Due Date' : 'When?',
               style: fontProvider.getTextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -377,8 +476,8 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TableCalendar(
-                firstDay: DateTime.now(),
-                lastDay: DateTime.now().add(const Duration(days: 365)),
+                firstDay: DateTime.now().subtract(const Duration(days: 365)),
+                lastDay: DateTime.now().add(const Duration(days: 365 * 2)),
                 focusedDay: _focusedDay,
                 selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
                 calendarFormat: CalendarFormat.month,
@@ -635,7 +734,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                         ),
                       )
                     : Text(
-                        'Save Payment',
+                        _isEditing ? 'Update Payment' : 'Save Payment',
                         style: fontProvider.getTextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,

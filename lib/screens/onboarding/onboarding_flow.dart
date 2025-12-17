@@ -1,13 +1,12 @@
-// lib/screens/onboarding_flow.dart
+// lib/screens/onboarding/onboarding_flow.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/user_service.dart';
-import '../providers/theme_provider.dart';
-import '../providers/font_provider.dart';
-import '../providers/app_preferences_provider.dart';
-import '../theme/app_themes.dart';
-import '../providers/locale_provider.dart';
+import '../../services/user_service.dart';
+import '../../providers/theme_provider.dart';
+import '../../providers/font_provider.dart';
+import '../../theme/app_themes.dart';
+import '../../providers/locale_provider.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key, required this.userService});

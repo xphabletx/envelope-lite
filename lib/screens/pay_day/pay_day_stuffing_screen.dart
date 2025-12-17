@@ -1,24 +1,30 @@
-// lib/screens/pay_day_stuffing_screen.dart
+// lib/screens/pay_day/pay_day_stuffing_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../models/envelope.dart';
-import '../services/envelope_repo.dart';
-import '../providers/font_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/envelope.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/account_repo.dart'; // NEW
+import '../../providers/font_provider.dart';
 
 class PayDayStuffingScreen extends StatefulWidget {
   const PayDayStuffingScreen({
     super.key,
     required this.repo,
+    required this.accountRepo, // NEW
     required this.allocations,
     required this.envelopes,
     required this.totalAmount,
+    required this.accountId, // NEW
   });
 
   final EnvelopeRepo repo;
+  final AccountRepo accountRepo; // NEW
   final Map<String, double> allocations;
   final List<Envelope> envelopes;
   final double totalAmount;
+  final String accountId; // NEW
 
   @override
   State<PayDayStuffingScreen> createState() => _PayDayStuffingScreenState();
@@ -38,7 +44,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
   void initState() {
     super.initState();
 
-    // Setup pulse animation for current envelope
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -58,6 +63,7 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
   }
 
   Future<void> _startStuffing() async {
+    // 1. Stuff envelopes
     for (int i = 0; i < widget.envelopes.length; i++) {
       if (!mounted) return;
 
@@ -69,7 +75,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       final env = widget.envelopes[i];
       final amount = widget.allocations[env.id] ?? 0.0;
 
-      // Animate progress bar filling up
       for (double progress = 0.0; progress <= 1.0; progress += 0.05) {
         await Future.delayed(const Duration(milliseconds: 50));
         if (mounted) {
@@ -77,7 +82,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
         }
       }
 
-      // Actually deposit the money into Firestore
       try {
         await widget.repo.deposit(
           envelopeId: env.id,
@@ -90,19 +94,52 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
         if (mounted) {
           setState(() => errorMessage = 'Error filling ${env.name}');
         }
-        // Wait a bit to show error, then continue
         await Future.delayed(const Duration(seconds: 1));
       }
 
-      // Small pause before moving to next envelope
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // All done!
+    // 2. Update Account Balance (NEW)
+    try {
+      // Fetch current account state
+      final account = await widget.accountRepo
+          .accountStream(widget.accountId)
+          .first;
+
+      // Update balance (add the total pay amount)
+      await widget.accountRepo.updateAccount(
+        accountId: widget.accountId,
+        currentBalance: account.currentBalance + widget.totalAmount,
+      );
+    } catch (e) {
+      debugPrint('Error updating account balance: $e');
+      // Non-fatal error for UI, but important to log
+    }
+
+    // 3. Update Settings History (NEW)
+    try {
+      final userId = widget.repo.currentUserId;
+      await widget.repo.db
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('payDaySettings')
+          .doc('settings')
+          .set({
+            'userId': userId,
+            'lastPayAmount': widget.totalAmount,
+            'lastPayDate': FieldValue.serverTimestamp(),
+            'defaultAccountId': widget.accountId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error updating settings: $e');
+    }
+
     if (mounted) {
       setState(() => stuffingComplete = true);
-
-      // Show success dialog after brief pause
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
         _showSuccessDialog();
@@ -200,9 +237,8 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: '£');
 
-    return WillPopScope(
-      // Prevent back button during stuffing
-      onWillPop: () async => stuffingComplete,
+    return PopScope(
+      canPop: stuffingComplete,
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         body: SafeArea(
@@ -211,9 +247,8 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Title
                 Text(
-                  'Stuffing Envelopes... 🎉',
+                  'Stuffing Envelopes... 💰',
                   style: fontProvider.getTextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -223,7 +258,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                 ),
                 const SizedBox(height: 48),
 
-                // Show error if any
                 if (errorMessage != null)
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -250,7 +284,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                     ),
                   ),
 
-                // Envelope list with progress
                 Expanded(
                   child: ListView.builder(
                     itemCount: widget.envelopes.length,
@@ -288,17 +321,13 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Envelope header
                             Row(
                               children: [
-                                // Emoji
                                 Text(
                                   env.emoji ?? '📨',
                                   style: const TextStyle(fontSize: 24),
                                 ),
                                 const SizedBox(width: 12),
-
-                                // Name
                                 Expanded(
                                   child: Text(
                                     env.name,
@@ -312,8 +341,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                                     ),
                                   ),
                                 ),
-
-                                // Status icon
                                 if (isComplete)
                                   Icon(
                                     Icons.check_circle,
@@ -339,8 +366,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                               ],
                             ),
                             const SizedBox(height: 12),
-
-                            // Progress bar
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
@@ -355,8 +380,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                               ),
                             ),
                             const SizedBox(height: 8),
-
-                            // Amount
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -385,7 +408,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                         ),
                       );
 
-                      // Add pulse animation to current envelope
                       if (isCurrent) {
                         return ScaleTransition(
                           scale: _pulseAnimation,

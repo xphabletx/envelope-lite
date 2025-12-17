@@ -1,10 +1,8 @@
 // lib/widgets/partner_visibility_toggle.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
+import 'package:provider/provider.dart';
 import '../services/workspace_helper.dart';
-import '../providers/font_provider.dart'; // NEW IMPORT
+import '../providers/font_provider.dart';
 
 class PartnerVisibilityToggle extends StatefulWidget {
   const PartnerVisibilityToggle({
@@ -63,7 +61,9 @@ class _PartnerVisibilityToggleState extends State<PartnerVisibilityToggle> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.primary.withAlpha(51)),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
@@ -76,7 +76,6 @@ class _PartnerVisibilityToggleState extends State<PartnerVisibilityToggle> {
           Expanded(
             child: Text(
               'Show Partner ${widget.isEnvelopes ? 'Envelopes' : 'Binders'}',
-              // UPDATED: FontProvider
               style: fontProvider.getTextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -86,7 +85,7 @@ class _PartnerVisibilityToggleState extends State<PartnerVisibilityToggle> {
           Switch(
             value: _showPartner,
             onChanged: _toggle,
-            activeThumbColor: theme.colorScheme.secondary,
+            activeTrackColor: theme.colorScheme.secondary,
           ),
         ],
       ),
