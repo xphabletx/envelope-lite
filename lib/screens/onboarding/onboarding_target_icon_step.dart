@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/font_provider.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../services/icon_search_service_unlimited.dart';
+import '../../data/material_icons_database.dart';
 
 class OnboardingTargetIconStep extends StatefulWidget {
   const OnboardingTargetIconStep({
@@ -101,11 +102,10 @@ class _OnboardingTargetIconStepState extends State<OnboardingTargetIconStep> {
         break;
       case 'material':
       default:
-        final codePoint = int.tryParse(_selectedIconValue!);
+        // Use material icons database to get IconData by name
+        final iconData = materialIconsDatabase[_selectedIconValue]?['icon'] as IconData?;
         iconWidget = Icon(
-          codePoint != null
-              ? IconData(codePoint, fontFamily: 'MaterialIcons')
-              : Icons.help_outline,
+          iconData ?? Icons.help_outline,
           size: 80,
           color: theme.colorScheme.primary,
         );
