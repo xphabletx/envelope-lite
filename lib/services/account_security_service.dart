@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'workspace_helper.dart';
 
 class AccountSecurityService {
@@ -40,7 +41,7 @@ class AccountSecurityService {
 
     if (!context.mounted) return false;
 
-    // 2. Re-authentication
+    // 2. Re-authentication FIRST (before deleting any data)
     bool reAuthSuccess = await _handleReauthentication(context, user);
     if (!reAuthSuccess) return false;
 
@@ -53,9 +54,11 @@ class AccountSecurityService {
       );
     }
 
+    bool dataDeleted = false;
     try {
       // 4. Execute Firestore Cascade
       await _performGDPRCascade(user.uid);
+      dataDeleted = true;
 
       // 5. Delete Auth Account
       await user.delete();
@@ -67,6 +70,26 @@ class AccountSecurityService {
       }
       return true;
     } catch (e) {
+      // CRITICAL: If data was deleted but auth deletion failed, force sign out
+      // This prevents "zombie account" state
+      if (dataDeleted) {
+        await _auth.signOut();
+        if (context.mounted) {
+          Navigator.of(context).pop(); // Dismiss loader
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Your data was deleted but account deletion failed. You have been signed out.',
+              ),
+            ),
+          );
+        }
+        return false;
+      }
+
       if (context.mounted) {
         Navigator.of(context).pop(); // Dismiss loader
         ScaffoldMessenger.of(
@@ -79,16 +102,34 @@ class AccountSecurityService {
 
   Future<bool> _handleReauthentication(BuildContext context, User user) async {
     // Determine provider
-    final isGoogle = user.providerData.any((p) => p.providerId == 'google.com');
+    final providerId = user.providerData.isNotEmpty
+        ? user.providerData.first.providerId
+        : 'password';
 
-    if (isGoogle) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please verify your identity with Google.'),
-        ),
+    if (providerId == 'google.com') {
+      // Trigger actual Google Sign In
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) return false; // User cancelled
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
       );
-      // Ideally trigger Google Sign In re-auth here
-      return true;
+
+      try {
+        await user.reauthenticateWithCredential(credential);
+        return true;
+      } on FirebaseAuthException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Google verification failed: ${e.message}')),
+          );
+        }
+        return false;
+      }
     } else {
       // Email/Password Flow
       final password = await _promptForPassword(context);
@@ -130,7 +171,7 @@ class AccountSecurityService {
             onPressed: () => Navigator.pop(context, null),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, inputPassword),
             child: const Text('Verify'),
           ),

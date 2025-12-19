@@ -16,7 +16,7 @@ class ThemePickerScreen extends StatelessWidget {
     final themes = AppThemes.getAllThemes();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose Theme')),
+      appBar: AppBar(title: const FittedBox(child: Text('Choose Theme'))),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

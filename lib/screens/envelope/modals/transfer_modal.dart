@@ -7,7 +7,9 @@ import 'package:provider/provider.dart'; // NEW IMPORT
 import 'package:intl/intl.dart';
 import '../../../../../models/envelope.dart';
 import '../../../../../services/envelope_repo.dart';
+import '../../../../../services/workspace_helper.dart';
 import '../../../../../widgets/calculator_widget.dart';
+import '../../../../../widgets/partner_badge.dart';
 import '../../../services/localization_service.dart';
 import '../../../../../providers/font_provider.dart'; // NEW IMPORT (Matching depth)
 
@@ -267,6 +269,7 @@ class _TransferModalState extends State<TransferModal> {
                   prefixIcon: const Icon(Icons.inbox),
                 ),
                 items: _availableEnvelopes.map((envelope) {
+                  final isPartner = envelope.userId != widget.repo.currentUserId;
                   return DropdownMenuItem(
                     value: envelope.id,
                     child: Row(
@@ -279,6 +282,19 @@ class _TransferModalState extends State<TransferModal> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (isPartner)
+                          FutureBuilder<String>(
+                            future: WorkspaceHelper.getUserDisplayName(
+                              envelope.userId,
+                              widget.repo.currentUserId,
+                            ),
+                            builder: (context, snapshot) {
+                              return PartnerBadge(
+                                partnerName: snapshot.data ?? 'Partner',
+                                size: PartnerBadgeSize.small,
+                              );
+                            },
+                          ),
                       ],
                     ),
                   );

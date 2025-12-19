@@ -116,7 +116,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(tr('workspace_start_or_join')), elevation: 0),
+      appBar: AppBar(
+        title: FittedBox(child: Text(tr('workspace_start_or_join'))),
+        elevation: 0),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -227,10 +229,12 @@ class _WorkspaceSharingSelectionScreenState
   // Set of IDs to HIDE. If ID is here, isShared = false.
   final Set<String> _hiddenEnvelopeIds = {};
   final Set<String> _hiddenGroupIds = {};
+  final Set<String> _hiddenAccountIds = {};
   bool _hideFutureEnvelopes = false; // New Checkbox
 
   List<DocumentSnapshot> _myEnvelopes = [];
   List<DocumentSnapshot> _myGroups = [];
+  List<DocumentSnapshot> _myAccounts = [];
 
   @override
   void initState() {
@@ -257,11 +261,19 @@ class _WorkspaceSharingSelectionScreenState
           .doc('data')
           .collection('groups')
           .get();
+      final accountSnap = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('solo')
+          .doc('data')
+          .collection('accounts')
+          .get();
 
       if (mounted) {
         setState(() {
           _myEnvelopes = envSnap.docs;
           _myGroups = groupSnap.docs;
+          _myAccounts = accountSnap.docs;
           _loading = false;
         });
       }
@@ -328,6 +340,10 @@ class _WorkspaceSharingSelectionScreenState
         final hide = _hiddenGroupIds.contains(doc.id);
         batch.update(doc.reference, {'isShared': !hide});
       }
+      for (var doc in _myAccounts) {
+        final hide = _hiddenAccountIds.contains(doc.id);
+        batch.update(doc.reference, {'isShared': !hide});
+      }
 
       // 3. Save "Hide Future" Preference
       print('[WorkspaceSharingSelectionScreen] DEBUG: Step 3 - Save "Hide Future" Preference.');
@@ -364,7 +380,7 @@ class _WorkspaceSharingSelectionScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr('workspace_sharing_setup')),
+        title: FittedBox(child: Text(tr('workspace_sharing_setup'))),
         scrolledUnderElevation: 0,
       ),
       body: Column(
@@ -393,7 +409,7 @@ class _WorkspaceSharingSelectionScreenState
           const Divider(),
 
           Expanded(
-            child: (_myEnvelopes.isEmpty && _myGroups.isEmpty)
+            child: (_myEnvelopes.isEmpty && _myGroups.isEmpty && _myAccounts.isEmpty)
                 ? Center(
                     child: Text(
                       "No items to share",
@@ -468,6 +484,42 @@ class _WorkspaceSharingSelectionScreenState
                                   _hiddenEnvelopeIds.add(doc.id);
                                 } else {
                                   _hiddenEnvelopeIds.remove(doc.id);
+                                }
+                              });
+                            },
+                          );
+                        }),
+                      ],
+                      if (_myAccounts.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Accounts',
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ..._myAccounts.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final isHidden = _hiddenAccountIds.contains(doc.id);
+                          return CheckboxListTile(
+                            value: isHidden,
+                            title: Text(data['name'] ?? 'Unnamed Account'),
+                            secondary: const Icon(Icons.account_balance_wallet),
+                            subtitle: Text(
+                              isHidden ? "Private" : "Shared",
+                              style: TextStyle(
+                                color: isHidden ? Colors.red : Colors.green,
+                              ),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _hiddenAccountIds.add(doc.id);
+                                } else {
+                                  _hiddenAccountIds.remove(doc.id);
                                 }
                               });
                             },

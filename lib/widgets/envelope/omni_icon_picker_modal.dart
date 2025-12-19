@@ -7,10 +7,16 @@ import '../../services/icon_search_service_unlimited.dart';
 import '../../providers/font_provider.dart';
 
 class OmniIconPickerModal extends StatefulWidget {
-  const OmniIconPickerModal({super.key, this.initialValue, this.initialType});
+  const OmniIconPickerModal({
+    super.key,
+    this.initialValue,
+    this.initialType,
+    this.initialQuery,
+  });
 
   final String? initialValue;
   final IconType? initialType;
+  final String? initialQuery;
 
   @override
   State<OmniIconPickerModal> createState() => _OmniIconPickerModalState();
@@ -25,7 +31,13 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
   @override
   void initState() {
     super.initState();
-    _onSearchChanged('');
+    // Pre-populate search box with initialQuery if provided
+    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
+      _searchController.text = widget.initialQuery!;
+      _onSearchChanged(widget.initialQuery!);
+    } else {
+      _onSearchChanged('');
+    }
   }
 
   @override

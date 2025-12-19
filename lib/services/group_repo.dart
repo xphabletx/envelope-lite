@@ -9,23 +9,17 @@ class GroupRepo {
   final EnvelopeRepo _envelopeRepo;
 
   bool get _inWorkspace => _envelopeRepo.inWorkspace;
-  String? get _workspaceId => _envelopeRepo.workspaceId;
   String get _userId => _envelopeRepo.currentUserId;
 
   fs.CollectionReference<Map<String, dynamic>> groupsCol() {
-    if (_inWorkspace && _workspaceId != null) {
-      return _db
-          .collection('workspaces')
-          .doc(_workspaceId)
-          .collection('groups');
-    } else {
-      return _db
-          .collection('users')
-          .doc(_userId)
-          .collection('solo')
-          .doc('data')
-          .collection('groups');
-    }
+    // Always use the user's solo collection for groups
+    // In workspace mode, groups are shared via isShared field
+    return _db
+        .collection('users')
+        .doc(_userId)
+        .collection('solo')
+        .doc('data')
+        .collection('groups');
   }
 
   Future<String> createGroup({
@@ -48,6 +42,7 @@ class GroupRepo {
       'iconColor': iconColor,
       'colorIndex': colorIndex ?? 0,
       'payDayEnabled': payDayEnabled ?? false,
+      'isShared': _inWorkspace, // Share by default in workspace mode
       'createdAt': fs.FieldValue.serverTimestamp(),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });

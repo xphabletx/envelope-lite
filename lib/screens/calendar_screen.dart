@@ -317,12 +317,16 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
                 scrolledUnderElevation: 0,
-                title: Text(
-                  tr('calendar_title'),
-                  style: fontProvider.getTextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                title: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    tr('calendar_title'),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
                 actions: [

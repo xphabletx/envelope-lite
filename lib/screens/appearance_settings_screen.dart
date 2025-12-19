@@ -29,11 +29,13 @@ class AppearanceSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          tr('settings_appearance'),
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+        title: FittedBox(
+          child: Text(
+            tr('settings_appearance'),
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         scrolledUnderElevation: 0,

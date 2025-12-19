@@ -53,10 +53,31 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     _viewingMonth = DateTime.now();
     _scrollController.addListener(_saveScrollOffset);
     _checkTutorial();
+    _checkPartnerEnvelope();
   }
 
   Future<void> _checkTutorial() async {
     // Tutorial logic placeholder
+  }
+
+  Future<void> _checkPartnerEnvelope() async {
+    final envelopeStream = widget.repo.envelopeStream(widget.envelopeId);
+    final envelope = await envelopeStream.first;
+
+    if (envelope.userId != widget.repo.currentUserId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You can only view or transfer funds to other users\' envelopes.'),
+              duration: Duration(seconds: 4),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
   }
 
   void _saveScrollOffset() {
@@ -128,6 +149,36 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
       builder: (context, envelopeSnapshot) {
+        if (envelopeSnapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading envelope',
+                    style: fontProvider.getTextStyle(fontSize: 20),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    envelopeSnapshot.error.toString(),
+                    style: const TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (!envelopeSnapshot.hasData) {
           return Scaffold(
             appBar: AppBar(),
@@ -173,12 +224,16 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.pop(context),
                 ),
-                title: Text(
-                  envelope.name,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                title: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    envelope.name,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
               ),
@@ -350,21 +405,11 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   ) {
     final iconColor = theme.colorScheme.onPrimaryContainer;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final isOwner = envelope.userId == widget.repo.currentUserId;
 
-    return SpeedDial(
-      key: _fabKey, // TUTORIAL KEY
-      icon: Icons.add,
-      activeIcon: Icons.close,
-      backgroundColor: theme.colorScheme.primary,
-      foregroundColor: theme.colorScheme.onPrimary,
-      overlayColor: Colors.black,
-      overlayOpacity: 0.5,
-      spacing: 12,
-      spaceBetweenChildren: 8,
-      buttonSize: const Size(56, 56),
-      childrenButtonSize: const Size(56, 56),
-      renderOverlay: true,
-      children: [
+    // Build children list conditionally
+    final children = <SpeedDialChild>[
+      if (isOwner) ...[
         SpeedDialChild(
           child: Icon(Icons.add_circle, color: iconColor),
           backgroundColor: theme.colorScheme.primaryContainer,
@@ -387,29 +432,45 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           labelBackgroundColor: theme.colorScheme.surface,
           onTap: () => _showWithdrawModal(context, envelope),
         ),
-        SpeedDialChild(
-          child: Icon(Icons.swap_horiz, color: iconColor),
-          backgroundColor: theme.colorScheme.primaryContainer,
-          label: tr('action_move_money'),
-          labelStyle: fontProvider.getTextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-          labelBackgroundColor: theme.colorScheme.surface,
-          onTap: () => _showTransferModal(context, envelope),
-        ),
-        SpeedDialChild(
-          child: Icon(Icons.calculate, color: iconColor),
-          backgroundColor: theme.colorScheme.primaryContainer,
-          label: tr('calculator'),
-          labelStyle: fontProvider.getTextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-          labelBackgroundColor: theme.colorScheme.surface,
-          onTap: () => _showCalculator(context),
-        ),
       ],
+      SpeedDialChild(
+        child: Icon(Icons.swap_horiz, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: tr('action_move_money'),
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showTransferModal(context, envelope),
+      ),
+      SpeedDialChild(
+        child: Icon(Icons.calculate, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: tr('calculator'),
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showCalculator(context),
+      ),
+    ];
+
+    return SpeedDial(
+      key: _fabKey, // TUTORIAL KEY
+      icon: Icons.add,
+      activeIcon: Icons.close,
+      backgroundColor: theme.colorScheme.primary,
+      foregroundColor: theme.colorScheme.onPrimary,
+      overlayColor: Colors.black,
+      overlayOpacity: 0.5,
+      spacing: 12,
+      spaceBetweenChildren: 8,
+      buttonSize: const Size(56, 56),
+      childrenButtonSize: const Size(56, 56),
+      renderOverlay: true,
+      children: children,
     );
   }
 

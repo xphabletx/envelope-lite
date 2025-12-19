@@ -32,12 +32,14 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
           icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Scheduled Payments',
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
+        title: FittedBox(
+          child: Text(
+            'Scheduled Payments',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
           ),
         ),
       ),

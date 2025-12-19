@@ -18,31 +18,67 @@ class AccountRepo {
   // --------- Collection References ----------
 
   fs.CollectionReference<Map<String, dynamic>> _accountsCol() {
-    if (_inWorkspace && _workspaceId != null) {
-      return _db
-          .collection('workspaces')
-          .doc(_workspaceId)
-          .collection('accounts');
-    } else {
-      return _db
-          .collection('users')
-          .doc(_userId)
-          .collection('solo')
-          .doc('data')
-          .collection('accounts');
-    }
+    // Always use the user's solo collection for accounts
+    // In workspace mode, accounts are shared via isShared field
+    return _db
+        .collection('users')
+        .doc(_userId)
+        .collection('solo')
+        .doc('data')
+        .collection('accounts');
   }
 
   // --------- Streams ----------
 
   Stream<List<Account>> accountsStream() {
-    return _accountsCol()
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => Account.fromFirestore(doc)).toList(),
-        );
+    if (!_inWorkspace) {
+      return _accountsCol()
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map(
+            (snapshot) =>
+                snapshot.docs.map((doc) => Account.fromFirestore(doc)).toList(),
+          );
+    }
+
+    // For workspace mode, read from all members' solo accounts (filtered by isShared)
+    return _db.collection('workspaces').doc(_workspaceId).snapshots().asyncMap(
+      (workspaceSnap) async {
+        if (!workspaceSnap.exists) return <Account>[];
+
+        final workspaceData = workspaceSnap.data();
+        final members = (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+        if (!members.containsKey(_userId)) {
+          return <Account>[];
+        }
+
+        if (members.isEmpty) return <Account>[];
+
+        final List<Account> allAccounts = [];
+
+        for (final memberId in members.keys) {
+          final memberAccountsSnap = await _db
+              .collection('users')
+              .doc(memberId)
+              .collection('solo')
+              .doc('data')
+              .collection('accounts')
+              .orderBy('createdAt', descending: false)
+              .get();
+
+          for (final doc in memberAccountsSnap.docs) {
+            final account = Account.fromFirestore(doc);
+            // Show own accounts or shared accounts from others
+            if (account.userId == _userId || account.isShared) {
+              allAccounts.add(account);
+            }
+          }
+        }
+
+        return allAccounts;
+      },
+    );
   }
 
   Stream<Account> accountStream(String accountId) {

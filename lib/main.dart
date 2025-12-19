@@ -27,7 +27,7 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
-  final savedWorkspaceId = prefs.getString('selected_workspace_id');
+  final savedWorkspaceId = prefs.getString('active_workspace_id');
 
   runApp(
     MultiProvider(
@@ -249,7 +249,7 @@ class _SplashScreenState extends State<SplashScreen>
     final imageSize = screenSize.width * 0.8; // 80% of screen width
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF1C1F25),
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,

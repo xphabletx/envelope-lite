@@ -320,12 +320,14 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
           icon: Icon(Icons.close, color: theme.colorScheme.primary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          _isEditing ? 'Edit Schedule' : 'Schedule Payment',
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
+        title: FittedBox(
+          child: Text(
+            _isEditing ? 'Edit Schedule' : 'Schedule Payment',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
           ),
         ),
         actions: [

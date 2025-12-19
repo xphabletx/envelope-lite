@@ -5,11 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
+import '../services/account_repo.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
+import '../models/account.dart';
 import '../widgets/partner_badge.dart';
 
 class WorkspaceManagementScreen extends StatefulWidget {
@@ -38,13 +40,12 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   String _workspaceName = '';
   String _joinCode = '';
   List<WorkspaceMember> _members = [];
-  int _selectedNavIndex = 2; // Start on settings tab
+  int _selectedNavIndex = 0; // Default to first tab (envelopes)
   bool _showPartnerOnly = false; // For "Mine only" toggle
   bool _hideFutureEnvelopes = false;
 
   @override
   void initState() {
-    print('[WorkspaceManagementScreen] DEBUG: initState called.');
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadData();
@@ -57,7 +58,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   }
 
   Future<void> _loadData() async {
-    print('[WorkspaceManagementScreen] DEBUG: _loadData called.');
     try {
       final doc = await FirebaseFirestore.instance
           .collection('workspaces')
@@ -67,9 +67,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         final data = doc.data()!;
         _workspaceName = data['displayName'] ?? data['name'] ?? '';
         _joinCode = data['joinCode'] ?? '';
-        print('[WorkspaceManagementScreen] DEBUG: Workspace data loaded: name=$_workspaceName, joinCode=$_joinCode');
-      } else {
-        print('[WorkspaceManagementScreen] DEBUG: Workspace document does not exist.');
       }
 
       // Load hide future envelopes preference
@@ -93,7 +90,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       }
     } catch (e) {
       debugPrint('Error loading workspace data: $e');
-      print('[WorkspaceManagementScreen] DEBUG: Error in _loadData: $e');
     }
   }
 
@@ -143,8 +139,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   }
 
   Future<void> _leaveWorkspace() async {
-    print('[WorkspaceManagementScreen] DEBUG: _leaveWorkspace called.');
-
     // Get provider references before async operations
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
@@ -162,17 +156,11 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         content: Text(tr('workspace_leave_warning')),
         actions: [
           TextButton(
-            onPressed: () {
-              print('[WorkspaceManagementScreen] DEBUG: User cancelled leaving workspace.');
-              Navigator.pop(context, false);
-            },
+            onPressed: () => Navigator.pop(context, false),
             child: Text(tr('cancel')),
           ),
           FilledButton(
-            onPressed: () {
-              print('[WorkspaceManagementScreen] DEBUG: User confirmed leaving workspace.');
-              Navigator.pop(context, true);
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: Text(tr('workspace_leave_button')),
           ),
@@ -180,28 +168,19 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       ),
     );
 
-    if (confirmed != true) {
-      print('[WorkspaceManagementScreen] DEBUG: Leave workspace cancelled.');
-      return;
-    }
-
-    print('[WorkspaceManagementScreen] DEBUG: Proceeding to leave workspace.');
+    if (confirmed != true) return;
 
     try {
       // Remove from workspace members
-      print('[WorkspaceManagementScreen] DEBUG: Removing user from workspace members in Firestore.');
       await WorkspaceHelper.leaveWorkspace(
         widget.workspaceId,
         widget.currentUserId,
       );
-      print('[WorkspaceManagementScreen] DEBUG: User removed from Firestore.');
 
       // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
       await workspaceProvider.setWorkspaceId(null);
-      print('[WorkspaceManagementScreen] DEBUG: Workspace cleared globally.');
 
       if (!mounted) return;
-      print('[WorkspaceManagementScreen] DEBUG: Workspace left successfully. Navigating back to home.');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(tr('workspace_left_success'))));
@@ -209,7 +188,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       // Pop back to home - it will rebuild without workspace
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
-      print('[WorkspaceManagementScreen] DEBUG: Error leaving workspace: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -251,16 +229,12 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   }
 
   void _onNavTapped(int index) {
-    if (index == _selectedNavIndex) return;
-
-    if (index == 2) {
-      // Already on settings, do nothing
-      return;
-    }
-
     // Navigate back to home with the correct tab
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    // TODO: You may need to pass the index to home screen to switch tabs
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/home',
+      (route) => false,
+      arguments: index,
+    );
   }
 
   @override
@@ -270,18 +244,22 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('workspace_management')), elevation: 0),
+        appBar: AppBar(
+          title: FittedBox(child: Text(tr('workspace_management'))),
+          elevation: 0),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          tr('workspace_management'),
-          style: fontProvider.getTextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
+        title: FittedBox(
+          child: Text(
+            'Workspace Management',
+            style: fontProvider.getTextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -373,9 +351,9 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
             label: tr('home_binders_tab'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.settings_outlined),
-            activeIcon: const Icon(Icons.settings),
-            label: 'Settings',
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: const Icon(Icons.account_balance_wallet),
+            label: tr('home_budget_tab'),
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.calendar_today_outlined),
@@ -505,7 +483,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           value: env.isShared,
                           enabled: !isPartner, // Can't toggle partner's envelopes
                           onChanged: isPartner ? null : (value) async {
-                            print('[WorkspaceManagementScreen] DEBUG: Toggled sharing for envelope ${env.id} to $value');
                             await widget.repo.updateEnvelope(
                               envelopeId: env.id,
                               isShared: value ?? true,
@@ -597,10 +574,11 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           value: group.isShared,
                           enabled: !isPartner,
                           onChanged: isPartner ? null : (value) async {
-                            print('[WorkspaceManagementScreen] DEBUG: Toggled sharing for group ${group.id} to $value');
                             await FirebaseFirestore.instance
-                                .collection('workspaces')
-                                .doc(widget.workspaceId)
+                                .collection('users')
+                                .doc(widget.currentUserId)
+                                .collection('solo')
+                                .doc('data')
                                 .collection('groups')
                                 .doc(group.id)
                                 .update({'isShared': value ?? true});
@@ -647,6 +625,106 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                               color: isPartner
                                   ? Colors.blue
                                   : (group.isShared ? Colors.green : Colors.grey),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Accounts',
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              StreamBuilder<List<Account>>(
+                stream: AccountRepo(widget.repo.db, widget.repo).accountsStream(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  var accounts = snapshot.data!;
+
+                  // Filter based on "Mine only" toggle
+                  if (!_showPartnerOnly) {
+                    accounts = accounts
+                        .where((acc) => acc.userId == widget.currentUserId)
+                        .toList();
+                  }
+
+                  if (accounts.isEmpty) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Center(child: Text('No accounts')),
+                      ),
+                    );
+                  }
+                  return Card(
+                    child: Column(
+                      children: accounts.map((account) {
+                        final isPartner = account.userId != widget.currentUserId;
+                        return CheckboxListTile(
+                          value: account.isShared,
+                          enabled: !isPartner,
+                          onChanged: isPartner ? null : (value) async {
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(widget.currentUserId)
+                                .collection('solo')
+                                .doc('data')
+                                .collection('accounts')
+                                .doc(account.id)
+                                .update({'isShared': value ?? true});
+                          },
+                          title: Row(
+                            children: [
+                              Text(
+                                account.emoji ?? '💳',
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  account.name,
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (isPartner)
+                                FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    account.userId,
+                                    widget.currentUserId,
+                                  ),
+                                  builder: (context, snapshot) {
+                                    return PartnerBadge(
+                                      partnerName: snapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            isPartner
+                                ? "Partner's account (read-only)"
+                                : (account.isShared
+                                    ? tr('workspace_visible_to_partner')
+                                    : tr('workspace_hidden_from_partner')),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isPartner
+                                  ? Colors.blue
+                                  : (account.isShared ? Colors.green : Colors.grey),
                             ),
                           ),
                         );

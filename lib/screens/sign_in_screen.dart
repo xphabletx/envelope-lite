@@ -459,13 +459,15 @@ class _SignInScreenState extends State<SignInScreen> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(
-            'Sign in',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              fontFamily: null, // System default
-              color: appTheme.colorScheme.onSurface,
+          title: FittedBox(
+            child: Text(
+              'Sign in',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                fontFamily: null, // System default
+                color: appTheme.colorScheme.onSurface,
+              ),
             ),
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/user_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
@@ -29,6 +30,26 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       FontProvider.systemDefaultId; // Start with system default
   String _selectedLanguage = 'en'; // Placeholder
   String _selectedCurrency = 'GBP'; // Placeholder
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure a basic profile exists so Storage Rules pass
+    _ensureProfileExists();
+  }
+
+  Future<void> _ensureProfileExists() async {
+    final profile = await widget.userService.getUserProfile();
+    if (profile == null) {
+      await widget.userService.createUserProfile(
+        displayName: 'New User',
+        selectedTheme: AppThemes.latteId,
+      );
+      await widget.userService.updateUserProfile(
+        hasCompletedOnboarding: false,
+      );
+    }
+  }
 
   Future<void> _completeOnboarding() async {
     // Create user profile in Firebase
@@ -177,51 +198,67 @@ class _PhotoUploadStepState extends State<_PhotoUploadStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _image == null
-              ? const Icon(Icons.account_circle, size: 120, color: Colors.grey)
-              : CircleAvatar(
-                  radius: 60,
-                  backgroundImage: FileImage(_image!),
+    return Scaffold(
+      appBar: AppBar(
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+              }
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Log Out'),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _image == null
+                ? const Icon(Icons.account_circle, size: 120, color: Colors.grey)
+                : CircleAvatar(
+                    radius: 60,
+                    backgroundImage: FileImage(_image!),
+                  ),
+            const SizedBox(height: 32),
+            Text(
+              'Add a Profile Photo',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Help your workspace members recognize you',
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 48),
+            ElevatedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.photo_camera),
+              label: const Text('Choose Photo'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-          const SizedBox(height: 32),
-          Text(
-            'Add a Profile Photo',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Help your workspace members recognize you',
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          ElevatedButton.icon(
-            onPressed: _pickImage,
-            icon: const Icon(Icons.photo_camera),
-            label: const Text('Choose Photo'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _uploading
-              ? const CircularProgressIndicator()
-              : TextButton(
-                  onPressed: _uploadImage,
-                  child: Text(_image == null ? 'Skip for now' : 'Continue'),
-                ),
-        ],
+            const SizedBox(height: 16),
+            _uploading
+                ? const CircularProgressIndicator()
+                : TextButton(
+                    onPressed: _uploadImage,
+                    child: Text(_image == null ? 'Skip for now' : 'Continue'),
+                  ),
+          ],
+        ),
       ),
     );
   }

@@ -85,7 +85,9 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(),
+      builder: (_) => OmniIconPickerModal(
+        initialQuery: _nameController.text.trim(), // Pre-populate with account name
+      ),
     );
 
     if (result != null) {

@@ -36,7 +36,7 @@ class AccountDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(account.name),
+        title: FittedBox(child: Text(account.name)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

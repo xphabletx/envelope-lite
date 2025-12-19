@@ -227,7 +227,7 @@ class EnvelopeRepo {
           .map((s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList());
     }
 
-    // For workspace mode, verify membership first
+    // For workspace mode, read from all members' solo groups (filtered by isShared)
     return _db.collection('workspaces').doc(_workspaceId).snapshots().switchMap(
       (workspaceSnap) {
         if (!workspaceSnap.exists) return Stream.value(<EnvelopeGroup>[]);
@@ -241,13 +241,31 @@ class EnvelopeRepo {
           return Stream.value(<EnvelopeGroup>[]);
         }
 
-        return _db
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('groups')
-            .orderBy('createdAt', descending: false)
-            .snapshots()
-            .map((s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList());
+        if (members.isEmpty) return Stream.value(<EnvelopeGroup>[]);
+
+        final memberIds = members.keys.toList();
+
+        // Stream groups from each member's solo collection
+        final memberStreams = memberIds.map((memberId) {
+          return _db
+              .collection('users')
+              .doc(memberId)
+              .collection('solo')
+              .doc('data')
+              .collection('groups')
+              .orderBy('createdAt', descending: false)
+              .snapshots()
+              .map((snap) {
+                return snap.docs
+                    .map((doc) => EnvelopeGroup.fromFirestore(doc))
+                    .where((group) => group.userId == _userId || group.isShared)
+                    .toList();
+              });
+        }).toList();
+
+        return CombineLatestStream.list(
+          memberStreams,
+        ).map((listOfLists) => listOfLists.expand((list) => list).toList());
       },
     );
   }
@@ -700,10 +718,46 @@ class EnvelopeRepo {
 
   /// Get single envelope as stream (for live updates in settings)
   Stream<Envelope> envelopeStream(String envelopeId) {
+    // First try to get from current user's collection
     return _colEnvelopes()
         .doc(envelopeId)
         .snapshots()
-        .map((doc) => Envelope.fromFirestore(doc));
+        .asyncMap((doc) async {
+      // If found in user's collection, return it
+      if (doc.exists) {
+        return Envelope.fromFirestore(doc);
+      }
+
+      // If not found and in workspace, check partner envelopes
+      if (inWorkspace && _workspaceId != null) {
+        final workspaceSnap = await _db.collection('workspaces').doc(_workspaceId).get();
+        if (workspaceSnap.exists) {
+          final workspaceData = workspaceSnap.data();
+          final members = (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+          // Search in each member's collection
+          for (final memberId in members.keys) {
+            if (memberId == _userId) continue; // Already checked above
+
+            final partnerDoc = await _db
+                .collection('users')
+                .doc(memberId)
+                .collection('solo')
+                .doc('data')
+                .collection('envelopes')
+                .doc(envelopeId)
+                .get();
+
+            if (partnerDoc.exists) {
+              return Envelope.fromFirestore(partnerDoc);
+            }
+          }
+        }
+      }
+
+      // If still not found, throw error
+      throw Exception('Envelope not found');
+    });
   }
 
   /// Delete an envelope
@@ -842,12 +896,30 @@ class EnvelopeRepo {
 
     final batch = _db.batch();
 
-    batch.update(_colEnvelopes().doc(fromEnvelopeId), {
+    // Update from envelope in its owner's collection
+    final fromEnvelopeRef = _db
+        .collection('users')
+        .doc(fromEnvelope.userId)
+        .collection('solo')
+        .doc('data')
+        .collection('envelopes')
+        .doc(fromEnvelopeId);
+
+    batch.update(fromEnvelopeRef, {
       'currentAmount': fs.FieldValue.increment(-amount),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
 
-    batch.update(_colEnvelopes().doc(toEnvelopeId), {
+    // Update to envelope in its owner's collection
+    final toEnvelopeRef = _db
+        .collection('users')
+        .doc(toEnvelope.userId)
+        .collection('solo')
+        .doc('data')
+        .collection('envelopes')
+        .doc(toEnvelopeId);
+
+    batch.update(toEnvelopeRef, {
       'currentAmount': fs.FieldValue.increment(amount),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });

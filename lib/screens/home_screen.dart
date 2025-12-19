@@ -17,9 +17,8 @@ import '../services/account_repo.dart';
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
 import '../widgets/group_editor.dart' as editor;
-import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
-import './accounts/account_list_screen.dart'; // IMPORT ADDED
+import './accounts/account_list_screen.dart';
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -470,7 +469,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   bool isMulti = false;
   final selected = <String>{};
   String _sortBy = 'name';
-  bool _showPartnerEnvelopes = true;
+  bool _mineOnly = false;
 
   @override
   void initState() {
@@ -557,6 +556,15 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   }
 
   void _openDetails(Envelope envelope) async {
+    // Prevent access to partner's envelopes
+    if (envelope.userId != widget.repo.currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You cannot view details of your partner's envelopes"),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
@@ -614,10 +622,12 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final isWorkspace = widget.repo.inWorkspace;
+    final showPartnerEnvelopes = !_mineOnly;
 
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(
-        showPartnerEnvelopes: _showPartnerEnvelopes,
+        showPartnerEnvelopes: showPartnerEnvelopes,
       ),
       builder: (c1, s1) {
         final envs = s1.data ?? [];
@@ -665,6 +675,25 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                       ],
                     ),
                     actions: [
+                      if (isWorkspace)
+                        Row(
+                          children: [
+                            Text(
+                              'Mine Only',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            Switch(
+                              value: _mineOnly,
+                              activeColor: theme.colorScheme.primary,
+                              onChanged: (val) => setState(() => _mineOnly = val),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
                       PopupMenuButton<String>(
                         tooltip: tr('sort_by'),
                         icon: Icon(
@@ -697,14 +726,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
                           children: [
-                            if (widget.repo.inWorkspace)
-                              PartnerVisibilityToggle(
-                                isEnvelopes: true,
-                                onChanged: (show) {
-                                  setState(() => _showPartnerEnvelopes = show);
-                                },
-                              ),
-
                             Expanded(
                               child: sortedEnvs.isEmpty
                                   ? Center(
@@ -775,39 +796,21 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                                                     ? () => _toggle(e.id)
                                                     : () => _openDetails(e),
                                               ),
-                                              if (isPartner)
+                                              if (isPartner && !_mineOnly)
                                                 Positioned(
-                                                  top: 8,
-                                                  right: 8,
-                                                  child: FutureBuilder<bool>(
+                                                  bottom: 24,
+                                                  right: 16,
+                                                  child: FutureBuilder<String>(
                                                     future:
-                                                        WorkspaceHelper.isCurrentlyInWorkspace(),
-                                                    builder: (context, workspaceSnap) {
-                                                      if (workspaceSnap.data ==
-                                                          false) {
-                                                        return const SizedBox.shrink();
-                                                      }
-
-                                                      return FutureBuilder<
-                                                        String
-                                                      >(
-                                                        future:
-                                                            WorkspaceHelper.getUserDisplayName(
-                                                              e.userId,
-                                                              widget
-                                                                  .repo
-                                                                  .currentUserId,
-                                                            ),
-                                                        builder: (context, snapshot) {
-                                                          return PartnerBadge(
-                                                            partnerName:
-                                                                snapshot.data ??
-                                                                'Partner',
-                                                            size:
-                                                                PartnerBadgeSize
-                                                                    .small,
-                                                          );
-                                                        },
+                                                        WorkspaceHelper.getUserDisplayName(
+                                                          e.userId,
+                                                          widget.repo.currentUserId,
+                                                        ),
+                                                    builder: (context, snapshot) {
+                                                      return PartnerBadge(
+                                                        partnerName:
+                                                            snapshot.data ?? 'Partner',
+                                                        size: PartnerBadgeSize.normal,
                                                       );
                                                     },
                                                   ),

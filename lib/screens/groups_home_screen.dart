@@ -9,7 +9,6 @@ import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/workspace_helper.dart';
 import '../widgets/group_editor.dart' as editor;
-import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
 import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
@@ -36,7 +35,8 @@ class GroupsHomeScreen extends StatefulWidget {
 class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  bool _showPartnerBinders = true;
+  bool _mineOnly = false;
+  String _sortBy = 'name';
 
   Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
@@ -75,6 +75,30 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     return themeColors.first;
   }
 
+  List<EnvelopeGroup> _sortGroups(List<EnvelopeGroup> groups, List<Envelope> envs) {
+    final sorted = groups.toList();
+    switch (_sortBy) {
+      case 'name':
+        sorted.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+      case 'total':
+        sorted.sort((a, b) {
+          final valA = _statsFor(a, envs)['totalSaved'] as double;
+          final valB = _statsFor(b, envs)['totalSaved'] as double;
+          return valB.compareTo(valA);
+        });
+        break;
+      case 'created':
+        sorted.sort((a, b) {
+          final dateA = a.createdAt ?? DateTime(2000);
+          final dateB = b.createdAt ?? DateTime(2000);
+          return dateB.compareTo(dateA);
+        });
+        break;
+    }
+    return sorted;
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -87,10 +111,11 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isWorkspace = widget.repo.inWorkspace;
 
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(
-        showPartnerEnvelopes: _showPartnerBinders,
+        showPartnerEnvelopes: !_mineOnly,
       ),
       builder: (_, s1) {
         final envs = s1.data ?? [];
@@ -98,11 +123,17 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
           stream: widget.repo.groupsStream,
           builder: (_, s2) {
             final allGroups = s2.data ?? [];
-            final groups = allGroups.where((g) {
+            final filteredGroups = allGroups.where((g) {
               if (g.userId == widget.repo.currentUserId) return true;
-              if (!_showPartnerBinders) return false;
+              if (_mineOnly) return false;
               return g.isShared;
             }).toList();
+
+            final groups = _sortGroups(filteredGroups, envs);
+
+            if (_currentPage >= groups.length && groups.isNotEmpty) {
+              _currentPage = groups.length - 1;
+            }
 
             if (groups.isEmpty) {
               return Scaffold(
@@ -152,46 +183,33 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                   backgroundColor: theme.scaffoldBackgroundColor,
                   elevation: 0,
                 ),
-                body: Column(
-                  children: [
-                    if (widget.repo.inWorkspace)
-                      PartnerVisibilityToggle(
-                        isEnvelopes: false,
-                        onChanged: (show) {
-                          setState(() => _showPartnerBinders = show);
-                        },
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_off_outlined,
+                        size: 64,
+                        color: Colors.grey.shade400,
                       ),
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.folder_off_outlined,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              tr('group_no_binders'),
-                              style: fontProvider.getTextStyle(
-                                fontSize: 28,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              tr('group_create_first_binder'),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 16),
+                      Text(
+                        tr('group_no_binders'),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 28,
+                          color: Colors.grey.shade600,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        tr('group_create_first_binder'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 floatingActionButton: FloatingActionButton.extended(
                   backgroundColor: theme.colorScheme.secondary,
@@ -215,27 +233,54 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             return Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
-                title: Text(
-                  tr('group_binders_title'),
-                  style: fontProvider.getTextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                title: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    tr('group_binders_title'),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 38,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
+                actions: [
+                  if (isWorkspace)
+                    Row(
+                      children: [
+                        Text(
+                          'Mine Only',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        Switch(
+                          value: _mineOnly,
+                          activeColor: theme.colorScheme.primary,
+                          onChanged: (val) => setState(() => _mineOnly = val),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  PopupMenuButton<String>(
+                    tooltip: tr('sort_by'),
+                    icon: Icon(Icons.sort, color: theme.colorScheme.primary),
+                    onSelected: (value) => setState(() => _sortBy = value),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
+                      PopupMenuItem(value: 'total', child: const Text('Total Saved')),
+                      PopupMenuItem(value: 'created', child: const Text('Date Created')),
+                    ],
+                  ),
+                ],
               ),
               body: Column(
                 children: [
-                  if (widget.repo.inWorkspace)
-                    PartnerVisibilityToggle(
-                      isEnvelopes: false,
-                      onChanged: (show) {
-                        setState(() => _showPartnerBinders = show);
-                      },
-                    ),
-
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
@@ -312,49 +357,17 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             horizontal: 16,
                             vertical: 8,
                           ),
-                          child: Stack(
-                            children: [
-                              _BinderSpread(
-                                group: group,
-                                binderColors: binderColors,
-                                envelopes: groupEnvelopes,
-                                totalSaved: totalSaved,
-                                currency: currency,
-                                onEdit: () => _openGroupEditor(group),
-                                onViewDetails: () => _openGroupDetail(group),
-                                theme: theme,
-                                repo: widget.repo,
-                              ),
-                              if (isPartner)
-                                FutureBuilder<bool>(
-                                  future:
-                                      WorkspaceHelper.isCurrentlyInWorkspace(),
-                                  builder: (context, snapshot) {
-                                    final inWorkspace = snapshot.data ?? false;
-                                    if (!inWorkspace) {
-                                      return const SizedBox.shrink();
-                                    }
-
-                                    return Positioned(
-                                      top: 12,
-                                      right: 12,
-                                      child: FutureBuilder<String>(
-                                        future:
-                                            WorkspaceHelper.getUserDisplayName(
-                                          group.userId,
-                                          widget.repo.currentUserId,
-                                        ),
-                                        builder: (context, nameSnapshot) {
-                                          return PartnerBadge(
-                                            partnerName:
-                                                nameSnapshot.data ?? 'Partner',
-                                          );
-                                        },
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ],
+                          child: _BinderSpread(
+                            group: group,
+                            binderColors: binderColors,
+                            envelopes: groupEnvelopes,
+                            totalSaved: totalSaved,
+                            currency: currency,
+                            onEdit: () => _openGroupEditor(group),
+                            onViewDetails: () => _openGroupDetail(group),
+                            theme: theme,
+                            repo: widget.repo,
+                            isPartner: isPartner && !_mineOnly,
                           ),
                         );
                       },
@@ -398,6 +411,7 @@ class _BinderSpread extends StatefulWidget {
   final VoidCallback onViewDetails;
   final ThemeData theme;
   final EnvelopeRepo repo;
+  final bool isPartner;
 
   const _BinderSpread({
     required this.group,
@@ -409,6 +423,7 @@ class _BinderSpread extends StatefulWidget {
     required this.onViewDetails,
     required this.theme,
     required this.repo,
+    required this.isPartner,
   });
 
   @override
@@ -423,6 +438,19 @@ class _BinderSpreadState extends State<_BinderSpread> {
     if (_selectedIndex == index) {
       _tapCount++;
       if (_tapCount == 2) {
+        final envelope = widget.envelopes[_selectedIndex!];
+        // Prevent access to partner's envelopes
+        if (envelope.userId != widget.repo.currentUserId) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("You cannot view details of your partner's envelopes"),
+            ),
+          );
+          setState(() {
+            _tapCount = 0;
+          });
+          return;
+        }
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -726,6 +754,22 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         // Action Buttons
                         Column(
                           children: [
+                            if (widget.isPartner)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    widget.group.userId,
+                                    widget.repo.currentUserId,
+                                  ),
+                                  builder: (context, nameSnapshot) {
+                                    return PartnerBadge(
+                                      partnerName: nameSnapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                ),
+                              ),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(

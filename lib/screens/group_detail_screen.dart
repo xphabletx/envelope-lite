@@ -126,12 +126,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     elevation: 0,
                     flexibleSpace: FlexibleSpaceBar(
                       titlePadding: const EdgeInsets.only(left: 60, bottom: 16),
-                      title: Text(
-                        widget.group.name,
-                        style: fontProvider.getTextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      title: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          widget.group.name,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       background: Container(
@@ -332,6 +336,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             onTap: isMulti
                                 ? () => _toggle(e.id)
                                 : () {
+                                    // Prevent access to partner's envelopes
+                                    if (e.userId != widget.envelopeRepo.currentUserId) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text("You cannot view details of your partner's envelopes"),
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(

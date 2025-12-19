@@ -213,7 +213,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(),
+      builder: (_) => OmniIconPickerModal(
+        initialQuery: _nameCtrl.text.trim(), // Pre-populate with binder name
+      ),
     );
 
     if (result != null) {
@@ -381,97 +383,68 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                // Binder Color Selection (moved to top)
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    InkWell(
-                                      onTap: pickEmoji,
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Container(
-                                        width: 70,
-                                        height: 70,
-                                        decoration: BoxDecoration(
-                                          color: bgTint,
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: groupIdentityColor,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: _buildIconDisplay(theme),
-                                        ),
+                                    Text(
+                                      tr('group_binder_color'),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            tr('group_binder_color'),
-                                            style: fontProvider.getTextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: availableColors
+                                          .asMap()
+                                          .entries
+                                          .map((entry) {
+                                        final index = entry.key;
+                                        final colorOption = entry.value;
+                                        final isSelected =
+                                            selectedColorIndex == index;
+                                        return GestureDetector(
+                                          onTap: () => setState(
+                                            () => selectedColorIndex = index,
+                                          ),
+                                          child: Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: colorOption.binderColor,
+                                              shape: BoxShape.circle,
+                                              border: isSelected
+                                                  ? Border.all(
+                                                      color: Colors.black,
+                                                      width: 3,
+                                                    )
+                                                  : Border.all(
+                                                      color:
+                                                          Colors.grey.shade300,
+                                                    ),
                                             ),
+                                            child: isSelected
+                                                ? Icon(
+                                                    Icons.check,
+                                                    color: buttonTextColor,
+                                                    size: 20,
+                                                  )
+                                                : null,
                                           ),
-                                          const SizedBox(height: 8),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: availableColors
-                                                .asMap()
-                                                .entries
-                                                .map((entry) {
-                                              final index = entry.key;
-                                              final colorOption = entry.value;
-                                              final isSelected =
-                                                  selectedColorIndex == index;
-                                              return GestureDetector(
-                                                onTap: () => setState(
-                                                  () =>
-                                                      selectedColorIndex = index,
-                                                ),
-                                                child: Container(
-                                                  width: 36,
-                                                  height: 36,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        colorOption.binderColor,
-                                                    shape: BoxShape.circle,
-                                                    border: isSelected
-                                                        ? Border.all(
-                                                            color: Colors.black,
-                                                            width: 3,
-                                                          )
-                                                        : Border.all(
-                                                            color: Colors.grey
-                                                                .shade300,
-                                                          ),
-                                                  ),
-                                                  child: isSelected
-                                                      ? Icon(
-                                                          Icons.check,
-                                                          color:
-                                                              buttonTextColor,
-                                                          size: 20,
-                                                        )
-                                                      : null,
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ],
-                                      ),
+                                        );
+                                      }).toList(),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 20),
+                                // Binder Name Field
                                 TextFormField(
                                   controller: _nameCtrl,
                                   textCapitalization: TextCapitalization.words,
+                                  autofocus: true,
                                   decoration: InputDecoration(
                                     labelText: tr('group_binder_name_label'),
                                     labelStyle: fontProvider.getTextStyle(
@@ -491,18 +464,57 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                       : null,
                                 ),
                                 const SizedBox(height: 16),
+                                // Icon picker
+                                InkWell(
+                                  onTap: pickEmoji,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.emoji_emotions),
+                                        const SizedBox(width: 16),
+                                        Text(
+                                          tr('Icon'),
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: 18,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (selectedIconType != null &&
+                                            selectedIconValue != null)
+                                          SizedBox(
+                                            width: 32,
+                                            height: 32,
+                                            child: _buildIconDisplay(theme),
+                                          )
+                                        else
+                                          const Icon(
+                                            Icons.add_photo_alternate_outlined,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: payDayEnabled
                                         ? theme.colorScheme.secondary
                                             .withAlpha((255 * 0.1).round())
-                                        : Colors.grey.shade100,
+                                        : theme.colorScheme.surface,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: payDayEnabled
                                           ? theme.colorScheme.secondary
-                                          : Colors.grey.shade300,
+                                          : theme.colorScheme.outline,
                                       width: 2,
                                     ),
                                   ),
@@ -512,7 +524,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                         Icons.monetization_on,
                                         color: payDayEnabled
                                             ? theme.colorScheme.secondary
-                                            : Colors.grey.shade600,
+                                            : theme.colorScheme.onSurface
+                                                .withAlpha((255 * 0.6).round()),
                                         size: 28,
                                       ),
                                       const SizedBox(width: 12),
@@ -529,14 +542,15 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 color: payDayEnabled
                                                     ? theme
                                                         .colorScheme.secondary
-                                                    : Colors.black,
+                                                    : theme.colorScheme.onSurface,
                                               ),
                                             ),
                                             Text(
                                               tr('group_pay_day_hint'),
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: Colors.grey.shade600,
+                                                color: theme.colorScheme.onSurface
+                                                    .withAlpha((255 * 0.6).round()),
                                               ),
                                             ),
                                           ],
@@ -619,7 +633,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 );
                                 final borderColor = isSelected
                                     ? groupIdentityColor
-                                    : Colors.grey.shade300;
+                                    : theme.colorScheme.outline;
 
                                 return Padding(
                                   key: ValueKey(e.id),
@@ -631,7 +645,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     decoration: BoxDecoration(
                                       color: isSelected
                                           ? bgTint
-                                          : Colors.white,
+                                          : theme.colorScheme.surface,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: borderColor,
@@ -667,7 +681,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                     ? ThemeData.estimateBrightnessForColor(bgTint) == Brightness.dark
                                                         ? Colors.white
                                                         : Colors.black
-                                                    : Colors.black,
+                                                    : theme.colorScheme.onSurface,
                                               ),
                                             ),
                                           ),

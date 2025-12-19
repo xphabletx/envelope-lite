@@ -358,13 +358,17 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                   key: _welcomeKey, // TUTORIAL KEY
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Pay Day Preview',
-                      // UPDATED: FontProvider
-                      style: fontProvider.getTextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Pay Day Preview',
+                        // UPDATED: FontProvider
+                        style: fontProvider.getTextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ),
                     Text(

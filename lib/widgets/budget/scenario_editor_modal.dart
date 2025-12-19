@@ -408,12 +408,14 @@ class _ScenarioEditorModalState extends State<ScenarioEditorModal> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Scenario Editor',
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
+        title: FittedBox(
+          child: Text(
+            'Scenario Editor',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
           ),
         ),
       ),

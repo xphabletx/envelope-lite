@@ -7,8 +7,10 @@ import 'package:provider/provider.dart'; // NEW IMPORT
 import '../models/envelope.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
+import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 import '../utils/calculator_helper.dart';
+import '../widgets/partner_badge.dart';
 
 class QuickActionModal extends StatefulWidget {
   const QuickActionModal({
@@ -251,14 +253,42 @@ class _QuickActionModalState extends State<QuickActionModal> {
               items: widget.allEnvelopes
                   .where((e) => e.id != widget.envelope.id)
                   .map(
-                    (e) => DropdownMenuItem(
-                      value: e.id,
-                      child: Text(
-                        e.name,
-                        // UPDATED: FontProvider
-                        style: fontProvider.getTextStyle(fontSize: 16),
-                      ),
-                    ),
+                    (e) {
+                      final isPartner = e.userId != widget.repo.currentUserId;
+                      return DropdownMenuItem(
+                        value: e.id,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            e.getIconWidget(Theme.of(context), size: 20),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                e.name,
+                                overflow: TextOverflow.ellipsis,
+                                // UPDATED: FontProvider
+                                style: fontProvider.getTextStyle(fontSize: 16),
+                              ),
+                            ),
+                            if (isPartner) ...[
+                              const SizedBox(width: 8),
+                              FutureBuilder<String>(
+                                future: WorkspaceHelper.getUserDisplayName(
+                                  e.userId,
+                                  widget.repo.currentUserId,
+                                ),
+                                builder: (context, snapshot) {
+                                  return PartnerBadge(
+                                    partnerName: snapshot.data ?? 'Partner',
+                                    size: PartnerBadgeSize.small,
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
                   )
                   .toList(),
               onChanged: (v) => setState(() => _selectedTargetId = v),

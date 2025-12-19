@@ -130,7 +130,7 @@ class LocalizationService {
     'calendar_no_payments_month': 'No payments in this month',
 
     // --- SETTINGS ---
-    'settings_appearance': 'Appearance',
+    'settings_appearance': 'Appearance Settings',
     'appearance_theme': 'Theme',
     'appearance_font': 'Font',
     'appearance_celebration': 'Celebration',
@@ -159,7 +159,7 @@ class LocalizationService {
     'workspace_no_members': 'No members yet',
     'workspace_tab_sharing': 'Sharing',
     'workspace_tab_members': 'Members',
-    'workspace_tab_workspace': 'Workspace',
+    'workspace_tab_workspace': 'Settings',
     'workspace_my_envelopes': 'My Envelopes',
     'workspace_my_binders': 'My Binders',
     'workspace_visible_to_partner': 'Visible to partner',
@@ -185,6 +185,7 @@ class LocalizationService {
     'workspace_about_title': 'About',
     'workspace_about_content':
         'Workspaces allow you to share envelopes and budgets with a partner.',
+    'workspace_management': 'Workspace',
 
     // --- ERRORS & MESSAGES ---
     'error_generic': 'Error',

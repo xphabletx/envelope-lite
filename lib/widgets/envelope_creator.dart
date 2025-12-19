@@ -161,7 +161,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(),
+      builder: (_) => OmniIconPickerModal(
+        initialQuery: _nameCtrl.text.trim(), // Pre-populate with envelope name
+      ),
     );
 
     if (result != null) {
@@ -321,12 +323,18 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(width: 16),
-            Text(
-              tr('envelope_new'),
-              style: fontProvider.getTextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  tr('envelope_new'),
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
               ),
             ),
           ],

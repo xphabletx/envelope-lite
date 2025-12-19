@@ -37,12 +37,14 @@ class BudgetScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
-        title: Text(
-          'Budget',
-          style: fontProvider.getTextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
+        title: FittedBox(
+          child: Text(
+            'Budget',
+            style: fontProvider.getTextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
           ),
         ),
         // ACTIONS REMOVED: Wallet icon has been moved to HomeScreen
