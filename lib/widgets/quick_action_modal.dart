@@ -189,14 +189,26 @@ class _QuickActionModalState extends State<QuickActionModal> {
                 child: Icon(icon, color: color),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                // UPDATED: FontProvider
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    // UPDATED: FontProvider
+                    style: fontProvider.getTextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  Text(
+                    'Balance: ${NumberFormat.currency(symbol: '£').format(widget.envelope.currentAmount)}',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface.withAlpha(179),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -19,7 +19,7 @@ import '../services/group_repo.dart';
 import '../services/account_repo.dart';
 
 import '../screens/appearance_settings_screen.dart';
-import '../screens/workspace_settings_screen.dart';
+import '../screens/workspace_management_screen.dart';
 import '../screens/workspace_gate.dart';
 import '../services/scheduled_payment_repo.dart';
 
@@ -169,21 +169,23 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Workspace',
                 icon: Icons.groups_outlined,
                 children: [
-                  if (repo.inWorkspace) ...[
+                  if (repo.workspaceId != null) ...[
                     _SettingsTile(
-                      title: 'Workspace Settings',
-                      subtitle: 'Manage sharing, members & workspace',
+                      title: 'Manage Workspace',
+                      subtitle: 'Members, join code & settings',
                       leading: const Icon(Icons.settings_outlined),
                       onTap: () {
                         final wsId = repo.workspaceId;
                         if (wsId == null) return;
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => WorkspaceSettingsScreen(
+                            builder: (_) => WorkspaceManagementScreen(
                               repo: repo,
                               workspaceId: wsId,
                               currentUserId: repo.currentUserId,
                               onWorkspaceLeft: () {
+                                // The app needs to restart to pick up the workspace change
+                                // For now just pop back
                                 Navigator.of(context).pop();
                               },
                             ),
@@ -201,6 +203,7 @@ class SettingsScreen extends StatelessWidget {
                         await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => WorkspaceGate(
+                              repo: repo,
                               onJoined: (workspaceId) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(

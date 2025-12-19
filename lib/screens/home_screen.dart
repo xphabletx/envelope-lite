@@ -401,25 +401,7 @@ class _AllEnvelopesFAB extends StatelessWidget {
       openCloseDial: isSpeedDialOpen,
       onOpen: () {},
       children: isMulti
-          ? [
-              sdChild(
-                context: context,
-                icon: Icons.delete_forever,
-                label: '${tr('delete')} (${selected.length})',
-                onTap: () async {
-                  await repo.deleteEnvelopes(selected);
-                  allEnvelopesState?.clearSelection();
-                },
-              ),
-              sdChild(
-                context: context,
-                icon: Icons.cancel,
-                label: tr('cancel_selection'),
-                onTap: () {
-                  allEnvelopesState?.clearSelection();
-                },
-              ),
-            ]
+          ? []
           : [
               sdChild(
                 context: context,
@@ -459,7 +441,7 @@ class _AllEnvelopesFAB extends StatelessWidget {
               sdChild(
                 context: context,
                 icon: Icons.edit_note,
-                label: tr('multi_select_mode'),
+                label: 'Delete Envelopes',
                 onTap: () {
                   allEnvelopesState?.enableMultiSelect();
                 },
@@ -495,6 +477,49 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
     super.initState();
   }
 
+  void _showDeleteSnackBar() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${selected.length} envelopes selected'),
+        duration: const Duration(days: 1), // Keep it open
+        action: SnackBarAction(
+          label: 'DELETE',
+          textColor: Colors.red,
+          onPressed: _deleteSelected,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteSelected() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${selected.length} envelopes?'),
+        content: const Text(
+          'This will permanently delete the selected envelopes and all their transactions. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await widget.repo.deleteEnvelopes(selected);
+      clearSelection();
+    }
+  }
+
   void _toggle(String id) {
     setState(() {
       if (selected.contains(id)) {
@@ -503,15 +528,24 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
         selected.add(id);
       }
       isMulti = selected.isNotEmpty;
-      if (!isMulti) selected.clear();
+      if (!isMulti) {
+        clearSelection();
+      } else {
+        _showDeleteSnackBar();
+      }
     });
   }
 
   void enableMultiSelect() {
-    setState(() => isMulti = true);
+    setState(() {
+      isMulti = true;
+      // You can optionally show a snackbar here that says "Select envelopes to delete"
+      // but the user's action of long-pressing will immediately show the count.
+    });
   }
 
   void clearSelection() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       selected.clear();
       isMulti = false;

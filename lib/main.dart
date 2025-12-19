@@ -10,6 +10,8 @@ import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
 import 'providers/font_provider.dart';
 import 'providers/app_preferences_provider.dart';
+import 'providers/workspace_provider.dart';
+import 'providers/locale_provider.dart';
 import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
 import 'services/tutorial_controller.dart';
@@ -17,7 +19,7 @@ import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
 import 'screens/onboarding/onboarding_flow.dart';
 import 'models/user_profile.dart';
-import 'widgets/app_lifecycle_observer.dart'; // Add this import
+import 'widgets/app_lifecycle_observer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +27,7 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
+  final savedWorkspaceId = prefs.getString('selected_workspace_id');
 
   runApp(
     MultiProvider(
@@ -35,6 +38,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => FontProvider()),
         ChangeNotifierProvider(create: (_) => AppPreferencesProvider()),
         ChangeNotifierProvider(create: (_) => TutorialController()),
+        ChangeNotifierProvider(
+          create: (_) => WorkspaceProvider(initialWorkspaceId: savedWorkspaceId),
+        ),
+        ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ],
       child: const MyApp(),
     ),
@@ -148,6 +155,11 @@ class _AuthGateState extends State<AuthGate> {
                 context,
                 listen: false,
               ).initialize(userService);
+              // Initialize locale provider
+              Provider.of<LocaleProvider>(
+                context,
+                listen: false,
+              ).initialize(user.uid);
             }
 
             if (profile == null || !profile.hasCompletedOnboarding) {
@@ -168,15 +180,22 @@ class HomeScreenWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
-    final repo = EnvelopeRepo.firebase(
-      FirebaseFirestore.instance,
-      userId: user.uid,
+
+    // Listen to workspace changes and rebuild with a new repo
+    return Consumer<WorkspaceProvider>(
+      builder: (context, workspaceProvider, _) {
+        final repo = EnvelopeRepo.firebase(
+          FirebaseFirestore.instance,
+          userId: user.uid,
+          workspaceId: workspaceProvider.workspaceId,
+        );
+
+        final args = ModalRoute.of(context)?.settings.arguments;
+        final initialIndex = args is int ? args : 0;
+
+        return HomeScreen(repo: repo, initialIndex: initialIndex);
+      },
     );
-
-    final args = ModalRoute.of(context)?.settings.arguments;
-    final initialIndex = args is int ? args : 0;
-
-    return HomeScreen(repo: repo, initialIndex: initialIndex);
   }
 }
 

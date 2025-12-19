@@ -1,0 +1,775 @@
+// lib/screens/workspace_management_screen.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
+import '../services/workspace_helper.dart';
+import '../services/envelope_repo.dart';
+import '../services/localization_service.dart';
+import '../providers/font_provider.dart';
+import '../providers/workspace_provider.dart';
+import '../models/envelope.dart';
+import '../models/envelope_group.dart';
+import '../widgets/partner_badge.dart';
+
+class WorkspaceManagementScreen extends StatefulWidget {
+  const WorkspaceManagementScreen({
+    super.key,
+    required this.workspaceId,
+    required this.currentUserId,
+    required this.repo,
+    required this.onWorkspaceLeft,
+  });
+
+  final String workspaceId;
+  final String currentUserId;
+  final EnvelopeRepo repo;
+  final VoidCallback onWorkspaceLeft;
+
+  @override
+  State<WorkspaceManagementScreen> createState() =>
+      _WorkspaceManagementScreenState();
+}
+
+class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  bool _loading = true;
+  String _workspaceName = '';
+  String _joinCode = '';
+  List<WorkspaceMember> _members = [];
+  int _selectedNavIndex = 2; // Start on settings tab
+  bool _showPartnerOnly = false; // For "Mine only" toggle
+  bool _hideFutureEnvelopes = false;
+
+  @override
+  void initState() {
+    print('[WorkspaceManagementScreen] DEBUG: initState called.');
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    print('[WorkspaceManagementScreen] DEBUG: _loadData called.');
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('workspaces')
+          .doc(widget.workspaceId)
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        _workspaceName = data['displayName'] ?? data['name'] ?? '';
+        _joinCode = data['joinCode'] ?? '';
+        print('[WorkspaceManagementScreen] DEBUG: Workspace data loaded: name=$_workspaceName, joinCode=$_joinCode');
+      } else {
+        print('[WorkspaceManagementScreen] DEBUG: Workspace document does not exist.');
+      }
+
+      // Load hide future envelopes preference
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.currentUserId)
+          .get();
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        _hideFutureEnvelopes =
+            userData?['workspacePreferences']?['hideFutureEnvelopes'] ?? false;
+      }
+
+      final members = await _getMembers();
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading workspace data: $e');
+      print('[WorkspaceManagementScreen] DEBUG: Error in _loadData: $e');
+    }
+  }
+
+  Future<List<WorkspaceMember>> _getMembers() async {
+    try {
+      final workspaceDoc = await FirebaseFirestore.instance
+          .collection('workspaces')
+          .doc(widget.workspaceId)
+          .get();
+
+      if (!workspaceDoc.exists) return [];
+
+      final data = workspaceDoc.data();
+      final memberIds = ((data?['members'] as Map<String, dynamic>?) ?? {}).keys
+          .toList();
+
+      final List<WorkspaceMember> members = [];
+
+      for (final memberId in memberIds) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(memberId)
+            .get();
+        final userData = userDoc.data();
+        final displayName =
+            (userData?['displayName'] as String?) ?? tr('unknown_user');
+        final email = (userData?['email'] as String?) ?? '';
+        final nickname = await WorkspaceHelper.getUserDisplayName(
+          memberId,
+          widget.currentUserId,
+        );
+
+        members.add(
+          WorkspaceMember(
+            userId: memberId,
+            displayName: displayName,
+            email: email,
+            nickname: nickname != displayName ? nickname : null,
+            isCurrentUser: memberId == widget.currentUserId,
+          ),
+        );
+      }
+      return members;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _leaveWorkspace() async {
+    print('[WorkspaceManagementScreen] DEBUG: _leaveWorkspace called.');
+
+    // Get provider references before async operations
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          tr('workspace_leave_confirm'),
+          style: fontProvider.getTextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(tr('workspace_leave_warning')),
+        actions: [
+          TextButton(
+            onPressed: () {
+              print('[WorkspaceManagementScreen] DEBUG: User cancelled leaving workspace.');
+              Navigator.pop(context, false);
+            },
+            child: Text(tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              print('[WorkspaceManagementScreen] DEBUG: User confirmed leaving workspace.');
+              Navigator.pop(context, true);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(tr('workspace_leave_button')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      print('[WorkspaceManagementScreen] DEBUG: Leave workspace cancelled.');
+      return;
+    }
+
+    print('[WorkspaceManagementScreen] DEBUG: Proceeding to leave workspace.');
+
+    try {
+      // Remove from workspace members
+      print('[WorkspaceManagementScreen] DEBUG: Removing user from workspace members in Firestore.');
+      await WorkspaceHelper.leaveWorkspace(
+        widget.workspaceId,
+        widget.currentUserId,
+      );
+      print('[WorkspaceManagementScreen] DEBUG: User removed from Firestore.');
+
+      // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
+      await workspaceProvider.setWorkspaceId(null);
+      print('[WorkspaceManagementScreen] DEBUG: Workspace cleared globally.');
+
+      if (!mounted) return;
+      print('[WorkspaceManagementScreen] DEBUG: Workspace left successfully. Navigating back to home.');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('workspace_left_success'))));
+
+      // Pop back to home - it will rebuild without workspace
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      print('[WorkspaceManagementScreen] DEBUG: Error leaving workspace: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${tr('error_generic')}: $e')));
+    }
+  }
+
+  Future<void> _editNickname(WorkspaceMember member) async {
+    final nicknameCtrl = TextEditingController(text: member.nickname ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Nickname'),
+        content: TextField(controller: nicknameCtrl),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, nicknameCtrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.currentUserId)
+          .set({
+            'nicknames': {
+              member.userId: result.isEmpty ? FieldValue.delete() : result,
+            },
+          }, SetOptions(merge: true));
+      _loadData(); // reload
+    }
+  }
+
+  void _onNavTapped(int index) {
+    if (index == _selectedNavIndex) return;
+
+    if (index == 2) {
+      // Already on settings, do nothing
+      return;
+    }
+
+    // Navigate back to home with the correct tab
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    // TODO: You may need to pass the index to home screen to switch tabs
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(tr('workspace_management')), elevation: 0),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          tr('workspace_management'),
+          style: fontProvider.getTextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: theme.colorScheme.primary,
+          tabs: [
+            Tab(text: tr('workspace_tab_sharing')),
+            Tab(text: tr('workspace_tab_members')),
+            Tab(text: tr('workspace_tab_workspace')),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // JOIN CODE HEADER
+          if (_joinCode.isNotEmpty)
+            Container(
+              width: double.infinity,
+              color: theme.colorScheme.primary.withValues(alpha:0.1),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Join Code: ",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  SelectableText(
+                    _joinCode,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 20),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _joinCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Code copied!')),
+                      );
+                    },
+                    tooltip: 'Copy Code',
+                  ),
+                ],
+              ),
+            ),
+
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildSharingTab(),
+                _buildMembersTab(),
+                _buildWorkspaceTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        selectedItemColor: theme.colorScheme.primary,
+        unselectedItemColor: Colors.grey.shade600,
+        elevation: 8,
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: fontProvider.getTextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+        unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+        items: [
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.mail_outline),
+            activeIcon: const Icon(Icons.mail),
+            label: tr('home_envelopes_tab'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.folder_open_outlined),
+            activeIcon: const Icon(Icons.folder_copy),
+            label: tr('home_binders_tab'),
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.settings_outlined),
+            activeIcon: const Icon(Icons.settings),
+            label: 'Settings',
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.calendar_today_outlined),
+            activeIcon: const Icon(Icons.calendar_today),
+            label: tr('home_calendar_tab'),
+          ),
+        ],
+        currentIndex: _selectedNavIndex,
+        onTap: _onNavTapped,
+      ),
+    );
+  }
+
+  Widget _buildSharingTab() {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    return Column(
+      children: [
+        // Filter bar with "Mine only" toggle
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Manage Sharing',
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Mine only',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      Switch(
+                        value: !_showPartnerOnly,
+                        activeTrackColor: theme.colorScheme.secondary,
+                        onChanged: (val) => setState(() => _showPartnerOnly = !val),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Hide future envelopes toggle
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: SwitchListTile(
+            title: Text(
+              tr('workspace_hide_future'),
+              style: fontProvider.getTextStyle(fontSize: 16),
+            ),
+            subtitle: Text(
+              'New envelopes will be private by default',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            value: _hideFutureEnvelopes,
+            onChanged: (val) async {
+              setState(() => _hideFutureEnvelopes = val);
+              await FirebaseFirestore.instance.collection('users').doc(widget.currentUserId).set({
+                'workspacePreferences': {'hideFutureEnvelopes': val},
+              }, SetOptions(merge: true));
+            },
+            activeTrackColor: theme.colorScheme.primary,
+          ),
+        ),
+        const Divider(),
+
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Text(
+                tr('workspace_my_envelopes'),
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              StreamBuilder<List<Envelope>>(
+                stream: widget.repo.envelopesStream(showPartnerEnvelopes: true),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  var envelopes = snapshot.data!;
+
+                  // Filter based on "Mine only" toggle
+                  if (!_showPartnerOnly) {
+                    envelopes = envelopes
+                        .where((env) => env.userId == widget.currentUserId)
+                        .toList();
+                  }
+
+                  if (envelopes.isEmpty) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Center(child: Text(tr('home_no_envelopes'))),
+                      ),
+                    );
+                  }
+                  return Card(
+                    child: Column(
+                      children: envelopes.map((env) {
+                        final isPartner = env.userId != widget.currentUserId;
+                        return CheckboxListTile(
+                          value: env.isShared,
+                          enabled: !isPartner, // Can't toggle partner's envelopes
+                          onChanged: isPartner ? null : (value) async {
+                            print('[WorkspaceManagementScreen] DEBUG: Toggled sharing for envelope ${env.id} to $value');
+                            await widget.repo.updateEnvelope(
+                              envelopeId: env.id,
+                              isShared: value ?? true,
+                            );
+                          },
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  env.name,
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (isPartner)
+                                FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    env.userId,
+                                    widget.currentUserId,
+                                  ),
+                                  builder: (context, snapshot) {
+                                    return PartnerBadge(
+                                      partnerName: snapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            isPartner
+                                ? "Partner's envelope (read-only)"
+                                : (env.isShared
+                                    ? tr('workspace_visible_to_partner')
+                                    : tr('workspace_hidden_from_partner')),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isPartner
+                                  ? Colors.blue
+                                  : (env.isShared ? Colors.green : Colors.grey),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 32),
+              Text(
+                tr('workspace_my_binders'),
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              StreamBuilder<List<EnvelopeGroup>>(
+                stream: widget.repo.groupsStream,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  var groups = snapshot.data!;
+
+                  // Filter based on "Mine only" toggle
+                  if (!_showPartnerOnly) {
+                    groups = groups
+                        .where((g) => g.userId == widget.currentUserId)
+                        .toList();
+                  }
+
+                  if (groups.isEmpty) {
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Center(child: Text(tr('group_no_binders'))),
+                      ),
+                    );
+                  }
+                  return Card(
+                    child: Column(
+                      children: groups.map((group) {
+                        final isPartner = group.userId != widget.currentUserId;
+                        return CheckboxListTile(
+                          value: group.isShared,
+                          enabled: !isPartner,
+                          onChanged: isPartner ? null : (value) async {
+                            print('[WorkspaceManagementScreen] DEBUG: Toggled sharing for group ${group.id} to $value');
+                            await FirebaseFirestore.instance
+                                .collection('workspaces')
+                                .doc(widget.workspaceId)
+                                .collection('groups')
+                                .doc(group.id)
+                                .update({'isShared': value ?? true});
+                          },
+                          title: Row(
+                            children: [
+                              Text(
+                                group.emoji ?? '📁',
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  group.name,
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              if (isPartner)
+                                FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    group.userId,
+                                    widget.currentUserId,
+                                  ),
+                                  builder: (context, snapshot) {
+                                    return PartnerBadge(
+                                      partnerName: snapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            isPartner
+                                ? "Partner's binder (read-only)"
+                                : (group.isShared
+                                    ? tr('workspace_visible_to_partner')
+                                    : tr('workspace_hidden_from_partner')),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isPartner
+                                  ? Colors.blue
+                                  : (group.isShared ? Colors.green : Colors.grey),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMembersTab() {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        ..._members.map((member) {
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Text(
+                  member.displayName.isNotEmpty ? member.displayName[0] : '?',
+                ),
+              ),
+              title: Text(
+                member.nickname ?? member.displayName,
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: member.isCurrentUser
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+              subtitle: Text(member.email),
+              trailing: member.isCurrentUser
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _editNickname(member),
+                    ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildWorkspaceTab() {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.edit),
+            title: Text(
+              'Rename Workspace',
+              style: fontProvider.getTextStyle(fontSize: 20),
+            ),
+            subtitle: Text(_workspaceName),
+            onTap: () async {
+              final ctrl = TextEditingController(text: _workspaceName);
+              final newName = await showDialog<String>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Rename Workspace"),
+                  content: TextField(controller: ctrl),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text("Cancel"),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, ctrl.text),
+                      child: const Text("Save"),
+                    ),
+                  ],
+                ),
+              );
+
+              if (newName != null && newName.isNotEmpty) {
+                await FirebaseFirestore.instance
+                    .collection('workspaces')
+                    .doc(widget.workspaceId)
+                    .update({'displayName': newName});
+                setState(() => _workspaceName = newName);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          color: Colors.red.shade50,
+          child: ListTile(
+            leading: const Icon(Icons.exit_to_app, color: Colors.red),
+            title: const Text(
+              'Leave Workspace',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            onTap: _leaveWorkspace,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class WorkspaceMember {
+  final String userId;
+  final String displayName;
+  final String email;
+  final String? nickname;
+  final bool isCurrentUser;
+
+  WorkspaceMember({
+    required this.userId,
+    required this.displayName,
+    required this.email,
+    this.nickname,
+    required this.isCurrentUser,
+  });
+}

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../../../services/envelope_repo.dart';
 import '../../../../../widgets/calculator_widget.dart';
+import '../../../../../providers/font_provider.dart';
+import '../../../../../services/localization_service.dart';
 
 class DepositModal extends StatefulWidget {
   const DepositModal({
@@ -111,6 +113,7 @@ class _DepositModalState extends State<DepositModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
       padding: EdgeInsets.only(
@@ -145,7 +148,7 @@ class _DepositModalState extends State<DepositModal> {
                       children: [
                         Text(
                           'Add Money',
-                          style: GoogleFonts.caveat(
+                          style: fontProvider.getTextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.primary,
@@ -175,7 +178,7 @@ class _DepositModalState extends State<DepositModal> {
                 controller: _amountController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Amount',
+                  labelText: tr('amount'),
                   prefixText: '£',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -196,7 +199,7 @@ class _DepositModalState extends State<DepositModal> {
                 controller: _descriptionController,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
-                  labelText: 'Description (optional)',
+                  labelText: tr('description_optional'),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -262,7 +265,7 @@ class _DepositModalState extends State<DepositModal> {
                       )
                     : Text(
                         'Add Money',
-                        style: GoogleFonts.caveat(
+                        style: fontProvider.getTextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),

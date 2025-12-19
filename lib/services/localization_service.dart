@@ -84,6 +84,9 @@ class LocalizationService {
     'action_add_money': 'Add Money',
     'action_take_money': 'Take Money',
     'action_move_money': 'Move Money',
+    'description_optional': 'Description (optional)',
+    'transfer_to_envelope': 'Transfer to Envelope',
+    'amount': 'Amount',
 
     // --- GROUPS ---
     'group_new': 'New Group',

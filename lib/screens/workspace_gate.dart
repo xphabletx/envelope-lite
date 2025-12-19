@@ -7,9 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../services/localization_service.dart';
 import '../services/envelope_repo.dart';
-import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart';
-import 'workspace_settings_screen.dart';
+import '../providers/workspace_provider.dart';
+import 'workspace_management_screen.dart';
 
 class WorkspaceGate extends StatefulWidget {
   const WorkspaceGate({
@@ -40,15 +40,15 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
           mode: WorkspaceSharingMode.create,
           repo: widget.repo,
           onComplete: (workspaceId) async {
-            // CRITICAL FIX: Set workspace on repo AND SharedPreferences
-            final repo = widget.repo;
-            if (repo != null) {
-              await repo.setWorkspace(workspaceId);
-              await WorkspaceHelper.setActiveWorkspaceId(workspaceId);
-            }
+            // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
+            final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+            await workspaceProvider.setWorkspaceId(workspaceId);
 
             widget.onJoined(workspaceId);
-            if (mounted) _navigateToSettings(workspaceId);
+            if (mounted) {
+              // Navigate to workspace management screen
+              _navigateToManagementScreen(workspaceId);
+            }
           },
         ),
       ),
@@ -68,41 +68,42 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
           joinCode: code,
           repo: widget.repo,
           onComplete: (workspaceId) async {
-            // CRITICAL FIX: Set workspace on repo AND SharedPreferences
-            final repo = widget.repo;
-            if (repo != null) {
-              await repo.setWorkspace(workspaceId);
-              await WorkspaceHelper.setActiveWorkspaceId(workspaceId);
-            }
+            // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
+            final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+            await workspaceProvider.setWorkspaceId(workspaceId);
 
             widget.onJoined(workspaceId);
-            if (mounted) _navigateToSettings(workspaceId);
+            if (mounted) {
+              // Navigate to workspace management screen
+              _navigateToManagementScreen(workspaceId);
+            }
           },
         ),
       ),
     );
   }
 
-  void _navigateToSettings(String workspaceId) {
-    print('[WorkspaceGate] DEBUG: Navigating to WorkspaceSettingsScreen with workspaceId: $workspaceId');
+  void _navigateToManagementScreen(String workspaceId) {
+    print('[WorkspaceGate] DEBUG: Navigating to WorkspaceManagementScreen with workspaceId: $workspaceId');
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final repo =
-        widget.repo ??
+    final repo = widget.repo ??
         EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
           userId: currentUserId,
-          workspaceId: workspaceId, // Pass workspace ID here
+          workspaceId: workspaceId,
         );
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => WorkspaceSettingsScreen(
+        builder: (_) => WorkspaceManagementScreen(
           workspaceId: workspaceId,
           currentUserId: currentUserId,
           repo: repo,
-          onWorkspaceLeft: () => Navigator.pop(context),
-          showJoinCodeInitially: true,
+          onWorkspaceLeft: () {
+            // After leaving workspace, go back to home
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
         ),
       ),
     );

@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'workspace_helper.dart';
 
 class AccountSecurityService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -138,6 +140,34 @@ class AccountSecurityService {
   }
 
   Future<void> _performGDPRCascade(String userId) async {
+    // CRITICAL: Get user's workspace memberships BEFORE deleting user doc
+    final userDoc = await _firestore.doc('users/$userId').get();
+    String? workspaceId;
+
+    if (userDoc.exists) {
+      final userData = userDoc.data() as Map<String, dynamic>?;
+      // Check for active workspace
+      workspaceId = userData?['activeWorkspaceId'] as String?;
+    }
+
+    // If user is in a workspace, remove them from workspace members
+    if (workspaceId != null) {
+      try {
+        await WorkspaceHelper.leaveWorkspace(workspaceId, userId);
+        print('[AccountSecurityService] Removed user from workspace: $workspaceId');
+      } catch (e) {
+        print('[AccountSecurityService] Error leaving workspace: $e');
+        // Continue with deletion even if workspace removal fails
+      }
+    }
+
+    // Clear workspace from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('active_workspace_id');
+    await prefs.remove('last_workspace_id');
+    await prefs.remove('last_workspace_name');
+    print('[AccountSecurityService] Cleared workspace from SharedPreferences');
+
     final batch = _firestore.batch();
 
     // 1. Delete Envelopes

@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
@@ -122,6 +123,31 @@ class EnvelopeRepo {
 
   bool isMyEnvelope(Envelope envelope) => envelope.userId == _userId;
 
+  /// Auto-fix for stale workspace state
+  Future<void> _clearStaleWorkspace() async {
+    try {
+      print('[EnvelopeRepo] Clearing stale workspace $_workspaceId for user $_userId');
+
+      // Clear from user's profile
+      await _db.collection('users').doc(_userId).set({
+        'activeWorkspaceId': null,
+      }, fs.SetOptions(merge: true));
+
+      // Clear from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_workspace_id');
+      await prefs.remove('last_workspace_id');
+      await prefs.remove('last_workspace_name');
+
+      // Update local state
+      _workspaceId = null;
+
+      print('[EnvelopeRepo] Stale workspace cleared successfully');
+    } catch (e) {
+      print('[EnvelopeRepo] Error clearing stale workspace: $e');
+    }
+  }
+
   /// Stream registry entries (for transfer pickers, etc.)
   Stream<List<Map<String, dynamic>>> get workspaceRegistryStream {
     if (!inWorkspace) {
@@ -151,6 +177,14 @@ class EnvelopeRepo {
         final workspaceData = workspaceSnap.data();
         final members =
             (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+        // CRITICAL: Check if current user is still a member
+        if (!members.containsKey(_userId)) {
+          print('[EnvelopeRepo] User $_userId is not a member of workspace $_workspaceId. Returning empty list.');
+          // Auto-fix: Clear the stale workspace ID
+          _clearStaleWorkspace();
+          return Stream.value(<Envelope>[]);
+        }
 
         if (members.isEmpty) return Stream.value(<Envelope>[]);
 
@@ -186,20 +220,35 @@ class EnvelopeRepo {
       envelopesStream(showPartnerEnvelopes: true);
 
   Stream<List<EnvelopeGroup>> get groupsStream {
-    fs.Query<Map<String, dynamic>> query;
-
-    if (inWorkspace) {
-      query = _db
-          .collection('workspaces')
-          .doc(_workspaceId)
-          .collection('groups')
-          .orderBy('createdAt', descending: false);
-    } else {
-      query = _colGroups().orderBy('createdAt', descending: false);
+    if (!inWorkspace) {
+      return _colGroups()
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .map((s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList());
     }
 
-    return query.snapshots().map(
-      (s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList(),
+    // For workspace mode, verify membership first
+    return _db.collection('workspaces').doc(_workspaceId).snapshots().switchMap(
+      (workspaceSnap) {
+        if (!workspaceSnap.exists) return Stream.value(<EnvelopeGroup>[]);
+
+        final workspaceData = workspaceSnap.data();
+        final members = (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+        // CRITICAL: Check if current user is still a member
+        if (!members.containsKey(_userId)) {
+          print('[EnvelopeRepo] User $_userId is not a member of workspace $_workspaceId (groups). Returning empty list.');
+          return Stream.value(<EnvelopeGroup>[]);
+        }
+
+        return _db
+            .collection('workspaces')
+            .doc(_workspaceId)
+            .collection('groups')
+            .orderBy('createdAt', descending: false)
+            .snapshots()
+            .map((s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList());
+      },
     );
   }
 
@@ -226,6 +275,12 @@ class EnvelopeRepo {
       final workspaceData = workspaceSnap.data();
       final members =
           (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+      // CRITICAL: Check if current user is still a member
+      if (!members.containsKey(_userId)) {
+        print('[EnvelopeRepo] User $_userId is not a member of workspace $_workspaceId (transactions). Returning empty list.');
+        return <Transaction>[];
+      }
 
       if (members.isEmpty) return <Transaction>[];
 

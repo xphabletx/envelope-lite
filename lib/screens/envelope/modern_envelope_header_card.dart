@@ -478,6 +478,7 @@ class _InfoChip extends StatelessWidget {
                 style: TextStyle(
                   color: textColor.withValues(alpha: 0.7),
                   fontSize: 10,
+                  height: 1.2,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
