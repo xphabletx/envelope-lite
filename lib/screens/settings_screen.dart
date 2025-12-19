@@ -2,27 +2,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:provider/provider.dart'; // Needed for TutorialController
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../models/user_profile.dart';
-import '../models/envelope.dart';
-import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
 import '../services/user_service.dart';
-// NEW: Import the security service
 import '../services/account_security_service.dart';
-// TUTORIAL IMPORT - UPDATED
 import '../services/tutorial_controller.dart';
+import '../services/data_export_service.dart';
+import '../services/group_repo.dart';
+import '../services/account_repo.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_settings_screen.dart';
 import '../screens/workspace_gate.dart';
+import '../services/scheduled_payment_repo.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -64,6 +63,25 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Profile',
                 icon: Icons.person_outline,
                 children: [
+                  _SettingsTile(
+                    title: 'Profile Photo',
+                    subtitle: profile?.photoURL != null
+                        ? 'Tap to change'
+                        : 'Tap to add',
+                    leading: profile?.photoURL != null
+                        ? CircleAvatar(
+                            backgroundImage: NetworkImage(profile!.photoURL!),
+                            radius: 20,
+                          )
+                        : const Icon(Icons.add_a_photo_outlined),
+                    onTap: () async {
+                      await _showProfilePhotoOptions(
+                        context,
+                        userService,
+                        profile?.photoURL,
+                      );
+                    },
+                  ),
                   _SettingsTile(
                     title: 'Display Name',
                     subtitle: displayName,
@@ -208,9 +226,9 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: 'Export My Data',
-                    subtitle: 'Download your data as CSV',
+                    subtitle: 'Download your data as .xlsx',
                     leading: const Icon(Icons.file_download_outlined),
-                    onTap: () => _exportUserData(context),
+                    onTap: () => _exportDataNew(context),
                   ),
                 ],
               ),
@@ -346,7 +364,30 @@ class SettingsScreen extends StatelessWidget {
                       );
 
                       if (confirm == true && context.mounted) {
-                        await AuthService.signOut();
+                        // Show loading indicator
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+
+                        try {
+                          await AuthService.signOut();
+                          // Navigation will be handled by auth state listener
+                          // The loading dialog will be dismissed when the screen is popped
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context); // Dismiss loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Logout failed: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
                       }
                     },
                   ),
@@ -397,6 +438,223 @@ class SettingsScreen extends StatelessWidget {
 
   // --- Helpers ---
 
+  Future<void> _showProfilePhotoOptions(
+    BuildContext context,
+    UserService userService,
+    String? currentPhotoURL,
+  ) async {
+    final theme = Theme.of(context);
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withAlpha(128),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (currentPhotoURL != null)
+              ListTile(
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('View Photo'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showFullPhoto(context, currentPhotoURL);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _pickAndUploadPhoto(context, userService);
+              },
+            ),
+            if (currentPhotoURL != null)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                title: Text(
+                  'Remove Photo',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _removePhoto(context, userService);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFullPhoto(BuildContext context, String photoURL) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                photoURL,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    color: Colors.grey,
+                    child: const Icon(Icons.error, color: Colors.white),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto(
+    BuildContext context,
+    UserService userService,
+  ) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+
+    if (pickedFile == null) return;
+
+    if (!context.mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final imageFile = File(pickedFile.path);
+      final userId = userService.userId;
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_photos')
+          .child('$userId.jpg');
+
+      await storageRef.putFile(imageFile);
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      await userService.updateUserProfile(photoURL: downloadUrl);
+
+      if (context.mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo updated')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removePhoto(
+    BuildContext context,
+    UserService userService,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Photo?'),
+        content: const Text('Are you sure you want to remove your profile photo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    try {
+      await userService.updateUserProfile(photoURL: '');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo removed')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -404,7 +662,7 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _exportUserData(BuildContext context) async {
+  Future<void> _exportDataNew(BuildContext context) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -412,27 +670,25 @@ class SettingsScreen extends StatelessWidget {
     );
 
     try {
-      final envelopes = await repo.getAllEnvelopes();
-      final envelopesCsv = _generateEnvelopesCsv(envelopes);
-      final transactionsCsv = await _generateTransactionsCsv(envelopes, repo);
+      final groupRepo = GroupRepo(repo.db, repo);
+      final scheduledPaymentRepo = ScheduledPaymentRepo(repo.db, repo.currentUserId);
+      final accountRepo = AccountRepo(
+        repo.db,
+        repo,
+      ); // New: Instantiate AccountRepo
 
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-
-      final envelopesFile = File('${tempDir.path}/envelopes_$timestamp.csv');
-      final transactionsFile = File(
-        '${tempDir.path}/transactions_$timestamp.csv',
+      final dataExportService = DataExportService(
+        envelopeRepo: repo,
+        groupRepo: groupRepo,
+        scheduledPaymentRepo: scheduledPaymentRepo,
+        accountRepo: accountRepo, // New: Pass AccountRepo
       );
 
-      await envelopesFile.writeAsString(envelopesCsv);
-      await transactionsFile.writeAsString(transactionsCsv);
+      final filePath = await dataExportService.generateExcelFile();
 
       if (context.mounted) {
-        Navigator.of(context).pop();
-        await Share.shareXFiles([
-          XFile(envelopesFile.path),
-          XFile(transactionsFile.path),
-        ], subject: 'My Envelope Lite Data Export');
+        Navigator.of(context).pop(); // Dismiss the progress dialog
+        await DataExportService.showExportOptions(context, filePath);
       }
     } catch (e) {
       if (context.mounted) {
@@ -445,74 +701,6 @@ class SettingsScreen extends StatelessWidget {
         );
       }
     }
-  }
-
-  String _generateEnvelopesCsv(List<Envelope> envelopes) {
-    final buffer = StringBuffer();
-    buffer.writeln(
-      'Name,Current Amount,Target Amount,Auto-Fill Amount,Group,Is Shared',
-    );
-    for (var env in envelopes) {
-      buffer.writeln(
-        [
-          _escapeCsv(env.name),
-          env.currentAmount.toStringAsFixed(2),
-          (env.targetAmount ?? 0).toStringAsFixed(2),
-          (env.autoFillAmount ?? 0).toStringAsFixed(2),
-          _escapeCsv(env.groupId ?? 'None'),
-          env.isShared ? 'Yes' : 'No',
-        ].join(','),
-      );
-    }
-    return buffer.toString();
-  }
-
-  Future<String> _generateTransactionsCsv(
-    List<Envelope> envelopes,
-    EnvelopeRepo repo,
-  ) async {
-    final buffer = StringBuffer();
-    buffer.writeln('Date,Envelope,Type,Amount,Description,Source,Target');
-
-    for (var env in envelopes) {
-      final transactions = await repo.getTransactions(env.id);
-
-      for (var tx in transactions) {
-        String source = '';
-        String target = '';
-
-        if (tx.type == TransactionType.transfer) {
-          source = tx.sourceEnvelopeName ?? 'Unknown';
-          target = tx.targetEnvelopeName ?? 'Unknown';
-        } else if (tx.type == TransactionType.deposit) {
-          source = 'Income';
-          target = env.name;
-        } else if (tx.type == TransactionType.withdrawal) {
-          source = env.name;
-          target = 'Merchant/Expense';
-        }
-
-        buffer.writeln(
-          [
-            tx.date.toIso8601String(),
-            _escapeCsv(env.name),
-            tx.type.name,
-            tx.amount.toStringAsFixed(2),
-            _escapeCsv(tx.description),
-            _escapeCsv(source),
-            _escapeCsv(target),
-          ].join(','),
-        );
-      }
-    }
-    return buffer.toString();
-  }
-
-  String _escapeCsv(String value) {
-    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-      return '"${value.replaceAll('"', '""')}"';
-    }
-    return value;
   }
 }
 
@@ -556,8 +744,7 @@ class _SettingsSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                // FIXED: Modernize deprecation
-                color: Colors.black.withValues(alpha: 0.05),
+                color: Colors.black.withAlpha(13),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -618,10 +805,7 @@ class _SettingsTile extends StatelessWidget {
       trailing: trailing != null
           ? IconTheme(
               data: IconThemeData(
-                // FIXED: Modernize deprecation
-                color: theme.colorScheme.onSurfaceVariant.withValues(
-                  alpha: 0.5,
-                ),
+                color: theme.colorScheme.onSurfaceVariant.withAlpha(128),
               ),
               child: trailing!,
             )

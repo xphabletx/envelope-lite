@@ -17,6 +17,7 @@ import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
 import 'screens/onboarding/onboarding_flow.dart';
 import 'models/user_profile.dart';
+import 'widgets/app_lifecycle_observer.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,43 +51,70 @@ class MyApp extends StatelessWidget {
         final baseTheme = themeProvider.currentTheme;
         final fontTheme = fontProvider.getTextTheme();
 
-        return MaterialApp(
-          title: 'Envelope Lite',
-          debugShowCheckedModeBanner: false,
-          // Apply the dynamic font to the dynamic theme
-          theme: baseTheme.copyWith(
-            textTheme: fontTheme.apply(
-              bodyColor: baseTheme.colorScheme.onSurface,
-              displayColor: baseTheme.colorScheme.onSurface,
+        return AppLifecycleObserver(
+          // Wrap MaterialApp with AppLifecycleObserver
+          child: MaterialApp(
+            title: 'Envelope Lite',
+            debugShowCheckedModeBanner: false,
+            // Apply the dynamic font to the dynamic theme
+            theme: baseTheme.copyWith(
+              textTheme: fontTheme.apply(
+                bodyColor: baseTheme.colorScheme.onSurface,
+                displayColor: baseTheme.colorScheme.onSurface,
+              ),
             ),
+            // Global tap-to-dismiss keyboard behavior
+            builder: (context, child) {
+              return GestureDetector(
+                onTap: () {
+                  // Unfocus any active text field when tapping outside
+                  final currentFocus = FocusScope.of(context);
+                  if (!currentFocus.hasPrimaryFocus &&
+                      currentFocus.focusedChild != null) {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  }
+                },
+                child: child,
+              );
+            },
+            routes: {'/home': (context) => const HomeScreenWrapper()},
+            home: const AuthGate(),
           ),
-          // Global tap-to-dismiss keyboard behavior
-          builder: (context, child) {
-            return GestureDetector(
-              onTap: () {
-                // Unfocus any active text field when tapping outside
-                final currentFocus = FocusScope.of(context);
-                if (!currentFocus.hasPrimaryFocus &&
-                    currentFocus.focusedChild != null) {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                }
-              },
-              child: child,
-            );
-          },
-          routes: {'/home': (context) => const HomeScreenWrapper()},
-          home: const AuthGate(),
         );
       },
     );
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Hide splash after 3 seconds (1.5s fade in + 1.5s fade out)
+    Future.delayed(const Duration(milliseconds: 3000), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_showSplash) {
+      return const SplashScreen();
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -149,5 +177,71 @@ class HomeScreenWrapper extends StatelessWidget {
     final initialIndex = args is int ? args : 0;
 
     return HomeScreen(repo: repo, initialIndex: initialIndex);
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 3000),
+      vsync: this,
+    );
+
+    // Create fade in and fade out animation
+    _fadeAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 50.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 50.0,
+      ),
+    ]).animate(_controller);
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final imageSize = screenSize.width * 0.8; // 80% of screen width
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Image.asset(
+            'assets/logo/develapp_logo.png',
+            width: imageSize,
+            height: imageSize,
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
   }
 }

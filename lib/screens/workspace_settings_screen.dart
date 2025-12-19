@@ -42,6 +42,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
 
   @override
   void initState() {
+    print('[WorkspaceSettingsScreen] DEBUG: initState called.');
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadData();
@@ -54,6 +55,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
   }
 
   Future<void> _loadData() async {
+    print('[WorkspaceSettingsScreen] DEBUG: _loadData called.');
     try {
       final doc = await FirebaseFirestore.instance
           .collection('workspaces')
@@ -63,6 +65,9 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
         final data = doc.data()!;
         _workspaceName = data['displayName'] ?? data['name'] ?? '';
         _joinCode = data['joinCode'] ?? '';
+        print('[WorkspaceSettingsScreen] DEBUG: Workspace data loaded: name=$_workspaceName, joinCode=$_joinCode');
+      } else {
+        print('[WorkspaceSettingsScreen] DEBUG: Workspace document does not exist.');
       }
 
       final members = await _getMembers();
@@ -75,6 +80,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       }
     } catch (e) {
       debugPrint('Error loading workspace data: $e');
+      print('[WorkspaceSettingsScreen] DEBUG: Error in _loadData: $e');
     }
   }
 
@@ -124,6 +130,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
   }
 
   Future<void> _leaveWorkspace() async {
+    print('[WorkspaceSettingsScreen] DEBUG: _leaveWorkspace called.');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -138,11 +145,17 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
         content: Text(tr('workspace_leave_warning')),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              print('[WorkspaceSettingsScreen] DEBUG: User cancelled leaving workspace.');
+              Navigator.pop(context, false);
+            },
             child: Text(tr('cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              print('[WorkspaceSettingsScreen] DEBUG: User confirmed leaving workspace.');
+              Navigator.pop(context, true);
+            },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: Text(tr('workspace_leave_button')),
           ),
@@ -150,26 +163,36 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      print('[WorkspaceSettingsScreen] DEBUG: Leave workspace cancelled.');
+      return;
+    }
 
+    print('[WorkspaceSettingsScreen] DEBUG: Proceeding to leave workspace.');
     try {
       // Clear workspace from repo and SharedPreferences
+      print('[WorkspaceSettingsScreen] DEBUG: Clearing workspace from repo and SharedPreferences.');
       await widget.repo.setWorkspace(null);
       await WorkspaceHelper.setActiveWorkspaceId(null);
+      print('[WorkspaceSettingsScreen] DEBUG: Workspace cleared locally.');
 
       // Remove from workspace members
+      print('[WorkspaceSettingsScreen] DEBUG: Removing user from workspace members in Firestore.');
       await WorkspaceHelper.leaveWorkspace(
         widget.workspaceId,
         widget.currentUserId,
       );
+      print('[WorkspaceSettingsScreen] DEBUG: User removed from Firestore.');
 
       if (!mounted) return;
+      print('[WorkspaceSettingsScreen] DEBUG: Workspace left successfully. Navigating back.');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(tr('workspace_left_success'))));
       widget.onWorkspaceLeft();
       Navigator.of(context).pop();
     } catch (e) {
+      print('[WorkspaceSettingsScreen] DEBUG: Error leaving workspace: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -336,6 +359,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                   return CheckboxListTile(
                     value: env.isShared,
                     onChanged: (value) async {
+                      print('[WorkspaceSettingsScreen] DEBUG: Toggled sharing for envelope ${env.id} to $value');
                       await widget.repo.updateEnvelope(
                         envelopeId: env.id,
                         isShared: value ?? true,
@@ -396,6 +420,7 @@ class _WorkspaceSettingsScreenState extends State<WorkspaceSettingsScreen>
                   return CheckboxListTile(
                     value: group.isShared,
                     onChanged: (value) async {
+                      print('[WorkspaceSettingsScreen] DEBUG: Toggled sharing for group ${group.id} to $value');
                       await FirebaseFirestore.instance
                           .collection('workspaces')
                           .doc(widget.workspaceId)

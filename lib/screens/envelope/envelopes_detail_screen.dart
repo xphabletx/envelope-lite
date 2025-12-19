@@ -20,6 +20,8 @@ import '../../../services/localization_service.dart';
 import '../../../providers/font_provider.dart';
 import '../../utils/calculator_helper.dart';
 import 'modern_envelope_header_card.dart';
+import '../../providers/theme_provider.dart';
+import '../../theme/app_themes.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -292,7 +294,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+          color: theme.colorScheme.outline.withAlpha(51),
         ),
       ),
       child: Row(
@@ -321,9 +323,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       tr('envelope_return_current_month'),
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
-                        ),
+                        color: theme.colorScheme.onSurface.withAlpha(128),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -335,7 +335,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
+                ? theme.colorScheme.onSurface.withAlpha(77)
                 : theme.colorScheme.primary,
           ),
         ],
@@ -487,10 +487,10 @@ class _TargetStatusCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+        color: theme.colorScheme.secondaryContainer.withAlpha(128),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+          color: theme.colorScheme.secondary.withAlpha(77),
         ),
       ),
       child: Row(
@@ -512,9 +512,7 @@ class _TargetStatusCard extends StatelessWidget {
                   daysLeft > 0 ? '$daysLeft days remaining' : 'Target due',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSecondaryContainer.withValues(
-                      alpha: 0.8,
-                    ),
+                    color: theme.colorScheme.onSecondaryContainer.withAlpha(204),
                   ),
                 ),
               ],
@@ -532,25 +530,12 @@ class _BinderInfoRow extends StatelessWidget {
   final String binderId;
   final EnvelopeRepo repo;
 
-  // FIXED: Explicit color overrides to match groups_home_screen
-  Color _getDisplayColor(String colorName, ColorScheme theme) {
-    switch (colorName) {
-      case 'Black':
-        return const Color(0xFF212121);
-      case 'Brown':
-        return const Color(0xFF5D4037);
-      case 'Grey':
-        return const Color(0xFF757575);
-      default:
-        return GroupColors.getThemedColor(colorName, theme);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final groupRepo = GroupRepo(repo.db, repo);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return FutureBuilder<EnvelopeGroup?>(
       future: _getBinder(groupRepo),
@@ -558,12 +543,9 @@ class _BinderInfoRow extends StatelessWidget {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
         final binder = snapshot.data!;
-        // Use the color override logic from groups_home_screen
-        final binderColor = _getDisplayColor(
-          binder.colorName,
-          theme.colorScheme,
-        );
-        final binderBgColor = GroupColors.getEnvelopeCardColor(binderColor);
+        final binderColorOption =
+            ThemeBinderColors.getColorsForTheme(themeProvider.currentThemeId)[binder.colorIndex];
+        final binderColor = binderColorOption.binderColor;
 
         return InkWell(
           onTap: () async {
@@ -585,16 +567,16 @@ class _BinderInfoRow extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: binderBgColor.withValues(alpha: 0.15),
+              color: binderColor.withAlpha(38),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: binderColor.withValues(alpha: 0.4)),
+              border: Border.all(color: binderColor.withAlpha(102)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: binderBgColor.withValues(alpha: 0.3),
+                    color: binderColor.withAlpha(77),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.folder, size: 20, color: binderColor),
@@ -608,9 +590,7 @@ class _BinderInfoRow extends StatelessWidget {
                         tr('envelope_in_binder'),
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
+                          color: theme.colorScheme.onSurface.withAlpha(153),
                         ),
                       ),
                       const SizedBox(height: 2),

@@ -1,15 +1,18 @@
-// lib/widgets/group_editor.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/group_repo.dart';
 import '../services/envelope_repo.dart';
 import '../models/envelope_group.dart';
+import 'envelope/omni_icon_picker_modal.dart';
 import '../models/envelope.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
-import 'emoji_picker_sheet.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_themes.dart';
+import '../data/material_icons_database.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -57,7 +60,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   late bool isEdit;
   late Set<String> selectedEnvelopeIds;
   late String selectedEmoji;
-  late String selectedColor;
+  late String? selectedIconType;
+  late String? selectedIconValue;
+  late int? selectedIconColor;
+  late int selectedColorIndex;
   late bool payDayEnabled;
   late String? editingGroupId;
 
@@ -75,9 +81,12 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     _nameCtrl = TextEditingController(text: widget.group?.name ?? '');
     selectedEnvelopeIds = <String>{};
     selectedEmoji = widget.group?.emoji ?? '📁';
-    selectedColor = widget.group?.colorName ?? 'Primary';
+    selectedIconType = widget.group?.iconType;
+    selectedIconValue = widget.group?.iconValue;
+    selectedIconColor = widget.group?.iconColor;
     payDayEnabled = widget.group?.payDayEnabled ?? false;
     editingGroupId = widget.group?.id;
+    selectedColorIndex = widget.group?.colorIndex ?? 0;
 
     if (widget.draftEnvelopeName != null) {
       selectedEnvelopeIds.add(_draftId);
@@ -89,19 +98,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     _nameCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Color _getPickerColor(String colorName, ColorScheme theme) {
-    switch (colorName) {
-      case 'Black':
-        return const Color(0xFF212121);
-      case 'Brown':
-        return const Color(0xFF5D4037);
-      case 'Grey':
-        return const Color(0xFF757575);
-      default:
-        return GroupColors.getThemedColor(colorName, theme);
-    }
   }
 
   Future<void> save() async {
@@ -116,22 +112,27 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           groupId: editingGroupId!,
           name: _nameCtrl.text.trim(),
           emoji: selectedEmoji,
-          colorName: selectedColor,
+          iconType: selectedIconType,
+          iconValue: selectedIconValue,
+          iconColor: selectedIconColor,
+          colorIndex: selectedColorIndex,
           payDayEnabled: payDayEnabled,
         );
       } else {
         currentGroupId = await widget.groupRepo.createGroup(
           name: _nameCtrl.text.trim(),
           emoji: selectedEmoji,
-          colorName: selectedColor,
+          iconType: selectedIconType,
+          iconValue: selectedIconValue,
+          iconColor: selectedIconColor,
+          colorIndex: selectedColorIndex,
           payDayEnabled: payDayEnabled,
         );
       }
 
       // FILTER OUT DRAFT ID before saving relationships
-      final realIdsToSave = selectedEnvelopeIds
-          .where((id) => id != _draftId)
-          .toSet();
+      final realIdsToSave =
+          selectedEnvelopeIds.where((id) => id != _draftId).toSet();
 
       await widget.envelopeRepo.updateGroupMembership(
         groupId: currentGroupId!,
@@ -208,31 +209,116 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   }
 
   Future<void> pickEmoji() async {
-    final String? initial = selectedEmoji == '📁' ? null : selectedEmoji;
-
-    final result = await showEmojiPickerSheet(
+    final result = await showModalBottomSheet(
       context: context,
-      initialEmoji: initial,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const OmniIconPickerModal(),
     );
 
     if (result != null) {
+      final iconType = result['type'].toString().split('.').last;
+      final iconValue = result['value'] as String;
+      final iconColor = result['color'] as int?;
+
       setState(() {
-        selectedEmoji = result.isEmpty ? '📁' : result;
+        selectedIconType = iconType;
+        selectedIconValue = iconValue;
+        selectedIconColor = iconColor;
+
+        // Keep emoji for backwards compatibility
+        if (iconType == 'emoji') {
+          selectedEmoji = iconValue;
+        }
       });
     }
+  }
+
+  Widget _buildIconDisplay(ThemeData theme) {
+    // Use new icon system if available
+    if (selectedIconType != null && selectedIconValue != null) {
+      switch (selectedIconType) {
+        case 'emoji':
+          return Text(
+            selectedIconValue!,
+            style: const TextStyle(fontSize: 36),
+          );
+
+        case 'materialIcon':
+          final iconData = materialIconsDatabase[selectedIconValue!]?['icon'] as IconData? ?? Icons.circle;
+          return Icon(
+            iconData,
+            size: 36,
+            color: selectedIconColor != null
+                ? Color(selectedIconColor!)
+                : theme.colorScheme.primary,
+          );
+
+        case 'companyLogo':
+          final logoUrl =
+              'https://www.google.com/s2/favicons?sz=128&domain=$selectedIconValue';
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: CachedNetworkImage(
+              imageUrl: logoUrl,
+              width: 36,
+              height: 36,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => SizedBox(
+                width: 36,
+                height: 36,
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) {
+                return Text(
+                  selectedEmoji,
+                  style: const TextStyle(fontSize: 36),
+                );
+              },
+            ),
+          );
+
+        default:
+          return Text(
+            selectedEmoji,
+            style: const TextStyle(fontSize: 36),
+          );
+      }
+    }
+
+    // Fallback to emoji
+    return Text(
+      selectedEmoji,
+      style: const TextStyle(fontSize: 36),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final groupIdentityColor = GroupColors.getThemedColor(
-      selectedColor,
-      theme.colorScheme,
-    );
-    final buttonColor = _getPickerColor(selectedColor, theme.colorScheme);
-    final buttonTextColor = GroupColors.getContrastingTextColor(buttonColor);
-    final bgTint = GroupColors.getBackgroundTint(groupIdentityColor);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    final availableColors =
+        ThemeBinderColors.getColorsForTheme(themeProvider.currentThemeId);
+    final binderColorOption = availableColors[selectedColorIndex];
+
+    final groupIdentityColor = binderColorOption.binderColor;
+    final buttonTextColor =
+        ThemeData.estimateBrightnessForColor(groupIdentityColor) ==
+                Brightness.dark
+            ? Colors.white
+            : Colors.black;
+    final bgTint = binderColorOption.paperColor;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -247,8 +333,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        groupIdentityColor.withValues(alpha: 0.3),
-                        bgTint.withValues(alpha: 0.3),
+                        groupIdentityColor.withAlpha((255 * 0.3).round()),
+                        bgTint.withAlpha((255 * 0.3).round()),
                       ],
                     ),
                   ),
@@ -314,12 +400,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           ),
                                         ),
                                         child: Center(
-                                          child: Text(
-                                            selectedEmoji,
-                                            style: const TextStyle(
-                                              fontSize: 36,
-                                            ),
-                                          ),
+                                          child: _buildIconDisplay(theme),
                                         ),
                                       ),
                                     ),
@@ -340,58 +421,47 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           Wrap(
                                             spacing: 8,
                                             runSpacing: 8,
-                                            // UPDATED: Filter out 'Gold' and 'Yellow'
-                                            children: GroupColors.colorNames
-                                                .where(
-                                                  (c) =>
-                                                      c != 'Gold' &&
-                                                      c != 'Yellow',
-                                                )
-                                                .map((colorName) {
-                                                  final color = _getPickerColor(
-                                                    colorName,
-                                                    theme.colorScheme,
-                                                  );
-                                                  final isSelected =
-                                                      selectedColor ==
-                                                      colorName;
-                                                  return GestureDetector(
-                                                    onTap: () => setState(
-                                                      () => selectedColor =
-                                                          colorName,
-                                                    ),
-                                                    child: Container(
-                                                      width: 36,
-                                                      height: 36,
-                                                      decoration: BoxDecoration(
-                                                        color: color,
-                                                        shape: BoxShape.circle,
-                                                        border: isSelected
-                                                            ? Border.all(
-                                                                color: Colors
-                                                                    .black,
-                                                                width: 3,
-                                                              )
-                                                            : Border.all(
-                                                                color: Colors
-                                                                    .grey
-                                                                    .shade300,
-                                                              ),
-                                                      ),
-                                                      child: isSelected
-                                                          ? Icon(
-                                                              Icons.check,
-                                                              color:
-                                                                  GroupColors.getContrastingTextColor(
-                                                                    color,
-                                                                  ),
-                                                              size: 20,
-                                                            )
-                                                          : null,
-                                                    ),
-                                                  );
-                                                })
-                                                .toList(),
+                                            children: availableColors
+                                                .asMap()
+                                                .entries
+                                                .map((entry) {
+                                              final index = entry.key;
+                                              final colorOption = entry.value;
+                                              final isSelected =
+                                                  selectedColorIndex == index;
+                                              return GestureDetector(
+                                                onTap: () => setState(
+                                                  () =>
+                                                      selectedColorIndex = index,
+                                                ),
+                                                child: Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        colorOption.binderColor,
+                                                    shape: BoxShape.circle,
+                                                    border: isSelected
+                                                        ? Border.all(
+                                                            color: Colors.black,
+                                                            width: 3,
+                                                          )
+                                                        : Border.all(
+                                                            color: Colors.grey
+                                                                .shade300,
+                                                          ),
+                                                  ),
+                                                  child: isSelected
+                                                      ? Icon(
+                                                          Icons.check,
+                                                          color:
+                                                              buttonTextColor,
+                                                          size: 20,
+                                                        )
+                                                      : null,
+                                                ),
+                                              );
+                                            }).toList(),
                                           ),
                                         ],
                                       ),
@@ -415,8 +485,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
+                                  validator: (v) => (v == null ||
+                                          v.trim().isEmpty)
                                       ? tr('error_enter_name')
                                       : null,
                                 ),
@@ -426,7 +496,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   decoration: BoxDecoration(
                                     color: payDayEnabled
                                         ? theme.colorScheme.secondary
-                                              .withValues(alpha: 0.1)
+                                            .withAlpha((255 * 0.1).round())
                                         : Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
@@ -458,8 +528,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 fontWeight: FontWeight.bold,
                                                 color: payDayEnabled
                                                     ? theme
-                                                          .colorScheme
-                                                          .secondary
+                                                        .colorScheme.secondary
                                                     : Colors.black,
                                               ),
                                             ),
@@ -500,15 +569,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                         StreamBuilder<List<Envelope>>(
                           stream: widget.envelopeRepo.envelopesStream(),
                           builder: (context, snapshot) {
-                            var allEnvelopes =
-                                (snapshot.data ?? [])
-                                    .where(
-                                      (e) =>
-                                          e.userId ==
-                                          widget.envelopeRepo.currentUserId,
-                                    )
-                                    .toList()
-                                  ..sort((a, b) => a.name.compareTo(b.name));
+                            var allEnvelopes = (snapshot.data ?? [])
+                                .where(
+                                  (e) =>
+                                      e.userId ==
+                                      widget.envelopeRepo.currentUserId,
+                                )
+                                .toList()
+                              ..sort((a, b) => a.name.compareTo(b.name));
 
                             if (widget.draftEnvelopeName != null &&
                                 widget.draftEnvelopeName!.isNotEmpty) {
@@ -561,7 +629,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   ),
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: isSelected ? bgTint : Colors.white,
+                                      color: isSelected
+                                          ? bgTint
+                                          : Colors.white,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: borderColor,
@@ -594,9 +664,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.bold,
                                                 color: isSelected
-                                                    ? GroupColors.getContrastingTextColor(
-                                                        bgTint,
-                                                      )
+                                                    ? ThemeData.estimateBrightnessForColor(bgTint) == Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black
                                                     : Colors.black,
                                               ),
                                             ),
@@ -620,7 +690,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                       color: theme.scaffoldBackgroundColor,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black
+                              .withAlpha((255 * 0.05).round()),
                           blurRadius: 10,
                           offset: const Offset(0, -2),
                         ),
@@ -634,7 +705,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                           height: 52,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: buttonColor,
+                              backgroundColor: groupIdentityColor,
                               foregroundColor: buttonTextColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),

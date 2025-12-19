@@ -231,6 +231,8 @@ class ProjectionService {
             envelopeId: env.id,
             envelopeName: env.name,
             emoji: env.emoji,
+            iconType: env.iconType,
+            iconValue: env.iconValue,
             currentAmount: env.currentAmount,
             projectedAmount: projectedEnvBalance,
             targetAmount: env.targetAmount ?? 0,

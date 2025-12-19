@@ -12,7 +12,8 @@ import '../../services/group_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../screens/stats_history_screen.dart';
-import '../../widgets/accounts/account_list_screen.dart';
+
+import '../../screens/accounts/account_list_screen.dart';
 import 'scheduled_payments_list_screen.dart';
 import 'auto_fill_list_screen.dart'; // NEW import
 

@@ -13,6 +13,8 @@ import '../widgets/group_editor.dart' as editor;
 import 'envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
 import '../providers/font_provider.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_themes.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   const GroupDetailScreen({
@@ -42,18 +44,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     _viewingMonth = DateTime.now();
   }
 
-  // FIXED: Explicit color overrides to match groups_home_screen
-  Color _getDisplayColor(String colorName, ColorScheme theme) {
-    switch (colorName) {
-      case 'Black':
-        return const Color(0xFF212121);
-      case 'Brown':
-        return const Color(0xFF5D4037);
-      case 'Grey':
-        return const Color(0xFF757575);
-      default:
-        return GroupColors.getThemedColor(colorName, theme);
+  BinderColorOption _getBinderColors(int colorIndex, String themeId) {
+    final themeColors = ThemeBinderColors.getColorsForTheme(themeId);
+    if (colorIndex >= 0 && colorIndex < themeColors.length) {
+      return themeColors[colorIndex];
     }
+    return themeColors.first;
   }
 
   void _toggle(String id) {
@@ -94,10 +90,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    // Use the color override logic from groups_home_screen
-    final groupColor = _getDisplayColor(
-      widget.group.colorName,
-      theme.colorScheme,
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    final binderColors = _getBinderColors(
+      widget.group.colorIndex,
+      themeProvider.currentThemeId,
     );
 
     return StreamBuilder<List<Envelope>>(
@@ -118,14 +115,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           stream: widget.envelopeRepo.transactionsStream,
           builder: (_, sTx) {
             return Scaffold(
-              backgroundColor: theme.scaffoldBackgroundColor,
+              backgroundColor: binderColors.paperColor,
               body: CustomScrollView(
                 slivers: [
-                  // STICKY HEADER FIX: Opaque background
                   SliverAppBar(
                     expandedHeight: 140,
                     pinned: true,
-                    backgroundColor: groupColor, // Use solid color here
+                    backgroundColor: binderColors.binderColor,
                     scrolledUnderElevation: 0,
                     elevation: 0,
                     flexibleSpace: FlexibleSpaceBar(
@@ -139,8 +135,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         ),
                       ),
                       background: Container(
-                        // Make sure this container is fully opaque
-                        color: groupColor,
+                        color: binderColors.binderColor,
                         child: SafeArea(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
@@ -151,7 +146,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
+                                    color: Colors.white.withAlpha(51),
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: Colors.white,
@@ -207,8 +202,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       ),
                     ],
                   ),
-
-                  // STATS (Scrollable)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -219,7 +212,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: groupColor.withValues(alpha: 0.1),
+                              color: binderColors.binderColor.withAlpha(25),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -233,30 +226,32 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                 _StatColumn(
                                   label: 'Total Saved',
                                   value: currency.format(totSaved),
-                                  color: groupColor,
+                                  color: binderColors.binderColor,
                                   large: true,
                                 ),
                                 _StatColumn(
                                   label: 'Target',
                                   value: currency.format(totTarget),
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.6,
-                                  ),
+                                  color: theme.colorScheme.onSurface
+                                      .withAlpha(153),
                                 ),
                                 _StatColumn(
                                   label: 'Progress',
                                   value: '${pct.toStringAsFixed(0)}%',
-                                  color: groupColor,
+                                  color: binderColors.binderColor,
                                   large: true,
                                 ),
                               ],
                             ),
                             const SizedBox(height: 16),
                             Builder(builder: (context) {
-                              final HSLColor hslColor = HSLColor.fromColor(groupColor);
-                              final HSLColor lighterColor =
-                                  hslColor.withLightness((hslColor.lightness + 0.4).clamp(0.0, 1.0));
-                              final Color lightGroupColor = lighterColor.toColor();
+                              final HSLColor hslColor =
+                                  HSLColor.fromColor(binderColors.binderColor);
+                              final HSLColor lighterColor = hslColor
+                                  .withLightness(
+                                      (hslColor.lightness + 0.4).clamp(0.0, 1.0));
+                              final Color lightGroupColor =
+                                  lighterColor.toColor();
                               return ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: LinearProgressIndicator(
@@ -265,7 +260,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                       : 0.0,
                                   minHeight: 12,
                                   backgroundColor: lightGroupColor,
-                                  valueColor: AlwaysStoppedAnimation(groupColor),
+                                  valueColor: AlwaysStoppedAnimation(
+                                      binderColors.binderColor),
                                 ),
                               );
                             }),
@@ -274,8 +270,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       ),
                     ),
                   ),
-
-                  // Envelopes Header
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -308,8 +302,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       ),
                     ),
                   ),
-
-                  // Envelopes List
                   if (inGroup.isEmpty)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -354,23 +346,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             isMultiSelectMode: isMulti,
                           );
                         },
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
                         itemCount: inGroup.length,
                       ),
                     ),
-
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-                  // Month Navigation
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _buildMonthNavigationBar(theme),
                     ),
                   ),
-
-                  // Transactions... (rest of the file logic preserved)
-                  // ...
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
@@ -392,7 +379,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+          color: theme.colorScheme.outline.withAlpha(51),
         ),
       ),
       child: Row(
@@ -421,9 +408,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       'Tap to return to current month',
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
-                        ),
+                        color: theme.colorScheme.onSurface.withAlpha(128),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -435,7 +420,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: isCurrentMonth ? null : _nextMonth,
             color: isCurrentMonth
-                ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
+                ? theme.colorScheme.onSurface.withAlpha(77)
                 : theme.colorScheme.primary,
           ),
         ],

@@ -177,7 +177,7 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                           Icon(
                             Icons.check_circle_outline,
                             size: 48,
-                            color: Colors.green.withValues(alpha: 0.5),
+                            color: Colors.green.withAlpha(128),
                           ),
                           const SizedBox(height: 16),
                           Text(

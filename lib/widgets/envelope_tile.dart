@@ -12,7 +12,6 @@ import '../models/transaction.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../services/workspace_helper.dart';
-import 'emoji_picker_sheet.dart';
 // TUTORIAL IMPORT
 import '../services/tutorial_controller.dart';
 
@@ -42,8 +41,6 @@ class EnvelopeTile extends StatefulWidget {
 
 class _EnvelopeTileState extends State<EnvelopeTile>
     with SingleTickerProviderStateMixin {
-  String? _customEmoji;
-  String? _subtitle;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
   bool _isRevealed = false;
@@ -53,8 +50,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
   @override
   void initState() {
     super.initState();
-    _customEmoji = widget.envelope.emoji;
-    _subtitle = widget.envelope.subtitle;
 
     _slideController = AnimationController(
       vsync: this,
@@ -65,17 +60,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       begin: Offset.zero,
       end: const Offset(-1.0, 0),
     ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
-  }
-
-  @override
-  void didUpdateWidget(EnvelopeTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.envelope.emoji != widget.envelope.emoji) {
-      _customEmoji = widget.envelope.emoji;
-    }
-    if (oldWidget.envelope.subtitle != widget.envelope.subtitle) {
-      _subtitle = widget.envelope.subtitle;
-    }
   }
 
   @override
@@ -101,101 +85,6 @@ class _EnvelopeTileState extends State<EnvelopeTile>
         _slideController.reverse();
         _isRevealed = false;
       });
-    }
-  }
-
-  // FIXED: Removed defaultEmoji parameter
-  Future<void> _pickEmoji() async {
-    final result = await showEmojiPickerSheet(
-      context: context,
-      initialEmoji: _customEmoji,
-    );
-
-    if (result != null) {
-      setState(() {
-        // If result is empty string, that means reset/clear
-        _customEmoji = result.isEmpty ? null : result;
-      });
-
-      await widget.repo.updateEnvelope(
-        envelopeId: widget.envelope.id,
-        emoji: result.isEmpty ? null : result,
-      );
-    }
-  }
-
-  Future<void> _editSubtitle() async {
-    final controller = TextEditingController(text: _subtitle ?? '');
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          tr('envelope_add_subtitle'),
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: TextField(
-          controller: controller,
-          style: fontProvider
-              .getTextStyle(fontSize: 18)
-              .copyWith(fontStyle: FontStyle.italic),
-          decoration: InputDecoration(
-            hintText: tr('envelope_subtitle_hint'),
-            hintStyle: fontProvider
-                .getTextStyle(fontSize: 16, color: Colors.grey)
-                .copyWith(fontStyle: FontStyle.italic),
-            border: const OutlineInputBorder(),
-          ),
-          maxLength: 50,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ''),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('clear'),
-                style: fontProvider.getTextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('cancel'),
-                style: fontProvider.getTextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                tr('save'),
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null && mounted) {
-      setState(() => _subtitle = result.isEmpty ? null : result);
-      await widget.repo.updateEnvelope(
-        envelopeId: widget.envelope.id,
-        subtitle: result.isEmpty ? null : result,
-      );
     }
   }
 
@@ -236,12 +125,12 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: widget.isSelected
-            ? theme.colorScheme.primary.withValues(alpha: 0.2)
+            ? theme.colorScheme.primary.withAlpha(51)
             : theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            color: theme.colorScheme.primary.withAlpha(26),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -254,25 +143,10 @@ class _EnvelopeTileState extends State<EnvelopeTile>
           children: [
             Row(
               children: [
-                GestureDetector(
-                  onTap: _pickEmoji,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _customEmoji ?? '📨',
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                    ),
-                  ),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: widget.envelope.getIconWidget(theme, size: 44),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -323,25 +197,21 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ],
               ],
             ),
-            if (_subtitle != null && _subtitle!.isNotEmpty) ...[
+            if (widget.envelope.subtitle != null &&
+                widget.envelope.subtitle!.isNotEmpty) ...[
               const SizedBox(height: 4),
               Padding(
                 padding: const EdgeInsets.only(left: 56),
-                child: GestureDetector(
-                  onTap: _editSubtitle,
-                  child: Text(
-                    '"$_subtitle"',
-                    style: fontProvider
-                        .getTextStyle(fontSize: 16)
-                        .copyWith(
-                          fontStyle: FontStyle.italic,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Text(
+                  '"${widget.envelope.subtitle}"',
+                  style: fontProvider
+                      .getTextStyle(fontSize: 16)
+                      .copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: theme.colorScheme.onSurface.withAlpha(179),
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -362,9 +232,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                       ' / ${currencyFormat.format(widget.envelope.targetAmount)}',
                       style: TextStyle(
                         fontSize: 16,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.7,
-                        ),
+                        color: theme.colorScheme.onSurface.withAlpha(179),
                       ),
                     ),
                   ],
@@ -525,9 +393,9 @@ class _ActionButton extends StatelessWidget {
           height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: primaryColor.withValues(alpha: 0.15),
+            color: primaryColor.withAlpha(38),
             border: Border.all(
-              color: primaryColor.withValues(alpha: 0.3),
+              color: primaryColor.withAlpha(77),
               width: 1.5,
             ),
           ),

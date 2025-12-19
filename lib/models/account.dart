@@ -1,18 +1,26 @@
 // lib/models/account.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:envelope_lite/data/material_icons_database.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class Account {
   final String id;
   final String name;
   final double currentBalance;
   final String userId;
-  final String? emoji;
+  final String? emoji; // Legacy
   final String? colorName;
   final DateTime createdAt;
   final DateTime lastUpdated;
-  final bool isDefault; // Main account that receives Pay Day deposits
-  final bool isShared; // For workspace mode
+  final bool isDefault;
+  final bool isShared;
   final String? workspaceId;
+
+  // NEW: Icon system
+  final String? iconType; // 'emoji', 'materialIcon', 'companyLogo'
+  final String? iconValue; // emoji char, icon name, or domain
+  final int? iconColor; // For material icons (Color.value)
 
   Account({
     required this.id,
@@ -26,7 +34,80 @@ class Account {
     this.isDefault = false,
     this.isShared = false,
     this.workspaceId,
+    this.iconType,
+    this.iconValue,
+    this.iconColor,
   });
+
+  /// Get icon widget for display
+  Widget getIconWidget(ThemeData theme, {double size = 40}) {
+    final effectiveIconColor = iconColor != null
+        ? Color(iconColor!)
+        : theme.colorScheme.primary;
+
+    // New icon system
+    if (iconType != null && iconValue != null) {
+      switch (iconType) {
+        case 'emoji':
+          return Text(
+            iconValue!,
+            style: TextStyle(fontSize: size * 0.8),
+          );
+
+        case 'materialIcon':
+          final iconData =
+              materialIconsDatabase[iconValue]?['icon'] as IconData?;
+          return Icon(
+            iconData ?? Icons.help_outline,
+            size: size,
+            color: effectiveIconColor,
+          );
+
+        case 'companyLogo':
+          final logoUrl =
+              'https://www.google.com/s2/favicons?sz=128&domain=${iconValue!}';
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(size * 0.1),
+            child: CachedNetworkImage(
+              imageUrl: logoUrl,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => SizedBox(
+                width: size,
+                height: size,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary.withAlpha(128),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Icon(
+                Icons.business,
+                size: size,
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+          );
+      }
+    }
+
+    // Fallback to old emoji system
+    if (emoji != null && emoji!.isNotEmpty) {
+      return Text(
+        emoji!,
+        style: TextStyle(fontSize: size * 0.8),
+      );
+    }
+
+    // Default fallback
+    return Icon(
+      Icons.account_balance_wallet,
+      size: size,
+      color: theme.colorScheme.primary,
+    );
+  }
 
   factory Account.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
@@ -43,6 +124,9 @@ class Account {
       isDefault: data['isDefault'] as bool? ?? false,
       isShared: data['isShared'] as bool? ?? false,
       workspaceId: data['workspaceId'] as String?,
+      iconType: data['iconType'] as String?,
+      iconValue: data['iconValue'] as String?,
+      iconColor: data['iconColor'] as int?,
     );
   }
 
@@ -59,6 +143,9 @@ class Account {
       'isDefault': isDefault,
       'isShared': isShared,
       'workspaceId': workspaceId,
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
     };
   }
 
@@ -70,6 +157,9 @@ class Account {
     DateTime? lastUpdated,
     bool? isDefault,
     bool? isShared,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
   }) {
     return Account(
       id: id,
@@ -83,11 +173,14 @@ class Account {
       isDefault: isDefault ?? this.isDefault,
       isShared: isShared ?? this.isShared,
       workspaceId: workspaceId,
+      iconType: iconType ?? this.iconType,
+      iconValue: iconValue ?? this.iconValue,
+      iconColor: iconColor ?? this.iconColor,
     );
   }
 
   @override
   String toString() {
-    return 'Account(id: $id, name: $name, balance: $currentBalance, isDefault: $isDefault)';
+    return 'Account(id: $id, name: $name, balance: $currentBalance, isDefault: $isDefault, icon: $iconValue)';
   }
 }

@@ -806,14 +806,22 @@ class _ScenarioEditorModalState extends State<ScenarioEditorModal> {
                               final change =
                                   env.projectedAmount - env.currentAmount;
                               final isPositive = change >= 0;
+                              final tempEnvelope = Envelope(
+                                id: env.envelopeId,
+                                name: env.envelopeName,
+                                userId: '',
+                                emoji: env.emoji,
+                                iconType: env.iconType,
+                                iconValue: env.iconValue,
+                              );
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 6,
                                 ),
                                 child: Row(
                                   children: [
-                                    if (env.emoji != null) ...[
-                                      Text(env.emoji!),
+                                    if (tempEnvelope.iconValue != null || tempEnvelope.emoji != null) ...[
+                                      tempEnvelope.getIconWidget(Theme.of(context), size: 20),
                                       const SizedBox(width: 8),
                                     ],
                                     Expanded(
@@ -957,8 +965,8 @@ class _EnvelopeTile extends StatelessWidget {
         leading: Checkbox(value: isEnabled, onChanged: (_) => onToggle()),
         title: Row(
           children: [
-            if (envelope.emoji != null)
-              Text(envelope.emoji!, style: const TextStyle(fontSize: 20)),
+            if (envelope.iconValue != null || envelope.emoji != null)
+              envelope.getIconWidget(Theme.of(context), size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

@@ -19,7 +19,7 @@ import '../widgets/envelope_creator.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_visibility_toggle.dart';
 import '../widgets/partner_badge.dart';
-import '../widgets/accounts/account_list_screen.dart'; // IMPORT ADDED
+import './accounts/account_list_screen.dart'; // IMPORT ADDED
 
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -230,15 +230,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     widget.repo.currentUserId,
                   ).userProfileStream,
                   builder: (context, snapshot) {
-                    final displayName =
-                        snapshot.data?.displayName ?? tr('your_envelopes');
-                    return Text(
-                      displayName,
-                      style: fontProvider.getTextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
+                    final profile = snapshot.data;
+                    final displayName = profile?.displayName ?? tr('your_envelopes');
+                    final photoURL = profile?.photoURL;
+
+                    return Row(
+                      children: [
+                        if (photoURL != null && photoURL.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: CircleAvatar(
+                              backgroundImage: NetworkImage(photoURL),
+                              radius: 20,
+                            ),
+                          ),
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: fontProvider.getTextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),

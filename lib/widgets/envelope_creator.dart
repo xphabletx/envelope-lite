@@ -13,7 +13,10 @@ import '../screens/add_scheduled_payment_screen.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
-import 'emoji_picker_sheet.dart';
+import 'envelope/omni_icon_picker_modal.dart';
+import '../models/envelope.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_themes.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -64,8 +67,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   List<EnvelopeGroup> _binders = [];
   bool _bindersLoaded = false;
 
-  // Emoji selection state
-  String? _selectedEmoji;
+  // Icon selection state
+  String? _iconType;
+  String? _iconValue;
 
   bool _saving = false;
 
@@ -152,15 +156,21 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     }
   }
 
-  Future<void> _pickEmoji() async {
-    final result = await showEmojiPickerSheet(
+  Future<void> _pickIcon() async {
+    final result = await showModalBottomSheet(
       context: context,
-      initialEmoji: _selectedEmoji,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const OmniIconPickerModal(),
     );
 
     if (result != null) {
+      final iconType = result['type'].toString().split('.').last;
+      final iconValue = result['value'] as String;
+
       setState(() {
-        _selectedEmoji = result.isEmpty ? null : result;
+        _iconType = iconType;
+        _iconValue = iconValue;
       });
     }
   }
@@ -247,13 +257,16 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     }
 
     setState(() => _saving = true);
+
     try {
       final envelopeId = await widget.repo.createEnvelope(
         name: name,
         startingAmount: start,
         targetAmount: target,
         subtitle: subtitle.isEmpty ? null : subtitle,
-        emoji: _selectedEmoji,
+        emoji: null, // OLD, DEPRECATED
+        iconType: _iconType,
+        iconValue: _iconValue,
         autoFillEnabled: _autoFillEnabled,
         autoFillAmount: autoFillAmount,
         groupId: _selectedBinderId,
@@ -290,6 +303,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     // FIX 1 & 2: Use Scaffold with standard AppBar to fix status bar overlap
     return Scaffold(
@@ -369,9 +383,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Emoji picker
+                        // Icon picker
                         InkWell(
-                          onTap: _pickEmoji,
+                          onTap: _pickIcon,
                           borderRadius: BorderRadius.circular(12),
                           child: Container(
                             padding: const EdgeInsets.all(16),
@@ -386,16 +400,22 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 const Icon(Icons.emoji_emotions),
                                 const SizedBox(width: 16),
                                 Text(
-                                  tr('Emoji'),
+                                  tr('Icon'),
                                   style: fontProvider.getTextStyle(
                                     fontSize: 18,
                                   ),
                                 ),
                                 const Spacer(),
-                                Text(
-                                  _selectedEmoji ?? '✉️',
-                                  style: const TextStyle(fontSize: 32),
-                                ),
+                                if (_iconValue != null)
+                                  Envelope(
+                                    id: '',
+                                    name: '',
+                                    userId: '',
+                                    iconType: _iconType,
+                                    iconValue: _iconValue,
+                                  ).getIconWidget(theme, size: 32)
+                                else
+                                  const Icon(Icons.add_photo_alternate_outlined),
                               ],
                             ),
                           ),
@@ -533,7 +553,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String?>(
-                                  initialValue: _selectedBinderId,
+                                  value: _selectedBinderId,
                                   decoration: InputDecoration(
                                     labelText: tr('envelope_add_to_binder'),
                                     labelStyle: fontProvider.getTextStyle(
@@ -559,11 +579,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                       ),
                                     ),
                                     ..._binders.map((binder) {
+                                      final binderColorOption =
+                                          ThemeBinderColors.getColorsForTheme(
+                                              themeProvider.currentThemeId)[binder.colorIndex];
                                       final binderColor =
-                                          GroupColors.getThemedColor(
-                                            binder.colorName,
-                                            theme.colorScheme,
-                                          );
+                                          binderColorOption.binderColor;
                                       return DropdownMenuItem(
                                         value: binder.id,
                                         child: Row(
@@ -644,9 +664,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             tr('envelope_autofill_subtitle'),
                             style: TextStyle(
                               fontSize: 14,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
+                              color: theme.colorScheme.onSurface.withAlpha(153),
                             ),
                           ),
                         ),
@@ -729,9 +747,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             tr('envelope_recurring_payment_subtitle'),
                             style: TextStyle(
                               fontSize: 14,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
+                              color: theme.colorScheme.onSurface.withAlpha(153),
                             ),
                           ),
                           secondary: Icon(

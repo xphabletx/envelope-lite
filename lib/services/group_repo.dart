@@ -31,7 +31,10 @@ class GroupRepo {
   Future<String> createGroup({
     required String name,
     String? emoji,
-    String? colorName,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
+    int? colorIndex,
     bool? payDayEnabled,
   }) async {
     final ref = groupsCol().doc();
@@ -40,7 +43,10 @@ class GroupRepo {
       'name': name,
       'userId': _userId,
       'emoji': emoji ?? '📁',
-      'colorName': colorName ?? 'Primary',
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
+      'colorIndex': colorIndex ?? 0,
       'payDayEnabled': payDayEnabled ?? false,
       'createdAt': fs.FieldValue.serverTimestamp(),
       'updatedAt': fs.FieldValue.serverTimestamp(),
@@ -52,7 +58,10 @@ class GroupRepo {
     required String groupId,
     String? name,
     String? emoji,
-    String? colorName,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
+    int? colorIndex,
     bool? payDayEnabled,
   }) async {
     final updateData = <String, dynamic>{
@@ -61,7 +70,10 @@ class GroupRepo {
 
     if (name != null) updateData['name'] = name;
     if (emoji != null) updateData['emoji'] = emoji;
-    if (colorName != null) updateData['colorName'] = colorName;
+    if (iconType != null) updateData['iconType'] = iconType;
+    if (iconValue != null) updateData['iconValue'] = iconValue;
+    if (iconColor != null) updateData['iconColor'] = iconColor;
+    if (colorIndex != null) updateData['colorIndex'] = colorIndex;
     if (payDayEnabled != null) {
       updateData['payDayEnabled'] = payDayEnabled;
     }

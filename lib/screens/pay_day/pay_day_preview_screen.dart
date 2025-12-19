@@ -13,6 +13,8 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import 'add_to_pay_day_modal.dart';
 import '../../providers/font_provider.dart'; // NEW IMPORT
+import '../../providers/theme_provider.dart';
+import '../../theme/app_themes.dart';
 // TUTORIAL IMPORT REMOVED - Logic commented out below
 
 class PayDayPreviewScreen extends StatefulWidget {
@@ -312,6 +314,7 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
     // FIXED: Corrected currency symbol from 'ﾂ｣' to '£'
     final currency = NumberFormat.currency(symbol: '£');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(),
@@ -408,10 +411,10 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                         allEnvelopes,
                       );
 
-                      final groupColor = GroupColors.getThemedColor(
-                        group.colorName,
-                        theme.colorScheme,
-                      );
+                      final binderColorOption =
+                          ThemeBinderColors.getColorsForTheme(
+                              themeProvider.currentThemeId)[group.colorIndex];
+                      final groupColor = binderColorOption.binderColor;
 
                       // NEW: Check if binder has auto-fill OFF but contains auto-fill envelopes
                       final hasAutoFillEnvelopes = envelopesInBinder.any(
@@ -427,12 +430,12 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              // FIX: withOpacity -> withValues
-                              color: groupColor.withValues(alpha: 0.26),
+                              // FIX: withOpacity -> withAlpha
+                              color: groupColor.withAlpha(66),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                // FIX: withOpacity -> withValues
-                                color: groupColor.withValues(alpha: 0.77),
+                                // FIX: withOpacity -> withAlpha
+                                color: groupColor.withAlpha(196),
                               ),
                             ),
                             child: Column(
@@ -470,9 +473,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                             '${currency.format(binderChecked)} / ${currency.format(binderPossible)}',
                                             style: TextStyle(
                                               fontSize: 14,
-                                              // FIX: withOpacity -> withValues
+                                              // FIX: withOpacity -> withAlpha
                                               color: theme.colorScheme.onSurface
-                                                  .withValues(alpha: 0.7),
+                                                  .withAlpha(179),
                                             ),
                                           ),
                                         ],
@@ -489,9 +492,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                       'Binder auto-fill is off but envelopes are set to auto-fill',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        // FIX: withOpacity -> withValues
+                                        // FIX: withOpacity -> withAlpha
                                         color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.5),
+                                            .withAlpha(128),
                                         fontStyle: FontStyle.italic,
                                       ),
                                     ),
@@ -518,9 +521,9 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    // FIX: withOpacity -> withValues
+                                    // FIX: withOpacity -> withAlpha
                                     color: isChecked
-                                        ? groupColor.withValues(alpha: 0.13)
+                                        ? groupColor.withAlpha(33)
                                         : Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -608,10 +611,8 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                           color: theme.colorScheme.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            // FIX: withOpacity -> withValues
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.77,
-                            ),
+                            // FIX: withOpacity -> withAlpha
+                            color: theme.colorScheme.primary.withAlpha(196),
                           ),
                         ),
                         child: Row(
@@ -801,8 +802,8 @@ class _PayDaySuccessDialogState extends State<_PayDaySuccessDialog>
               // UPDATED: FontProvider
               style: fontProvider.getTextStyle(
                 fontSize: 20,
-                // FIX: withOpacity -> withValues
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                // FIX: withOpacity -> withAlpha
+                color: theme.colorScheme.onSurface.withAlpha(179),
               ),
               textAlign: TextAlign.center,
             ),

@@ -12,7 +12,9 @@ import '../../services/account_repo.dart'; // NEW
 import '../../widgets/group_editor.dart' as editor;
 import '../../providers/font_provider.dart';
 import '../add_scheduled_payment_screen.dart';
-import '../../widgets/emoji_picker_sheet.dart';
+import '../../widgets/envelope/omni_icon_picker_modal.dart';
+import '../../providers/theme_provider.dart';
+import '../../theme/app_themes.dart';
 
 class EnvelopeSettingsSheet extends StatefulWidget {
   const EnvelopeSettingsSheet({
@@ -39,6 +41,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   final _autoFillAmountController = TextEditingController();
 
   String? _selectedEmoji;
+  String? _iconType;
+  String? _iconValue;
   String? _selectedBinderId;
   String? _selectedAccountId; // NEW
   bool _autoFillEnabled = false;
@@ -103,15 +107,21 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     await _loadBinders();
   }
 
-  Future<void> _showEmojiPicker(Envelope envelope) async {
-    final result = await showEmojiPickerSheet(
+  Future<void> _pickIcon(Envelope envelope) async {
+    final result = await showModalBottomSheet(
       context: context,
-      initialEmoji: _selectedEmoji ?? envelope.emoji,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const OmniIconPickerModal(),
     );
 
     if (result != null) {
       setState(() {
-        _selectedEmoji = result.isEmpty ? null : result;
+        _iconType = result['type'].toString().split('.').last;
+        _iconValue = result['value'] as String;
+        if (_iconType == 'emoji') {
+          _selectedEmoji = _iconValue;
+        }
       });
     }
   }
@@ -120,6 +130,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
@@ -142,6 +153,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           _autoFillAmountController.text =
               envelope.autoFillAmount?.toStringAsFixed(2) ?? '';
           _selectedEmoji = envelope.emoji;
+          _iconType = envelope.iconType;
+          _iconValue = envelope.iconValue;
           _selectedAccountId = envelope.linkedAccountId; // NEW
 
           if (envelope.groupId != null &&
@@ -228,9 +241,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     ),
                     const SizedBox(height: 16),
 
-                    // EMOJI PICKER
+                    // ICON PICKER
                     InkWell(
-                      onTap: () => _showEmojiPicker(envelope),
+                      onTap: () => _pickIcon(envelope),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.all(16),
@@ -243,14 +256,17 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             const Icon(Icons.emoji_emotions),
                             const SizedBox(width: 16),
                             Text(
-                              'Emoji',
+                              'Icon',
                               style: fontProvider.getTextStyle(fontSize: 18),
                             ),
                             const Spacer(),
-                            Text(
-                              _selectedEmoji ?? envelope.emoji ?? '💰',
-                              style: const TextStyle(fontSize: 32),
-                            ),
+                            envelope
+                                .copyWith(
+                                  iconType: _iconType,
+                                  iconValue: _iconValue,
+                                  emoji: _selectedEmoji,
+                                )
+                                .getIconWidget(theme, size: 32),
                           ],
                         ),
                       ),
@@ -338,10 +354,11 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                 ),
                               ),
                               ..._binders.map((binder) {
-                                final binderColor = GroupColors.getThemedColor(
-                                  binder.colorName,
-                                  theme.colorScheme,
-                                );
+                                final binderColorOption =
+                                    ThemeBinderColors.getColorsForTheme(
+                                        themeProvider.currentThemeId)[binder.colorIndex];
+                                final binderColor =
+                                    binderColorOption.binderColor;
                                 return DropdownMenuItem(
                                   value: binder.id,
                                   child: Row(
@@ -404,9 +421,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       'Where does money for this envelope come from?',
                       style: TextStyle(
                         fontSize: 14,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.6,
-                        ),
+                        color: theme.colorScheme.onSurface.withAlpha(153),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -479,9 +494,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.1,
-                          ),
+                          color: theme.colorScheme.primary.withAlpha(26),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -500,9 +513,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         'Set up recurring deposits/withdrawals',
                         style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
+                          color: theme.colorScheme.onSurface.withAlpha(153),
                         ),
                       ),
                       trailing: const Icon(Icons.chevron_right),
@@ -548,9 +559,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         'Automatically add money on pay day',
                         style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
+                          color: theme.colorScheme.onSurface.withAlpha(153),
                         ),
                       ),
                     ),
@@ -664,6 +673,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       final Map<String, dynamic> updates = {
         'name': _nameController.text.trim(),
         'emoji': _selectedEmoji,
+        'iconType': _iconType,
+        'iconValue': _iconValue,
         'targetAmount': targetAmount,
         'autoFillEnabled': _autoFillEnabled,
         'updatedAt': FieldValue.serverTimestamp(),

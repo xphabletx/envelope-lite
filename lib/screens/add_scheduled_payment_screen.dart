@@ -2,12 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../models/scheduled_payment.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../data/material_icons_database.dart';
 
 class AddScheduledPaymentScreen extends StatefulWidget {
   const AddScheduledPaymentScreen({
@@ -236,10 +239,77 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
         : 'Every $_frequencyValue $unit';
   }
 
+  Widget _buildGroupIcon(EnvelopeGroup group, ThemeData theme) {
+    // Use new icon system if available
+    if (group.iconType != null && group.iconValue != null) {
+      switch (group.iconType) {
+        case 'emoji':
+          return Text(
+            group.iconValue!,
+            style: const TextStyle(fontSize: 20),
+          );
+
+        case 'materialIcon':
+          final iconData = materialIconsDatabase[group.iconValue!]?['icon'] as IconData? ?? Icons.folder;
+          return Icon(
+            iconData,
+            size: 20,
+            color: group.iconColor != null
+                ? Color(group.iconColor!)
+                : theme.colorScheme.primary,
+          );
+
+        case 'companyLogo':
+          final logoUrl =
+              'https://www.google.com/s2/favicons?sz=128&domain=${group.iconValue}';
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: CachedNetworkImage(
+              imageUrl: logoUrl,
+              width: 20,
+              height: 20,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => const SizedBox(
+                width: 20,
+                height: 20,
+                child: Center(
+                  child: SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(strokeWidth: 1),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) {
+                return Text(
+                  group.emoji ?? '📁',
+                  style: const TextStyle(fontSize: 20),
+                );
+              },
+            ),
+          );
+
+        default:
+          return Text(
+            group.emoji ?? '📁',
+            style: const TextStyle(fontSize: 20),
+          );
+      }
+    }
+
+    // Fallback to emoji
+    return Text(
+      group.emoji ?? '📁',
+      style: const TextStyle(fontSize: 20),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+    final currencySymbol = localeProvider.currencySymbol;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -332,15 +402,19 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                               value: 'env_${e.id}',
                               child: Row(
                                 children: [
-                                  Text(
-                                    e.emoji ?? '📨',
-                                    style: const TextStyle(fontSize: 20),
+                                  SizedBox(
+                                    width: 28,
+                                    height: 28,
+                                    child: e.getIconWidget(theme, size: 24),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    e.name,
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 18,
+                                  Expanded(
+                                    child: Text(
+                                      e.name,
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 18,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -367,12 +441,21 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                               value: 'grp_${g.id}',
                               child: Row(
                                 children: [
-                                  const Icon(Icons.folder, size: 20),
+                                  SizedBox(
+                                    width: 28,
+                                    height: 28,
+                                    child: Center(
+                                      child: _buildGroupIcon(g, theme),
+                                    ),
+                                  ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    g.name,
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 18,
+                                  Expanded(
+                                    child: Text(
+                                      g.name,
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 18,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -447,9 +530,19 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: '0.00',
-                prefixIcon: Icon(
-                  Icons.attach_money,
-                  color: theme.colorScheme.secondary,
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(left: 16, right: 8),
+                  child: Center(
+                    widthFactor: 1.0,
+                    child: Text(
+                      currencySymbol,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                  ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),

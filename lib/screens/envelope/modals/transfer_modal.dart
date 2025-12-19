@@ -271,11 +271,7 @@ class _TransferModalState extends State<TransferModal> {
                     value: envelope.id,
                     child: Row(
                       children: [
-                        if (envelope.emoji != null)
-                          Text(
-                            envelope.emoji!,
-                            style: const TextStyle(fontSize: 20),
-                          ),
+                        envelope.getIconWidget(Theme.of(context), size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(

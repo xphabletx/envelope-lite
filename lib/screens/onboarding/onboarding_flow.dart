@@ -1,7 +1,10 @@
 // lib/screens/onboarding/onboarding_flow.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../services/user_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
@@ -35,27 +38,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       selectedTheme: _selectedTheme,
     );
 
+    if (!mounted) return;
+
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+    final navigator = Navigator.of(context);
+
     // Update providers
-    if (mounted) {
-      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-      await themeProvider.setTheme(_selectedTheme);
-
-      final fontProvider = Provider.of<FontProvider>(context, listen: false);
-      await fontProvider.setFont(_selectedFont);
-
-      // NEW: Initialize LocaleProvider
-      final localeProvider = Provider.of<LocaleProvider>(
-        context,
-        listen: false,
-      );
-      await localeProvider.setLanguage(_selectedLanguage);
-      await localeProvider.setCurrency(_selectedCurrency);
-    }
+    await themeProvider.setTheme(_selectedTheme);
+    await fontProvider.setFont(_selectedFont);
+    await localeProvider.setLanguage(_selectedLanguage);
+    await localeProvider.setCurrency(_selectedCurrency);
 
     // Mark onboarding complete
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/home');
-    }
+    navigator.pushReplacementNamed('/home');
   }
 
   void _nextStep() {
@@ -78,11 +75,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       _PhotoUploadStep(
         onPhotoSelected: (url) => _photoURL = url,
         onNext: _nextStep,
+        userService: widget.userService,
       ),
       _DisplayNameStep(
         onNameChanged: (name) => _displayName = name,
         onNext: _nextStep,
         onBack: _previousStep,
+        photoURL: _photoURL,
       ),
       _ThemePickerStep(
         selectedTheme: _selectedTheme,
@@ -115,11 +114,66 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 }
 
 // Step 1: Photo Upload
-class _PhotoUploadStep extends StatelessWidget {
-  const _PhotoUploadStep({required this.onPhotoSelected, required this.onNext});
+class _PhotoUploadStep extends StatefulWidget {
+  const _PhotoUploadStep(
+      {required this.onPhotoSelected,
+      required this.onNext,
+      required this.userService});
 
   final Function(String?) onPhotoSelected;
   final VoidCallback onNext;
+  final UserService userService;
+
+  @override
+  State<_PhotoUploadStep> createState() => _PhotoUploadStepState();
+}
+
+class _PhotoUploadStepState extends State<_PhotoUploadStep> {
+  File? _image;
+  bool _uploading = false;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _uploadImage() async {
+    if (_image == null) {
+      widget.onPhotoSelected(null);
+      widget.onNext();
+      return;
+    }
+
+    setState(() => _uploading = true);
+
+    try {
+      final userId = widget.userService.userId;
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_photos')
+          .child('$userId.jpg');
+      await storageRef.putFile(_image!);
+      final downloadUrl = await storageRef.getDownloadURL();
+      widget.onPhotoSelected(downloadUrl);
+      widget.onNext();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading photo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +182,12 @@ class _PhotoUploadStep extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.account_circle, size: 120, color: Colors.grey),
+          _image == null
+              ? const Icon(Icons.account_circle, size: 120, color: Colors.grey)
+              : CircleAvatar(
+                  radius: 60,
+                  backgroundImage: FileImage(_image!),
+                ),
           const SizedBox(height: 32),
           Text(
             'Add a Profile Photo',
@@ -145,12 +204,7 @@ class _PhotoUploadStep extends StatelessWidget {
           ),
           const SizedBox(height: 48),
           ElevatedButton.icon(
-            onPressed: () {
-              // TODO: Implement image picker
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Photo upload coming soon')),
-              );
-            },
+            onPressed: _pickImage,
             icon: const Icon(Icons.photo_camera),
             label: const Text('Choose Photo'),
             style: ElevatedButton.styleFrom(
@@ -161,13 +215,12 @@ class _PhotoUploadStep extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          TextButton(
-            onPressed: () {
-              onPhotoSelected(null);
-              onNext();
-            },
-            child: const Text('Skip for now'),
-          ),
+          _uploading
+              ? const CircularProgressIndicator()
+              : TextButton(
+                  onPressed: _uploadImage,
+                  child: Text(_image == null ? 'Skip for now' : 'Continue'),
+                ),
         ],
       ),
     );
@@ -180,11 +233,13 @@ class _DisplayNameStep extends StatefulWidget {
     required this.onNameChanged,
     required this.onNext,
     required this.onBack,
+    this.photoURL,
   });
 
   final Function(String) onNameChanged;
   final VoidCallback onNext;
   final VoidCallback onBack;
+  final String? photoURL;
 
   @override
   State<_DisplayNameStep> createState() => _DisplayNameStepState();
@@ -202,9 +257,11 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
   void _continue() {
     final name = _controller.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a display name')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a display name')),
+        );
+      }
       return;
     }
     widget.onNameChanged(name);
@@ -218,7 +275,12 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.badge_outlined, size: 120, color: Colors.grey),
+          widget.photoURL == null
+              ? const Icon(Icons.badge_outlined, size: 120, color: Colors.grey)
+              : CircleAvatar(
+                  radius: 60,
+                  backgroundImage: NetworkImage(widget.photoURL!),
+                ),
           const SizedBox(height: 32),
           Text(
             'What should we call you?',
@@ -321,7 +383,7 @@ class _ThemePickerStep extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(
                 context,
-              ).colorScheme.onSurface.withValues(alpha: 0.7),
+              ).colorScheme.onSurface.withAlpha(179),
             ),
             textAlign: TextAlign.center,
           ),
@@ -354,9 +416,7 @@ class _ThemePickerStep extends StatelessWidget {
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: theme.primaryColor.withValues(
-                                  alpha: 0.3,
-                                ),
+                                color: theme.primaryColor.withAlpha(77),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -398,7 +458,7 @@ class _ThemePickerStep extends StatelessWidget {
                             theme.description,
                             style: TextStyle(
                               fontSize: 12,
-                              color: theme.primaryColor.withValues(alpha: 0.7),
+                              color: theme.primaryColor.withAlpha(179),
                             ),
                             textAlign: TextAlign.center,
                             maxLines: 2,
@@ -619,7 +679,7 @@ class _LanguagePickerStep extends StatelessWidget {
                     'Choose your preferred language',
                     style: fontProvider.getTextStyle(
                       fontSize: 16,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      color: theme.colorScheme.onSurface.withAlpha(179),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -638,9 +698,7 @@ class _LanguagePickerStep extends StatelessWidget {
                         side: BorderSide(
                           color: isSelected
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.outline.withValues(
-                                  alpha: 0.2,
-                                ),
+                              : theme.colorScheme.outline.withAlpha(51),
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -764,7 +822,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                     'Choose your preferred currency',
                     style: fontProvider.getTextStyle(
                       fontSize: 16,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      color: theme.colorScheme.onSurface.withAlpha(179),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -783,9 +841,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                         side: BorderSide(
                           color: isSelected
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.outline.withValues(
-                                  alpha: 0.2,
-                                ),
+                              : theme.colorScheme.outline.withAlpha(51),
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -795,9 +851,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.1,
-                            ),
+                            color: theme.colorScheme.primary.withAlpha(26),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
@@ -825,9 +879,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                           code,
                           style: fontProvider.getTextStyle(
                             fontSize: 14,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
+                            color: theme.colorScheme.onSurface.withAlpha(153),
                           ),
                         ),
                         trailing: isSelected

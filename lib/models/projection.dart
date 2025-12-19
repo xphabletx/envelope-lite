@@ -44,6 +44,8 @@ class EnvelopeProjection {
   final String envelopeId;
   final String envelopeName;
   final String? emoji;
+  final String? iconType;
+  final String? iconValue;
   final double currentAmount;
   final double projectedAmount; // Amount after all scheduled payments/deposits
   final double targetAmount;
@@ -54,6 +56,8 @@ class EnvelopeProjection {
     required this.envelopeId,
     required this.envelopeName,
     this.emoji,
+    this.iconType,
+    this.iconValue,
     required this.currentAmount,
     required this.projectedAmount,
     required this.targetAmount,

@@ -4,488 +4,314 @@ import 'package:intl/intl.dart';
 import '../../models/account.dart';
 import '../../models/envelope.dart';
 import '../../services/account_repo.dart';
+import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
-import '../../widgets/accounts/account_editor_modal.dart';
 
 class AccountDetailScreen extends StatelessWidget {
   const AccountDetailScreen({
     super.key,
-    required this.accountId,
-    required this.accountRepo,
+    required this.account,
   });
 
-  final String accountId;
-  final AccountRepo accountRepo;
+  final Account account;
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    return StreamBuilder<Account>(
-      stream: accountRepo.accountStream(accountId),
-      builder: (context, accountSnapshot) {
-        if (!accountSnapshot.hasData) {
-          return Scaffold(
-            appBar: AppBar(),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final account = accountSnapshot.data!;
-
-        return Scaffold(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          appBar: AppBar(
-            backgroundColor: theme.scaffoldBackgroundColor,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: Text(
-              account.name,
-              style: fontProvider.getTextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            actions: [
-              // Edit button
-              IconButton(
-                icon: const Icon(Icons.edit),
-                tooltip: 'Edit Account',
-                color: theme.colorScheme.onSurface,
-                onPressed: () => _showEditModal(context, account),
-              ),
-              // Delete button
-              IconButton(
-                icon: const Icon(Icons.delete),
-                tooltip: 'Delete Account',
-                color: theme.colorScheme.error,
-                onPressed: () => _confirmDelete(context, account),
-              ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Account summary card
-                _AccountSummaryCard(account: account, accountRepo: accountRepo),
-
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 24),
-
-                // Linked envelopes section
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'Linked Envelopes',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Envelope list
-                FutureBuilder<List<Envelope>>(
-                  future: accountRepo.getLinkedEnvelopes(accountId),
-                  builder: (context, envelopeSnapshot) {
-                    if (!envelopeSnapshot.hasData) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-
-                    final envelopes = envelopeSnapshot.data!;
-
-                    if (envelopes.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.mail_outline,
-                                size: 64,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.3,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No envelopes linked yet',
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 18,
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.6,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Link envelopes to this account in envelope settings',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: envelopes.length,
-                      itemBuilder: (context, index) {
-                        return _EnvelopeTile(envelope: envelopes[index]);
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 80),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showEditModal(BuildContext context, Account account) {
-    showModalBottomSheet(
+  void _showLinkEnvelopesDialog(BuildContext context) {
+    final envelopeRepo = Provider.of<EnvelopeRepo>(context, listen: false);
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          AccountEditorModal(accountRepo: accountRepo, account: account),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, Account account) async {
-    // Check if any envelopes are linked
-    final linkedEnvelopes = await accountRepo.getLinkedEnvelopes(account.id);
-
-    if (!context.mounted) return;
-
-    if (linkedEnvelopes.isNotEmpty) {
-      // Show warning - cannot delete
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Cannot Delete Account'),
-          content: Text(
-            'This account has ${linkedEnvelopes.length} linked envelope(s). '
-            'Please unlink or delete them first.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Account?'),
-        content: Text(
-          'Are you sure you want to delete "${account.name}"? '
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (_) => _LinkEnvelopesDialog(
+        envelopeRepo: envelopeRepo,
+        account: account,
       ),
     );
-
-    if (confirmed != true || !context.mounted) return;
-
-    try {
-      await accountRepo.deleteAccount(account.id);
-      if (context.mounted) {
-        Navigator.pop(context); // Go back to account list
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Account deleted')));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
   }
-}
-
-// Account summary card widget
-class _AccountSummaryCard extends StatelessWidget {
-  const _AccountSummaryCard({required this.account, required this.accountRepo});
-
-  final Account account;
-  final AccountRepo accountRepo;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: '£');
+    final accountRepo = Provider.of<AccountRepo>(context, listen: false);
+    final envelopeRepo = Provider.of<EnvelopeRepo>(context, listen: false);
 
-    return FutureBuilder<double>(
-      future: accountRepo.getAssignedAmount(account.id),
-      builder: (context, snapshot) {
-        final assigned = snapshot.data ?? 0.0;
-        final available = account.currentBalance - assigned;
-
-        return Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          child: Column(
-            children: [
-              // Emoji + Name + Default badge
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    account.emoji ?? '💳',
-                    style: const TextStyle(fontSize: 48),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(account.name),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                account.getIconWidget(theme, size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    account.name,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  if (account.isDefault)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                ),
+                if (account.isDefault)
+                  const Icon(Icons.star, color: Colors.amber, size: 24),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Balance',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface.withAlpha(153),
+              ),
+            ),
+            Text(
+              currency.format(account.currentBalance),
+              style: fontProvider.getTextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<double>(
+              future: accountRepo.getAssignedAmount(account.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const LinearProgressIndicator();
+                }
+                final assigned = snapshot.data ?? 0.0;
+                final available = account.currentBalance - assigned;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.star, size: 16, color: Colors.white),
-                          const SizedBox(width: 4),
                           Text(
-                            'Default',
+                            'Assigned',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withAlpha(153),
+                            ),
+                          ),
+                          Text(
+                            currency.format(assigned),
                             style: fontProvider.getTextStyle(
-                              fontSize: 14,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                         ],
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Balance
-              Text(
-                'Balance',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                currency.format(account.currentBalance),
-                style: fontProvider.getTextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Assigned & Available
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Assigned',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Available ✨',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withAlpha(153),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          currency.format(assigned),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Available ✨',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
+                          Text(
+                            currency.format(available),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.secondary,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          currency.format(available),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.secondary,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            StreamBuilder<List<Envelope>>(
+              stream: envelopeRepo.envelopesStream(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final linkedEnvelopes = snapshot.data!
+                    .where((e) => e.linkedAccountId == account.id)
+                    .toList();
+
+                if (linkedEnvelopes.isEmpty) {
+                  return Column(
+                    children: [
+                      const Text('No envelopes linked to this account.'),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () => _showLinkEnvelopesDialog(context),
+                        child: const Text('Link Envelopes'),
+                      ),
+                    ],
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Linked Envelopes',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: linkedEnvelopes.length,
+                      itemBuilder: (context, index) {
+                        final envelope = linkedEnvelopes[index];
+                        return ListTile(
+                          leading: envelope.getIconWidget(theme),
+                          title: Text(envelope.name),
+                          trailing: Text(
+                            currency.format(envelope.currentAmount),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => _showLinkEnvelopesDialog(context),
+                      child: const Text('Link More Envelopes'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-// Envelope tile widget
-class _EnvelopeTile extends StatelessWidget {
-  const _EnvelopeTile({required this.envelope});
+class _LinkEnvelopesDialog extends StatefulWidget {
+  const _LinkEnvelopesDialog({
+    required this.envelopeRepo,
+    required this.account,
+  });
 
-  final Envelope envelope;
+  final EnvelopeRepo envelopeRepo;
+  final Account account;
+
+  @override
+  State<_LinkEnvelopesDialog> createState() => _LinkEnvelopesDialogState();
+}
+
+class _LinkEnvelopesDialogState extends State<_LinkEnvelopesDialog> {
+  final Set<String> _selectedEnvelopeIds = {};
+  bool _isLinking = false;
+
+  void _toggleEnvelopeSelection(String envelopeId) {
+    setState(() {
+      if (_selectedEnvelopeIds.contains(envelopeId)) {
+        _selectedEnvelopeIds.remove(envelopeId);
+      } else {
+        _selectedEnvelopeIds.add(envelopeId);
+      }
+    });
+  }
+
+  Future<void> _handleLinkEnvelopes() async {
+    if (_isLinking || _selectedEnvelopeIds.isEmpty) return;
+
+    setState(() => _isLinking = true);
+
+    try {
+      await widget.envelopeRepo.linkEnvelopesToAccount(
+        _selectedEnvelopeIds.toList(),
+        widget.account.id,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${_selectedEnvelopeIds.length} envelope(s) linked to ${widget.account.name}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLinking = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error linking envelopes: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    return AlertDialog(
+      title: Text('Link Envelopes to ${widget.account.name}'),
+      content: StreamBuilder<List<Envelope>>(
+        stream: widget.envelopeRepo.unlinkedEnvelopesStream(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final unlinkedEnvelopes = snapshot.data!;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () {
-            // TODO: Navigate to envelope detail screen
-            // Navigator.push(context, MaterialPageRoute(...));
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: theme.colorScheme.outline.withValues(alpha: 0.2),
-              ),
-              borderRadius: BorderRadius.circular(12),
+          if (unlinkedEnvelopes.isEmpty) {
+            return const Text('No unlinked envelopes available.');
+          }
+
+          return SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: unlinkedEnvelopes.length,
+              itemBuilder: (context, index) {
+                final envelope = unlinkedEnvelopes[index];
+                final isSelected = _selectedEnvelopeIds.contains(envelope.id);
+                return CheckboxListTile(
+                  title: Text(envelope.name),
+                  value: isSelected,
+                  onChanged: (_) => _toggleEnvelopeSelection(envelope.id),
+                );
+              },
             ),
-            child: Row(
-              children: [
-                Text(
-                  envelope.emoji ?? '📨',
-                  style: const TextStyle(fontSize: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        envelope.name,
-                        style: fontProvider.getTextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (envelope.subtitle != null &&
-                          envelope.subtitle!.isNotEmpty)
-                        Text(
-                          envelope.subtitle!,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Text(
-                  currency.format(envelope.currentAmount),
-                  style: fontProvider.getTextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
-              ],
-            ),
-          ),
-        ),
+          );
+        },
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _handleLinkEnvelopes,
+          child: _isLinking
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Link Selected'),
+        ),
+      ],
     );
   }
 }

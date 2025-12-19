@@ -46,7 +46,7 @@ class EnvelopeHeaderCard extends StatelessWidget {
           children: [
             // The beautiful 3D envelope (Wider "Bank Note" Aspect Ratio)
             _RealisticEnvelope(
-              emoji: envelope.emoji ?? '💰',
+              envelope: envelope,
               primaryColor: theme.colorScheme.primary,
             ),
 
@@ -183,10 +183,10 @@ class _InfoChip extends StatelessWidget {
 
 // The gorgeous 3D envelope (Refactored with bottom flap and deeper shadows)
 class _RealisticEnvelope extends StatelessWidget {
-  final String emoji;
+  final Envelope envelope;
   final Color primaryColor;
 
-  const _RealisticEnvelope({required this.emoji, required this.primaryColor});
+  const _RealisticEnvelope({required this.envelope, required this.primaryColor});
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +295,7 @@ class _RealisticEnvelope extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Text(emoji, style: TextStyle(fontSize: emojiSize)),
+              child: envelope.getIconWidget(Theme.of(context), size: emojiSize * 0.9),
             ),
           ),
         ],

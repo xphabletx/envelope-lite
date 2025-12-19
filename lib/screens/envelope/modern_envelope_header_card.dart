@@ -223,10 +223,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     ],
                     border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: Text(
-                    envelope.emoji ?? '💰',
-                    style: const TextStyle(fontSize: 36),
-                  ),
+                  child: envelope.getIconWidget(theme, size: 36),
                 ),
               ),
 

@@ -60,6 +60,9 @@ class AccountRepo {
     String? emoji,
     String? colorName,
     bool isDefault = false,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
   }) async {
     final doc = _accountsCol().doc();
 
@@ -79,6 +82,9 @@ class AccountRepo {
       'isDefault': isDefault,
       'isShared': _inWorkspace,
       'workspaceId': _workspaceId,
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
     });
 
     return doc.id;
@@ -91,6 +97,9 @@ class AccountRepo {
     String? emoji,
     String? colorName,
     bool? isDefault,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
   }) async {
     final updateData = <String, dynamic>{
       'lastUpdated': fs.FieldValue.serverTimestamp(),
@@ -100,6 +109,11 @@ class AccountRepo {
     if (currentBalance != null) updateData['currentBalance'] = currentBalance;
     if (emoji != null) updateData['emoji'] = emoji;
     if (colorName != null) updateData['colorName'] = colorName;
+    if (iconType != null) {
+      updateData['iconType'] = iconType;
+      updateData['iconValue'] = iconValue;
+      updateData['iconColor'] = iconColor;
+    }
 
     if (isDefault == true) {
       await _unsetOtherDefaults(excludeAccountId: accountId);

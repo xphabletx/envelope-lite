@@ -253,6 +253,7 @@ class EnvelopeRepo {
 
   // ------------------------------ Workspace ----------------------------------
   Future<void> setWorkspace(String? newWorkspaceId) async {
+    print('[EnvelopeRepo] DEBUG: Setting workspace to: $newWorkspaceId');
     _workspaceId = (newWorkspaceId?.isEmpty ?? true) ? null : newWorkspaceId;
 
     await _db.collection('users').doc(_userId).set({
@@ -298,9 +299,13 @@ class EnvelopeRepo {
     String? groupId,
     String? subtitle,
     String? emoji,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
     bool autoFillEnabled = false,
     double? autoFillAmount,
   }) async {
+    print('[EnvelopeRepo] DEBUG: Creating envelope with name: $name');
     final doc = _colEnvelopes().doc();
 
     final user = FirebaseAuth.instance.currentUser;
@@ -317,6 +322,9 @@ class EnvelopeRepo {
       'groupId': groupId,
       'subtitle': subtitle,
       'emoji': emoji,
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
       'autoFillEnabled': autoFillEnabled,
       'autoFillAmount': autoFillAmount,
       'isShared': inWorkspace,
@@ -374,12 +382,17 @@ class EnvelopeRepo {
     String? name,
     double? targetAmount,
     String? emoji,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
     String? subtitle,
     String? groupId,
     bool? autoFillEnabled,
     double? autoFillAmount,
     bool? isShared,
+    String? linkedAccountId,
   }) async {
+    print('[EnvelopeRepo] DEBUG: Updating envelope $envelopeId. isShared: $isShared');
     final updateData = <String, dynamic>{
       'updatedAt': fs.FieldValue.serverTimestamp(),
     };
@@ -387,12 +400,18 @@ class EnvelopeRepo {
     if (groupId != null) updateData['groupId'] = groupId;
     if (targetAmount != null) updateData['targetAmount'] = targetAmount;
     if (emoji != null) updateData['emoji'] = emoji;
+    if (iconType != null) updateData['iconType'] = iconType;
+    if (iconValue != null) updateData['iconValue'] = iconValue;
+    if (iconColor != null) updateData['iconColor'] = iconColor;
     if (subtitle != null) updateData['subtitle'] = subtitle;
     if (autoFillEnabled != null) {
       updateData['autoFillEnabled'] = autoFillEnabled;
     }
     if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
     if (isShared != null) updateData['isShared'] = isShared;
+    if (linkedAccountId != null) {
+      updateData['linkedAccountId'] = linkedAccountId;
+    }
 
     await _colEnvelopes().doc(envelopeId).update(updateData);
 
@@ -743,6 +762,7 @@ class EnvelopeRepo {
     required String description,
     DateTime? date,
   }) async {
+    print('[EnvelopeRepo] DEBUG: Transferring $amount from $fromEnvelopeId to $toEnvelopeId');
     final fromDoc = await _colEnvelopes().doc(fromEnvelopeId).get();
     final toDoc = await _colEnvelopes().doc(toEnvelopeId).get();
 
@@ -822,6 +842,23 @@ class EnvelopeRepo {
   /// Fetch all envelopes once (for CSV export)
   Future<List<Envelope>> getAllEnvelopes() {
     return envelopesStream().first;
+  }
+
+  Stream<List<Envelope>> unlinkedEnvelopesStream() {
+    return envelopesStream().map((envelopes) =>
+        envelopes.where((e) => e.linkedAccountId == null).toList());
+  }
+
+  Future<void> linkEnvelopesToAccount(
+      List<String> envelopeIds, String accountId) async {
+    final batch = _db.batch();
+    for (final envelopeId in envelopeIds) {
+      batch.update(_colEnvelopes().doc(envelopeId), {
+        'linkedAccountId': accountId,
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
   }
 
   /// Fetch all transactions once (for CSV export)

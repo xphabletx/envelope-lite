@@ -15,6 +15,8 @@ import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../providers/theme_provider.dart';
+import '../theme/app_themes.dart';
 import '../screens/pay_day/pay_day_preview_screen.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
@@ -65,18 +67,12 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     );
   }
 
-  // FIXED: Explicit color overrides to match the Editor
-  Color _getDisplayColor(String colorName, ColorScheme theme) {
-    switch (colorName) {
-      case 'Black':
-        return const Color(0xFF212121);
-      case 'Brown':
-        return const Color(0xFF5D4037);
-      case 'Grey':
-        return const Color(0xFF757575);
-      default:
-        return GroupColors.getThemedColor(colorName, theme);
+  BinderColorOption _getBinderColors(int colorIndex, String themeId) {
+    final themeColors = ThemeBinderColors.getColorsForTheme(themeId);
+    if (colorIndex >= 0 && colorIndex < themeColors.length) {
+      return themeColors[colorIndex];
     }
+    return themeColors.first;
   }
 
   @override
@@ -90,6 +86,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final theme = Theme.of(context);
     final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(
@@ -302,14 +299,10 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             stats['envelopes'] as List<Envelope>;
                         final totalSaved = stats['totalSaved'] as double;
 
-                        // FIXED: Use the specific color overrides
-                        final groupColor = _getDisplayColor(
-                          group.colorName,
-                          theme.colorScheme,
+                        final binderColors = _getBinderColors(
+                          group.colorIndex,
+                          themeProvider.currentThemeId,
                         );
-
-                        final paperColor = theme.colorScheme.surface;
-                        final paperTextColor = theme.colorScheme.onSurface;
 
                         final isPartner =
                             group.userId != widget.repo.currentUserId;
@@ -323,9 +316,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             children: [
                               _BinderSpread(
                                 group: group,
-                                groupColor: groupColor,
-                                paperColor: paperColor,
-                                paperTextColor: paperTextColor,
+                                binderColors: binderColors,
                                 envelopes: groupEnvelopes,
                                 totalSaved: totalSaved,
                                 currency: currency,
@@ -350,9 +341,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                       child: FutureBuilder<String>(
                                         future:
                                             WorkspaceHelper.getUserDisplayName(
-                                              group.userId,
-                                              widget.repo.currentUserId,
-                                            ),
+                                          group.userId,
+                                          widget.repo.currentUserId,
+                                        ),
                                         builder: (context, nameSnapshot) {
                                           return PartnerBadge(
                                             partnerName:
@@ -399,9 +390,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
 
 class _BinderSpread extends StatefulWidget {
   final EnvelopeGroup group;
-  final Color groupColor;
-  final Color paperColor;
-  final Color paperTextColor;
+  final BinderColorOption binderColors;
   final List<Envelope> envelopes;
   final double totalSaved;
   final NumberFormat currency;
@@ -412,9 +401,7 @@ class _BinderSpread extends StatefulWidget {
 
   const _BinderSpread({
     required this.group,
-    required this.groupColor,
-    required this.paperColor,
-    required this.paperTextColor,
+    required this.binderColors,
     required this.envelopes,
     required this.totalSaved,
     required this.currency,
@@ -461,15 +448,15 @@ class _BinderSpreadState extends State<_BinderSpread> {
   Widget build(BuildContext context) {
     final selectedEnvelope =
         _selectedIndex != null && _selectedIndex! < widget.envelopes.length
-        ? widget.envelopes[_selectedIndex!]
-        : null;
+            ? widget.envelopes[_selectedIndex!]
+            : null;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: widget.theme.colorScheme.shadow.withValues(alpha: 0.2),
+            color: widget.theme.colorScheme.shadow.withAlpha(51),
             blurRadius: 20,
             offset: const Offset(0, 10),
             spreadRadius: 2,
@@ -481,7 +468,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
           // LAYER 1: The "Leather" Binder Cover (Custom Paint)
           Positioned.fill(
             child: CustomPaint(
-              painter: _OpenBinderPainter(color: widget.groupColor),
+              painter: _OpenBinderPainter(color: widget.binderColors.binderColor),
             ),
           ),
 
@@ -495,7 +482,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   flex: 1,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: widget.paperColor,
+                      color: widget.binderColors.paperColor,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(8),
                         bottomLeft: Radius.circular(8),
@@ -504,7 +491,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
+                          color: Colors.black.withAlpha(26),
                           blurRadius: 4,
                           offset: const Offset(1, 1),
                         ),
@@ -542,7 +529,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     Icon(
                                       Icons.mail,
                                       size: 16,
-                                      color: widget.groupColor,
+                                      color: widget.binderColors.binderColor,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -550,9 +537,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                       style: fontProvider.getTextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
-                                        color: widget.paperTextColor.withValues(
-                                          alpha: 0.7,
-                                        ),
+                                        color: widget.binderColors.envelopeTextColor
+                                            .withAlpha(179),
                                       ),
                                     ),
                                   ],
@@ -562,9 +548,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                   child: _DynamicEnvelopeStack(
                                     envelopes: widget.envelopes,
                                     selectedIndex: _selectedIndex,
-                                    groupColor: widget.groupColor,
-                                    paperColor: widget.paperColor,
-                                    paperTextColor: widget.paperTextColor,
+                                    binderColors: widget.binderColors,
                                     currency: widget.currency,
                                     onTap: _handleEnvelopeTap,
                                   ),
@@ -583,7 +567,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   flex: 1,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: widget.paperColor,
+                      color: widget.binderColors.paperColor,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(2),
                         bottomLeft: Radius.circular(2),
@@ -592,7 +576,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
+                          color: Colors.black.withAlpha(26),
                           blurRadius: 4,
                           offset: const Offset(-1, 1),
                         ),
@@ -610,17 +594,16 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               width: 55,
                               height: 55,
                               decoration: BoxDecoration(
-                                color: widget.paperColor,
+                                color: widget.binderColors.paperColor,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: widget.groupColor,
+                                  color: widget.binderColors.binderColor,
                                   width: 3,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: widget.groupColor.withValues(
-                                      alpha: 0.2,
-                                    ),
+                                    color: widget.binderColors.binderColor
+                                        .withAlpha(51),
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
@@ -639,7 +622,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               style: fontProvider.getTextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: widget.paperTextColor,
+                                color: widget.binderColors.envelopeTextColor,
                               ),
                               textAlign: TextAlign.center,
                               maxLines: 2,
@@ -652,7 +635,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: widget.groupColor.withValues(alpha: 0.1),
+                                color: widget.binderColors.binderColor
+                                    .withAlpha(26),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Column(
@@ -661,7 +645,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     tr('group_binder_total'),
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: widget.groupColor,
+                                      color: widget.binderColors.binderColor,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 0.5,
                                     ),
@@ -674,7 +658,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                       style: fontProvider.getTextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold,
-                                        color: widget.groupColor,
+                                        color: widget.binderColors.binderColor,
                                       ),
                                     ),
                                   ),
@@ -689,15 +673,15 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           Column(
                             children: [
                               Divider(
-                                color: widget.paperTextColor.withValues(
-                                  alpha: 0.1,
-                                ),
+                                color: widget.binderColors.envelopeTextColor
+                                    .withAlpha(26),
                               ),
                               const SizedBox(height: 8),
                               Icon(
                                 Icons.mail,
                                 size: 20,
-                                color: widget.groupColor.withValues(alpha: 0.7),
+                                color: widget.binderColors.binderColor
+                                    .withAlpha(179),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -705,7 +689,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 style: fontProvider.getTextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: widget.paperTextColor,
+                                  color: widget.binderColors.envelopeTextColor,
                                 ),
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
@@ -721,7 +705,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: widget.groupColor,
+                                    color: widget.binderColors.binderColor,
                                   ),
                                 ),
                               ),
@@ -730,9 +714,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 tr('tap_again_for_details'),
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: widget.paperTextColor.withValues(
-                                    alpha: 0.5,
-                                  ),
+                                  color: widget.binderColors.envelopeTextColor
+                                      .withAlpha(128),
                                   fontStyle: FontStyle.italic,
                                 ),
                                 textAlign: TextAlign.center,
@@ -747,7 +730,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: widget.groupColor,
+                                  backgroundColor:
+                                      widget.binderColors.binderColor,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 10,
@@ -777,9 +761,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   side: BorderSide(
-                                    color: widget.groupColor.withValues(
-                                      alpha: 0.5,
-                                    ),
+                                    color: widget.binderColors.binderColor
+                                        .withAlpha(128),
                                     width: 1.5,
                                   ),
                                   padding: const EdgeInsets.symmetric(
@@ -792,7 +775,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 icon: Icon(
                                   Icons.analytics,
                                   size: 16,
-                                  color: widget.groupColor,
+                                  color: widget.binderColors.binderColor,
                                 ),
                                 label: FittedBox(
                                   fit: BoxFit.scaleDown,
@@ -801,7 +784,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     style: fontProvider.getTextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: widget.groupColor,
+                                      color: widget.binderColors.binderColor,
                                     ),
                                   ),
                                 ),
@@ -822,22 +805,17 @@ class _BinderSpreadState extends State<_BinderSpread> {
     );
   }
 }
-
 class _DynamicEnvelopeStack extends StatelessWidget {
   final List<Envelope> envelopes;
   final int? selectedIndex;
-  final Color groupColor;
-  final Color paperColor;
-  final Color paperTextColor;
+  final BinderColorOption binderColors;
   final NumberFormat currency;
   final Function(int) onTap;
 
   const _DynamicEnvelopeStack({
     required this.envelopes,
     required this.selectedIndex,
-    required this.groupColor,
-    required this.paperColor,
-    required this.paperTextColor,
+    required this.binderColors,
     required this.currency,
     required this.onTap,
   });
@@ -891,18 +869,18 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                   height: envelopeHeight,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: paperColor,
+                    color: binderColors.paperColor,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isSelected
-                          ? groupColor
-                          : groupColor.withValues(alpha: 0.3),
+                          ? binderColors.envelopeBorderColor
+                          : binderColors.envelopeBorderColor.withAlpha(77),
                       width: isSelected ? 2 : 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: groupColor.withValues(
-                          alpha: isSelected ? 0.2 : 0.05,
+                        color: binderColors.binderColor.withAlpha(
+                          isSelected ? 51 : 13,
                         ),
                         blurRadius: isSelected ? 4 : 2,
                         offset: const Offset(0, 1),
@@ -920,8 +898,8 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: paperTextColor.withValues(
-                              alpha: isSelected ? 1.0 : 0.8,
+                            color: binderColors.envelopeTextColor.withAlpha(
+                              isSelected ? 255 : 204,
                             ),
                           ),
                           maxLines: 1,
@@ -934,7 +912,7 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: groupColor,
+                            color: binderColors.binderColor,
                           ),
                         ),
                     ],
@@ -959,12 +937,10 @@ class _OpenBinderPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final hsl = HSLColor.fromColor(color);
     final baseColor = color;
-    final darkerColor = hsl
-        .withLightness((hsl.lightness - 0.15).clamp(0.0, 1.0))
-        .toColor();
-    final lighterColor = hsl
-        .withLightness((hsl.lightness + 0.1).clamp(0.0, 1.0))
-        .toColor();
+    final darkerColor =
+        hsl.withLightness((hsl.lightness - 0.15).clamp(0.0, 1.0)).toColor();
+    final lighterColor =
+        hsl.withLightness((hsl.lightness + 0.1).clamp(0.0, 1.0)).toColor();
 
     final rrect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
@@ -997,7 +973,7 @@ class _OpenBinderPainter extends CustomPainter {
 
     // Add vertical lines to spine to simulate ridges
     final linePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.1)
+      ..color = Colors.black.withAlpha(26)
       ..strokeWidth = 1;
 
     canvas.drawLine(

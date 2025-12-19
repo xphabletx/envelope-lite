@@ -32,6 +32,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
 
   // New Flow Logic
   void _initiateCreate() {
+    print('[WorkspaceGate] DEBUG: Initiating Create Workspace flow.');
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -56,6 +57,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
 
   void _initiateJoin() {
     final code = _joinCtrl.text.trim().toUpperCase();
+    print('[WorkspaceGate] DEBUG: Initiating Join Workspace flow with code: $code');
     if (code.isEmpty) return;
 
     Navigator.push(
@@ -82,6 +84,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
   }
 
   void _navigateToSettings(String workspaceId) {
+    print('[WorkspaceGate] DEBUG: Navigating to WorkspaceSettingsScreen with workspaceId: $workspaceId');
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final repo =
         widget.repo ??
@@ -274,14 +277,19 @@ class _WorkspaceSharingSelectionScreenState
   }
 
   Future<void> _finish() async {
+    print('[WorkspaceSharingSelectionScreen] DEBUG: _finish called.');
     setState(() => _processing = true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      print('[WorkspaceSharingSelectionScreen] DEBUG: User is not authenticated.');
+      return;
+    }
 
     try {
       String workspaceId = '';
 
       // 1. Create or Join Workspace
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Step 1 - Create or Join Workspace.');
       if (widget.mode == WorkspaceSharingMode.create) {
         final code = _randomCode(6);
         final ref = _db.collection('workspaces').doc();
@@ -293,6 +301,7 @@ class _WorkspaceSharingSelectionScreenState
           'members': {uid: true},
         });
         workspaceId = ref.id;
+        print('[WorkspaceSharingSelectionScreen] DEBUG: Created workspace with id: $workspaceId');
       } else {
         final snap = await _db
             .collection('workspaces')
@@ -303,9 +312,11 @@ class _WorkspaceSharingSelectionScreenState
         final doc = snap.docs.first;
         await doc.reference.update({'members.$uid': true});
         workspaceId = doc.id;
+        print('[WorkspaceSharingSelectionScreen] DEBUG: Joined workspace with id: $workspaceId');
       }
 
       // 2. Update Sharing Preferences (Batch)
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences.');
       final batch = _db.batch();
 
       for (var doc in _myEnvelopes) {
@@ -318,14 +329,20 @@ class _WorkspaceSharingSelectionScreenState
       }
 
       // 3. Save "Hide Future" Preference
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Step 3 - Save "Hide Future" Preference.');
       batch.set(_db.collection('users').doc(uid), {
         'workspacePreferences': {'hideFutureEnvelopes': _hideFutureEnvelopes},
       }, SetOptions(merge: true));
 
       await batch.commit();
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Batch commit successful.');
 
-      if (mounted) widget.onComplete(workspaceId);
+      if (mounted) {
+        print('[WorkspaceSharingSelectionScreen] DEBUG: Calling onComplete with workspaceId: $workspaceId');
+        widget.onComplete(workspaceId);
+      }
     } catch (e) {
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Error in _finish: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,

@@ -17,6 +17,14 @@ class ScheduledPaymentRepo {
         .collection('scheduledPayments');
   }
 
+  // Get all scheduled payments
+  Future<List<ScheduledPayment>> getAllScheduledPayments() async {
+    final snapshot = await _collection().get();
+    return snapshot.docs
+        .map((doc) => ScheduledPayment.fromFirestore(doc))
+        .toList();
+  }
+
   // Stream all scheduled payments for current user
   Stream<List<ScheduledPayment>> get scheduledPaymentsStream {
     return _collection()

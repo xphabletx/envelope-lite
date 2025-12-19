@@ -1,12 +1,11 @@
 // lib/theme/app_themes.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppThemes {
   // Theme IDs
   static const String latteId = 'latte_love';
   static const String blushId = 'blush_gold';
-  static const String lavenderID = 'lavender_dreams';
+  static const String lavenderId = 'lavender_dreams';
   static const String mintId = 'mint_fresh';
   static const String monoId = 'monochrome';
   static const String singularityId = 'singularity';
@@ -18,7 +17,7 @@ class AppThemes {
         return latteLove;
       case blushId:
         return blushGold;
-      case lavenderID:
+      case lavenderId:
         return lavenderDreams;
       case mintId:
         return mintFresh;
@@ -38,7 +37,7 @@ class AppThemes {
         return 'Latte Love';
       case blushId:
         return 'Blush & Gold';
-      case lavenderID:
+      case lavenderId:
         return 'Lavender Dreams';
       case mintId:
         return 'Mint Fresh';
@@ -69,7 +68,7 @@ class AppThemes {
         surfaceColor: const Color(0xFFF8E8E8),
       ),
       ThemeOption(
-        id: lavenderID,
+        id: lavenderId,
         name: 'Lavender Dreams',
         description: 'Lilacs, soft purples, and pale blues',
         primaryColor: const Color(0xFFB8A7D9),
@@ -116,16 +115,15 @@ class AppThemes {
       backgroundColor: Color(0xFFF5F0E8),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Color(0xFF5C4033),
       ),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Color(0xFF5C4033)),
-      bodyMedium: const TextStyle(color: Color(0xFF795548)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Color(0xFF5C4033)),
+      bodyMedium: TextStyle(color: Color(0xFF795548)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Color(0xFF5C4033),
@@ -155,16 +153,15 @@ class AppThemes {
       backgroundColor: Color(0xFFFFF5F5),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Color(0xFF6B4E71),
       ),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Color(0xFF6B4E71)),
-      bodyMedium: const TextStyle(color: Color(0xFF9B7EAC)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Color(0xFF6B4E71)),
+      bodyMedium: TextStyle(color: Color(0xFF9B7EAC)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Color(0xFF6B4E71),
@@ -194,16 +191,15 @@ class AppThemes {
       backgroundColor: Color(0xFFF5F0FF),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Color(0xFF4A3F6B),
       ),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Color(0xFF4A3F6B)),
-      bodyMedium: const TextStyle(color: Color(0xFF6B5B95)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Color(0xFF4A3F6B)),
+      bodyMedium: TextStyle(color: Color(0xFF6B5B95)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Color(0xFF4A3F6B),
@@ -233,16 +229,15 @@ class AppThemes {
       backgroundColor: Color(0xFFF0FFF5),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Color(0xFF2C5F4D),
       ),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Color(0xFF2C5F4D)),
-      bodyMedium: const TextStyle(color: Color(0xFF4A7C5D)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Color(0xFF2C5F4D)),
+      bodyMedium: TextStyle(color: Color(0xFF4A7C5D)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Color(0xFF2C5F4D),
@@ -269,19 +264,18 @@ class AppThemes {
     ),
     scaffoldBackgroundColor: const Color(0xFFF5F5F5),
     appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF5F5F5),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Color(0xFF212121),
       ),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Color(0xFF212121)),
-      bodyMedium: const TextStyle(color: Color(0xFF616161)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Color(0xFF212121)),
+      bodyMedium: TextStyle(color: Color(0xFF616161)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Color(0xFF212121),
@@ -311,17 +305,16 @@ class AppThemes {
       backgroundColor: Color(0xFF0A1929),
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Caveat',
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: Colors.white,
       ),
       iconTheme: IconThemeData(color: Color(0xFF00BCD4)),
     ),
-    textTheme: GoogleFonts.caveatTextTheme().copyWith(
-      bodyLarge: const TextStyle(color: Colors.white),
-      bodyMedium: const TextStyle(color: Color(0xFFB0BEC5)),
-      titleLarge: const TextStyle(
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Colors.white),
+      bodyMedium: TextStyle(color: Color(0xFFB0BEC5)),
+      titleLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Colors.white,
@@ -355,4 +348,254 @@ class ThemeOption {
     required this.primaryColor,
     required this.surfaceColor,
   });
+}
+
+class BinderColorOption {
+  final String id;
+  final String displayName;
+  final Color binderColor;
+  final Color paperColor;
+  final Color envelopeTextColor;
+  final Color envelopeBorderColor;
+
+  const BinderColorOption({
+    required this.id,
+    required this.displayName,
+    required this.binderColor,
+    required this.paperColor,
+    required this.envelopeTextColor,
+    required this.envelopeBorderColor,
+  });
+}
+
+class ThemeBinderColors {
+  // Returns available binder colors for a given theme
+  static List<BinderColorOption> getColorsForTheme(String themeId) {
+    switch (themeId) {
+      case AppThemes.latteId:
+        return _latteLoveColors;
+      case AppThemes.blushId:
+        return _blushGoldColors;
+      case AppThemes.lavenderId:
+        return _lavenderDreamsColors;
+      case AppThemes.mintId:
+        return _mintFreshColors;
+      case AppThemes.monoId:
+        return _monochromeColors;
+      case AppThemes.singularityId:
+        return _singularityColors;
+      default:
+        return _latteLoveColors;
+    }
+  }
+
+  static final _latteLoveColors = [
+    const BinderColorOption(
+      id: 'espresso',
+      displayName: 'Espresso',
+      binderColor: Color(0xFF5C4033),
+      paperColor: Color(0xFFF5EFE6),
+      envelopeTextColor: Color(0xFF3E2723),
+      envelopeBorderColor: Color(0xFF8B6F47),
+    ),
+    const BinderColorOption(
+      id: 'caramel',
+      displayName: 'Caramel',
+      binderColor: Color(0xFFC89B6C),
+      paperColor: Color(0xFFFFF8F0),
+      envelopeTextColor: Color(0xFF5D4037),
+      envelopeBorderColor: Color(0xFFA67C52),
+    ),
+    const BinderColorOption(
+      id: 'mocha',
+      displayName: 'Mocha',
+      binderColor: Color(0xFF8B6F47),
+      paperColor: Color(0xFFF0E8DC),
+      envelopeTextColor: Color(0xFF4A3426),
+      envelopeBorderColor: Color(0xFF6D563D),
+    ),
+    const BinderColorOption(
+      id: 'vanilla_cream',
+      displayName: 'Vanilla Cream',
+      binderColor: Color(0xFFE8DFD0),
+      paperColor: Color(0xFFFFFBF5),
+      envelopeTextColor: Color(0xFF6B5544),
+      envelopeBorderColor: Color(0xFFC4A582),
+    ),
+  ];
+
+  static final _blushGoldColors = [
+    const BinderColorOption(
+      id: 'rose_gold',
+      displayName: 'Rose Gold',
+      binderColor: Color(0xFFD4AF37),
+      paperColor: Color(0xFFFFF5F5),
+      envelopeTextColor: Color(0xFF8B6B4D),
+      envelopeBorderColor: Color(0xFFE8A0BF),
+    ),
+    const BinderColorOption(
+      id: 'blush_pink',
+      displayName: 'Blush Pink',
+      binderColor: Color(0xFFE8A0BF),
+      paperColor: Color(0xFFFFF8FA),
+      envelopeTextColor: Color(0xFF6B4E71),
+      envelopeBorderColor: Color(0xFFD4AF37),
+    ),
+    const BinderColorOption(
+      id: 'dusty_rose',
+      displayName: 'Dusty Rose',
+      binderColor: Color(0xFFC9A0A6),
+      paperColor: Color(0xFFFAF0F2),
+      envelopeTextColor: Color(0xFF5C4550),
+      envelopeBorderColor: Color(0xFFB88B94),
+    ),
+    const BinderColorOption(
+      id: 'champagne',
+      displayName: 'Champagne',
+      binderColor: Color(0xFFF7E7CE),
+      paperColor: Color(0xFFFFFAF5),
+      envelopeTextColor: Color(0xFF8B7355),
+      envelopeBorderColor: Color(0xFFDDB892),
+    ),
+  ];
+
+  static final _lavenderDreamsColors = [
+    const BinderColorOption(
+      id: 'deep_lavender',
+      displayName: 'Deep Lavender',
+      binderColor: Color(0xFF9B87C6),
+      paperColor: Color(0xFFF5F0FF),
+      envelopeTextColor: Color(0xFF4A3F6B),
+      envelopeBorderColor: Color(0xFFB8A7D9),
+    ),
+    const BinderColorOption(
+      id: 'lilac',
+      displayName: 'Lilac',
+      binderColor: Color(0xFFC5B3E6),
+      paperColor: Color(0xFFFAF7FF),
+      envelopeTextColor: Color(0xFF5C4F7A),
+      envelopeBorderColor: Color(0xFFA695C7),
+    ),
+    const BinderColorOption(
+      id: 'periwinkle',
+      displayName: 'Periwinkle',
+      binderColor: Color(0xFF8B9DC3),
+      paperColor: Color(0xFFF0F2FA),
+      envelopeTextColor: Color(0xFF3D4E6B),
+      envelopeBorderColor: Color(0xFF7B8FB8),
+    ),
+    const BinderColorOption(
+      id: 'violet_mist',
+      displayName: 'Violet Mist',
+      binderColor: Color(0xFFDFD3E3),
+      paperColor: Color(0xFFFFFBFF),
+      envelopeTextColor: Color(0xFF6B5B7A),
+      envelopeBorderColor: Color(0xFFB8A7C7),
+    ),
+  ];
+
+  static final _mintFreshColors = [
+    const BinderColorOption(
+      id: 'sage_green',
+      displayName: 'Sage Green',
+      binderColor: Color(0xFF7BB8A0),
+      paperColor: Color(0xFFF5FFF9),
+      envelopeTextColor: Color(0xFF2C5F4D),
+      envelopeBorderColor: Color(0xFF5A9B82),
+    ),
+    const BinderColorOption(
+      id: 'mint',
+      displayName: 'Mint',
+      binderColor: Color(0xFFA8D8C8),
+      paperColor: Color(0xFFF7FFFC),
+      envelopeTextColor: Color(0xFF3A6B5A),
+      envelopeBorderColor: Color(0xFF8CC4B2),
+    ),
+    const BinderColorOption(
+      id: 'eucalyptus',
+      displayName: 'Eucalyptus',
+      binderColor: Color(0xFF8FAA9E),
+      paperColor: Color(0xFFF2F7F5),
+      envelopeTextColor: Color(0xFF3E5249),
+      envelopeBorderColor: Color(0xFF6D8C7F),
+    ),
+    const BinderColorOption(
+      id: 'sea_glass',
+      displayName: 'Sea Glass',
+      binderColor: Color(0xFFB8D8D8),
+      paperColor: Color(0xFFF5FFFE),
+      envelopeTextColor: Color(0xFF4A6B6B),
+      envelopeBorderColor: Color(0xFF90C4C4),
+    ),
+  ];
+
+  static final _monochromeColors = [
+    const BinderColorOption(
+      id: 'charcoal',
+      displayName: 'Charcoal',
+      binderColor: Color(0xFF424242),
+      paperColor: Color(0xFFFAFAFA),
+      envelopeTextColor: Color(0xFF212121),
+      envelopeBorderColor: Color(0xFF616161),
+    ),
+    const BinderColorOption(
+      id: 'steel',
+      displayName: 'Steel',
+      binderColor: Color(0xFF757575),
+      paperColor: Color(0xFFF5F5F5),
+      envelopeTextColor: Color(0xFF424242),
+      envelopeBorderColor: Color(0xFF9E9E9E),
+    ),
+    const BinderColorOption(
+      id: 'silver',
+      displayName: 'Silver',
+      binderColor: Color(0xFFBDBDBD),
+      paperColor: Color(0xFFFFFFFF),
+      envelopeTextColor: Color(0xFF616161),
+      envelopeBorderColor: Color(0xFF9E9E9E),
+    ),
+    const BinderColorOption(
+      id: 'ink_black',
+      displayName: 'Ink Black',
+      binderColor: Color(0xFF212121),
+      paperColor: Color(0xFFF0F0F0),
+      envelopeTextColor: Color(0xFF000000),
+      envelopeBorderColor: Color(0xFF424242),
+    ),
+  ];
+
+  static final _singularityColors = [
+    const BinderColorOption(
+      id: 'cosmic_teal',
+      displayName: 'Cosmic Teal',
+      binderColor: Color(0xFF00BCD4),
+      paperColor: Color(0xFF1E2A3A),
+      envelopeTextColor: Color(0xFFE0F7FA),
+      envelopeBorderColor: Color(0xFF00E5FF),
+    ),
+    const BinderColorOption(
+      id: 'deep_space',
+      displayName: 'Deep Space',
+      binderColor: Color(0xFF2196F3),
+      paperColor: Color(0xFF1A2332),
+      envelopeTextColor: Color(0xFFBBDEFB),
+      envelopeBorderColor: Color(0xFF42A5F5),
+    ),
+    const BinderColorOption(
+      id: 'nebula_purple',
+      displayName: 'Nebula Purple',
+      binderColor: Color(0xFF7B1FA2),
+      paperColor: Color(0xFF1C1C2E),
+      envelopeTextColor: Color(0xFFE1BEE7),
+      envelopeBorderColor: Color(0xFFAB47BC),
+    ),
+    const BinderColorOption(
+      id: 'lunar_grey',
+      displayName: 'Lunar Grey',
+      binderColor: Color(0xFF546E7A),
+      paperColor: Color(0xFF263238),
+      envelopeTextColor: Color(0xFFCFD8DC),
+      envelopeBorderColor: Color(0xFF78909C),
+    ),
+  ];
 }

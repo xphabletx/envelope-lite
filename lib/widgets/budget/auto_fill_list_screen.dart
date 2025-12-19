@@ -197,10 +197,7 @@ class AutoFillListScreen extends StatelessWidget {
                             color: theme.colorScheme.secondaryContainer,
                             shape: BoxShape.circle,
                           ),
-                          child: Text(
-                            envelope.emoji ?? '✉️',
-                            style: const TextStyle(fontSize: 24),
-                          ),
+                          child: envelope.getIconWidget(theme, size: 24),
                         ),
                         title: Text(
                           envelope.name,
