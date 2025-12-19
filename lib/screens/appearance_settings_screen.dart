@@ -9,6 +9,8 @@ import '../../providers/app_preferences_provider.dart';
 import '../../theme/app_themes.dart';
 import 'theme_picker_screen.dart';
 import '../../services/localization_service.dart';
+import '../../widgets/envelope/omni_icon_picker_modal.dart';
+import '../../services/icon_search_service_unlimited.dart';
 
 class AppearanceSettingsScreen extends StatelessWidget {
   const AppearanceSettingsScreen({super.key});
@@ -122,155 +124,22 @@ class AppearanceSettingsScreen extends StatelessWidget {
     BuildContext context,
     AppPreferencesProvider provider,
   ) async {
-    final controller = TextEditingController(text: provider.celebrationEmoji);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final theme = Theme.of(context);
-
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
-      isScrollControlled: true, // Allows input to push sheet up
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 24,
-          left: 24,
-          right: 24,
-        ),
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            Text(
-              tr('appearance_choose_emoji'),
-              style: fontProvider.getTextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Tap the circle to open keyboard",
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Big Emoji Display / Input
-            Center(
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 48), // Big emoji
-                  maxLength: 2, // Limit characters
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.all(20),
-                  ),
-                  // This forces the emoji keyboard on iOS/Android if available,
-                  // though standard keyboard usually has an emoji button.
-                  keyboardType: TextInputType.text,
-                  onChanged: (value) {
-                    // Auto-limit logic if they paste something long
-                    if (value.characters.length > 2) {
-                      controller.text = value.characters.take(2).toString();
-                      controller.selection = TextSelection.fromPosition(
-                        TextPosition(offset: controller.text.length),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // RESET BUTTON
-                TextButton.icon(
-                  onPressed: () {
-                    provider.setCelebrationEmoji('🥰'); // Reset to default
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: Text(
-                    "Reset",
-                    style: fontProvider.getTextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: TextButton.styleFrom(foregroundColor: Colors.grey),
-                ),
-
-                // SAVE BUTTON
-                FilledButton(
-                  onPressed: () {
-                    final emoji = controller.text.trim();
-                    if (emoji.isNotEmpty) {
-                      provider.setCelebrationEmoji(emoji);
-                    }
-                    Navigator.pop(context);
-                  },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    tr('save'),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+      builder: (context) => OmniIconPickerModal(
+        initialValue: provider.celebrationEmoji,
+        initialType: IconType.emoji,
+        initialQuery: '',
       ),
     );
+
+    if (result != null && result['type'] == IconType.emoji) {
+      // Only accept emoji type for celebration emoji
+      final emoji = result['value'] as String;
+      provider.setCelebrationEmoji(emoji);
+    }
   }
 
   // --- REUSED FONT PICKER (Cleaned up) ---

@@ -136,6 +136,8 @@ class _AccountListScreenState extends State<AccountListScreen> {
                         MaterialPageRoute(
                           builder: (_) => AccountDetailScreen(
                             account: account,
+                            accountRepo: accountRepo,
+                            envelopeRepo: widget.envelopeRepo,
                           ),
                         ),
                       );

@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
+import '../services/account_repo.dart';
 import '../models/envelope_group.dart';
+import '../models/account.dart';
 import '../screens/add_scheduled_payment_screen.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../services/localization_service.dart';
@@ -23,19 +25,29 @@ Future<void> showEnvelopeCreator(
   BuildContext context, {
   required EnvelopeRepo repo,
   required GroupRepo groupRepo,
+  required AccountRepo accountRepo,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => _EnvelopeCreatorScreen(repo: repo, groupRepo: groupRepo),
+      builder: (_) => _EnvelopeCreatorScreen(
+        repo: repo,
+        groupRepo: groupRepo,
+        accountRepo: accountRepo,
+      ),
     ),
   );
 }
 
 class _EnvelopeCreatorScreen extends StatefulWidget {
-  const _EnvelopeCreatorScreen({required this.repo, required this.groupRepo});
+  const _EnvelopeCreatorScreen({
+    required this.repo,
+    required this.groupRepo,
+    required this.accountRepo,
+  });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
 
   @override
   State<_EnvelopeCreatorScreen> createState() => _EnvelopeCreatorScreenState();
@@ -67,6 +79,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   List<EnvelopeGroup> _binders = [];
   bool _bindersLoaded = false;
 
+  // Account selection state
+  String? _selectedAccountId;
+  List<dynamic> _accounts = [];
+  bool _accountsLoaded = false;
+
   // Icon selection state
   String? _iconType;
   String? _iconValue;
@@ -77,6 +94,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   void initState() {
     super.initState();
     _loadBinders();
+    _loadAccounts();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -132,6 +150,20 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     } catch (e) {
       debugPrint('Error loading binders: $e');
       setState(() => _bindersLoaded = true);
+    }
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final allAccounts = await widget.accountRepo.accountsStream().first;
+
+      setState(() {
+        _accounts = allAccounts..sort((a, b) => a.name.compareTo(b.name));
+        _accountsLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('Error loading accounts: $e');
+      setState(() => _accountsLoaded = true);
     }
   }
 
@@ -272,6 +304,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         autoFillEnabled: _autoFillEnabled,
         autoFillAmount: autoFillAmount,
         groupId: _selectedBinderId,
+        linkedAccountId: _selectedAccountId,
       );
 
       if (!mounted) return;
@@ -546,6 +579,76 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         Divider(color: theme.colorScheme.outline),
                         const SizedBox(height: 16),
 
+                        // Account selection
+                        if (_accountsLoaded) ...[
+                          Text(
+                            tr('linked_account'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String?>(
+                            value: _selectedAccountId,
+                            decoration: InputDecoration(
+                              labelText: tr('envelope_linked_account'),
+                              labelStyle: fontProvider.getTextStyle(
+                                fontSize: 16,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              prefixIcon: const Icon(Icons.account_balance_wallet),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            items: [
+                              DropdownMenuItem(
+                                value: null,
+                                child: Text(
+                                  tr('envelope_no_account'),
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ),
+                              ..._accounts.map((account) {
+                                final typedAccount = account as Account;
+                                return DropdownMenuItem(
+                                  value: typedAccount.id,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      typedAccount.getIconWidget(theme, size: 20),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          typedAccount.name,
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _selectedAccountId = value),
+                          ),
+                          const SizedBox(height: 24),
+                          Divider(color: theme.colorScheme.outline),
+                          const SizedBox(height: 16),
+                        ],
+
                         // Binder selection
                         if (_bindersLoaded) ...[
                           Text(
@@ -590,22 +693,15 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                       final binderColorOption =
                                           ThemeBinderColors.getColorsForTheme(
                                               themeProvider.currentThemeId)[binder.colorIndex];
-                                      final binderColor =
-                                          binderColorOption.binderColor;
+                                      // Use envelopeTextColor for better contrast, especially for light binders
+                                      final textColor = binderColorOption.envelopeTextColor;
                                       return DropdownMenuItem(
                                         value: binder.id,
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            if (binder.emoji != null) ...[
-                                              Text(
-                                                binder.emoji!,
-                                                style: const TextStyle(
-                                                  fontSize: 20,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                            ],
+                                            binder.getIconWidget(theme, size: 20),
+                                            const SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
                                                 binder.name,
@@ -614,7 +710,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                                       fontSize: 18,
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                      color: binderColor,
+                                                      color: textColor,
                                                     ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),

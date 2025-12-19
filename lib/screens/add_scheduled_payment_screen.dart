@@ -281,27 +281,18 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 ),
               ),
               errorWidget: (context, url, error) {
-                return Text(
-                  group.emoji ?? '📁',
-                  style: const TextStyle(fontSize: 20),
-                );
+                return group.getIconWidget(theme, size: 20);
               },
             ),
           );
 
         default:
-          return Text(
-            group.emoji ?? '📁',
-            style: const TextStyle(fontSize: 20),
-          );
+          return group.getIconWidget(theme, size: 20);
       }
     }
 
     // Fallback to emoji
-    return Text(
-      group.emoji ?? '📁',
-      style: const TextStyle(fontSize: 20),
-    );
+    return group.getIconWidget(theme, size: 20);
   }
 
   @override

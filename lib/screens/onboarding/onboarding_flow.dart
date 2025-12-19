@@ -11,6 +11,10 @@ import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../providers/locale_provider.dart';
+import '../../services/envelope_repo.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'onboarding_target_icon_step.dart';
+import 'onboarding_account_setup.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key, required this.userService});
@@ -28,6 +32,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   String _selectedTheme = AppThemes.latteId;
   String _selectedFont =
       FontProvider.systemDefaultId; // Start with system default
+  String? _targetIconType = 'emoji';
+  String? _targetIconValue = '🎯';
   String _selectedLanguage = 'en'; // Placeholder
   String _selectedCurrency = 'GBP'; // Placeholder
 
@@ -52,19 +58,25 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   Future<void> _completeOnboarding() async {
-    // Create user profile in Firebase
+    // Create user profile in Firebase with target icon
     await widget.userService.createUserProfile(
       displayName: _displayName.isEmpty ? 'User' : _displayName,
       photoURL: _photoURL,
       selectedTheme: _selectedTheme,
     );
 
+    // Save target icon to user settings
+    final userId = widget.userService.userId;
+    await FirebaseFirestore.instance.collection('users').doc(userId).set({
+      'targetIconType': _targetIconType,
+      'targetIconValue': _targetIconValue,
+    }, SetOptions(merge: true));
+
     if (!mounted) return;
 
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
-    final navigator = Navigator.of(context);
 
     // Update providers
     await themeProvider.setTheme(_selectedTheme);
@@ -72,12 +84,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await localeProvider.setLanguage(_selectedLanguage);
     await localeProvider.setCurrency(_selectedCurrency);
 
-    // Mark onboarding complete
-    navigator.pushReplacementNamed('/home');
+    // Note: Account setup will handle navigation to /home
   }
 
   void _nextStep() {
-    if (_currentStep < 5) {
+    if (_currentStep < 7) {
       setState(() => _currentStep++);
     } else {
       _completeOnboarding();
@@ -114,6 +125,24 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         selectedFont: _selectedFont,
         onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
         onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      OnboardingTargetIconStep(
+        initialIconType: _targetIconType,
+        initialIconValue: _targetIconValue,
+        onIconSelected: (type, value) {
+          _targetIconType = type;
+          _targetIconValue = value;
+        },
+        onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      OnboardingAccountSetup(
+        envelopeRepo: EnvelopeRepo.firebase(
+          FirebaseFirestore.instance,
+          workspaceId: null,
+          userId: widget.userService.userId,
+        ),
         onBack: _previousStep,
       ),
       _LanguagePickerStep(

@@ -412,8 +412,8 @@ class _AllEnvelopesFAB extends StatelessWidget {
               ),
               sdChild(
                 context: context,
-                icon: Icons.people_alt,
-                label: tr('group_new'),
+                icon: Icons.chrome_reader_mode,
+                label: tr('group_new_binder'),
                 key: createBinderKey,
                 onTap: () async {
                   await editor.showGroupEditor(
@@ -433,6 +433,7 @@ class _AllEnvelopesFAB extends StatelessWidget {
                     context,
                     repo: repo,
                     groupRepo: groupRepo,
+                    accountRepo: AccountRepo(repo.db, repo),
                   );
                   allEnvelopesState?.refresh();
                 },

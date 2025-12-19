@@ -23,6 +23,7 @@ class StatsHistoryScreen extends StatefulWidget {
     this.initialEnd,
     this.myOnlyDefault = false,
     this.title,
+    this.filterTransactionTypes,
   });
 
   final EnvelopeRepo repo;
@@ -32,6 +33,7 @@ class StatsHistoryScreen extends StatefulWidget {
   final DateTime? initialEnd;
   final bool myOnlyDefault;
   final String? title;
+  final Set<TransactionType>? filterTransactionTypes;
 
   @override
   State<StatsHistoryScreen> createState() => _StatsHistoryScreenState();
@@ -362,7 +364,9 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                     final inChosen = chosenIds.contains(t.envelopeId);
                     final inRange =
                         !t.date.isBefore(start) && t.date.isBefore(end);
-                    return inChosen && inRange;
+                    final typeMatch = widget.filterTransactionTypes == null ||
+                        widget.filterTransactionTypes!.contains(t.type);
+                    return inChosen && inRange && typeMatch;
                   }).toList()..sort((a, b) => b.date.compareTo(a.date));
 
                   // Calculate stats
@@ -378,19 +382,39 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                       ? (totalSaved / totalTarget).clamp(0.0, 1.0) * 100
                       : 0.0;
 
-                  final double totDep = shownTxs
-                      .where((t) => t.type == TransactionType.deposit)
-                      .fold(0.0, (s, t) => s + t.amount);
-                  final double totWdr = shownTxs
-                      .where((t) => t.type == TransactionType.withdrawal)
-                      .fold(0.0, (s, t) => s + t.amount);
-                  final double totTrnOut = shownTxs
-                      .where(
-                        (t) =>
-                            t.type == TransactionType.transfer &&
-                            t.transferDirection == TransferDirection.out_,
-                      )
-                      .fold(0.0, (s, t) => s + t.amount);
+                  // Calculate transaction stats (only for shown transaction types)
+                  final showDeposits = widget.filterTransactionTypes == null ||
+                      widget.filterTransactionTypes!.contains(
+                        TransactionType.deposit,
+                      );
+                  final showWithdrawals = widget.filterTransactionTypes == null ||
+                      widget.filterTransactionTypes!.contains(
+                        TransactionType.withdrawal,
+                      );
+                  final showTransfers = widget.filterTransactionTypes == null ||
+                      widget.filterTransactionTypes!.contains(
+                        TransactionType.transfer,
+                      );
+
+                  final double totDep = showDeposits
+                      ? shownTxs
+                            .where((t) => t.type == TransactionType.deposit)
+                            .fold(0.0, (s, t) => s + t.amount)
+                      : 0.0;
+                  final double totWdr = showWithdrawals
+                      ? shownTxs
+                            .where((t) => t.type == TransactionType.withdrawal)
+                            .fold(0.0, (s, t) => s + t.amount)
+                      : 0.0;
+                  final double totTrnOut = showTransfers
+                      ? shownTxs
+                            .where(
+                              (t) =>
+                                  t.type == TransactionType.transfer &&
+                                  t.transferDirection == TransferDirection.out_,
+                            )
+                            .fold(0.0, (s, t) => s + t.amount)
+                      : 0.0;
 
                   final envSelectedCount = filteredEnvelopes
                       .where((e) => selectedIds.contains(e.id))

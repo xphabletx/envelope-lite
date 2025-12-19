@@ -357,27 +357,22 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                 final binderColorOption =
                                     ThemeBinderColors.getColorsForTheme(
                                         themeProvider.currentThemeId)[binder.colorIndex];
-                                final binderColor =
-                                    binderColorOption.binderColor;
+                                // Use envelopeTextColor for better contrast, especially for light binders
+                                final textColor = binderColorOption.envelopeTextColor;
                                 return DropdownMenuItem(
                                   value: binder.id,
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      if (binder.emoji != null) ...[
-                                        Text(
-                                          binder.emoji!,
-                                          style: const TextStyle(fontSize: 20),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
+                                      binder.getIconWidget(theme, size: 20),
+                                      const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
                                           binder.name,
                                           style: fontProvider.getTextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
-                                            color: binderColor,
+                                            color: textColor,
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),

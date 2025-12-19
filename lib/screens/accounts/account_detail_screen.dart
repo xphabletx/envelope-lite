@@ -11,12 +11,15 @@ class AccountDetailScreen extends StatelessWidget {
   const AccountDetailScreen({
     super.key,
     required this.account,
+    required this.accountRepo,
+    required this.envelopeRepo,
   });
 
   final Account account;
+  final AccountRepo accountRepo;
+  final EnvelopeRepo envelopeRepo;
 
   void _showLinkEnvelopesDialog(BuildContext context) {
-    final envelopeRepo = Provider.of<EnvelopeRepo>(context, listen: false);
     showDialog(
       context: context,
       builder: (_) => _LinkEnvelopesDialog(
@@ -31,8 +34,6 @@ class AccountDetailScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: '£');
-    final accountRepo = Provider.of<AccountRepo>(context, listen: false);
-    final envelopeRepo = Provider.of<EnvelopeRepo>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(

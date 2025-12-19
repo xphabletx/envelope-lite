@@ -1,5 +1,8 @@
 // lib/models/envelope_group.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../data/material_icons_database.dart';
 
 class EnvelopeGroup {
   final String id;
@@ -103,6 +106,76 @@ class EnvelopeGroup {
       isShared: isShared ?? this.isShared,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  /// Get icon widget for display
+  Widget getIconWidget(ThemeData theme, {double size = 40}) {
+    final effectiveIconColor = iconColor != null
+        ? Color(iconColor!)
+        : theme.colorScheme.primary;
+
+    // New icon system
+    if (iconType != null && iconValue != null) {
+      switch (iconType) {
+        case 'emoji':
+          return Text(
+            iconValue!,
+            style: TextStyle(fontSize: size * 0.8),
+          );
+
+        case 'materialIcon':
+          final iconData =
+              materialIconsDatabase[iconValue]?['icon'] as IconData?;
+          return Icon(
+            iconData ?? Icons.folder_open,
+            size: size,
+            color: effectiveIconColor,
+          );
+
+        case 'companyLogo':
+          final logoUrl =
+              'https://www.google.com/s2/favicons?sz=128&domain=$iconValue';
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(size * 0.1),
+            child: CachedNetworkImage(
+              imageUrl: logoUrl,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => SizedBox(
+                width: size,
+                height: size,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary.withAlpha(128),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Icon(
+                Icons.folder_open,
+                size: size,
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+          );
+      }
+    }
+
+    // Fallback to old emoji system
+    if (emoji != null && emoji!.isNotEmpty) {
+      return Text(
+        emoji!,
+        style: TextStyle(fontSize: size * 0.8),
+      );
+    }
+
+    // Final fallback
+    return Icon(
+      Icons.folder_open,
+      size: size,
+      color: theme.colorScheme.primary,
     );
   }
 }

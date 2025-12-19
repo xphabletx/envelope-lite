@@ -458,7 +458,7 @@ class _IconTile extends StatelessWidget {
         child: Center(
           child: Icon(
             (icon.preview as Icon).icon,
-            color: isSelected ? theme.colorScheme.primary : color,
+            color: isSelected ? theme.colorScheme.onPrimaryContainer : color,
             size: 32,
           ),
         ),
@@ -558,7 +558,15 @@ class _EmojiTile extends StatelessWidget {
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Center(child: icon.preview),
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: icon.preview,
+            ),
+          ),
+        ),
       ),
     );
   }

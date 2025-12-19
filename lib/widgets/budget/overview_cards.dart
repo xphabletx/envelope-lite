@@ -261,6 +261,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               title: 'Income & History',
               initialStart: _historyStart,
               initialEnd: _historyEnd,
+              filterTransactionTypes: {TransactionType.deposit},
             ),
           ),
         );
@@ -291,6 +292,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               title: 'Spending & History',
               initialStart: _historyStart,
               initialEnd: _historyEnd,
+              filterTransactionTypes: {TransactionType.withdrawal},
             ),
           ),
         );

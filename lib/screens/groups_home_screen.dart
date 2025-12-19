@@ -474,6 +474,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final selectedEnvelope =
         _selectedIndex != null && _selectedIndex! < widget.envelopes.length
             ? widget.envelopes[_selectedIndex!]
@@ -638,10 +639,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 ],
                               ),
                               child: Center(
-                                child: Text(
-                                  widget.group.emoji ?? '📁',
-                                  style: const TextStyle(fontSize: 26),
-                                ),
+                                child: widget.group.getIconWidget(theme, size: 26),
                               ),
                             ),
                             const SizedBox(height: 8),

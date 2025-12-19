@@ -377,6 +377,7 @@ class EnvelopeRepo {
     int? iconColor,
     bool autoFillEnabled = false,
     double? autoFillAmount,
+    String? linkedAccountId,
   }) async {
     print('[EnvelopeRepo] DEBUG: Creating envelope with name: $name');
     final doc = _colEnvelopes().doc();
@@ -400,6 +401,7 @@ class EnvelopeRepo {
       'iconColor': iconColor,
       'autoFillEnabled': autoFillEnabled,
       'autoFillAmount': autoFillAmount,
+      'linkedAccountId': linkedAccountId,
       'isShared': inWorkspace,
       'workspaceId': _workspaceId,
       'createdAt': fs.FieldValue.serverTimestamp(),

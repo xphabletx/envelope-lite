@@ -6,9 +6,14 @@ import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
 
 class OnboardingAccountSetup extends StatefulWidget {
-  const OnboardingAccountSetup({super.key, required this.envelopeRepo});
+  const OnboardingAccountSetup({
+    super.key,
+    required this.envelopeRepo,
+    this.onBack,
+  });
 
   final EnvelopeRepo envelopeRepo;
+  final VoidCallback? onBack;
 
   @override
   State<OnboardingAccountSetup> createState() => _OnboardingAccountSetupState();
@@ -302,6 +307,18 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
               ),
 
               const SizedBox(height: 16),
+
+              // Back button
+              if (widget.onBack != null)
+                TextButton(
+                  onPressed: widget.onBack,
+                  child: Text(
+                    'Back',
+                    style: fontProvider.getTextStyle(fontSize: 16),
+                  ),
+                ),
+
+              const SizedBox(height: 8),
 
               // Skip button
               TextButton(
