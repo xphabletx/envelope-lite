@@ -137,17 +137,17 @@ class _QuickActionModalState extends State<QuickActionModal> {
       case TransactionType.deposit:
         title = 'Add Money';
         icon = Icons.add_circle;
-        color = Colors.green;
+        color = theme.colorScheme.primary;
         break;
       case TransactionType.withdrawal:
         title = 'Spend Money';
         icon = Icons.remove_circle;
-        color = Colors.red;
+        color = theme.colorScheme.error;
         break;
       case TransactionType.transfer:
         title = 'Move Money';
         icon = Icons.swap_horiz;
-        color = Colors.blue;
+        color = theme.colorScheme.primary;
         break;
     }
 
@@ -355,18 +355,22 @@ class _QuickActionModalState extends State<QuickActionModal> {
             onPressed: _isLoading ? null : _submit,
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
-              foregroundColor: Colors.white,
+              foregroundColor: widget.type == TransactionType.withdrawal
+                  ? theme.colorScheme.onError
+                  : theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: _isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: widget.type == TransactionType.withdrawal
+                          ? theme.colorScheme.onError
+                          : theme.colorScheme.onPrimary,
                       strokeWidth: 2,
                     ),
                   )

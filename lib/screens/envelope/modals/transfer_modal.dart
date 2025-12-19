@@ -1,17 +1,15 @@
-// lib/widgets/transfer_modal.dart
-// FONT PROVIDER INTEGRATED: All GoogleFonts.caveat() replaced with FontProvider
-// All button text wrapped in FittedBox to prevent wrapping
+// lib/screens/envelope/modals/transfer_modal.dart
+// Unified with quick_action_modal.dart style and layout
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // NEW IMPORT
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../../../models/envelope.dart';
-import '../../../../../services/envelope_repo.dart';
-import '../../../../../services/workspace_helper.dart';
-import '../../../../../widgets/calculator_widget.dart';
-import '../../../../../widgets/partner_badge.dart';
-import '../../../services/localization_service.dart';
-import '../../../../../providers/font_provider.dart'; // NEW IMPORT (Matching depth)
+import '../../../models/envelope.dart';
+import '../../../services/envelope_repo.dart';
+import '../../../services/workspace_helper.dart';
+import '../../../providers/font_provider.dart';
+import '../../../utils/calculator_helper.dart';
+import '../../../widgets/partner_badge.dart';
 
 class TransferModal extends StatefulWidget {
   const TransferModal({
@@ -33,9 +31,9 @@ class TransferModal extends StatefulWidget {
 
 class _TransferModalState extends State<TransferModal> {
   final _amountController = TextEditingController();
-  final _descriptionController = TextEditingController();
+  final _descController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String? _selectedTargetEnvelopeId;
+  String? _selectedTargetId;
   bool _isLoading = false;
   List<Envelope> _availableEnvelopes = [];
 
@@ -48,12 +46,11 @@ class _TransferModalState extends State<TransferModal> {
   @override
   void dispose() {
     _amountController.dispose();
-    _descriptionController.dispose();
+    _descController.dispose();
     super.dispose();
   }
 
   Future<void> _loadEnvelopes() async {
-    // Get all envelopes except the source envelope
     final subscription = widget.repo.envelopesStream().listen((envelopes) {
       if (mounted) {
         setState(() {
@@ -69,61 +66,35 @@ class _TransferModalState extends State<TransferModal> {
   }
 
   void _showCalculator() async {
-    final result = await showDialog<double>(
-      context: context,
-      builder: (context) => const Dialog(child: CalculatorWidget()),
-    );
+    final result = await CalculatorHelper.showCalculator(context);
 
     if (result != null && mounted) {
       setState(() {
-        _amountController.text = result.toStringAsFixed(2);
+        _amountController.text = result;
       });
     }
   }
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
-  }
-
-  Future<void> _transfer() async {
-    if (_selectedTargetEnvelopeId == null) {
+  Future<void> _submit() async {
+    if (_selectedTargetId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('error_select_target_envelope'))),
+        const SnackBar(content: Text('Please select a destination envelope')),
       );
       return;
     }
 
-    final amountText = _amountController.text.trim();
-    if (amountText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('error_enter_amount'))));
-      return;
-    }
-
-    final amount = double.tryParse(amountText);
+    final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('error_invalid_amount'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid amount')),
+      );
       return;
     }
 
     if (amount > widget.currentAmount) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('error_insufficient_funds'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Insufficient funds')),
+      );
       return;
     }
 
@@ -132,32 +103,24 @@ class _TransferModalState extends State<TransferModal> {
     try {
       await widget.repo.transfer(
         fromEnvelopeId: widget.sourceEnvelopeId,
-        toEnvelopeId: _selectedTargetEnvelopeId!,
+        toEnvelopeId: _selectedTargetId!,
         amount: amount,
-        description: _descriptionController.text.trim(),
+        description: _descController.text.trim(),
         date: _selectedDate,
       );
 
       if (mounted) {
-        final targetEnvelope = _availableEnvelopes.firstWhere(
-          (e) => e.id == _selectedTargetEnvelopeId,
-        );
-
-        Navigator.pop(context, true);
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${tr('success_moved')} ${NumberFormat.currency(symbol: '£').format(amount)} ${tr('to')} ${targetEnvelope.name}',
-            ),
-          ),
+          const SnackBar(content: Text('Transfer successful')),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${tr('error_generic')}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
       }
     }
   }
@@ -169,253 +132,230 @@ class _TransferModalState extends State<TransferModal> {
 
     return Container(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        top: 16,
+        left: 16,
+        right: 16,
       ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Row(
             children: [
-              // Header - FIX: Use theme colors
-              Row(
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.swap_horiz,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.swap_horiz,
-                      color: theme.colorScheme.onPrimary,
-                      size: 28,
+                  Text(
+                    'Move Money',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr('action_move_money'),
-                          // UPDATED: FontProvider
-                          style: fontProvider.getTextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        Text(
-                          '${tr('from')}: ${widget.sourceEnvelopeName}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Balance: ${NumberFormat.currency(symbol: '£').format(widget.currentAmount)}',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface.withAlpha(179),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 16),
-
-              // Available balance
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet,
-                      size: 20,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${tr('available')}: ${NumberFormat.currency(symbol: '£').format(widget.currentAmount)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Target envelope picker
-              DropdownButtonFormField<String?>(
-                initialValue: _selectedTargetEnvelopeId,
-                decoration: InputDecoration(
-                  labelText: tr('transfer_to_envelope'),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  prefixIcon: const Icon(Icons.inbox),
-                ),
-                items: _availableEnvelopes.map((envelope) {
-                  final isPartner = envelope.userId != widget.repo.currentUserId;
-                  return DropdownMenuItem(
-                    value: envelope.id,
-                    child: Row(
-                      children: [
-                        envelope.getIconWidget(Theme.of(context), size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            envelope.name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isPartner)
-                          FutureBuilder<String>(
-                            future: WorkspaceHelper.getUserDisplayName(
-                              envelope.userId,
-                              widget.repo.currentUserId,
-                            ),
-                            builder: (context, snapshot) {
-                              return PartnerBadge(
-                                partnerName: snapshot.data ?? 'Partner',
-                                size: PartnerBadgeSize.small,
-                              );
-                            },
-                          ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedTargetEnvelopeId = value;
-                  });
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // Amount field with calculator button
-              TextField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tr('amount'),
-                  prefixText: '£',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calculate),
-                    onPressed: _showCalculator,
-                    tooltip: tr('calculator_tooltip'),
-                  ),
-                ),
-                autofocus: true,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Description field
-              TextField(
-                controller: _descriptionController,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  labelText: tr('description_optional'),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Date picker
-              InkWell(
-                onTap: _selectDate,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: theme.colorScheme.outline),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        DateFormat('MMM dd, yyyy').format(_selectedDate),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.arrow_drop_down,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Transfer button - FIX: Use theme primary color to match other modals
-              ElevatedButton(
-                onPressed: _isLoading ? null : _transfer,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: theme.colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isLoading
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            theme.colorScheme.onPrimary,
-                          ),
-                        ),
-                      )
-                    : FittedBox(
-                        // UPDATED: FittedBox
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          tr('action_move_money'),
-                          // UPDATED: FontProvider
-                          style: fontProvider.getTextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-              ),
-
-              const SizedBox(height: 8),
             ],
           ),
-        ),
+
+          const SizedBox(height: 24),
+
+          // Amount
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: fontProvider.getTextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Amount',
+              prefixText: '£',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.calculate),
+                onPressed: _showCalculator,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            autofocus: true,
+          ),
+
+          const SizedBox(height: 16),
+
+          // Transfer Target Dropdown
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              labelText: 'To Envelope',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            value: _selectedTargetId,
+            items: _availableEnvelopes
+                .map(
+                  (e) {
+                    final isPartner = e.userId != widget.repo.currentUserId;
+                    return DropdownMenuItem(
+                      value: e.id,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          e.getIconWidget(Theme.of(context), size: 20),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              e.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: fontProvider.getTextStyle(fontSize: 16),
+                            ),
+                          ),
+                          if (isPartner) ...[
+                            const SizedBox(width: 8),
+                            FutureBuilder<String>(
+                              future: WorkspaceHelper.getUserDisplayName(
+                                e.userId,
+                                widget.repo.currentUserId,
+                              ),
+                              builder: (context, snapshot) {
+                                return PartnerBadge(
+                                  partnerName: snapshot.data ?? 'Partner',
+                                  size: PartnerBadgeSize.small,
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _selectedTargetId = v),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Description
+          TextField(
+            controller: _descController,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: 'Description (Optional)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            style: fontProvider.getTextStyle(fontSize: 16),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Date Picker
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) {
+                setState(() => _selectedDate = picked);
+              }
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today, size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    DateFormat('MMM dd, yyyy').format(_selectedDate),
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Submit Button
+          ElevatedButton(
+            onPressed: _isLoading ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isLoading
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: theme.colorScheme.onPrimary,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Text(
+                    'Confirm',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }

@@ -550,8 +550,9 @@ class EnvelopeRepo {
     Transaction tx, {
     Envelope? from,
     Envelope? to,
+    fs.WriteBatch? externalBatch, // New optional parameter
   }) async {
-    final batch = _db.batch();
+    final batch = externalBatch ?? _db.batch(); // Use external batch if provided, otherwise create new
 
     final actorId = _userId;
     final actorName =
@@ -613,52 +614,13 @@ class EnvelopeRepo {
         'targetEnvelopeName': to.name,
       });
 
-      batch.update(
-        _db
-            .collection('users')
-            .doc(fromOwnerId)
-            .collection('solo')
-            .doc('data')
-            .collection('envelopes')
-            .doc(from.id),
-        {
-          'currentAmount': from.currentAmount,
-          'updatedAt': fs.FieldValue.serverTimestamp(),
-        },
-      );
 
-      batch.update(
-        _db
-            .collection('users')
-            .doc(toOwnerId)
-            .collection('solo')
-            .doc('data')
-            .collection('envelopes')
-            .doc(to.id),
-        {
-          'currentAmount': to.currentAmount,
-          'updatedAt': fs.FieldValue.serverTimestamp(),
-        },
-      );
 
-      await batch.commit();
-
-      if (inWorkspace) {
-        await _upsertRegistryForEnvelope(
-          envelopeId: from.id,
-          envelopeName: from.name,
-          currentAmount: from.currentAmount,
-          ownerId: from.userId,
-          ownerDisplayName: fromOwnerName,
-        );
-        await _upsertRegistryForEnvelope(
-          envelopeId: to.id,
-          envelopeName: to.name,
-          currentAmount: to.currentAmount,
-          ownerId: to.userId,
-          ownerDisplayName: toOwnerName,
-        );
+      if (externalBatch == null) {
+        await batch.commit();
       }
+
+
 
       return;
     }
@@ -694,24 +656,13 @@ class EnvelopeRepo {
       'transferDirection': null,
     });
 
-    if (from != null) {
-      batch.update(_colEnvelopes().doc(from.id), {
-        'currentAmount': from.currentAmount,
-        'updatedAt': fs.FieldValue.serverTimestamp(),
-      });
+
+
+    if (externalBatch == null) {
+      await batch.commit();
     }
 
-    await batch.commit();
 
-    if (inWorkspace && from != null) {
-      await _upsertRegistryForEnvelope(
-        envelopeId: from.id,
-        envelopeName: from.name,
-        currentAmount: from.currentAmount,
-        ownerId: from.userId,
-        ownerDisplayName: ownerNameForSingle,
-      );
-    }
   }
 
   // ============= MODAL HELPER METHODS =============
@@ -801,21 +752,24 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    await recordTransaction(tx);
+    final batch = _db.batch();
 
-    await _colEnvelopes().doc(envelopeId).update({
+    await recordTransaction(tx, externalBatch: batch);
+
+    batch.update(_colEnvelopes().doc(envelopeId), {
       'currentAmount': fs.FieldValue.increment(amount),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
 
+    await batch.commit();
+
     if (inWorkspace) {
-      final ownerName = await getUserDisplayName(_userId);
       await _upsertRegistryForEnvelope(
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         currentAmount: envelope.currentAmount + amount,
-        ownerId: _userId,
-        ownerDisplayName: ownerName,
+        ownerId: envelope.userId, // Use envelope.userId
+        ownerDisplayName: await getUserDisplayName(envelope.userId),
       );
     }
   }
@@ -844,21 +798,24 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    await recordTransaction(tx);
+    final batch = _db.batch();
 
-    await _colEnvelopes().doc(envelopeId).update({
+    await recordTransaction(tx, externalBatch: batch);
+
+    batch.update(_colEnvelopes().doc(envelopeId), {
       'currentAmount': fs.FieldValue.increment(-amount),
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
 
+    await batch.commit();
+
     if (inWorkspace) {
-      final ownerName = await getUserDisplayName(_userId);
       await _upsertRegistryForEnvelope(
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         currentAmount: envelope.currentAmount - amount,
-        ownerId: _userId,
-        ownerDisplayName: ownerName,
+        ownerId: envelope.userId, // Use envelope.userId
+        ownerDisplayName: await getUserDisplayName(envelope.userId),
       );
     }
   }
@@ -872,11 +829,54 @@ class EnvelopeRepo {
     DateTime? date,
   }) async {
     print('[EnvelopeRepo] DEBUG: Transferring $amount from $fromEnvelopeId to $toEnvelopeId');
-    final fromDoc = await _colEnvelopes().doc(fromEnvelopeId).get();
-    final toDoc = await _colEnvelopes().doc(toEnvelopeId).get();
 
+    // Fetch from envelope (always from current user's collection for transfers initiated by user)
+    final fromDoc = await _colEnvelopes().doc(fromEnvelopeId).get();
+    if (!fromDoc.exists) {
+      throw Exception('Source envelope not found');
+    }
     final fromEnvelope = Envelope.fromFirestore(fromDoc);
-    final toEnvelope = Envelope.fromFirestore(toDoc);
+
+    // Fetch to envelope - could be from current user OR partner's collection
+    Envelope? toEnvelope;
+    fs.DocumentSnapshot<Map<String, dynamic>>? toDoc;
+
+    // First try current user's collection
+    toDoc = await _colEnvelopes().doc(toEnvelopeId).get();
+    if (toDoc.exists) {
+      toEnvelope = Envelope.fromFirestore(toDoc);
+    } else if (inWorkspace && _workspaceId != null) {
+      // If not found and in workspace, check partner envelopes
+      final workspaceSnap = await _db.collection('workspaces').doc(_workspaceId).get();
+      if (workspaceSnap.exists) {
+        final workspaceData = workspaceSnap.data();
+        final members = (workspaceData?['members'] as Map<String, dynamic>?) ?? {};
+
+        // Search in each member's collection
+        for (final memberId in members.keys) {
+          if (memberId == _userId) continue; // Already checked above
+
+          final partnerDoc = await _db
+              .collection('users')
+              .doc(memberId)
+              .collection('solo')
+              .doc('data')
+              .collection('envelopes')
+              .doc(toEnvelopeId)
+              .get();
+
+          if (partnerDoc.exists) {
+            toEnvelope = Envelope.fromFirestore(partnerDoc);
+            toDoc = partnerDoc;
+            break;
+          }
+        }
+      }
+    }
+
+    if (toEnvelope == null) {
+      throw Exception('Target envelope not found');
+    }
 
     if (fromEnvelope.currentAmount < amount) {
       throw Exception('Insufficient funds in source envelope');
@@ -892,9 +892,14 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    await recordTransaction(tx, from: fromEnvelope, to: toEnvelope);
+    final batch = _db.batch(); // Create a single batch for all operations
 
-    final batch = _db.batch();
+    await recordTransaction(
+      tx,
+      from: fromEnvelope,
+      to: toEnvelope,
+      externalBatch: batch, // Pass the batch to recordTransaction
+    );
 
     // Update from envelope in its owner's collection
     final fromEnvelopeRef = _db
@@ -924,25 +929,23 @@ class EnvelopeRepo {
       'updatedAt': fs.FieldValue.serverTimestamp(),
     });
 
-    await batch.commit();
+    await batch.commit(); // Commit the single batch
 
     if (inWorkspace) {
-      final ownerName = await getUserDisplayName(_userId);
-
       await _upsertRegistryForEnvelope(
         envelopeId: fromEnvelope.id,
         envelopeName: fromEnvelope.name,
         currentAmount: fromEnvelope.currentAmount - amount,
-        ownerId: _userId,
-        ownerDisplayName: ownerName,
+        ownerId: fromEnvelope.userId,
+        ownerDisplayName: await getUserDisplayName(fromEnvelope.userId),
       );
 
       await _upsertRegistryForEnvelope(
         envelopeId: toEnvelope.id,
         envelopeName: toEnvelope.name,
         currentAmount: toEnvelope.currentAmount + amount,
-        ownerId: _userId,
-        ownerDisplayName: ownerName,
+        ownerId: toEnvelope.userId,
+        ownerDisplayName: await getUserDisplayName(toEnvelope.userId),
       );
     }
   }
