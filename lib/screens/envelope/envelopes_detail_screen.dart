@@ -18,10 +18,13 @@ import 'modals/withdraw_modal.dart';
 import 'modals/transfer_modal.dart';
 import '../../../services/localization_service.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/time_machine_provider.dart';
 import '../../utils/calculator_helper.dart';
 import 'modern_envelope_header_card.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
+import '../../widgets/time_machine_indicator.dart';
+import '../../widgets/future_transaction_tile.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -139,6 +142,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
 
     // Initialize the ScheduledPaymentRepo
     final scheduledPaymentRepo = ScheduledPaymentRepo(
@@ -186,12 +190,25 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           );
         }
 
-        final envelope = envelopeSnapshot.data!;
+        final realEnvelope = envelopeSnapshot.data!;
+
+        // Apply Time Machine projection if active
+        final envelope = timeMachine.isActive
+            ? timeMachine.getProjectedEnvelope(realEnvelope)
+            : realEnvelope;
 
         return StreamBuilder<List<Transaction>>(
           stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
           builder: (context, txSnapshot) {
-            final allTransactions = txSnapshot.data ?? [];
+            final realTransactions = txSnapshot.data ?? [];
+
+            // If in Time Machine mode, add future transactions
+            final allTransactions = timeMachine.isActive
+                ? [
+                    ...realTransactions,
+                    ...timeMachine.getFutureTransactions(widget.envelopeId),
+                  ]
+                : realTransactions;
 
             // Filter transactions logic
             final monthStart = DateTime(
@@ -242,6 +259,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                 controller: _scrollController,
                 child: Column(
                   children: [
+                    // Time Machine Indicator
+                    const TimeMachineIndicator(),
+
                     // ---------------------------------------------------
                     // 1. THE VECTOR ENVELOPE (CustomPaint)
                     // ---------------------------------------------------
@@ -323,7 +343,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   ),
                 ],
               ),
-              floatingActionButton: _buildThemedFAB(context, envelope, theme),
+              floatingActionButton: timeMachine.isActive
+                  ? null
+                  : _buildThemedFAB(context, envelope, theme),
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
             );

@@ -7,9 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/scheduled_payment.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
+import '../../services/notification_repo.dart';
 import 'add_scheduled_payment_screen.dart';
 import '../../services/localization_service.dart';
 import '../../providers/font_provider.dart';
+import 'notifications_screen.dart';
 import '../screens/home_screen.dart';
 
 class _PaymentOccurrence {
@@ -20,9 +22,14 @@ class _PaymentOccurrence {
 }
 
 class CalendarScreenV2 extends StatefulWidget {
-  const CalendarScreenV2({super.key, required this.repo});
+  const CalendarScreenV2({
+    super.key,
+    required this.repo,
+    this.notificationRepo,
+  });
 
   final EnvelopeRepo repo;
+  final NotificationRepo? notificationRepo;
 
   @override
   State<CalendarScreenV2> createState() => _CalendarScreenV2State();
@@ -330,6 +337,61 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                   ),
                 ),
                 actions: [
+                  // Notification badge button
+                  if (widget.notificationRepo != null)
+                    StreamBuilder<int>(
+                      stream: widget.notificationRepo!.unreadCountStream,
+                      builder: (context, snapshot) {
+                        final unreadCount = snapshot.data ?? 0;
+                        return Stack(
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.notifications_outlined,
+                                color: theme.colorScheme.primary,
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => NotificationsScreen(
+                                      notificationRepo:
+                                          widget.notificationRepo!,
+                                    ),
+                                  ),
+                                );
+                              },
+                              tooltip: 'Notifications',
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  child: Text(
+                                    unreadCount > 9 ? '9+' : '$unreadCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   IconButton(
                     icon: Icon(
                       _compactCalendar

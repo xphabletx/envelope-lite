@@ -13,6 +13,7 @@ class Transaction {
   final DateTime date; // server or client date
   final String description;
   final String userId;
+  final bool isFuture; // Mark projected/future transactions (not stored in Firestore)
 
   // --- Transfer-specific fields (null for non-transfers) ---
   final String? transferPeerEnvelopeId; // the other envelope in the transfer
@@ -46,6 +47,7 @@ class Transaction {
     this.targetEnvelopeName,
     this.sourceOwnerDisplayName,
     this.targetOwnerDisplayName,
+    this.isFuture = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -66,6 +68,7 @@ class Transaction {
       'targetEnvelopeName': targetEnvelopeName,
       'sourceOwnerDisplayName': sourceOwnerDisplayName,
       'targetOwnerDisplayName': targetOwnerDisplayName,
+      // Note: isFuture is not saved to Firestore (used only for UI projections)
     };
   }
 
@@ -91,6 +94,7 @@ class Transaction {
       targetEnvelopeName: data['targetEnvelopeName'] as String?,
       sourceOwnerDisplayName: data['sourceOwnerDisplayName'] as String?,
       targetOwnerDisplayName: data['targetOwnerDisplayName'] as String?,
+      isFuture: false, // Real transactions from Firestore are never future
     );
   }
 

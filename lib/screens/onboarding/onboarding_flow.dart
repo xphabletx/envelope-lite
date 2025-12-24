@@ -34,8 +34,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       FontProvider.systemDefaultId; // Start with system default
   String? _targetIconType = 'emoji';
   String? _targetIconValue = '🎯';
-  String _selectedLanguage = 'en'; // Placeholder
-  String _selectedCurrency = 'GBP'; // Placeholder
+  final String _selectedLanguage = 'en'; // Default to English (no picker in onboarding)
+  String _selectedCurrency = 'GBP'; // User will select this
 
   @override
   void initState() {
@@ -88,7 +88,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   void _nextStep() {
-    if (_currentStep < 7) {
+    if (_currentStep < 6) {
       setState(() => _currentStep++);
     } else {
       _completeOnboarding();
@@ -143,12 +143,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           workspaceId: null,
           userId: widget.userService.userId,
         ),
-        onBack: _previousStep,
-      ),
-      _LanguagePickerStep(
-        selectedLanguage: _selectedLanguage,
-        onLanguageSelected: (lang) => setState(() => _selectedLanguage = lang),
-        onNext: _nextStep,
         onBack: _previousStep,
       ),
       _CurrencyPickerStep(
@@ -694,149 +688,6 @@ class _FontPickerStep extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-// Step 5: Language Picker (FIXED OVERFLOW)
-class _LanguagePickerStep extends StatelessWidget {
-  const _LanguagePickerStep({
-    required this.selectedLanguage,
-    required this.onLanguageSelected,
-    required this.onNext,
-    required this.onBack,
-  });
-
-  final String selectedLanguage;
-  final Function(String) onLanguageSelected;
-  final VoidCallback onNext;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          // Expanded wrapping SingleChildScrollView allows content to scroll and fill available space
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 32),
-                  const Icon(Icons.language, size: 120, color: Colors.grey),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Select Language',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Choose your preferred language',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      color: theme.colorScheme.onSurface.withAlpha(179),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Language dropdown
-                  ...LocaleProvider.supportedLanguages.map((lang) {
-                    final code = lang['code']!;
-                    final isSelected = selectedLanguage == code;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      elevation: isSelected ? 4 : 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isSelected
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.outline.withAlpha(51),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Text(
-                          lang['flag']!,
-                          style: const TextStyle(fontSize: 32),
-                        ),
-                        title: Text(
-                          lang['name']!,
-                          style: fontProvider.getTextStyle(
-                            fontSize: 18,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? Icon(
-                                Icons.check_circle,
-                                color: theme.colorScheme.primary,
-                                size: 32,
-                              )
-                            : null,
-                        onTap: () => onLanguageSelected(code),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-
-          // Fixed Bottom Buttons
-          const SizedBox(height: 16), // Padding between list and buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onBack,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text('Back', style: fontProvider.getTextStyle()),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: onNext,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'Continue',
-                    style: fontProvider.getTextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

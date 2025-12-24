@@ -8,6 +8,7 @@ class ProjectionResult {
   final List<ProjectionEvent> timeline; // What happens between now and then
   final double totalAvailable; // Sum of all available across accounts
   final double totalAssigned; // Sum of all assigned across accounts
+  final double totalSpent; // Money that left the system via bills/payments
 
   ProjectionResult({
     required this.projectionDate,
@@ -15,9 +16,11 @@ class ProjectionResult {
     required this.timeline,
     required this.totalAvailable,
     required this.totalAssigned,
+    required this.totalSpent,
   });
 
   double get totalBalance => totalAvailable + totalAssigned;
+  double get totalInSystem => totalBalance; // Money still in accounts + envelopes
 }
 
 /// Projection for a single account

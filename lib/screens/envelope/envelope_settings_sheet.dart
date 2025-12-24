@@ -738,7 +738,11 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ),
         ),
         content: Text(
-          'Are you sure you want to delete "${envelope.name}"? This will also delete all associated transactions. This action cannot be undone.',
+          'Are you sure you want to delete "${envelope.name}"?\n\n'
+          'This will also delete:\n'
+          '• All associated transactions\n'
+          '• All scheduled payments for this envelope\n\n'
+          'This action cannot be undone.',
           style: const TextStyle(fontSize: 16),
         ),
         actions: [

@@ -10,9 +10,10 @@ import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/run_migrations_once.dart';
 import '../services/user_service.dart';
-import '../services/auto_payment_service.dart';
 import '../providers/font_provider.dart';
+import '../providers/time_machine_provider.dart';
 import '../services/account_repo.dart';
+import '../widgets/time_machine_indicator.dart';
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
@@ -72,11 +73,13 @@ class HomeScreen extends StatefulWidget {
     required this.repo,
     this.initialIndex = 0,
     this.projectionDate,
+    this.notificationRepo,
   });
 
   final EnvelopeRepo repo;
   final int initialIndex;
   final DateTime? projectionDate;
+  final dynamic notificationRepo; // NotificationRepo - using dynamic to avoid import
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -117,23 +120,6 @@ class _HomeScreenState extends State<HomeScreen> {
         db: widget.repo.db,
         explicitUid: widget.repo.currentUserId,
       );
-    });
-
-    Future.microtask(() async {
-      final service = AutoPaymentService();
-      final processedCount = await service.processDuePayments(
-        widget.repo.currentUserId,
-      );
-      if (processedCount > 0 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '$processedCount scheduled payments processed successfully.',
-            ),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-          ),
-        );
-      }
     });
 
     Future.microtask(() async {
@@ -211,7 +197,10 @@ class _HomeScreenState extends State<HomeScreen> {
         repo: widget.repo,
         initialProjectionDate: widget.projectionDate,
       ),
-      CalendarScreenV2(repo: widget.repo),
+      CalendarScreenV2(
+        repo: widget.repo,
+        notificationRepo: widget.notificationRepo,
+      ),
     ];
 
     return Consumer<TutorialController>(
@@ -315,8 +304,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: tr('home_envelopes_tab'),
                   ),
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.folder_open_outlined),
-                    activeIcon: const Icon(Icons.folder_copy),
+                    icon: const Icon(Icons.menu_book_outlined),
+                    activeIcon: const Icon(Icons.menu_book),
                     label: tr('home_binders_tab'),
                   ),
                   BottomNavigationBarItem(
@@ -625,20 +614,27 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final isWorkspace = widget.repo.inWorkspace;
     final showPartnerEnvelopes = !_mineOnly;
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
 
     return StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(
         showPartnerEnvelopes: showPartnerEnvelopes,
       ),
       builder: (c1, s1) {
-        final envs = s1.data ?? [];
+        final realEnvs = s1.data ?? [];
+
+        // Apply Time Machine projection if active
+        final displayEnvs = timeMachine.isActive
+            ? realEnvs.map((e) => timeMachine.getProjectedEnvelope(e)).toList()
+            : realEnvs;
+
         return StreamBuilder<List<EnvelopeGroup>>(
           stream: widget.repo.groupsStream,
           builder: (c2, s2) {
             return StreamBuilder<List<Transaction>>(
               stream: widget.repo.transactionsStream,
               builder: (c3, s3) {
-                final sortedEnvs = _sortEnvelopes(envs);
+                final sortedEnvs = _sortEnvelopes(displayEnvs);
                 return Scaffold(
                   appBar: AppBar(
                     scrolledUnderElevation: 0,
@@ -647,7 +643,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                     title: Row(
                       children: [
                         ElevatedButton.icon(
-                          onPressed: _openPayDayScreen,
+                          onPressed: timeMachine.isActive ? null : _openPayDayScreen,
                           icon: const Icon(Icons.monetization_on, size: 20),
                           label: FittedBox(
                             fit: BoxFit.scaleDown,
@@ -727,6 +723,9 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
                           children: [
+                            // Time Machine Indicator at the top
+                            const TimeMachineIndicator(),
+
                             Expanded(
                               child: sortedEnvs.isEmpty
                                   ? Center(
@@ -787,7 +786,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                                                     ? widget.firstEnvelopeKey
                                                     : null,
                                                 envelope: e,
-                                                allEnvelopes: envs,
+                                                allEnvelopes: displayEnvs,
                                                 repo: widget.repo,
                                                 isSelected: isSel,
                                                 isMultiSelectMode: isMulti,

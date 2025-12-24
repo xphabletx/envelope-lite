@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/group_repo.dart';
 import '../services/envelope_repo.dart';
+import '../services/account_repo.dart';
 import '../models/envelope_group.dart';
 import 'envelope/omni_icon_picker_modal.dart';
 import '../models/envelope.dart';
@@ -13,6 +14,9 @@ import '../providers/font_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
 import '../data/material_icons_database.dart';
+import '../data/binder_templates.dart';
+import 'binder_template_selector.dart';
+import 'envelope_creator.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -71,6 +75,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   bool didInitSelection = false;
   bool showColorPreview = false;
 
+  // Track newly created envelopes in this session
+  Set<String> newlyCreatedEnvelopeIds = {};
+
   // Constant for draft logic
   static const String _draftId = 'DRAFT_NEW_ENVELOPE';
 
@@ -90,6 +97,13 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
 
     if (widget.draftEnvelopeName != null) {
       selectedEnvelopeIds.add(_draftId);
+    }
+
+    // Show template selector for new binders
+    if (!isEdit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showTemplateSelector();
+      });
     }
   }
 
@@ -161,41 +175,159 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     }
   }
 
-  // UPDATED: Confirmation Dialog for Delete
+  // UPDATED: Confirmation Dialog for Delete with two options
   Future<void> _confirmDelete() async {
-    final confirmed = await showDialog<bool>(
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final theme = Theme.of(context);
+
+    final deleteOption = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(tr('delete_binder_title')),
-        content: Text(
-          tr('delete_binder_confirm_msg'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('delete_binder_confirm_msg'),
+                style: fontProvider.getTextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+            // Option 1: Delete binder only
+            InkWell(
+              onTap: () => Navigator.pop(context, 'binder_only'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.colorScheme.outline),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.folder_delete_outlined,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('delete_binder_only'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40),
+                      child: Text(
+                        tr('delete_binder_only_desc'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface.withAlpha((255 * 0.7).round()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Option 2: Delete binder and envelopes
+            InkWell(
+              onTap: () => Navigator.pop(context, 'binder_and_envelopes'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.red.withAlpha((255 * 0.5).round())),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.red.withAlpha((255 * 0.05).round()),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.delete_forever,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            tr('delete_binder_and_envelopes'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40),
+                      child: Text(
+                        tr('delete_binder_and_envelopes_desc'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red.withAlpha((255 * 0.8).round()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, null),
             child: Text(tr('cancel')),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(tr('delete')),
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
+    if (deleteOption != null) {
       setState(() => saving = true);
       try {
-        await widget.envelopeRepo.updateGroupMembership(
-          groupId: editingGroupId!,
-          newEnvelopeIds: {},
-          allEnvelopesStream: widget.envelopeRepo.envelopesStream(),
-        );
+        if (deleteOption == 'binder_and_envelopes') {
+          // Get all envelopes in this binder
+          final allEnvelopes = await widget.envelopeRepo.envelopesStream().first;
+          final envelopesToDelete = allEnvelopes
+              .where((e) => e.groupId == editingGroupId)
+              .map((e) => e.id)
+              .toList();
+
+          // Delete all envelopes in the binder
+          for (final envelopeId in envelopesToDelete) {
+            await widget.envelopeRepo.deleteEnvelope(envelopeId);
+          }
+        } else {
+          // Just remove envelopes from the binder (don't delete them)
+          await widget.envelopeRepo.updateGroupMembership(
+            groupId: editingGroupId!,
+            newEnvelopeIds: {},
+            allEnvelopesStream: widget.envelopeRepo.envelopesStream(),
+          );
+        }
+
+        // Delete the binder itself
         await widget.groupRepo.deleteGroup(groupId: editingGroupId!);
+
         if (mounted) Navigator.pop(context);
       } catch (e) {
         setState(() => saving = false);
@@ -233,6 +365,118 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           selectedEmoji = iconValue;
         }
       });
+    }
+  }
+
+  Future<void> _showTemplateSelector() async {
+    // Get existing envelopes to check which templates have been used
+    final existingEnvelopes = await widget.envelopeRepo.envelopesStream().first;
+
+    if (!mounted) return;
+
+    final template = await Navigator.push<BinderTemplate?>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BinderTemplateSelector(
+          existingEnvelopes: existingEnvelopes,
+        ),
+      ),
+    );
+
+    if (template != null && mounted) {
+      // User selected a template - create envelopes
+      await _createEnvelopesFromTemplate(template);
+    }
+  }
+
+  Future<void> _createEnvelopesFromTemplate(BinderTemplate template) async {
+    setState(() => saving = true);
+
+    try {
+      // Pre-fill name and emoji from template
+      _nameCtrl.text = template.name;
+      selectedEmoji = template.emoji;
+      selectedIconType = 'emoji';
+      selectedIconValue = template.emoji;
+
+      // Create all envelopes from template with emojis
+      final createdIds = <String>[];
+      for (final envelope in template.envelopes) {
+        final envelopeId = await widget.envelopeRepo.createEnvelope(
+          name: envelope.name,
+          startingAmount: 0.0,
+          targetAmount: null,
+          emoji: envelope.emoji,
+          subtitle: null,
+          autoFillEnabled: false,
+          autoFillAmount: null,
+        );
+        createdIds.add(envelopeId);
+      }
+
+      if (mounted) {
+        setState(() {
+          selectedEnvelopeIds.addAll(createdIds);
+          newlyCreatedEnvelopeIds.addAll(createdIds);
+          saving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${template.envelopes.length} envelopes created from ${template.name} template',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating envelopes: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _createNewEnvelope() async {
+    final accountRepo = AccountRepo(widget.envelopeRepo.db, widget.envelopeRepo);
+
+    // Store IDs before opening creator
+    final beforeIds = await widget.envelopeRepo.envelopesStream().first;
+    final beforeIdSet = beforeIds.map((e) => e.id).toSet();
+
+    await showEnvelopeCreator(
+      context,
+      repo: widget.envelopeRepo,
+      groupRepo: widget.groupRepo,
+      accountRepo: accountRepo,
+    );
+
+    // Check for newly created envelope
+    if (mounted) {
+      final afterIds = await widget.envelopeRepo.envelopesStream().first;
+      final afterIdSet = afterIds.map((e) => e.id).toSet();
+      final newIds = afterIdSet.difference(beforeIdSet);
+
+      if (newIds.isNotEmpty) {
+        setState(() {
+          selectedEnvelopeIds.addAll(newIds);
+          newlyCreatedEnvelopeIds.addAll(newIds);
+        });
+
+        // Scroll to bottom to show the new envelope
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
     }
   }
 
@@ -576,6 +820,70 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
+
+                                // "Create New Envelope" button
+                                InkWell(
+                                  onTap: _createNewEnvelope,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: theme.colorScheme.primary,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.add,
+                                            color: Colors.white,
+                                            size: 24,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Create New Envelope',
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.colorScheme.onPrimaryContainer,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                'Add a custom envelope to this binder',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.arrow_forward_ios,
+                                          size: 16,
+                                          color: theme.colorScheme.onPrimaryContainer,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                               ],
                             ),
                           ),
@@ -685,6 +993,26 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                               ),
                                             ),
                                           ),
+                                          // NEW badge for newly created envelopes
+                                          if (newlyCreatedEnvelopeIds.contains(e.id))
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.secondary,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                'NEW',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),

@@ -7,9 +7,8 @@ import '../services/group_repo.dart';
 import '../services/scheduled_payment_repo.dart';
 import '../providers/font_provider.dart';
 import '../widgets/budget/overview_cards.dart';
-import '../widgets/budget/projection_tool.dart';
 import '../models/pay_day_settings.dart';
-import '../widgets/budget/scenario_editor_modal.dart';
+import '../widgets/budget/time_machine_screen.dart';
 // Note: account_list_screen.dart import removed since it's no longer used here
 
 class BudgetScreen extends StatelessWidget {
@@ -90,77 +89,141 @@ class BudgetScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
-            // Scenario Planner Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FilledButton.icon(
-                onPressed: () async {
-                  // Load pay settings
-                  final userId = repo.currentUserId;
-                  final settingsDoc = await repo.db
-                      .collection('users')
-                      .doc(userId)
-                      .collection('payDaySettings')
-                      .doc('settings')
-                      .get();
-
-                  PayDaySettings paySettings;
-                  if (settingsDoc.exists) {
-                    paySettings = PayDaySettings.fromFirestore(settingsDoc);
-                  } else {
-                    paySettings = PayDaySettings(userId: userId);
-                  }
-
-                  if (!context.mounted) return;
-
-                  // Open scenario editor
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ScenarioEditorModal(
-                        accountRepo: accountRepo,
-                        envelopeRepo: repo,
-                        groupRepo: groupRepo,
-                        initialStartDate: DateTime.now(),
-                        initialEndDate: DateTime.now().add(
-                          const Duration(days: 90),
-                        ),
-                        paySettings: paySettings,
-                      ),
-                      fullscreenDialog: true,
+            // Time Machine Button - Centered Special Tile
+            Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 400),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.colorScheme.secondaryContainer,
+                      theme.colorScheme.secondaryContainer.withValues(alpha: 0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                      spreadRadius: 2,
                     ),
-                  );
-                },
-                icon: const Icon(Icons.science, size: 24),
-                label: Text(
-                  'What-If Scenario Planner',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    BoxShadow(
+                      color: theme.colorScheme.secondary.withValues(alpha: 0.1),
+                      blurRadius: 40,
+                      offset: const Offset(0, 12),
+                      spreadRadius: 4,
+                    ),
+                  ],
+                  border: Border.all(
+                    width: 3,
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.5),
                   ),
                 ),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                    horizontal: 20,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(21),
+                    border: Border.all(
+                      width: 2,
+                      color: theme.colorScheme.onSecondaryContainer.withValues(
+                        alpha: 0.2,
+                      ),
+                    ),
                   ),
-                  backgroundColor: theme.colorScheme.secondary,
-                  minimumSize: const Size(double.infinity, 56),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () async {
+                        // Load pay settings
+                        final userId = repo.currentUserId;
+                        final settingsDoc = await repo.db
+                            .collection('users')
+                            .doc(userId)
+                            .collection('payDaySettings')
+                            .doc('settings')
+                            .get();
+
+                        PayDaySettings paySettings;
+                        if (settingsDoc.exists) {
+                          paySettings = PayDaySettings.fromFirestore(settingsDoc);
+                        } else {
+                          paySettings = PayDaySettings(userId: userId);
+                        }
+
+                        if (!context.mounted) return;
+
+                        // Open Time Machine screen
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TimeMachineScreen(
+                              accountRepo: accountRepo,
+                              envelopeRepo: repo,
+                              groupRepo: groupRepo,
+                              paySettings: paySettings,
+                            ),
+                            fullscreenDialog: true,
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(21),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 28,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: theme.colorScheme.onSecondaryContainer
+                                    .withValues(alpha: 0.15),
+                                border: Border.all(
+                                  color: theme.colorScheme.onSecondaryContainer
+                                      .withValues(alpha: 0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.access_time,
+                                size: 56,
+                                color: theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Time Machine',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'View your future finances',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: theme.colorScheme.onSecondaryContainer
+                                    .withValues(alpha: 0.8),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // SECTION 2: Projection Tool
-            // NEW: Pass the initialProjectionDate down
-            ProjectionTool(
-              accountRepo: accountRepo,
-              envelopeRepo: repo,
-              initialDate: initialProjectionDate, // NEW
             ),
 
             const SizedBox(height: 80),

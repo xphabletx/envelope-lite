@@ -10,6 +10,7 @@ import '../models/envelope_group.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
+import '../widgets/analytics/analytics_section.dart';
 
 enum StatsViewMode { combined, envelopes, groups }
 
@@ -507,6 +508,34 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                       ),
 
                       const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                      // Analytics Section
+                      SliverToBoxAdapter(
+                        child: AnalyticsSection(
+                          transactions: shownTxs,
+                          envelopes: envelopes,
+                          groups: groups,
+                          dateRange: DateTimeRange(start: start, end: end),
+                          onDateRangeChange: (range) {
+                            setState(() {
+                              start = DateTime(
+                                range.start.year,
+                                range.start.month,
+                                range.start.day,
+                              );
+                              end = DateTime(
+                                range.end.year,
+                                range.end.month,
+                                range.end.day,
+                                23,
+                                59,
+                                59,
+                                999,
+                              );
+                            });
+                          },
+                        ),
+                      ),
 
                       // Summary Card
                       SliverToBoxAdapter(

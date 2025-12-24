@@ -77,6 +77,42 @@ class GroupRepo {
   }
 
   Future<void> deleteGroup({required String groupId}) async {
-    await groupsCol().doc(groupId).delete();
+    final batch = _db.batch();
+
+    // 1. Delete all scheduled payments for this group
+    final paymentSnapshot = await _db
+        .collection('users')
+        .doc(_userId)
+        .collection('solo')
+        .doc('data')
+        .collection('scheduledPayments')
+        .where('groupId', isEqualTo: groupId)
+        .get();
+
+    for (final doc in paymentSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 2. Unlink all envelopes from this group (set groupId to null)
+    final envelopeSnapshot = await _db
+        .collection('users')
+        .doc(_userId)
+        .collection('solo')
+        .doc('data')
+        .collection('envelopes')
+        .where('groupId', isEqualTo: groupId)
+        .get();
+
+    for (final doc in envelopeSnapshot.docs) {
+      batch.update(doc.reference, {
+        'groupId': null,
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 3. Delete the group document
+    batch.delete(groupsCol().doc(groupId));
+
+    await batch.commit();
   }
 }

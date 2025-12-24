@@ -41,6 +41,16 @@ class LocalizationService {
     'delete_envelopes_title': 'Delete Envelopes?',
     'delete_envelopes_confirm':
         'Are you sure you want to delete this many envelopes:',
+    'delete_binder_title': 'Delete Binder?',
+    'delete_binder_confirm_msg':
+        'How would you like to delete this binder?',
+    'delete_binder_only': 'Delete Binder Only',
+    'delete_binder_only_desc': 'Remove binder but keep all envelopes. Deletes scheduled payments for this binder.',
+    'delete_binder_and_envelopes': 'Delete Binder & Envelopes',
+    'delete_binder_and_envelopes_desc': 'Permanently delete binder and all envelopes within it (including transactions and scheduled payments)',
+    'delete_account_title': 'Delete Account?',
+    'delete_account_confirm_msg':
+        'Are you sure you want to delete this account? This cannot be undone.',
 
     // --- HOME ---
     'home_envelopes_tab': 'Envelopes',
@@ -206,6 +216,14 @@ class LocalizationService {
     'success_binder_updated': 'Binder updated successfully',
     'success_binder_created': 'Binder created successfully',
     'success_envelope_created': 'Envelope created successfully',
+    'success_account_updated': 'Account updated successfully',
+    'success_account_deleted': 'Account deleted successfully',
+
+    // --- ACCOUNTS ---
+    'edit_account': 'Edit Account',
+    'delete_account': 'Delete Account',
+    'account_name': 'Account Name',
+    'account_balance': 'Account Balance',
   };
 }
 

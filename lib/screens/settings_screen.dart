@@ -17,6 +17,8 @@ import '../services/tutorial_controller.dart';
 import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../services/data_cleanup_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
@@ -234,6 +236,12 @@ class SettingsScreen extends StatelessWidget {
                     subtitle: 'Download your data as .xlsx',
                     leading: const Icon(Icons.file_download_outlined),
                     onTap: () => _exportDataNew(context),
+                  ),
+                  _SettingsTile(
+                    title: 'Clean Up Orphaned Data',
+                    subtitle: 'Remove deleted items still in database',
+                    leading: const Icon(Icons.cleaning_services_outlined),
+                    onTap: () => _cleanupOrphanedData(context),
                   ),
                 ],
               ),
@@ -701,6 +709,79 @@ class SettingsScreen extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _cleanupOrphanedData(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Clean Up Database?'),
+        content: const Text(
+          'This will find and delete:\n'
+          '• Scheduled payments for deleted envelopes/groups\n'
+          '• Transactions for deleted envelopes\n\n'
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Clean Up'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final cleanup = DataCleanupService(
+        FirebaseFirestore.instance,
+        FirebaseAuth.instance.currentUser!.uid,
+      );
+
+      final results = await cleanup.cleanupAll();
+      final paymentsDeleted = results['payments'] ?? 0;
+      final txDeleted = results['transactions'] ?? 0;
+
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cleaned up $paymentsDeleted payment(s) and $txDeleted transaction(s)',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cleanup failed: $e'),
             backgroundColor: Colors.red,
           ),
         );

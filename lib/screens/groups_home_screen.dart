@@ -611,17 +611,17 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // Binder Header
                         Column(
                           children: [
                             Container(
-                              width: 55,
-                              height: 55,
+                              width: 48,
+                              height: 48,
                               decoration: BoxDecoration(
                                 color: widget.binderColors.paperColor,
                                 shape: BoxShape.circle,
@@ -639,14 +639,14 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 ],
                               ),
                               child: Center(
-                                child: widget.group.getIconWidget(theme, size: 26),
+                                child: widget.group.getIconWidget(theme, size: 22),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               widget.group.name,
                               style: fontProvider.getTextStyle(
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: widget.binderColors.envelopeTextColor,
                               ),
@@ -654,7 +654,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
@@ -682,7 +682,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     child: Text(
                                       widget.currency.format(widget.totalSaved),
                                       style: fontProvider.getTextStyle(
-                                        fontSize: 24,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                         color: widget.binderColors.binderColor,
                                       ),
@@ -695,33 +695,35 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         ),
 
                         // Selected Envelope Details
-                        if (selectedEnvelope != null)
+                        if (selectedEnvelope != null) ...[
+                          const SizedBox(height: 8),
                           Column(
                             children: [
                               Divider(
                                 color: widget.binderColors.envelopeTextColor
                                     .withAlpha(26),
+                                height: 8,
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               Icon(
                                 Icons.mail,
-                                size: 20,
+                                size: 16,
                                 color: widget.binderColors.binderColor
                                     .withAlpha(179),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 selectedEnvelope.name,
                                 style: fontProvider.getTextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                   color: widget.binderColors.envelopeTextColor,
                                 ),
                                 textAlign: TextAlign.center,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Text(
@@ -729,13 +731,13 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     selectedEnvelope.currentAmount,
                                   ),
                                   style: TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: widget.binderColors.binderColor,
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 tr('tap_again_for_details'),
                                 style: TextStyle(
@@ -748,13 +750,15 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               ),
                             ],
                           ),
+                        ],
 
                         // Action Buttons
+                        const SizedBox(height: 8),
                         Column(
                           children: [
                             if (widget.isPartner)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.only(bottom: 8),
                                 child: FutureBuilder<String>(
                                   future: WorkspaceHelper.getUserDisplayName(
                                     widget.group.userId,
@@ -776,20 +780,20 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                       widget.binderColors.binderColor,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
+                                    vertical: 8,
                                   ),
                                   elevation: 2,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
-                                icon: const Icon(Icons.edit, size: 16),
+                                icon: const Icon(Icons.edit, size: 14),
                                 label: FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
                                     tr('edit'),
                                     style: fontProvider.getTextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -797,7 +801,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 onPressed: widget.onEdit,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
@@ -808,7 +812,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     width: 1.5,
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
+                                    vertical: 8,
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
@@ -816,7 +820,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 ),
                                 icon: Icon(
                                   Icons.analytics,
-                                  size: 16,
+                                  size: 14,
                                   color: widget.binderColors.binderColor,
                                 ),
                                 label: FittedBox(
@@ -824,7 +828,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                   child: Text(
                                     tr('group_history'),
                                     style: fontProvider.getTextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                       color: widget.binderColors.binderColor,
                                     ),
@@ -881,28 +885,14 @@ class _DynamicEnvelopeStack extends StatelessWidget {
           spacing = spacing.clamp(15.0, envelopeHeight + 6);
         }
 
-        final orderedEnvelopes = <MapEntry<int, Envelope>>[];
-        if (selectedIndex != null && selectedIndex! < envelopes.length) {
-          orderedEnvelopes.add(
-            MapEntry(selectedIndex!, envelopes[selectedIndex!]),
-          );
-        }
-        for (var i = 0; i < envelopes.length; i++) {
-          if (i != selectedIndex) {
-            orderedEnvelopes.add(MapEntry(i, envelopes[i]));
-          }
-        }
-
         return Stack(
-          children: orderedEnvelopes.asMap().entries.map((entry) {
-            final displayIndex = entry.key;
-            final originalIndex = entry.value.key;
-            final envelope = entry.value.value;
+          children: envelopes.asMap().entries.map((entry) {
+            final originalIndex = entry.key;
+            final envelope = entry.value;
             final isSelected = selectedIndex == originalIndex;
-            final isTop = displayIndex == 0;
 
             return Positioned(
-              top: isTop ? 0 : displayIndex * spacing,
+              top: originalIndex * spacing,
               left: 0,
               right: 0,
               child: GestureDetector(

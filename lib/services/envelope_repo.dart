@@ -717,8 +717,7 @@ class EnvelopeRepo {
   Future<void> deleteEnvelope(String envelopeId) async {
     final batch = _db.batch();
 
-    batch.delete(_colEnvelopes().doc(envelopeId));
-
+    // 1. Delete all transactions for this envelope
     final txSnapshot = await _colTxs()
         .where('envelopeId', isEqualTo: envelopeId)
         .get();
@@ -727,11 +726,41 @@ class EnvelopeRepo {
       batch.delete(doc.reference);
     }
 
+    // 2. Delete all scheduled payments for this envelope
+    final paymentSnapshot = await _docRootUser()
+        .collection('scheduledPayments')
+        .where('envelopeId', isEqualTo: envelopeId)
+        .get();
+
+    for (final doc in paymentSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 3. Remove envelope from any groups (update envelopeIds array)
+    final groupsSnapshot = await _colGroups()
+        .get();
+
+    for (final doc in groupsSnapshot.docs) {
+      final data = doc.data();
+      final envelopeIds = (data['envelopeIds'] as List<dynamic>?)?.cast<String>() ?? [];
+
+      if (envelopeIds.contains(envelopeId)) {
+        batch.update(doc.reference, {
+          'envelopeIds': envelopeIds.where((id) => id != envelopeId).toList(),
+          'updatedAt': fs.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    // 4. Delete the envelope itself
+    batch.delete(_colEnvelopes().doc(envelopeId));
+
+    await batch.commit();
+
+    // 5. If envelope is in a workspace, remove from registry
     if (inWorkspace) {
       await _removeRegistryForEnvelope(envelopeId);
     }
-
-    await batch.commit();
   }
 
   /// Deposit money into envelope

@@ -12,8 +12,11 @@ import 'providers/font_provider.dart';
 import 'providers/app_preferences_provider.dart';
 import 'providers/workspace_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/time_machine_provider.dart';
 import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
+import 'services/scheduled_payment_repo.dart';
+import 'services/notification_repo.dart';
 import 'services/tutorial_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/sign_in_screen.dart';
@@ -42,6 +45,7 @@ void main() async {
           create: (_) => WorkspaceProvider(initialWorkspaceId: savedWorkspaceId),
         ),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
+        ChangeNotifierProvider(create: (_) => TimeMachineProvider()),
       ],
       child: const MyApp(),
     ),
@@ -58,35 +62,32 @@ class MyApp extends StatelessWidget {
         final baseTheme = themeProvider.currentTheme;
         final fontTheme = fontProvider.getTextTheme();
 
-        return AppLifecycleObserver(
-          // Wrap MaterialApp with AppLifecycleObserver
-          child: MaterialApp(
-            title: 'Envelope Lite',
-            debugShowCheckedModeBanner: false,
-            // Apply the dynamic font to the dynamic theme
-            theme: baseTheme.copyWith(
-              textTheme: fontTheme.apply(
-                bodyColor: baseTheme.colorScheme.onSurface,
-                displayColor: baseTheme.colorScheme.onSurface,
-              ),
+        return MaterialApp(
+          title: 'Envelope Lite',
+          debugShowCheckedModeBanner: false,
+          // Apply the dynamic font to the dynamic theme
+          theme: baseTheme.copyWith(
+            textTheme: fontTheme.apply(
+              bodyColor: baseTheme.colorScheme.onSurface,
+              displayColor: baseTheme.colorScheme.onSurface,
             ),
-            // Global tap-to-dismiss keyboard behavior
-            builder: (context, child) {
-              return GestureDetector(
-                onTap: () {
-                  // Unfocus any active text field when tapping outside
-                  final currentFocus = FocusScope.of(context);
-                  if (!currentFocus.hasPrimaryFocus &&
-                      currentFocus.focusedChild != null) {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                  }
-                },
-                child: child,
-              );
-            },
-            routes: {'/home': (context) => const HomeScreenWrapper()},
-            home: const AuthGate(),
           ),
+          // Global tap-to-dismiss keyboard behavior
+          builder: (context, child) {
+            return GestureDetector(
+              onTap: () {
+                // Unfocus any active text field when tapping outside
+                final currentFocus = FocusScope.of(context);
+                if (!currentFocus.hasPrimaryFocus &&
+                    currentFocus.focusedChild != null) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                }
+              },
+              child: child,
+            );
+          },
+          routes: {'/home': (context) => const HomeScreenWrapper()},
+          home: const AuthGate(),
         );
       },
     );
@@ -180,20 +181,34 @@ class HomeScreenWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
+    final db = FirebaseFirestore.instance;
 
     // Listen to workspace changes and rebuild with a new repo
     return Consumer<WorkspaceProvider>(
       builder: (context, workspaceProvider, _) {
         final repo = EnvelopeRepo.firebase(
-          FirebaseFirestore.instance,
+          db,
           userId: user.uid,
           workspaceId: workspaceProvider.workspaceId,
         );
 
+        // Initialize repos for scheduled payments and notifications
+        final paymentRepo = ScheduledPaymentRepo(db, user.uid);
+        final notificationRepo = NotificationRepo(db, user.uid);
+
         final args = ModalRoute.of(context)?.settings.arguments;
         final initialIndex = args is int ? args : 0;
 
-        return HomeScreen(repo: repo, initialIndex: initialIndex);
+        return AppLifecycleObserver(
+          envelopeRepo: repo,
+          paymentRepo: paymentRepo,
+          notificationRepo: notificationRepo,
+          child: HomeScreen(
+            repo: repo,
+            initialIndex: initialIndex,
+            notificationRepo: notificationRepo,
+          ),
+        );
       },
     );
   }

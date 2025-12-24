@@ -7,7 +7,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
-import 'pay_day_stuffing_screen.dart';
+import 'pay_day_preview_screen.dart';
 
 class PayDayAllocationScreen extends StatefulWidget {
   const PayDayAllocationScreen({
@@ -101,26 +101,13 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
   }
 
   void _startStuffing() {
-    if (allocations.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No envelopes to fill!'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
+    // Navigate to preview screen where user can review and toggle envelopes
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PayDayStuffingScreen(
+        builder: (_) => PayDayPreviewScreen(
           repo: widget.repo,
-          accountRepo: widget.accountRepo,
-          allocations: allocations,
-          envelopes: autoPayEnvelopes,
-          totalAmount: widget.totalAmount,
-          accountId: widget.accountId,
+          groupRepo: widget.groupRepo,
         ),
       ),
     );

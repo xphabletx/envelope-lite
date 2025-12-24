@@ -162,6 +162,7 @@ class AccountRepo {
   }
 
   Future<void> deleteAccount(String accountId) async {
+    // 1. Check for linked envelopes - prevent deletion if any exist
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
 
     if (linkedEnvelopes.isNotEmpty) {
@@ -170,6 +171,23 @@ class AccountRepo {
       );
     }
 
+    // 2. Check PayDaySettings - if this is the default account, clear it
+    final paySettingsRef = _db
+        .collection('users')
+        .doc(_userId)
+        .collection('payDaySettings')
+        .doc('settings');
+
+    final paySettings = await paySettingsRef.get();
+    if (paySettings.exists &&
+        paySettings.data()?['defaultAccountId'] == accountId) {
+      await paySettingsRef.update({
+        'defaultAccountId': null,
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 3. Delete the account
     await _accountsCol().doc(accountId).delete();
   }
 

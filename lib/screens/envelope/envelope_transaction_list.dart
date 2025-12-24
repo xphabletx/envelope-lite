@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/transaction.dart';
 import '../../../providers/font_provider.dart';
+import '../../widgets/future_transaction_tile.dart';
 
 class EnvelopeTransactionList extends StatelessWidget {
   const EnvelopeTransactionList({
@@ -111,12 +112,20 @@ class _TransactionGroup extends StatelessWidget {
 
         // Transactions in this group
         ...transactions.map(
-          (tx) => _TransactionTile(
-            transaction: tx,
-            onTap: onTransactionTap != null
-                ? () => onTransactionTap!(tx)
-                : null,
-          ),
+          (tx) {
+            // Use FutureTransactionTile for projected transactions
+            if (tx.isFuture) {
+              return FutureTransactionTile(transaction: tx);
+            }
+
+            // Use regular tile for real transactions
+            return _TransactionTile(
+              transaction: tx,
+              onTap: onTransactionTap != null
+                  ? () => onTransactionTap!(tx)
+                  : null,
+            );
+          },
         ),
 
         const SizedBox(height: 8),
