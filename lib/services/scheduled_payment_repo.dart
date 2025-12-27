@@ -6,14 +6,18 @@ import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
 
 class ScheduledPaymentRepo {
-  ScheduledPaymentRepo(this._db, this._userId) {
+  ScheduledPaymentRepo(this._db, this._userId, {String? workspaceId}) {
     // Initialize Hive box
     _paymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+    _workspaceId = workspaceId;
   }
 
   final FirebaseFirestore _db;
   final String _userId;
   late final Box<ScheduledPayment> _paymentBox;
+  String? _workspaceId;
+
+  bool get _inWorkspace => _workspaceId != null && _workspaceId!.isNotEmpty;
 
   // Collection reference for user's scheduled payments
   CollectionReference<Map<String, dynamic>> _collection() {
@@ -252,28 +256,60 @@ class ScheduledPaymentRepo {
 
   // Delete all payments for an envelope (when envelope is deleted)
   Future<void> deletePaymentsForEnvelope(String envelopeId) async {
-    final snapshot = await _collection()
-        .where('envelopeId', isEqualTo: envelopeId)
-        .get();
+    // Delete from Hive first
+    final paymentsToDelete = _paymentBox.values
+        .where((payment) => payment.envelopeId == envelopeId)
+        .toList();
 
-    final batch = _db.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    for (final payment in paymentsToDelete) {
+      await _paymentBox.delete(payment.id);
     }
-    await batch.commit();
+    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive for envelope');
+
+    // ONLY delete from Firebase if in workspace mode
+    if (_inWorkspace) {
+      final snapshot = await _collection()
+          .where('envelopeId', isEqualTo: envelopeId)
+          .get();
+
+      final batch = _db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      debugPrint('[ScheduledPaymentRepo] ✅ Deleted payments from Firebase workspace');
+    } else {
+      debugPrint('[ScheduledPaymentRepo] ⏭️ Skipping Firebase delete (solo mode)');
+    }
   }
 
   // Delete all payments for a group (when group is deleted)
   Future<void> deletePaymentsForGroup(String groupId) async {
-    final snapshot = await _collection()
-        .where('groupId', isEqualTo: groupId)
-        .get();
+    // Delete from Hive first
+    final paymentsToDelete = _paymentBox.values
+        .where((payment) => payment.groupId == groupId)
+        .toList();
 
-    final batch = _db.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    for (final payment in paymentsToDelete) {
+      await _paymentBox.delete(payment.id);
     }
-    await batch.commit();
+    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive for group');
+
+    // ONLY delete from Firebase if in workspace mode
+    if (_inWorkspace) {
+      final snapshot = await _collection()
+          .where('groupId', isEqualTo: groupId)
+          .get();
+
+      final batch = _db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      debugPrint('[ScheduledPaymentRepo] ✅ Deleted payments from Firebase workspace');
+    } else {
+      debugPrint('[ScheduledPaymentRepo] ⏭️ Skipping Firebase delete (solo mode)');
+    }
   }
 
   // Execute a scheduled payment (create transaction in envelope/group)

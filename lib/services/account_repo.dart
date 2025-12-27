@@ -449,22 +449,55 @@ class AccountRepo {
   // --------- Private Helpers ----------
 
   Future<void> _unsetOtherDefaults({String? excludeAccountId}) async {
-    final batch = _db.batch();
-
-    final snapshot = await _accountsCol()
-        .where('isDefault', isEqualTo: true)
-        .get();
-
-    for (final doc in snapshot.docs) {
-      if (excludeAccountId != null && doc.id == excludeAccountId) {
-        continue;
+    // Update Hive first
+    final allAccounts = _accountBox.values.toList();
+    for (final account in allAccounts) {
+      if (account.isDefault && account.id != excludeAccountId) {
+        final updated = Account(
+          id: account.id,
+          name: account.name,
+          userId: account.userId,
+          currentBalance: account.currentBalance,
+          createdAt: account.createdAt,
+          lastUpdated: DateTime.now(),
+          iconType: account.iconType,
+          iconValue: account.iconValue,
+          iconColor: account.iconColor,
+          isDefault: false,
+          creditLimit: account.creditLimit,
+          accountType: account.accountType,
+          emoji: account.emoji,
+          colorName: account.colorName,
+          isShared: account.isShared,
+          workspaceId: account.workspaceId,
+        );
+        await _accountBox.put(account.id, updated);
       }
-      batch.update(doc.reference, {
-        'isDefault': false,
-        'lastUpdated': fs.FieldValue.serverTimestamp(),
-      });
     }
+    debugPrint('[AccountRepo] ✅ Unset other defaults in Hive');
 
-    await batch.commit();
+    // ONLY update Firebase if in workspace mode
+    if (_inWorkspace) {
+      final batch = _db.batch();
+
+      final snapshot = await _accountsCol()
+          .where('isDefault', isEqualTo: true)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        if (excludeAccountId != null && doc.id == excludeAccountId) {
+          continue;
+        }
+        batch.update(doc.reference, {
+          'isDefault': false,
+          'lastUpdated': fs.FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      debugPrint('[AccountRepo] ✅ Unset other defaults synced to Firebase');
+    } else {
+      debugPrint('[AccountRepo] ⏭️ Skipping Firebase unset defaults (solo mode)');
+    }
   }
 }

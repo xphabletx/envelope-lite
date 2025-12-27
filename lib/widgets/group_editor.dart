@@ -78,6 +78,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   // Track newly created envelopes in this session
   Set<String> newlyCreatedEnvelopeIds = {};
 
+  // Track selected template to create envelopes on save
+  BinderTemplate? _selectedTemplate;
+
   // Constant for draft logic
   static const String _draftId = 'DRAFT_NEW_ENVELOPE';
 
@@ -142,6 +145,15 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           colorIndex: selectedColorIndex,
           payDayEnabled: payDayEnabled,
         );
+      }
+
+      // Create envelopes from template NOW (if a template was selected)
+      if (_selectedTemplate != null && currentGroupId != null) {
+        final createdIds = await _createEnvelopesFromTemplateNow(
+          _selectedTemplate!,
+          currentGroupId,
+        );
+        selectedEnvelopeIds.addAll(createdIds);
       }
 
       // FILTER OUT DRAFT ID before saving relationships
@@ -390,18 +402,41 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     }
   }
 
+  /// Store template selection to create envelopes on save
   Future<void> _createEnvelopesFromTemplate(BinderTemplate template) async {
-    setState(() => saving = true);
+    // Pre-fill name and emoji from template
+    _nameCtrl.text = template.name;
+    selectedEmoji = template.emoji;
+    selectedIconType = 'emoji';
+    selectedIconValue = template.emoji;
+
+    // Store template for later (will create envelopes when binder is saved)
+    setState(() {
+      _selectedTemplate = template;
+    });
+
+    // Show info that envelopes will be created
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${template.envelopes.length} envelopes will be created when you save the binder',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// Actually create envelopes from template when binder is saved
+  Future<List<String>> _createEnvelopesFromTemplateNow(
+    BinderTemplate template,
+    String groupId,
+  ) async {
+    final createdIds = <String>[];
 
     try {
-      // Pre-fill name and emoji from template
-      _nameCtrl.text = template.name;
-      selectedEmoji = template.emoji;
-      selectedIconType = 'emoji';
-      selectedIconValue = template.emoji;
-
-      // Create all envelopes from template with emojis
-      final createdIds = <String>[];
+      // Create all envelopes from template with emojis and groupId
       for (final envelope in template.envelopes) {
         final envelopeId = await widget.envelopeRepo.createEnvelope(
           name: envelope.name,
@@ -411,33 +446,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           subtitle: null,
           autoFillEnabled: false,
           autoFillAmount: null,
+          groupId: groupId, // Assign to binder immediately
         );
         createdIds.add(envelopeId);
       }
-
-      if (mounted) {
-        setState(() {
-          selectedEnvelopeIds.addAll(createdIds);
-          newlyCreatedEnvelopeIds.addAll(createdIds);
-          saving = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${template.envelopes.length} envelopes created from ${template.name} template',
-            ),
-          ),
-        );
-      }
     } catch (e) {
-      setState(() => saving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating envelopes: $e')),
-        );
-      }
+      debugPrint('Error creating envelopes from template: $e');
+      rethrow;
     }
+
+    return createdIds;
   }
 
   Future<void> _createNewEnvelope() async {

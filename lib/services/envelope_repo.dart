@@ -725,36 +725,107 @@ class EnvelopeRepo {
     required Set<String> newEnvelopeIds,
     required Stream<List<Envelope>> allEnvelopesStream,
   }) async {
-    final currentSnap = await _colEnvelopes()
-        .where('groupId', isEqualTo: groupId)
-        .get();
-
-    final currentIds = currentSnap.docs.map((d) => d.id).toSet();
+    // Get current envelopes in this group from Hive
+    final allEnvelopes = _envelopeBox.values.toList();
+    final currentIds = allEnvelopes
+        .where((e) => e.groupId == groupId)
+        .map((e) => e.id)
+        .toSet();
 
     final toRemove = currentIds.difference(newEnvelopeIds);
     final toAddOrKeep = newEnvelopeIds;
 
-    Future<void> applyBatchLocal(
-      Iterable<String> ids,
-      Map<String, dynamic> data,
-    ) async {
-      if (ids.isEmpty) return;
-      final b = _db.batch();
-      for (final id in ids) {
-        b.update(_colEnvelopes().doc(id), data);
+    // Update Hive (primary storage)
+    for (final id in toRemove) {
+      final envelope = _envelopeBox.get(id);
+      if (envelope != null) {
+        final updated = Envelope(
+          id: envelope.id,
+          name: envelope.name,
+          userId: envelope.userId,
+          currentAmount: envelope.currentAmount,
+          targetAmount: envelope.targetAmount,
+          targetDate: envelope.targetDate,
+          groupId: null, // Remove from group
+          emoji: envelope.emoji,
+          iconType: envelope.iconType,
+          iconValue: envelope.iconValue,
+          iconColor: envelope.iconColor,
+          subtitle: envelope.subtitle,
+          autoFillEnabled: envelope.autoFillEnabled,
+          autoFillAmount: envelope.autoFillAmount,
+          isShared: envelope.isShared,
+          linkedAccountId: envelope.linkedAccountId,
+          isDebtEnvelope: envelope.isDebtEnvelope,
+          startingDebt: envelope.startingDebt,
+          termStartDate: envelope.termStartDate,
+          termMonths: envelope.termMonths,
+          monthlyPayment: envelope.monthlyPayment,
+        );
+        await _envelopeBox.put(id, updated);
       }
-      await b.commit();
     }
 
-    await applyBatchLocal(toRemove, {
-      'groupId': null,
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
+    for (final id in toAddOrKeep) {
+      final envelope = _envelopeBox.get(id);
+      if (envelope != null) {
+        final updated = Envelope(
+          id: envelope.id,
+          name: envelope.name,
+          userId: envelope.userId,
+          currentAmount: envelope.currentAmount,
+          targetAmount: envelope.targetAmount,
+          targetDate: envelope.targetDate,
+          groupId: groupId, // Add to group
+          emoji: envelope.emoji,
+          iconType: envelope.iconType,
+          iconValue: envelope.iconValue,
+          iconColor: envelope.iconColor,
+          subtitle: envelope.subtitle,
+          autoFillEnabled: envelope.autoFillEnabled,
+          autoFillAmount: envelope.autoFillAmount,
+          isShared: envelope.isShared,
+          linkedAccountId: envelope.linkedAccountId,
+          isDebtEnvelope: envelope.isDebtEnvelope,
+          startingDebt: envelope.startingDebt,
+          termStartDate: envelope.termStartDate,
+          termMonths: envelope.termMonths,
+          monthlyPayment: envelope.monthlyPayment,
+        );
+        await _envelopeBox.put(id, updated);
+      }
+    }
 
-    await applyBatchLocal(toAddOrKeep, {
-      'groupId': groupId,
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
+    debugPrint('[EnvelopeRepo] ✅ Updated group membership in Hive');
+
+    // ONLY update Firebase if in workspace mode
+    if (inWorkspace) {
+      Future<void> applyBatchFirebase(
+        Iterable<String> ids,
+        Map<String, dynamic> data,
+      ) async {
+        if (ids.isEmpty) return;
+        final b = _db.batch();
+        for (final id in ids) {
+          b.update(_colEnvelopes().doc(id), data);
+        }
+        await b.commit();
+      }
+
+      await applyBatchFirebase(toRemove, {
+        'groupId': null,
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+
+      await applyBatchFirebase(toAddOrKeep, {
+        'groupId': groupId,
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('[EnvelopeRepo] ✅ Updated group membership in Firebase');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase group membership update (solo mode)');
+    }
   }
 
   // --------------------------- Transactions ----------------------------
@@ -1294,46 +1365,47 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    final batch = _db.batch(); // Create a single batch for all operations
-
-    await recordTransaction(
-      tx,
-      from: fromEnvelope,
-      to: toEnvelope,
-      externalBatch: batch, // Pass the batch to recordTransaction
-    );
-
-    // Update from envelope in its owner's collection
-    final fromEnvelopeRef = _db
-        .collection('users')
-        .doc(fromEnvelope.userId)
-        .collection('solo')
-        .doc('data')
-        .collection('envelopes')
-        .doc(fromEnvelopeId);
-
-    batch.update(fromEnvelopeRef, {
-      'currentAmount': fs.FieldValue.increment(-amount),
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
-
-    // Update to envelope in its owner's collection
-    final toEnvelopeRef = _db
-        .collection('users')
-        .doc(toEnvelope.userId)
-        .collection('solo')
-        .doc('data')
-        .collection('envelopes')
-        .doc(toEnvelopeId);
-
-    batch.update(toEnvelopeRef, {
-      'currentAmount': fs.FieldValue.increment(amount),
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit(); // Commit the single batch
-
+    // ONLY update Firebase if in workspace mode
     if (inWorkspace) {
+      final batch = _db.batch(); // Create a single batch for all operations
+
+      await recordTransaction(
+        tx,
+        from: fromEnvelope,
+        to: toEnvelope,
+        externalBatch: batch, // Pass the batch to recordTransaction
+      );
+
+      // Update from envelope in its owner's collection
+      final fromEnvelopeRef = _db
+          .collection('users')
+          .doc(fromEnvelope.userId)
+          .collection('solo')
+          .doc('data')
+          .collection('envelopes')
+          .doc(fromEnvelopeId);
+
+      batch.update(fromEnvelopeRef, {
+        'currentAmount': fs.FieldValue.increment(-amount),
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+
+      // Update to envelope in its owner's collection
+      final toEnvelopeRef = _db
+          .collection('users')
+          .doc(toEnvelope.userId)
+          .collection('solo')
+          .doc('data')
+          .collection('envelopes')
+          .doc(toEnvelopeId);
+
+      batch.update(toEnvelopeRef, {
+        'currentAmount': fs.FieldValue.increment(amount),
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit(); // Commit the single batch
+
       await _upsertRegistryForEnvelope(
         envelopeId: fromEnvelope.id,
         envelopeName: fromEnvelope.name,
@@ -1349,6 +1421,10 @@ class EnvelopeRepo {
         ownerId: toEnvelope.userId,
         ownerDisplayName: await getUserDisplayName(toEnvelope.userId),
       );
+
+      debugPrint('[EnvelopeRepo] ✅ Transfer synced to Firebase workspace');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase transfer (solo mode)');
     }
   }
 
@@ -1383,14 +1459,52 @@ class EnvelopeRepo {
 
   Future<void> linkEnvelopesToAccount(
       List<String> envelopeIds, String accountId) async {
-    final batch = _db.batch();
+    // Update Hive first
     for (final envelopeId in envelopeIds) {
-      batch.update(_colEnvelopes().doc(envelopeId), {
-        'linkedAccountId': accountId,
-        'updatedAt': fs.FieldValue.serverTimestamp(),
-      });
+      final envelope = _envelopeBox.get(envelopeId);
+      if (envelope != null) {
+        final updated = Envelope(
+          id: envelope.id,
+          name: envelope.name,
+          userId: envelope.userId,
+          currentAmount: envelope.currentAmount,
+          targetAmount: envelope.targetAmount,
+          targetDate: envelope.targetDate,
+          groupId: envelope.groupId,
+          emoji: envelope.emoji,
+          iconType: envelope.iconType,
+          iconValue: envelope.iconValue,
+          iconColor: envelope.iconColor,
+          subtitle: envelope.subtitle,
+          autoFillEnabled: envelope.autoFillEnabled,
+          autoFillAmount: envelope.autoFillAmount,
+          isShared: envelope.isShared,
+          linkedAccountId: accountId,
+          isDebtEnvelope: envelope.isDebtEnvelope,
+          startingDebt: envelope.startingDebt,
+          termStartDate: envelope.termStartDate,
+          termMonths: envelope.termMonths,
+          monthlyPayment: envelope.monthlyPayment,
+        );
+        await _envelopeBox.put(envelopeId, updated);
+      }
     }
-    await batch.commit();
+    debugPrint('[EnvelopeRepo] ✅ Linked ${envelopeIds.length} envelopes to account in Hive');
+
+    // ONLY update Firebase if in workspace mode
+    if (inWorkspace) {
+      final batch = _db.batch();
+      for (final envelopeId in envelopeIds) {
+        batch.update(_colEnvelopes().doc(envelopeId), {
+          'linkedAccountId': accountId,
+          'updatedAt': fs.FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      debugPrint('[EnvelopeRepo] ✅ Linked envelopes synced to Firebase workspace');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase link (solo mode)');
+    }
   }
 
   /// Fetch all transactions once (for CSV export)

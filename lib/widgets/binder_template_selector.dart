@@ -237,7 +237,9 @@ class _TemplateCard extends StatelessWidget {
                   ),
                   if (envelopeCount != null) ...[
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -257,8 +259,7 @@ class _TemplateCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (isDisabled) ...[
-                          const SizedBox(width: 8),
+                        if (isDisabled)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -288,7 +289,6 @@ class _TemplateCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ],
