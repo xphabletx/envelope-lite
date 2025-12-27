@@ -5,6 +5,7 @@ import 'envelope_repo.dart';
 import 'scheduled_payment_repo.dart';
 import 'notification_repo.dart';
 import '../models/app_notification.dart';
+import '../models/scheduled_payment.dart';
 
 class ScheduledPaymentProcessingResult {
   final int processedCount;
@@ -76,42 +77,64 @@ class ScheduledPaymentProcessor {
               orElse: () => throw Exception('Envelope not found'),
             );
 
-            // Check if envelope has sufficient balance
-            if (envelope.currentAmount < payment.amount) {
-              final error = ScheduledPaymentError(
-                paymentName: payment.name,
-                envelopeName: envelope.name,
-                amount: payment.amount,
-                reason:
-                    'Insufficient balance (${currency.format(envelope.currentAmount)} available)',
-              );
-              errors.add(error);
+            // Determine the amount to deduct based on payment type
+            double amountToDeduct;
+            String description;
 
-              // Create notification for failed payment
-              await notificationRepo.createNotification(
-                type: NotificationType.scheduledPaymentFailed,
-                title: 'Payment Failed',
-                message:
-                    '${payment.name} failed - insufficient balance in ${envelope.name}',
-                metadata: {
-                  'paymentId': payment.id,
-                  'paymentName': payment.name,
-                  'envelopeId': envelope.id,
-                  'envelopeName': envelope.name,
-                  'amount': payment.amount,
-                  'availableBalance': envelope.currentAmount,
-                },
-              );
+            if (payment.paymentType == ScheduledPaymentType.envelopeBalance) {
+              // Use the entire envelope balance
+              amountToDeduct = envelope.currentAmount;
+              description = 'Scheduled Payment (Envelope Balance): ${payment.name}';
 
-              debugPrint('Failed: ${payment.name} - insufficient balance');
-              continue;
+              // Skip if envelope is empty
+              if (amountToDeduct <= 0) {
+                debugPrint('Skipped: ${payment.name} - envelope is empty');
+                // Still mark as executed so it moves to next occurrence
+                await paymentRepo.markPaymentExecuted(payment.id);
+                continue;
+              }
+            } else {
+              // Use the fixed amount
+              amountToDeduct = payment.amount;
+              description = 'Scheduled Payment: ${payment.name}';
+
+              // Check if envelope has sufficient balance
+              if (envelope.currentAmount < amountToDeduct) {
+                final error = ScheduledPaymentError(
+                  paymentName: payment.name,
+                  envelopeName: envelope.name,
+                  amount: amountToDeduct,
+                  reason:
+                      'Insufficient balance (${currency.format(envelope.currentAmount)} available)',
+                );
+                errors.add(error);
+
+                // Create notification for failed payment
+                await notificationRepo.createNotification(
+                  type: NotificationType.scheduledPaymentFailed,
+                  title: 'Payment Failed',
+                  message:
+                      '${payment.name} failed - insufficient balance in ${envelope.name}',
+                  metadata: {
+                    'paymentId': payment.id,
+                    'paymentName': payment.name,
+                    'envelopeId': envelope.id,
+                    'envelopeName': envelope.name,
+                    'amount': amountToDeduct,
+                    'availableBalance': envelope.currentAmount,
+                  },
+                );
+
+                debugPrint('Failed: ${payment.name} - insufficient balance');
+                continue;
+              }
             }
 
-            // Process withdrawal
+            // Process withdrawal (deduction)
             await envelopeRepo.withdraw(
               envelopeId: payment.envelopeId!,
-              amount: payment.amount,
-              description: 'Scheduled Payment: ${payment.name}',
+              amount: amountToDeduct,
+              description: description,
               date: DateTime.now(),
             );
 
@@ -119,11 +142,11 @@ class ScheduledPaymentProcessor {
             await paymentRepo.markPaymentExecuted(payment.id);
 
             processedCount++;
-            totalAmount += payment.amount;
+            totalAmount += amountToDeduct;
             processedPaymentNames.add(payment.name);
 
             debugPrint(
-              'Processed: ${payment.name} - ${currency.format(payment.amount)}',
+              'Processed: ${payment.name} - ${currency.format(amountToDeduct)}',
             );
           }
           // Handle group-based payments (future implementation)

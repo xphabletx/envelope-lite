@@ -1,24 +1,82 @@
 // lib/models/scheduled_payment.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 
-enum PaymentFrequencyUnit { days, weeks, months, years }
+part 'scheduled_payment.g.dart';
 
+@HiveType(typeId: 102)
+enum PaymentFrequencyUnit {
+  @HiveField(0)
+  days,
+  @HiveField(1)
+  weeks,
+  @HiveField(2)
+  months,
+  @HiveField(3)
+  years,
+}
+
+@HiveType(typeId: 103)
+enum ScheduledPaymentType {
+  @HiveField(0)
+  fixedAmount,
+  @HiveField(1)
+  envelopeBalance,
+}
+
+@HiveType(typeId: 4)
 class ScheduledPayment {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String userId;
+
+  @HiveField(2)
   final String? envelopeId;
+
+  @HiveField(3)
   final String? groupId;
+
+  @HiveField(4)
   final String name; // Display name (e.g., "Rent", "Subscriptions")
+
+  @HiveField(5)
   final String? description;
+
+  @HiveField(6)
   final double amount;
+
+  @HiveField(7)
   final DateTime startDate;
+
+  @HiveField(8)
   final int frequencyValue; // e.g., 1, 2, 3
+
+  @HiveField(9)
   final PaymentFrequencyUnit frequencyUnit; // days, weeks, months, years
+
+  @HiveField(10)
   final String colorName; // e.g., "Blusher", "Moody Sky"
+
+  @HiveField(11)
   final int colorValue; // Actual color int value
+
+  @HiveField(12)
   final bool isAutomatic; // Auto-execute on due date
+
+  @HiveField(13)
   final DateTime? lastExecuted; // Track last execution
+
+  @HiveField(14)
   final DateTime createdAt;
+
+  // NEW: Dynamic payment type support
+  @HiveField(15)
+  final ScheduledPaymentType paymentType;
+
+  @HiveField(16)
+  final String? paymentEnvelopeId; // Envelope to pull payment amount from
 
   ScheduledPayment({
     required this.id,
@@ -36,6 +94,8 @@ class ScheduledPayment {
     this.isAutomatic = false,
     this.lastExecuted,
     required this.createdAt,
+    this.paymentType = ScheduledPaymentType.fixedAmount,
+    this.paymentEnvelopeId,
   });
 
   // Get next due date based on last execution or start date
@@ -100,11 +160,19 @@ class ScheduledPayment {
           ? Timestamp.fromDate(lastExecuted!)
           : null,
       'createdAt': Timestamp.fromDate(createdAt),
+      'paymentType': paymentType.name,
+      'paymentEnvelopeId': paymentEnvelopeId,
     };
   }
 
   factory ScheduledPayment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Parse payment type
+    final typeString = data['paymentType'] as String?;
+    final paymentType = typeString == 'envelopeBalance'
+        ? ScheduledPaymentType.envelopeBalance
+        : ScheduledPaymentType.fixedAmount;
 
     return ScheduledPayment(
       id: doc.id,
@@ -129,6 +197,8 @@ class ScheduledPayment {
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
+      paymentType: paymentType,
+      paymentEnvelopeId: data['paymentEnvelopeId'],
     );
   }
 
@@ -148,6 +218,8 @@ class ScheduledPayment {
     bool? isAutomatic,
     DateTime? lastExecuted,
     DateTime? createdAt,
+    ScheduledPaymentType? paymentType,
+    String? paymentEnvelopeId,
   }) {
     return ScheduledPayment(
       id: id ?? this.id,
@@ -165,6 +237,8 @@ class ScheduledPayment {
       isAutomatic: isAutomatic ?? this.isAutomatic,
       lastExecuted: lastExecuted ?? this.lastExecuted,
       createdAt: createdAt ?? this.createdAt,
+      paymentType: paymentType ?? this.paymentType,
+      paymentEnvelopeId: paymentEnvelopeId ?? this.paymentEnvelopeId,
     );
   }
 }

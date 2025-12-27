@@ -23,7 +23,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
 import '../screens/workspace_gate.dart';
+import '../screens/migration_screen.dart';
+import '../screens/pay_day_settings_screen.dart';
 import '../services/scheduled_payment_repo.dart';
+import '../services/hive_migration_service.dart';
+import '../services/pay_day_settings_service.dart';
+import '../providers/workspace_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -168,6 +174,34 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
+              // Pay Day Settings Section
+              _SettingsSection(
+                title: 'Pay Day',
+                icon: Icons.payments_outlined,
+                children: [
+                  _SettingsTile(
+                    title: 'Pay Day Settings',
+                    subtitle: 'Configure your pay schedule & calendar',
+                    leading: const Icon(Icons.calendar_month_outlined),
+                    onTap: () {
+                      final payDayService = PayDaySettingsService(
+                        repo.db,
+                        repo.currentUserId,
+                      );
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PayDaySettingsScreen(
+                            service: payDayService,
+                          ),
+                        ),
+                      );
+                    },
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
               // Workspace Section
               _SettingsSection(
                 title: 'Workspace',
@@ -231,6 +265,34 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Data & Privacy',
                 icon: Icons.lock_outline,
                 children: [
+                  _SettingsTile(
+                    title: 'Migrate to Local Storage',
+                    subtitle: 'Move data from Firebase to device (Hive)',
+                    leading: const Icon(Icons.cloud_download_outlined),
+                    onTap: () => _openMigrationScreen(context),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                  _SettingsTile(
+                    title: 'Sync to Firebase',
+                    subtitle: 'Upload local data to cloud backup',
+                    leading: const Icon(Icons.cloud_upload_outlined),
+                    onTap: () => _syncToFirebase(context),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                  _SettingsTile(
+                    title: 'Force Solo Mode',
+                    subtitle: 'Clear workspace & use only local storage',
+                    leading: const Icon(Icons.phonelink_off_outlined),
+                    onTap: () => _forceSoloMode(context),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                  _SettingsTile(
+                    title: 'Clear Firebase Cache',
+                    subtitle: 'Remove all offline Firebase data',
+                    leading: const Icon(Icons.clear_all_outlined, color: Colors.orange),
+                    onTap: () => _clearFirebaseCache(context),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
                   _SettingsTile(
                     title: 'Export My Data',
                     subtitle: 'Download your data as .xlsx',
@@ -388,8 +450,11 @@ class SettingsScreen extends StatelessWidget {
 
                         try {
                           await AuthService.signOut();
-                          // Navigation will be handled by auth state listener
-                          // The loading dialog will be dismissed when the screen is popped
+                          // Dismiss loading dialog after sign out completes
+                          if (context.mounted) {
+                            Navigator.pop(context); // Dismiss loading
+                          }
+                          // Navigation to SignInScreen will be handled by auth state listener
                         } catch (e) {
                           if (context.mounted) {
                             Navigator.pop(context); // Dismiss loading
@@ -672,6 +737,438 @@ class SettingsScreen extends StatelessWidget {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
+    }
+  }
+
+  Future<void> _openMigrationScreen(BuildContext context) async {
+    final migrationService = HiveMigrationService(
+      FirebaseFirestore.instance,
+      FirebaseAuth.instance,
+    );
+
+    final needsMigration = await migrationService.needsMigration();
+
+    if (!context.mounted) return;
+
+    if (!needsMigration) {
+      // Already migrated or no data to migrate
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Migration Not Needed'),
+          content: const Text(
+            'Your data has already been migrated to local storage, or there is no data to migrate.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Navigate to migration screen
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MigrationScreen(),
+      ),
+    );
+  }
+
+  Future<void> _forceSoloMode(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Confirm with user
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Force Solo Mode?'),
+        content: const Text(
+          'This will:\n'
+          '• Clear any workspace association\n'
+          '• Use ONLY local Hive storage\n'
+          '• Stop syncing to Firebase\n'
+          '• Clear Firebase cache\n\n'
+          'Your local data will be preserved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enable Solo Mode'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      debugPrint('[Settings] 🔧 Forcing solo mode...');
+
+      // 1. Clear SharedPreferences FIRST
+      final prefs = await SharedPreferences.getInstance();
+
+      final removed1 = await prefs.remove('active_workspace_id');
+      final removed2 = await prefs.remove('last_workspace_id');
+      final removed3 = await prefs.remove('last_workspace_name');
+
+      debugPrint('[Settings] Cleared active_workspace_id: $removed1');
+      debugPrint('[Settings] Cleared last_workspace_id: $removed2');
+      debugPrint('[Settings] Cleared last_workspace_name: $removed3');
+
+      // VERIFY they're actually gone
+      final verify1 = prefs.getString('active_workspace_id');
+      final verify2 = prefs.getString('last_workspace_id');
+      final verify3 = prefs.getString('last_workspace_name');
+
+      debugPrint('[Settings] VERIFY - active_workspace_id: ${verify1 ?? "NULL ✅"}');
+      debugPrint('[Settings] VERIFY - last_workspace_id: ${verify2 ?? "NULL ✅"}');
+      debugPrint('[Settings] VERIFY - last_workspace_name: ${verify3 ?? "NULL ✅"}');
+
+      if (verify1 != null || verify2 != null || verify3 != null) {
+        throw Exception('Failed to clear workspace IDs from SharedPreferences!');
+      }
+
+      // 2. Clear workspace from Firebase user document
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+          'activeWorkspaceId': null,
+        }, SetOptions(merge: true));
+        debugPrint('[Settings] ✅ Cleared activeWorkspaceId from Firebase user document');
+      }
+
+      // 3. Update WorkspaceProvider if it exists
+      if (context.mounted) {
+        try {
+          final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+          await workspaceProvider.setWorkspaceId(null);
+          debugPrint('[Settings] ✅ WorkspaceProvider cleared');
+        } catch (e) {
+          debugPrint('[Settings] ⚠️ WorkspaceProvider not found (may not exist): $e');
+        }
+      }
+
+      // 4. Update the EnvelopeRepo to force it to re-check workspace status
+      // The repo will see workspaceId is now null when it checks
+      await repo.setWorkspace(null);
+      debugPrint('[Settings] ✅ EnvelopeRepo workspace cleared');
+
+      // 5. NEW: Clear Firebase cache to remove ghost listeners
+      try {
+        debugPrint('[Settings] 🔥 Terminating Firebase connections...');
+        await FirebaseFirestore.instance.terminate();
+
+        debugPrint('[Settings] 🔥 Clearing Firebase persistence...');
+        await FirebaseFirestore.instance.clearPersistence();
+
+        debugPrint('[Settings] ✅ Firebase cache cleared');
+      } catch (e) {
+        debugPrint('[Settings] ⚠️ Error clearing Firebase cache: $e');
+        // Continue anyway - not critical
+      }
+
+      if (!context.mounted) return;
+
+      // Show success
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✓ Solo mode enabled. App will reload...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Wait for snackbar
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Restart app by popping to root
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      debugPrint('[Settings] ❌ Error forcing solo mode: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearFirebaseCache(BuildContext context) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Firebase Cache?'),
+        content: const Text(
+          'This will:\n'
+          '• Remove all offline Firebase data\n'
+          '• Close all Firebase connections\n'
+          '• Fix ghost listener issues\n\n'
+          'Your local Hive data is safe.\n\n'
+          'The app will restart after clearing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Clear Cache'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    if (!context.mounted) return;
+
+    try {
+      debugPrint('[Settings] 🔥 Clearing Firebase cache...');
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Clearing Firebase cache...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Terminate Firebase
+      await FirebaseFirestore.instance.terminate();
+      debugPrint('[Settings] ✅ Firebase connections terminated');
+
+      // Clear persistence
+      await FirebaseFirestore.instance.clearPersistence();
+      debugPrint('[Settings] ✅ Firebase persistence cleared');
+
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Firebase cache cleared. Restarting app...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Wait for snackbar
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Restart app
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+
+    } catch (e) {
+      debugPrint('[Settings] ❌ Error clearing Firebase cache: $e');
+
+      // Close loading if still showing
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncToFirebase(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Confirm with user
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Sync to Firebase?'),
+        content: const Text(
+          'This will upload all your local data to Firebase cloud storage.\n\n'
+          'Use this to:\n'
+          '• Create a cloud backup of your local data\n'
+          '• Prepare for workspace mode\n'
+          '• Restore data to Firebase\n\n'
+          'This may take a few moments for large datasets.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sync Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show progress dialog
+    String currentProgress = 'Initializing...';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(currentProgress),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    try {
+      final migrationService = HiveMigrationService(
+        FirebaseFirestore.instance,
+        FirebaseAuth.instance,
+      );
+
+      final result = await migrationService.syncToFirebase(
+        onProgress: (progress) {
+          currentProgress = progress;
+          // Update dialog (if still mounted)
+        },
+      );
+
+      if (!context.mounted) return;
+
+      // Dismiss progress dialog
+      Navigator.of(context).pop();
+
+      if (result['success'] == true) {
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: theme.colorScheme.surface,
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text('Sync Complete'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Successfully synced to Firebase:'),
+                const SizedBox(height: 12),
+                Text('• ${result['envelopes'] ?? 0} envelopes'),
+                Text('• ${result['accounts'] ?? 0} accounts'),
+                Text('• ${result['groups'] ?? 0} groups'),
+                Text('• ${result['transactions'] ?? 0} transactions'),
+                Text('• ${result['scheduledPayments'] ?? 0} scheduled payments'),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Show error dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: theme.colorScheme.surface,
+            title: Row(
+              children: [
+                Icon(Icons.error, color: theme.colorScheme.error),
+                const SizedBox(width: 8),
+                const Text('Sync Failed'),
+              ],
+            ),
+            content: Text(
+              'Failed to sync data to Firebase:\n\n${result['error'] ?? 'Unknown error'}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+
+      // Dismiss progress dialog if still showing
+      Navigator.of(context).pop();
+
+      // Show error
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          title: Row(
+            children: [
+              Icon(Icons.error, color: theme.colorScheme.error),
+              const SizedBox(width: 8),
+              const Text('Sync Failed'),
+            ],
+          ),
+          content: Text('Error syncing to Firebase:\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     }
   }
 

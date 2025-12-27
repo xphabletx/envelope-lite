@@ -617,7 +617,10 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     OutlinedButton(
                       onPressed: _isLoading
                           ? null
-                          : () => _confirmDelete(envelope),
+                          : () {
+                              debugPrint('[EnvelopeSettingsSheet] 🔴 Delete button tapped');
+                              _confirmDelete(envelope);
+                            },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -726,6 +729,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   }
 
   Future<void> _confirmDelete(Envelope envelope) async {
+    debugPrint('[EnvelopeSettingsSheet] 📋 Showing delete confirmation dialog');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -769,12 +773,19 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     );
 
     if (confirmed == true && mounted) {
+      debugPrint('[EnvelopeSettingsSheet] ✅ User confirmed delete');
+      debugPrint('[EnvelopeSettingsSheet] Envelope ID: ${widget.envelopeId}');
+      debugPrint('[EnvelopeSettingsSheet] Envelope name: ${envelope.name}');
+
       setState(() => _isLoading = true);
 
       try {
+        debugPrint('[EnvelopeSettingsSheet] 📞 Calling repo.deleteEnvelope...');
         await widget.repo.deleteEnvelope(widget.envelopeId);
+        debugPrint('[EnvelopeSettingsSheet] ✅ Delete completed successfully');
 
         if (mounted) {
+          debugPrint('[EnvelopeSettingsSheet] Popping navigation and showing success message');
           Navigator.pop(context);
           Navigator.pop(context);
           ScaffoldMessenger.of(
@@ -782,6 +793,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ).showSnackBar(const SnackBar(content: Text('Envelope deleted')));
         }
       } catch (e) {
+        debugPrint('[EnvelopeSettingsSheet] ❌ Delete failed with error: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error deleting envelope: $e')),
@@ -789,6 +801,10 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           setState(() => _isLoading = false);
         }
       }
+    } else if (confirmed == false) {
+      debugPrint('[EnvelopeSettingsSheet] ❌ User cancelled delete');
+    } else if (!mounted) {
+      debugPrint('[EnvelopeSettingsSheet] ⚠️ Widget not mounted, skipping delete');
     }
   }
 }

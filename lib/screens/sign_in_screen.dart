@@ -208,8 +208,9 @@ class _SignInScreenState extends State<SignInScreen> {
                           sheetBusy = true;
                         });
                         try {
+                          final email = emailCtrl.text.trim();
                           await AuthService.createWithEmail(
-                            email: emailCtrl.text.trim(),
+                            email: email,
                             password: passCtrl.text,
                             displayName: null,
                           );
@@ -223,7 +224,31 @@ class _SignInScreenState extends State<SignInScreen> {
 
                           if (!ctx2.mounted) return;
                           Navigator.of(ctx2).pop();
-                          _showSnack('Account created. You are signed in.');
+
+                          // Show verification email dialog
+                          if (ctx2.mounted) {
+                            showDialog(
+                              context: ctx2,
+                              barrierDismissible: false,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('Check Your Email'),
+                                content: Text(
+                                  'We sent a verification link to $email\n\n'
+                                  'Please check your inbox and click the link to verify your account.',
+                                ),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () {
+                                      Navigator.pop(dialogContext);
+                                      // AuthWrapper will automatically handle showing
+                                      // the verification screen
+                                    },
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
                         } on FirebaseAuthException catch (e) {
                           switch (e.code) {
                             case 'email-already-in-use':

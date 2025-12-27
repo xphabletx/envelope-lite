@@ -3,21 +3,34 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
 import 'package:rxdart/rxdart.dart';
+import 'hive_service.dart';
 
 /// Firestore repo (canonical storage is always user/solo),
 /// with optional workspace *context* tagging on writes.
 class EnvelopeRepo {
   EnvelopeRepo.firebase(this._db, {String? workspaceId, required String userId})
     : _workspaceId = (workspaceId?.isEmpty ?? true) ? null : workspaceId,
-      _userId = userId;
+      _userId = userId {
+    // Initialize Hive boxes
+    _envelopeBox = HiveService.getBox<Envelope>('envelopes');
+    _groupBox = HiveService.getBox<EnvelopeGroup>('groups');
+    _transactionBox = HiveService.getBox<Transaction>('transactions');
+  }
 
   final fs.FirebaseFirestore _db;
   final String _userId;
   String? _workspaceId; // null => Solo mode
+
+  // Hive boxes for offline-first storage
+  late final Box<Envelope> _envelopeBox;
+  late final Box<EnvelopeGroup> _groupBox;
+  late final Box<Transaction> _transactionBox;
 
   final Map<String, String> _userDisplayNameCache = {};
 
@@ -164,10 +177,25 @@ class EnvelopeRepo {
   /// Get envelopes stream with optional partner filtering
   Stream<List<Envelope>> envelopesStream({bool showPartnerEnvelopes = true}) {
     if (!inWorkspace) {
-      return _colEnvelopes()
-          .orderBy('createdAt', descending: false)
-          .snapshots()
-          .map((s) => s.docs.map((d) => Envelope.fromFirestore(d)).toList());
+      // Solo mode: Use Hive's watch() stream (only emits when data changes)
+      debugPrint('[EnvelopeRepo] 📦 Setting up Hive stream (solo mode)');
+
+      // Emit initial state immediately
+      final initialEnvelopes = _envelopeBox.values
+          .where((env) => env.userId == _userId)
+          .toList();
+      debugPrint('[EnvelopeRepo] ✅ Initial state: ${initialEnvelopes.length} envelopes from Hive');
+
+      // Then listen for changes
+      return Stream.value(initialEnvelopes).asBroadcastStream().concatWith([
+        _envelopeBox.watch().map((_) {
+          final envelopes = _envelopeBox.values
+              .where((env) => env.userId == _userId)
+              .toList();
+          debugPrint('[EnvelopeRepo] ✅ Emitting ${envelopes.length} envelopes from Hive');
+          return envelopes;
+        })
+      ]);
     }
 
     return _db.collection('workspaces').doc(_workspaceId).snapshots().switchMap(
@@ -221,10 +249,25 @@ class EnvelopeRepo {
 
   Stream<List<EnvelopeGroup>> get groupsStream {
     if (!inWorkspace) {
-      return _colGroups()
-          .orderBy('createdAt', descending: false)
-          .snapshots()
-          .map((s) => s.docs.map((doc) => EnvelopeGroup.fromFirestore(doc)).toList());
+      // Solo mode: Use Hive's watch() stream (only emits when data changes)
+      debugPrint('[EnvelopeRepo] 📦 Setting up Hive groups stream (solo mode)');
+
+      // Emit initial state immediately
+      final initialGroups = _groupBox.values
+          .where((group) => group.userId == _userId)
+          .toList();
+      debugPrint('[EnvelopeRepo] ✅ Initial state: ${initialGroups.length} groups from Hive');
+
+      // Then listen for changes
+      return Stream.value(initialGroups).asBroadcastStream().concatWith([
+        _groupBox.watch().map((_) {
+          final groups = _groupBox.values
+              .where((group) => group.userId == _userId)
+              .toList();
+          debugPrint('[EnvelopeRepo] ✅ Emitting ${groups.length} groups from Hive');
+          return groups;
+        })
+      ]);
     }
 
     // For workspace mode, read from all members' solo groups (filtered by isShared)
@@ -279,10 +322,27 @@ class EnvelopeRepo {
 
   Stream<List<Transaction>> get transactionsStream {
     if (!inWorkspace) {
-      return _colTxs()
-          .orderBy('date', descending: true)
-          .snapshots()
-          .map((s) => s.docs.map((d) => Transaction.fromFirestore(d)).toList());
+      // Solo mode: Use Hive's watch() stream (only emits when data changes)
+      debugPrint('[EnvelopeRepo] 📦 Setting up Hive transactions stream (solo mode)');
+
+      // Emit initial state immediately
+      final initialTxs = _transactionBox.values
+          .where((tx) => tx.userId == _userId)
+          .toList();
+      initialTxs.sort((a, b) => b.date.compareTo(a.date)); // Newest first
+      debugPrint('[EnvelopeRepo] ✅ Initial state: ${initialTxs.length} transactions from Hive');
+
+      // Then listen for changes
+      return Stream.value(initialTxs).asBroadcastStream().concatWith([
+        _transactionBox.watch().map((_) {
+          final txs = _transactionBox.values
+              .where((tx) => tx.userId == _userId)
+              .toList();
+          txs.sort((a, b) => b.date.compareTo(a.date)); // Newest first
+          debugPrint('[EnvelopeRepo] ✅ Emitting ${txs.length} transactions from Hive');
+          return txs;
+        })
+      ]);
     }
 
     return _db.collection('workspaces').doc(_workspaceId).snapshots().asyncMap((
@@ -337,38 +397,82 @@ class EnvelopeRepo {
 
   // -------------------------------- Envelopes --------------------------------
   Future<void> deleteEnvelopes(Iterable<String> ids) async {
+    debugPrint('[EnvelopeRepo] DEBUG BULK DELETE:');
     final idList = ids.toList();
+    debugPrint('  - Deleting ${idList.length} envelopes');
+    debugPrint('  - Envelope IDs: $idList');
+    debugPrint('  - inWorkspace: $inWorkspace');
 
-    final b1 = _db.batch();
+    // STEP 1: Delete from Hive first
+    debugPrint('[EnvelopeRepo] 📦 STEP 1: Deleting from Hive...');
     for (final id in idList) {
-      b1.delete(_colEnvelopes().doc(id));
-    }
-    await b1.commit();
+      // Delete transactions for this envelope
+      final txsToDelete = _transactionBox.values
+          .where((tx) => tx.envelopeId == id)
+          .map((tx) => tx.id)
+          .toList();
 
-    for (var i = 0; i < idList.length; i += 10) {
-      final chunk = idList.sublist(
-        i,
-        (i + 10 > idList.length) ? idList.length : i + 10,
-      );
-      final snap = await _colTxs().where('envelopeId', whereIn: chunk).get();
-      final b = _db.batch();
-      for (final d in snap.docs) {
-        b.delete(d.reference);
+      debugPrint('  - Envelope $id: Deleting ${txsToDelete.length} transactions from Hive');
+      for (final txId in txsToDelete) {
+        await _transactionBox.delete(txId);
       }
-      await b.commit();
-    }
 
+      // Delete the envelope itself
+      await _envelopeBox.delete(id);
+      debugPrint('  - Envelope $id: Deleted from Hive');
+    }
+    debugPrint('[EnvelopeRepo] ✅ All ${idList.length} envelopes deleted from Hive');
+
+    // STEP 2: Delete from Firebase (if in workspace mode)
     if (inWorkspace) {
+      debugPrint('[EnvelopeRepo] 🔥 STEP 2: Deleting from Firebase workspace...');
+
+      // Delete envelopes
+      debugPrint('[EnvelopeRepo] 🔥 Deleting envelope documents...');
+      final b1 = _db.batch();
+      for (final id in idList) {
+        b1.delete(_colEnvelopes().doc(id));
+      }
+      await b1.commit();
+      debugPrint('[EnvelopeRepo] ✅ ${idList.length} envelope documents deleted from Firebase');
+
+      // Delete transactions in chunks
+      debugPrint('[EnvelopeRepo] 🔥 Deleting transactions...');
+      int totalTxDeleted = 0;
+      for (var i = 0; i < idList.length; i += 10) {
+        final chunk = idList.sublist(
+          i,
+          (i + 10 > idList.length) ? idList.length : i + 10,
+        );
+        final snap = await _colTxs().where('envelopeId', whereIn: chunk).get();
+        debugPrint('  - Chunk ${i ~/ 10 + 1}: Found ${snap.docs.length} transactions');
+        final b = _db.batch();
+        for (final d in snap.docs) {
+          b.delete(d.reference);
+        }
+        await b.commit();
+        totalTxDeleted += snap.docs.length;
+      }
+      debugPrint('[EnvelopeRepo] ✅ $totalTxDeleted transactions deleted from Firebase');
+
+      // Remove from registry
+      debugPrint('[EnvelopeRepo] 🔥 Removing from registry...');
       for (final id in idList) {
         await _removeRegistryForEnvelope(id);
       }
+      debugPrint('[EnvelopeRepo] ✅ Registry entries removed');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase (solo mode)');
     }
+
+    debugPrint('[EnvelopeRepo] ✅ BULK DELETE COMPLETE for ${idList.length} envelopes');
   }
 
   Future<String> createEnvelope({
     required String name,
     required double startingAmount,
     double? targetAmount,
+    DateTime? targetDate,
     String? groupId,
     String? subtitle,
     String? emoji,
@@ -385,58 +489,107 @@ class EnvelopeRepo {
     final user = FirebaseAuth.instance.currentUser;
     final ownerDisplayName = user?.displayName ?? (user?.email ?? 'Me');
 
-    final data = {
-      'id': doc.id,
-      'name': name,
-      'userId': _userId,
-      'ownerId': _userId,
-      'ownerDisplayName': ownerDisplayName,
-      'currentAmount': startingAmount,
-      'targetAmount': targetAmount,
-      'groupId': groupId,
-      'subtitle': subtitle,
-      'emoji': emoji,
-      'iconType': iconType,
-      'iconValue': iconValue,
-      'iconColor': iconColor,
-      'autoFillEnabled': autoFillEnabled,
-      'autoFillAmount': autoFillAmount,
-      'linkedAccountId': linkedAccountId,
-      'isShared': inWorkspace,
-      'workspaceId': _workspaceId,
-      'createdAt': fs.FieldValue.serverTimestamp(),
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    };
+    // Create Envelope object
+    final envelope = Envelope(
+      id: doc.id,
+      name: name,
+      userId: _userId,
+      currentAmount: startingAmount,
+      targetAmount: targetAmount,
+      targetDate: targetDate,
+      groupId: groupId,
+      subtitle: subtitle,
+      emoji: emoji,
+      iconType: iconType,
+      iconValue: iconValue,
+      iconColor: iconColor,
+      autoFillEnabled: autoFillEnabled,
+      autoFillAmount: autoFillAmount,
+      linkedAccountId: linkedAccountId,
+      isShared: inWorkspace,
+    );
 
-    await doc.set(data);
+    // ALWAYS write to Hive (primary storage)
+    await _envelopeBox.put(doc.id, envelope);
+    debugPrint('[EnvelopeRepo] ✅ Envelope saved to Hive: ${doc.id}');
+
+    // ONLY write to Firebase if in workspace mode
+    if (inWorkspace) {
+      final data = {
+        'id': doc.id,
+        'name': name,
+        'userId': _userId,
+        'ownerId': _userId,
+        'ownerDisplayName': ownerDisplayName,
+        'currentAmount': startingAmount,
+        'targetAmount': targetAmount,
+        'targetDate': targetDate != null ? fs.Timestamp.fromDate(targetDate) : null,
+        'groupId': groupId,
+        'subtitle': subtitle,
+        'emoji': emoji,
+        'iconType': iconType,
+        'iconValue': iconValue,
+        'iconColor': iconColor,
+        'autoFillEnabled': autoFillEnabled,
+        'autoFillAmount': autoFillAmount,
+        'linkedAccountId': linkedAccountId,
+        'isShared': inWorkspace,
+        'workspaceId': _workspaceId,
+        'createdAt': fs.FieldValue.serverTimestamp(),
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      };
+
+      await doc.set(data);
+      debugPrint('[EnvelopeRepo] ✅ Envelope synced to Firebase workspace');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase (solo mode)');
+    }
 
     if (startingAmount > 0) {
       final txDoc = _colTxs().doc();
-      await txDoc.set({
-        'id': txDoc.id,
-        'envelopeId': doc.id,
-        'type': TransactionType.deposit.name,
-        'amount': startingAmount,
-        'date': fs.FieldValue.serverTimestamp(),
-        'description': 'Initial balance',
-        'userId': _userId,
-        'workspaceId': _workspaceId,
-        'ownerId': _userId,
-        'ownerDisplayName': ownerDisplayName,
-        'transferPeerEnvelopeId': null,
-        'transferLinkId': null,
-        'transferDirection': null,
-        'sourceOwnerId': null,
-        'sourceOwnerDisplayName': null,
-        'sourceEnvelopeName': null,
-        'targetOwnerId': null,
-        'targetOwnerDisplayName': null,
-        'targetEnvelopeName': null,
-        'emoji': null,
-        'subtitle': subtitle,
-        'autoFillEnabled': autoFillEnabled,
-        'autoFillAmount': autoFillAmount,
-      });
+      final transaction = Transaction(
+        id: txDoc.id,
+        envelopeId: doc.id,
+        type: TransactionType.deposit,
+        amount: startingAmount,
+        date: DateTime.now(),
+        description: 'Initial balance',
+        userId: _userId,
+      );
+
+      // ALWAYS write to Hive
+      await _transactionBox.put(txDoc.id, transaction);
+      debugPrint('[EnvelopeRepo] ✅ Initial transaction saved to Hive');
+
+      // ONLY write to Firebase if in workspace mode
+      if (inWorkspace) {
+        await txDoc.set({
+          'id': txDoc.id,
+          'envelopeId': doc.id,
+          'type': TransactionType.deposit.name,
+          'amount': startingAmount,
+          'date': fs.FieldValue.serverTimestamp(),
+          'description': 'Initial balance',
+          'userId': _userId,
+          'workspaceId': _workspaceId,
+          'ownerId': _userId,
+          'ownerDisplayName': ownerDisplayName,
+          'transferPeerEnvelopeId': null,
+          'transferLinkId': null,
+          'transferDirection': null,
+          'sourceOwnerId': null,
+          'sourceOwnerDisplayName': null,
+          'sourceEnvelopeName': null,
+          'targetOwnerId': null,
+          'targetOwnerDisplayName': null,
+          'targetEnvelopeName': null,
+          'emoji': null,
+          'subtitle': subtitle,
+          'autoFillEnabled': autoFillEnabled,
+          'autoFillAmount': autoFillAmount,
+        });
+        debugPrint('[EnvelopeRepo] ✅ Initial transaction synced to Firebase');
+      }
     }
 
     if (inWorkspace) {
@@ -467,46 +620,103 @@ class EnvelopeRepo {
     bool? isShared,
     String? linkedAccountId,
   }) async {
-    print('[EnvelopeRepo] DEBUG: Updating envelope $envelopeId. isShared: $isShared');
-    final updateData = <String, dynamic>{
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    };
-    if (name != null) updateData['name'] = name;
-    if (groupId != null) updateData['groupId'] = groupId;
-    if (targetAmount != null) updateData['targetAmount'] = targetAmount;
-    if (emoji != null) updateData['emoji'] = emoji;
-    if (iconType != null) updateData['iconType'] = iconType;
-    if (iconValue != null) updateData['iconValue'] = iconValue;
-    if (iconColor != null) updateData['iconColor'] = iconColor;
-    if (subtitle != null) updateData['subtitle'] = subtitle;
-    if (autoFillEnabled != null) {
-      updateData['autoFillEnabled'] = autoFillEnabled;
-    }
-    if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
-    if (isShared != null) updateData['isShared'] = isShared;
-    if (linkedAccountId != null) {
-      updateData['linkedAccountId'] = linkedAccountId;
+    // DEBUG: Check workspace status
+    final prefs = await SharedPreferences.getInstance();
+    final workspaceId = prefs.getString('active_workspace_id');
+
+    debugPrint('[EnvelopeRepo] DEBUG UPDATE:');
+    debugPrint('  - Envelope ID: $envelopeId');
+    debugPrint('  - WorkspaceId from prefs: ${workspaceId ?? "NULL"}');
+    debugPrint('  - _workspaceId field: ${_workspaceId ?? "NULL"}');
+    debugPrint('  - inWorkspace flag: $inWorkspace');
+
+    // Get current envelope from Hive
+    final envelope = _envelopeBox.get(envelopeId);
+    if (envelope == null) {
+      debugPrint('[EnvelopeRepo] ❌ Envelope not found in Hive: $envelopeId');
+      throw Exception('Envelope not found: $envelopeId');
     }
 
-    await _colEnvelopes().doc(envelopeId).update(updateData);
+    // Create updated envelope
+    final updatedEnvelope = Envelope(
+      id: envelope.id,
+      name: name ?? envelope.name,
+      userId: envelope.userId,
+      currentAmount: envelope.currentAmount,
+      targetAmount: targetAmount ?? envelope.targetAmount,
+      groupId: groupId ?? envelope.groupId,
+      subtitle: subtitle ?? envelope.subtitle,
+      emoji: emoji ?? envelope.emoji,
+      iconType: iconType ?? envelope.iconType,
+      iconValue: iconValue ?? envelope.iconValue,
+      iconColor: iconColor ?? envelope.iconColor,
+      autoFillEnabled: autoFillEnabled ?? envelope.autoFillEnabled,
+      autoFillAmount: autoFillAmount ?? envelope.autoFillAmount,
+      linkedAccountId: linkedAccountId ?? envelope.linkedAccountId,
+      isShared: isShared ?? envelope.isShared,
+      isDebtEnvelope: envelope.isDebtEnvelope,
+      startingDebt: envelope.startingDebt,
+      termStartDate: envelope.termStartDate,
+      termMonths: envelope.termMonths,
+      monthlyPayment: envelope.monthlyPayment,
+    );
 
-    if (inWorkspace) {
-      final snap = await _colEnvelopes().doc(envelopeId).get();
-      final d = snap.data();
-      if (d != null) {
-        final user = FirebaseAuth.instance.currentUser;
-        final ownerDisplayName =
-            (d['ownerDisplayName'] as String?) ??
-            (user?.displayName ?? (user?.email ?? 'Me'));
+    // ALWAYS write to Hive
+    await _envelopeBox.put(envelopeId, updatedEnvelope);
+    debugPrint('[EnvelopeRepo] ✅ Envelope updated in Hive: $envelopeId');
 
-        await _upsertRegistryForEnvelope(
-          envelopeId: envelopeId,
-          envelopeName: (d['name'] as String?) ?? 'Unnamed',
-          currentAmount: (d['currentAmount'] as num?)?.toDouble() ?? 0.0,
-          ownerId: (d['ownerId'] as String?) ?? _userId,
-          ownerDisplayName: ownerDisplayName,
-        );
+    // Check Firebase sync
+    if (inWorkspace && _workspaceId != null) {
+      debugPrint('[EnvelopeRepo] 🔥 Syncing to Firebase workspace: $_workspaceId');
+      try {
+        final updateData = <String, dynamic>{
+          'updatedAt': fs.FieldValue.serverTimestamp(),
+        };
+        if (name != null) updateData['name'] = name;
+        if (groupId != null) updateData['groupId'] = groupId;
+        if (targetAmount != null) updateData['targetAmount'] = targetAmount;
+        if (emoji != null) updateData['emoji'] = emoji;
+        if (iconType != null) updateData['iconType'] = iconType;
+        if (iconValue != null) updateData['iconValue'] = iconValue;
+        if (iconColor != null) updateData['iconColor'] = iconColor;
+        if (subtitle != null) updateData['subtitle'] = subtitle;
+        if (autoFillEnabled != null) {
+          updateData['autoFillEnabled'] = autoFillEnabled;
+        }
+        if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
+        if (isShared != null) updateData['isShared'] = isShared;
+        if (linkedAccountId != null) {
+          updateData['linkedAccountId'] = linkedAccountId;
+        }
+
+        await _colEnvelopes().doc(envelopeId).update(updateData);
+        debugPrint('[EnvelopeRepo] ✅ Firebase sync successful');
+
+        // Update registry
+        final snap = await _colEnvelopes().doc(envelopeId).get();
+        final d = snap.data();
+        if (d != null) {
+          final user = FirebaseAuth.instance.currentUser;
+          final ownerDisplayName =
+              (d['ownerDisplayName'] as String?) ??
+              (user?.displayName ?? (user?.email ?? 'Me'));
+
+          await _upsertRegistryForEnvelope(
+            envelopeId: envelopeId,
+            envelopeName: (d['name'] as String?) ?? 'Unnamed',
+            currentAmount: (d['currentAmount'] as num?)?.toDouble() ?? 0.0,
+            ownerId: (d['ownerId'] as String?) ?? _userId,
+            ownerDisplayName: ownerDisplayName,
+          );
+        }
+      } catch (e) {
+        debugPrint('[EnvelopeRepo] ❌ Firebase sync failed: $e');
       }
+    } else if (inWorkspace && _workspaceId == null) {
+      debugPrint('[EnvelopeRepo] ⚠️ inWorkspace is TRUE but _workspaceId is NULL!');
+      debugPrint('[EnvelopeRepo] ⚠️ This is a bug - workspace status is stale');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase (solo mode)');
     }
   }
 
@@ -671,7 +881,31 @@ class EnvelopeRepo {
 
   /// Get single envelope as stream (for live updates in settings)
   Stream<Envelope> envelopeStream(String envelopeId) {
-    // First try to get from current user's collection
+    if (!inWorkspace) {
+      // Solo mode: Use Hive's watch() stream (only emits when data changes)
+      debugPrint('[EnvelopeRepo] 📦 Setting up Hive stream for envelope: $envelopeId');
+
+      // Emit initial state immediately
+      final initialEnvelope = _envelopeBox.get(envelopeId);
+      if (initialEnvelope == null) {
+        throw Exception('Envelope not found: $envelopeId');
+      }
+      debugPrint('[EnvelopeRepo] ✅ Initial state: ${initialEnvelope.name} (\$${initialEnvelope.currentAmount})');
+
+      // Then listen for changes to this specific key
+      return Stream.value(initialEnvelope).asBroadcastStream().concatWith([
+        _envelopeBox.watch(key: envelopeId).map((_) {
+          final envelope = _envelopeBox.get(envelopeId);
+          if (envelope == null) {
+            throw Exception('Envelope not found: $envelopeId');
+          }
+          debugPrint('[EnvelopeRepo] ✅ Emitting envelope update: ${envelope.name} (\$${envelope.currentAmount})');
+          return envelope;
+        })
+      ]);
+    }
+
+    // Workspace mode: Stream from Firebase
     return _colEnvelopes()
         .doc(envelopeId)
         .snapshots()
@@ -715,52 +949,125 @@ class EnvelopeRepo {
 
   /// Delete an envelope
   Future<void> deleteEnvelope(String envelopeId) async {
-    final batch = _db.batch();
+    debugPrint('[EnvelopeRepo] DEBUG DELETE:');
+    debugPrint('  - Envelope ID: $envelopeId');
+    debugPrint('  - Method called: deleteEnvelope');
 
-    // 1. Delete all transactions for this envelope
-    final txSnapshot = await _colTxs()
-        .where('envelopeId', isEqualTo: envelopeId)
-        .get();
+    // Check if envelope exists in Hive
+    final envelope = _envelopeBox.get(envelopeId);
+    debugPrint('  - Envelope found in Hive: ${envelope != null}');
 
-    for (final doc in txSnapshot.docs) {
-      batch.delete(doc.reference);
+    if (envelope == null) {
+      debugPrint('[EnvelopeRepo] ❌ Envelope not found in Hive: $envelopeId');
+      throw Exception('Envelope not found: $envelopeId');
     }
 
-    // 2. Delete all scheduled payments for this envelope
-    final paymentSnapshot = await _docRootUser()
-        .collection('scheduledPayments')
-        .where('envelopeId', isEqualTo: envelopeId)
-        .get();
+    debugPrint('  - Envelope name: ${envelope.name}');
+    debugPrint('  - Envelope userId: ${envelope.userId}');
+    debugPrint('  - Current userId: $_userId');
 
-    for (final doc in paymentSnapshot.docs) {
-      batch.delete(doc.reference);
+    // Check workspace status
+    final prefs = await SharedPreferences.getInstance();
+    final workspaceId = prefs.getString('active_workspace_id');
+    debugPrint('  - WorkspaceId from prefs: ${workspaceId ?? "NULL"}');
+    debugPrint('  - _workspaceId field: ${_workspaceId ?? "NULL"}');
+    debugPrint('  - inWorkspace flag: $inWorkspace');
+
+    // 1. Delete all transactions for this envelope from Hive
+    debugPrint('[EnvelopeRepo] 📦 Deleting transactions from Hive...');
+    final txsToDelete = _transactionBox.values
+        .where((tx) => tx.envelopeId == envelopeId)
+        .map((tx) => tx.id)
+        .toList();
+    debugPrint('  - Found ${txsToDelete.length} transactions to delete');
+
+    for (final txId in txsToDelete) {
+      await _transactionBox.delete(txId);
+    }
+    debugPrint('[EnvelopeRepo] ✅ Deleted ${txsToDelete.length} transactions from Hive');
+
+    // 2. Delete the envelope from Hive
+    debugPrint('[EnvelopeRepo] 📦 Deleting envelope from Hive...');
+    try {
+      await _envelopeBox.delete(envelopeId);
+      debugPrint('[EnvelopeRepo] ✅ Envelope deleted from Hive: $envelopeId');
+    } catch (e) {
+      debugPrint('[EnvelopeRepo] ❌ Error deleting from Hive: $e');
+      rethrow;
     }
 
-    // 3. Remove envelope from any groups (update envelopeIds array)
-    final groupsSnapshot = await _colGroups()
-        .get();
+    // 3. If in workspace mode, also delete from Firebase
+    if (inWorkspace && _workspaceId != null) {
+      debugPrint('[EnvelopeRepo] 🔥 Deleting from Firebase workspace: $_workspaceId');
+      try {
+        final batch = _db.batch();
 
-    for (final doc in groupsSnapshot.docs) {
-      final data = doc.data();
-      final envelopeIds = (data['envelopeIds'] as List<dynamic>?)?.cast<String>() ?? [];
+        // Delete all transactions for this envelope
+        debugPrint('[EnvelopeRepo] 🔥 Querying Firebase transactions...');
+        final txSnapshot = await _colTxs()
+            .where('envelopeId', isEqualTo: envelopeId)
+            .get();
+        debugPrint('  - Found ${txSnapshot.docs.length} Firebase transactions');
 
-      if (envelopeIds.contains(envelopeId)) {
-        batch.update(doc.reference, {
-          'envelopeIds': envelopeIds.where((id) => id != envelopeId).toList(),
-          'updatedAt': fs.FieldValue.serverTimestamp(),
-        });
+        for (final doc in txSnapshot.docs) {
+          batch.delete(doc.reference);
+        }
+
+        // Delete all scheduled payments for this envelope
+        debugPrint('[EnvelopeRepo] 🔥 Querying Firebase scheduled payments...');
+        final paymentSnapshot = await _docRootUser()
+            .collection('scheduledPayments')
+            .where('envelopeId', isEqualTo: envelopeId)
+            .get();
+        debugPrint('  - Found ${paymentSnapshot.docs.length} Firebase scheduled payments');
+
+        for (final doc in paymentSnapshot.docs) {
+          batch.delete(doc.reference);
+        }
+
+        // Remove envelope from any groups (update envelopeIds array)
+        debugPrint('[EnvelopeRepo] 🔥 Querying Firebase groups...');
+        final groupsSnapshot = await _colGroups()
+            .get();
+        debugPrint('  - Found ${groupsSnapshot.docs.length} Firebase groups');
+
+        for (final doc in groupsSnapshot.docs) {
+          final data = doc.data();
+          final envelopeIds = (data['envelopeIds'] as List<dynamic>?)?.cast<String>() ?? [];
+
+          if (envelopeIds.contains(envelopeId)) {
+            debugPrint('  - Removing envelope from group: ${doc.id}');
+            batch.update(doc.reference, {
+              'envelopeIds': envelopeIds.where((id) => id != envelopeId).toList(),
+              'updatedAt': fs.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+        // Delete the envelope itself
+        debugPrint('[EnvelopeRepo] 🔥 Deleting envelope document from Firebase...');
+        batch.delete(_colEnvelopes().doc(envelopeId));
+
+        debugPrint('[EnvelopeRepo] 🔥 Committing Firebase batch...');
+        await batch.commit();
+        debugPrint('[EnvelopeRepo] ✅ Envelope deleted from Firebase workspace');
+
+        // Remove from registry
+        debugPrint('[EnvelopeRepo] 🔥 Removing from registry...');
+        await _removeRegistryForEnvelope(envelopeId);
+        debugPrint('[EnvelopeRepo] ✅ Removed from registry');
+      } catch (e) {
+        debugPrint('[EnvelopeRepo] ❌ Firebase delete failed: $e');
+        // Don't rethrow - Hive delete succeeded
       }
+    } else if (inWorkspace && _workspaceId == null) {
+      debugPrint('[EnvelopeRepo] ⚠️ inWorkspace is TRUE but _workspaceId is NULL!');
+      debugPrint('[EnvelopeRepo] ⚠️ This is a bug - workspace status is stale');
+    } else {
+      debugPrint('[EnvelopeRepo] ⏭️ Skipping Firebase (solo mode)');
     }
 
-    // 4. Delete the envelope itself
-    batch.delete(_colEnvelopes().doc(envelopeId));
-
-    await batch.commit();
-
-    // 5. If envelope is in a workspace, remove from registry
-    if (inWorkspace) {
-      await _removeRegistryForEnvelope(envelopeId);
-    }
+    debugPrint('[EnvelopeRepo] ✅ DELETE COMPLETE for envelope: $envelopeId');
   }
 
   /// Deposit money into envelope
@@ -770,11 +1077,16 @@ class EnvelopeRepo {
     required String description,
     DateTime? date,
   }) async {
-    final envDoc = await _colEnvelopes().doc(envelopeId).get();
-    final envelope = Envelope.fromFirestore(envDoc);
+    // Get envelope from Hive
+    final envelope = _envelopeBox.get(envelopeId);
+    if (envelope == null) {
+      throw Exception('Envelope not found: $envelopeId');
+    }
 
+    // Create transaction
+    final txId = _db.collection('_temp').doc().id; // Generate ID
     final tx = Transaction(
-      id: '',
+      id: txId,
       envelopeId: envelopeId,
       type: TransactionType.deposit,
       amount: amount,
@@ -783,23 +1095,50 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    final batch = _db.batch();
+    // Update envelope in Hive
+    final updatedEnvelope = Envelope(
+      id: envelope.id,
+      name: envelope.name,
+      userId: envelope.userId,
+      currentAmount: envelope.currentAmount + amount,
+      targetAmount: envelope.targetAmount,
+      groupId: envelope.groupId,
+      subtitle: envelope.subtitle,
+      emoji: envelope.emoji,
+      iconType: envelope.iconType,
+      iconValue: envelope.iconValue,
+      iconColor: envelope.iconColor,
+      autoFillEnabled: envelope.autoFillEnabled,
+      autoFillAmount: envelope.autoFillAmount,
+      linkedAccountId: envelope.linkedAccountId,
+      isShared: envelope.isShared,
+      isDebtEnvelope: envelope.isDebtEnvelope,
+      startingDebt: envelope.startingDebt,
+      termStartDate: envelope.termStartDate,
+      termMonths: envelope.termMonths,
+      monthlyPayment: envelope.monthlyPayment,
+    );
 
-    await recordTransaction(tx, externalBatch: batch);
+    await _envelopeBox.put(envelopeId, updatedEnvelope);
+    await _transactionBox.put(txId, tx);
+    debugPrint('[EnvelopeRepo] ✅ Deposit saved to Hive: +\$$amount');
 
-    batch.update(_colEnvelopes().doc(envelopeId), {
-      'currentAmount': fs.FieldValue.increment(amount),
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
-
+    // Sync to Firebase if in workspace
     if (inWorkspace) {
+      final batch = _db.batch();
+      await recordTransaction(tx, externalBatch: batch);
+      batch.update(_colEnvelopes().doc(envelopeId), {
+        'currentAmount': fs.FieldValue.increment(amount),
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      debugPrint('[EnvelopeRepo] ✅ Deposit synced to Firebase workspace');
+
       await _upsertRegistryForEnvelope(
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         currentAmount: envelope.currentAmount + amount,
-        ownerId: envelope.userId, // Use envelope.userId
+        ownerId: envelope.userId,
         ownerDisplayName: await getUserDisplayName(envelope.userId),
       );
     }
@@ -812,15 +1151,20 @@ class EnvelopeRepo {
     required String description,
     DateTime? date,
   }) async {
-    final envDoc = await _colEnvelopes().doc(envelopeId).get();
-    final envelope = Envelope.fromFirestore(envDoc);
+    // Get envelope from Hive
+    final envelope = _envelopeBox.get(envelopeId);
+    if (envelope == null) {
+      throw Exception('Envelope not found: $envelopeId');
+    }
 
     if (envelope.currentAmount < amount) {
       throw Exception('Insufficient funds in envelope');
     }
 
+    // Create transaction
+    final txId = _db.collection('_temp').doc().id;
     final tx = Transaction(
-      id: '',
+      id: txId,
       envelopeId: envelopeId,
       type: TransactionType.withdrawal,
       amount: amount,
@@ -829,23 +1173,50 @@ class EnvelopeRepo {
       userId: _userId,
     );
 
-    final batch = _db.batch();
+    // Update envelope in Hive
+    final updatedEnvelope = Envelope(
+      id: envelope.id,
+      name: envelope.name,
+      userId: envelope.userId,
+      currentAmount: envelope.currentAmount - amount,
+      targetAmount: envelope.targetAmount,
+      groupId: envelope.groupId,
+      subtitle: envelope.subtitle,
+      emoji: envelope.emoji,
+      iconType: envelope.iconType,
+      iconValue: envelope.iconValue,
+      iconColor: envelope.iconColor,
+      autoFillEnabled: envelope.autoFillEnabled,
+      autoFillAmount: envelope.autoFillAmount,
+      linkedAccountId: envelope.linkedAccountId,
+      isShared: envelope.isShared,
+      isDebtEnvelope: envelope.isDebtEnvelope,
+      startingDebt: envelope.startingDebt,
+      termStartDate: envelope.termStartDate,
+      termMonths: envelope.termMonths,
+      monthlyPayment: envelope.monthlyPayment,
+    );
 
-    await recordTransaction(tx, externalBatch: batch);
+    await _envelopeBox.put(envelopeId, updatedEnvelope);
+    await _transactionBox.put(txId, tx);
+    debugPrint('[EnvelopeRepo] ✅ Withdrawal saved to Hive: -\$$amount');
 
-    batch.update(_colEnvelopes().doc(envelopeId), {
-      'currentAmount': fs.FieldValue.increment(-amount),
-      'updatedAt': fs.FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
-
+    // Sync to Firebase if in workspace
     if (inWorkspace) {
+      final batch = _db.batch();
+      await recordTransaction(tx, externalBatch: batch);
+      batch.update(_colEnvelopes().doc(envelopeId), {
+        'currentAmount': fs.FieldValue.increment(-amount),
+        'updatedAt': fs.FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      debugPrint('[EnvelopeRepo] ✅ Withdrawal synced to Firebase workspace');
+
       await _upsertRegistryForEnvelope(
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         currentAmount: envelope.currentAmount - amount,
-        ownerId: envelope.userId, // Use envelope.userId
+        ownerId: envelope.userId,
         ownerDisplayName: await getUserDisplayName(envelope.userId),
       );
     }

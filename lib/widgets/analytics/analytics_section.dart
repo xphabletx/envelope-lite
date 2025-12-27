@@ -36,7 +36,10 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
   @override
   void initState() {
     super.initState();
-    _applyPeriod(_period);
+    // Schedule the period application after the build phase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyPeriod(_period);
+    });
   }
 
   void _applyPeriod(AnalyticsPeriod period) {

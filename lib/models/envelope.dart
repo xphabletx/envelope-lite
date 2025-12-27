@@ -4,30 +4,79 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:hive/hive.dart';
 import '../data/material_icons_database.dart';
 
+part 'envelope.g.dart';
+
+@HiveType(typeId: 0)
 class Envelope {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   String name;
+
+  @HiveField(2)
   final String userId;
+
+  @HiveField(3)
   double currentAmount;
+
+  @HiveField(4)
   double? targetAmount;
+
+  @HiveField(5)
   DateTime? targetDate;
+
+  @HiveField(6)
   String? groupId;
 
   // OLD: Single emoji field (keep for backwards compatibility)
+  @HiveField(7)
   final String? emoji;
 
   // NEW: Icon system
+  @HiveField(8)
   final String? iconType; // 'emoji', 'materialIcon', 'companyLogo'
+
+  @HiveField(9)
   final String? iconValue; // emoji char, icon name, or domain
+
+  @HiveField(10)
   final int? iconColor; // For material icons (Color.value)
 
+  @HiveField(11)
   final String? subtitle;
+
+  @HiveField(12)
   final bool autoFillEnabled;
+
+  @HiveField(13)
   final double? autoFillAmount;
+
+  @HiveField(14)
   final bool isShared;
+
+  @HiveField(15)
   final String? linkedAccountId;
+
+  // NEW: Debt tracking fields
+  @HiveField(20)
+  final bool isDebtEnvelope;
+
+  @HiveField(21)
+  final double? startingDebt;
+
+  // NEW: Time-based goal tracking (for loan terms)
+  @HiveField(22)
+  final DateTime? termStartDate;
+
+  @HiveField(23)
+  final int? termMonths;
+
+  @HiveField(24)
+  final double? monthlyPayment;
 
   Envelope({
     required this.id,
@@ -46,6 +95,11 @@ class Envelope {
     this.autoFillAmount,
     this.isShared = true,
     this.linkedAccountId,
+    this.isDebtEnvelope = false,
+    this.startingDebt,
+    this.termStartDate,
+    this.termMonths,
+    this.monthlyPayment,
   });
 
   /// Get icon widget for display
@@ -126,6 +180,94 @@ class Envelope {
     return materialIconsDatabase[name]?['icon'] as IconData? ?? Icons.circle;
   }
 
+  // =========================================================================
+  // DEBT TRACKING HELPERS
+  // =========================================================================
+
+  /// Whether this envelope is tracking debt (negative balance)
+  bool get isDebt => currentAmount < 0;
+
+  /// Progress for debt payoff (if tracking debt)
+  /// Returns percentage of debt paid off (0.0 to 1.0)
+  double? get debtPayoffProgress {
+    if (!isDebtEnvelope || startingDebt == null || startingDebt! >= 0) {
+      return null;
+    }
+
+    // Example: Started at -£5,000, now at -£3,000 = 40% paid off
+    final amountPaid = startingDebt! - currentAmount; // £2,000 paid
+    final totalDebt = startingDebt!.abs(); // £5,000 total
+    return (amountPaid / totalDebt).clamp(0.0, 1.0);
+  }
+
+  /// Remaining debt (absolute value)
+  double get remainingDebt => currentAmount < 0 ? currentAmount.abs() : 0.0;
+
+  /// Amount paid off from starting debt
+  double get amountPaidOff {
+    if (!isDebtEnvelope || startingDebt == null) return 0.0;
+    return (startingDebt! - currentAmount).abs();
+  }
+
+  // =========================================================================
+  // TIME-BASED PROGRESS HELPERS
+  // =========================================================================
+
+  /// Calculate time-based progress (for loans with fixed terms)
+  /// Returns percentage of term elapsed (0.0 to 1.0)
+  double? get termProgress {
+    if (termStartDate == null || termMonths == null) return null;
+
+    final now = DateTime.now();
+    final monthsElapsed = _monthsBetween(termStartDate!, now);
+
+    return (monthsElapsed / termMonths!).clamp(0.0, 1.0);
+  }
+
+  /// Months remaining in term
+  int? get monthsRemaining {
+    if (termStartDate == null || termMonths == null) return null;
+
+    final now = DateTime.now();
+    final monthsElapsed = _monthsBetween(termStartDate!, now);
+
+    return (termMonths! - monthsElapsed).clamp(0, termMonths!);
+  }
+
+  /// Expected completion date based on term
+  DateTime? get expectedCompletionDate {
+    if (termStartDate == null || termMonths == null) return null;
+
+    return DateTime(
+      termStartDate!.year,
+      termStartDate!.month + termMonths!,
+      termStartDate!.day,
+    );
+  }
+
+  /// Whether user is on track with payments
+  /// Compares actual payments to expected payments based on monthly payment and elapsed time
+  bool? get isOnTrack {
+    if (!isDebtEnvelope || startingDebt == null || monthlyPayment == null) {
+      return null;
+    }
+
+    final monthsElapsed = termProgress != null
+        ? (termProgress! * termMonths!).round()
+        : 0;
+
+    final expectedPaid = monthlyPayment! * monthsElapsed;
+    final actualPaid = (startingDebt! - currentAmount).abs();
+
+    // On track if paid at least 90% of expected amount
+    return actualPaid >= (expectedPaid * 0.9);
+  }
+
+  /// Helper: Calculate months between two dates
+  int _monthsBetween(DateTime start, DateTime end) {
+    return (end.year - start.year) * 12 + (end.month - start.month);
+  }
+
   Envelope copyWith({
     String? id,
     String? name,
@@ -143,6 +285,11 @@ class Envelope {
     double? autoFillAmount,
     bool? isShared,
     String? linkedAccountId,
+    bool? isDebtEnvelope,
+    double? startingDebt,
+    DateTime? termStartDate,
+    int? termMonths,
+    double? monthlyPayment,
   }) {
     return Envelope(
       id: id ?? this.id,
@@ -161,6 +308,11 @@ class Envelope {
       autoFillAmount: autoFillAmount ?? this.autoFillAmount,
       isShared: isShared ?? this.isShared,
       linkedAccountId: linkedAccountId ?? this.linkedAccountId,
+      isDebtEnvelope: isDebtEnvelope ?? this.isDebtEnvelope,
+      startingDebt: startingDebt ?? this.startingDebt,
+      termStartDate: termStartDate ?? this.termStartDate,
+      termMonths: termMonths ?? this.termMonths,
+      monthlyPayment: monthlyPayment ?? this.monthlyPayment,
     );
   }
 
@@ -181,6 +333,12 @@ class Envelope {
       'autoFillAmount': autoFillAmount,
       'isShared': isShared,
       'linkedAccountId': linkedAccountId,
+      'isDebtEnvelope': isDebtEnvelope,
+      'startingDebt': startingDebt,
+      'termStartDate':
+          termStartDate != null ? Timestamp.fromDate(termStartDate!) : null,
+      'termMonths': termMonths,
+      'monthlyPayment': monthlyPayment,
     };
   }
 
@@ -218,6 +376,15 @@ class Envelope {
           : toDouble(data['autoFillAmount']),
       isShared: (data['isShared'] as bool?) ?? true,
       linkedAccountId: data['linkedAccountId'] as String?,
+      isDebtEnvelope: (data['isDebtEnvelope'] as bool?) ?? false,
+      startingDebt: (data['startingDebt'] == null)
+          ? null
+          : toDouble(data['startingDebt']),
+      termStartDate: (data['termStartDate'] as Timestamp?)?.toDate(),
+      termMonths: data['termMonths'] as int?,
+      monthlyPayment: (data['monthlyPayment'] == null)
+          ? null
+          : toDouble(data['monthlyPayment']),
     );
   }
 }

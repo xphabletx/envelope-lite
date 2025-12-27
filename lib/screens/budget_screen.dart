@@ -5,6 +5,7 @@ import '../services/account_repo.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/scheduled_payment_repo.dart';
+import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
 import '../widgets/budget/overview_cards.dart';
 import '../models/pay_day_settings.dart';
@@ -139,21 +140,13 @@ class BudgetScreen extends StatelessWidget {
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: () async {
-                        // Load pay settings
+                        // Load pay settings using PayDaySettingsService
                         final userId = repo.currentUserId;
-                        final settingsDoc = await repo.db
-                            .collection('users')
-                            .doc(userId)
-                            .collection('payDaySettings')
-                            .doc('settings')
-                            .get();
+                        final payDayService = PayDaySettingsService(repo.db, userId);
 
-                        PayDaySettings paySettings;
-                        if (settingsDoc.exists) {
-                          paySettings = PayDaySettings.fromFirestore(settingsDoc);
-                        } else {
-                          paySettings = PayDaySettings(userId: userId);
-                        }
+                        debugPrint('[BudgetScreen] Loading pay day settings for time machine...');
+                        final paySettings = await payDayService.getPayDaySettings();
+                        debugPrint('[BudgetScreen] Pay day settings loaded: ${paySettings?.nextPayDate}');
 
                         if (!context.mounted) return;
 
@@ -165,7 +158,7 @@ class BudgetScreen extends StatelessWidget {
                               accountRepo: accountRepo,
                               envelopeRepo: repo,
                               groupRepo: groupRepo,
-                              paySettings: paySettings,
+                              paySettings: paySettings ?? PayDaySettings(userId: userId),
                             ),
                             fullscreenDialog: true,
                           ),

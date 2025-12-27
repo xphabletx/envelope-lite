@@ -56,21 +56,33 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Always set target date to 30 days from today
     _targetDate = DateTime.now().add(const Duration(days: 30));
+
+    // Use expectedPayAmount from PayDaySettings (not lastPayAmount)
     _payAmountController = TextEditingController(
-      text: widget.paySettings.lastPayAmount?.toStringAsFixed(2) ?? '0.00',
+      text: widget.paySettings.expectedPayAmount?.toStringAsFixed(2) ?? '0.00',
     );
     _payAmountFocusNode = FocusNode();
+
+    // Use pay frequency from settings
     _payFrequency = widget.paySettings.payFrequency;
 
-    if (widget.paySettings.lastPayDate != null) {
-      _nextPayDate = _calculateNextPayDateFromHistory(
-        widget.paySettings.lastPayDate!,
-        widget.paySettings.payFrequency,
-      );
+    // Use nextPayDate directly from PayDaySettings (not lastPayDate)
+    if (widget.paySettings.nextPayDate != null) {
+      _nextPayDate = widget.paySettings.nextPayDate!;
+      debugPrint('[TimeMachine] ✅ Initialized with next pay date: $_nextPayDate');
     } else {
       _nextPayDate = DateTime.now().add(const Duration(days: 1));
+      debugPrint('[TimeMachine] ⚠️ No pay date in settings, using tomorrow');
     }
+
+    debugPrint('[TimeMachine] ✅ Initialized projection settings:');
+    debugPrint('  - Target date: $_targetDate');
+    debugPrint('  - Next pay date: $_nextPayDate');
+    debugPrint('  - Pay amount: ${_payAmountController.text}');
+    debugPrint('  - Pay frequency: $_payFrequency');
 
     _loadData();
   }

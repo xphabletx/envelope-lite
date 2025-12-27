@@ -11,6 +11,7 @@ import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../data/material_icons_database.dart';
+import '../../widgets/calculator_widget.dart';
 
 class AddScheduledPaymentScreen extends StatefulWidget {
   const AddScheduledPaymentScreen({
@@ -43,6 +44,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   bool _isAutomatic = false;
   bool _saving = false;
   bool _isEditing = false;
+  ScheduledPaymentType _paymentType = ScheduledPaymentType.fixedAmount;
 
   DateTime _focusedDay = DateTime.now();
 
@@ -69,6 +71,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
       _frequencyUnit = p.frequencyUnit;
       _selectedColorName = p.colorName;
       _isAutomatic = p.isAutomatic;
+      _paymentType = p.paymentType;
     } else if (widget.preselectedEnvelopeId != null) {
       _selectedEnvelopeId = widget.preselectedEnvelopeId;
     }
@@ -136,20 +139,25 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
       return;
     }
 
-    final amountText = _amountCtrl.text.trim();
-    if (amountText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter an amount')));
-      return;
-    }
+    // Validate amount (only for fixed amount type)
+    double amount = 0.0;
+    if (_paymentType == ScheduledPaymentType.fixedAmount) {
+      final amountText = _amountCtrl.text.trim();
+      if (amountText.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Please enter an amount')));
+        return;
+      }
 
-    final amount = double.tryParse(amountText);
-    if (amount == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid amount')));
-      return;
+      final parsedAmount = double.tryParse(amountText);
+      if (parsedAmount == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Invalid amount')));
+        return;
+      }
+      amount = parsedAmount;
     }
 
     setState(() => _saving = true);
@@ -192,6 +200,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
           colorName: _selectedColorName,
           colorValue: CalendarColors.getColorValue(_selectedColorName),
           isAutomatic: _isAutomatic,
+          paymentType: _paymentType,
         );
         if (!mounted) return;
         Navigator.pop(context);
@@ -214,6 +223,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
           colorName: _selectedColorName,
           colorValue: CalendarColors.getColorValue(_selectedColorName),
           isAutomatic: _isAutomatic,
+          paymentType: _paymentType,
         );
         if (!mounted) return;
         Navigator.pop(context);
@@ -515,35 +525,140 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+
+            // Payment Type Toggle (only show for envelope payments)
+            if (_selectedEnvelopeId != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: theme.colorScheme.secondary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Use envelope balance',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Deduct whatever is in the envelope at payment time',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.7,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _paymentType == ScheduledPaymentType.envelopeBalance,
+                      onChanged: (value) {
+                        setState(() {
+                          _paymentType = value
+                              ? ScheduledPaymentType.envelopeBalance
+                              : ScheduledPaymentType.fixedAmount;
+                        });
+                      },
+                      activeThumbColor: theme.colorScheme.secondary,
+                    ),
+                  ],
+                ),
               ),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                hintText: '0.00',
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.only(left: 16, right: 8),
-                  child: Center(
-                    widthFactor: 1.0,
-                    child: Text(
-                      currencySymbol,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.secondary,
+              const SizedBox(height: 12),
+            ],
+
+            // Amount field (only show for fixed amount type)
+            if (_paymentType == ScheduledPaymentType.fixedAmount)
+              TextField(
+                controller: _amountCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: '0.00',
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(left: 16, right: 8),
+                    child: Center(
+                      widthFactor: 1.0,
+                      child: Text(
+                        currencySymbol,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.secondary,
+                        ),
                       ),
                     ),
                   ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.calculate),
+                    onPressed: () async {
+                      final result = await showDialog<double>(
+                        context: context,
+                        builder: (context) => const Dialog(
+                          child: CalculatorWidget(),
+                        ),
+                      );
+                      if (result != null && mounted) {
+                        setState(() {
+                          _amountCtrl.text = result.toStringAsFixed(2);
+                        });
+                      }
+                    },
+                    tooltip: 'Open Calculator',
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surface,
                 ),
-                border: OutlineInputBorder(
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.5),
+                  ),
                 ),
-                filled: true,
-                fillColor: theme.colorScheme.surface,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: theme.colorScheme.secondary,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'The entire envelope balance will be deducted on the payment date',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 16,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
             const SizedBox(height: 24),
 

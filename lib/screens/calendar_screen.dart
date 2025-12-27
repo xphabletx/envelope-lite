@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/scheduled_payment.dart';
+import '../../models/pay_day_settings.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
+import '../../services/pay_day_settings_service.dart';
 import '../../services/notification_repo.dart';
 import 'add_scheduled_payment_screen.dart';
 import '../../services/localization_service.dart';
@@ -14,11 +16,45 @@ import '../../providers/font_provider.dart';
 import 'notifications_screen.dart';
 import '../screens/home_screen.dart';
 
-class _PaymentOccurrence {
-  final ScheduledPayment payment;
+class _PayDayOccurrence {
+  final double amount;
+  final DateTime date;
+  final String frequency;
+
+  _PayDayOccurrence(this.amount, this.date, this.frequency);
+}
+
+/// Unified class to hold either a scheduled payment or a pay day occurrence
+class _CalendarEvent {
+  final ScheduledPayment? payment;
+  final _PayDayOccurrence? payDay;
   final DateTime date;
 
-  _PaymentOccurrence(this.payment, this.date);
+  _CalendarEvent.fromPayment(this.payment, this.date) : payDay = null;
+  _CalendarEvent.fromPayDay(this.payDay, this.date) : payment = null;
+
+  bool get isPayDay => payDay != null;
+
+  String get name => isPayDay ? '💰 Pay Day' : payment!.name;
+  double get amount => isPayDay ? payDay!.amount : payment!.amount;
+  int get colorValue => isPayDay ? 0xFF4CAF50 : payment!.colorValue; // Green for pay day
+  String get frequencyString {
+    if (isPayDay) {
+      switch (payDay!.frequency) {
+        case 'weekly':
+          return 'Weekly';
+        case 'biweekly':
+          return 'Bi-weekly';
+        case 'fourweekly':
+          return '4-weekly';
+        case 'monthly':
+          return 'Monthly';
+        default:
+          return payDay!.frequency;
+      }
+    }
+    return payment!.frequencyString;
+  }
 }
 
 class CalendarScreenV2 extends StatefulWidget {
@@ -43,11 +79,16 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
   static const String _kPrefsKeyCalendarCompact = 'calendar_view_compact';
 
   late final ScheduledPaymentRepo _paymentRepo;
+  late final PayDaySettingsService _payDayService;
 
   @override
   void initState() {
     super.initState();
     _paymentRepo = ScheduledPaymentRepo(
+      widget.repo.db,
+      widget.repo.currentUserId,
+    );
+    _payDayService = PayDaySettingsService(
       widget.repo.db,
       widget.repo.currentUserId,
     );
@@ -129,26 +170,98 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     }
   }
 
-  List<ScheduledPayment> _getEventsForDay(
+  List<_CalendarEvent> _getEventsForDay(
     DateTime day,
     List<ScheduledPayment> payments,
+    PayDaySettings? paySettings,
   ) {
-    final eventsOnDay = <ScheduledPayment>[];
+    final eventsOnDay = <_CalendarEvent>[];
     final dayStart = DateTime(day.year, day.month, day.day);
     final dayEnd = dayStart.add(const Duration(days: 1));
 
+    // Add scheduled payment events
     for (final payment in payments) {
       final occurrences = _getOccurrencesInRange(payment, dayStart, dayEnd);
       if (occurrences.isNotEmpty) {
-        eventsOnDay.add(payment);
+        eventsOnDay.add(_CalendarEvent.fromPayment(payment, dayStart));
       }
+    }
+
+    // Add pay day events
+    final payDayOccurrences = _getPayDayOccurrences(paySettings, dayStart, dayEnd);
+    for (final payDay in payDayOccurrences) {
+      eventsOnDay.add(_CalendarEvent.fromPayDay(payDay, dayStart));
     }
 
     return eventsOnDay;
   }
 
-  Map<DateTime, List<_PaymentOccurrence>> _getOccurrencesForVisibleRange(
+  // Calculate pay day occurrences within a date range
+  List<_PayDayOccurrence> _getPayDayOccurrences(
+    PayDaySettings? paySettings,
+    DateTime start,
+    DateTime end,
+  ) {
+    if (paySettings == null || paySettings.nextPayDate == null) {
+      return [];
+    }
+
+    final occurrences = <_PayDayOccurrence>[];
+    DateTime current = paySettings.nextPayDate!;
+
+    // Go back to find first occurrence before start
+    while (current.isAfter(start)) {
+      current = _getPreviousPayDay(paySettings, current);
+    }
+
+    // Generate occurrences within range
+    while (current.isBefore(end)) {
+      if (!current.isBefore(start)) {
+        occurrences.add(_PayDayOccurrence(
+          paySettings.expectedPayAmount ?? 0.0,
+          current,
+          paySettings.payFrequency,
+        ));
+      }
+      current = _getNextPayDay(paySettings, current);
+    }
+
+    return occurrences;
+  }
+
+  DateTime _getNextPayDay(PayDaySettings settings, DateTime from) {
+    switch (settings.payFrequency) {
+      case 'weekly':
+        return from.add(const Duration(days: 7));
+      case 'biweekly':
+        return from.add(const Duration(days: 14));
+      case 'fourweekly':
+        return from.add(const Duration(days: 28));
+      case 'monthly':
+        return DateTime(from.year, from.month + 1, from.day);
+      default:
+        return from.add(const Duration(days: 30));
+    }
+  }
+
+  DateTime _getPreviousPayDay(PayDaySettings settings, DateTime from) {
+    switch (settings.payFrequency) {
+      case 'weekly':
+        return from.subtract(const Duration(days: 7));
+      case 'biweekly':
+        return from.subtract(const Duration(days: 14));
+      case 'fourweekly':
+        return from.subtract(const Duration(days: 28));
+      case 'monthly':
+        return DateTime(from.year, from.month - 1, from.day);
+      default:
+        return from.subtract(const Duration(days: 30));
+    }
+  }
+
+  Map<DateTime, List<_CalendarEvent>> _getOccurrencesForVisibleRange(
     List<ScheduledPayment> payments,
+    PayDaySettings? paySettings,
   ) {
     DateTime startRange;
     DateTime endRange;
@@ -178,28 +291,42 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       endRange = DateTime(baseDate.year, baseDate.month + 1, 1);
     }
 
-    final occurrences = <_PaymentOccurrence>[];
+    final events = <_CalendarEvent>[];
 
+    // Add scheduled payment occurrences
     for (final payment in payments) {
       final dates = _getOccurrencesInRange(payment, startRange, endRange);
       for (final date in dates) {
-        occurrences.add(_PaymentOccurrence(payment, date));
+        events.add(_CalendarEvent.fromPayment(payment, date));
       }
     }
 
-    occurrences.sort((a, b) => a.date.compareTo(b.date));
+    // Add pay day occurrences
+    if (paySettings != null && paySettings.nextPayDate != null) {
+      final payDayOccurrences = _getPayDayOccurrences(
+        paySettings,
+        startRange,
+        endRange,
+      );
+      for (final payDay in payDayOccurrences) {
+        events.add(_CalendarEvent.fromPayDay(payDay, payDay.date));
+      }
+      debugPrint('[Calendar] Added ${payDayOccurrences.length} pay day events to calendar');
+    }
 
-    final Map<DateTime, List<_PaymentOccurrence>> grouped = {};
-    for (var occurrence in occurrences) {
+    events.sort((a, b) => a.date.compareTo(b.date));
+
+    final Map<DateTime, List<_CalendarEvent>> grouped = {};
+    for (var event in events) {
       final dateKey = DateTime(
-        occurrence.date.year,
-        occurrence.date.month,
-        occurrence.date.day,
+        event.date.year,
+        event.date.month,
+        event.date.day,
       );
       if (!grouped.containsKey(dateKey)) {
         grouped[dateKey] = [];
       }
-      grouped[dateKey]!.add(occurrence);
+      grouped[dateKey]!.add(event);
     }
 
     return grouped;
@@ -241,7 +368,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     );
   }
 
-  Widget _buildEventMarker(List<ScheduledPayment> events) {
+  Widget _buildEventMarker(List<_CalendarEvent> events) {
     if (events.isEmpty) return const SizedBox.shrink();
 
     if (events.length == 1) {
@@ -299,26 +426,34 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     final currencyFormatter = NumberFormat.currency(symbol: '£');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
-    return StreamBuilder<List<ScheduledPayment>>(
-      stream: _paymentRepo.scheduledPaymentsStream,
-      builder: (context, paymentsSnapshot) {
-        return StreamBuilder<List<dynamic>>(
-          stream: widget.repo.envelopesStream(),
-          builder: (context, envelopesSnapshot) {
-            final allPayments = paymentsSnapshot.data ?? [];
-            final existingEnvelopes = envelopesSnapshot.data ?? [];
-            final envelopeIds = existingEnvelopes.map((e) => e.id).toSet();
+    return StreamBuilder<PayDaySettings?>(
+      stream: _payDayService.payDaySettingsStream,
+      builder: (context, payDaySnapshot) {
+        final paySettings = payDaySnapshot.data;
 
-            final scheduledPayments = allPayments
-                .where((payment) => envelopeIds.contains(payment.envelopeId))
-                .toList();
+        return StreamBuilder<List<ScheduledPayment>>(
+          stream: _paymentRepo.scheduledPaymentsStream,
+          builder: (context, paymentsSnapshot) {
+            return StreamBuilder<List<dynamic>>(
+              stream: widget.repo.envelopesStream(),
+              builder: (context, envelopesSnapshot) {
+                final allPayments = paymentsSnapshot.data ?? [];
+                final existingEnvelopes = envelopesSnapshot.data ?? [];
+                final envelopeIds = existingEnvelopes.map((e) => e.id).toSet();
 
-            final groupedOccurrences = _getOccurrencesForVisibleRange(
-              scheduledPayments,
-            );
-            final sortedDates = groupedOccurrences.keys.toList()..sort();
+                final scheduledPayments = allPayments
+                    .where((payment) => envelopeIds.contains(payment.envelopeId))
+                    .toList();
 
-            return Scaffold(
+                // Get all calendar events (scheduled payments + pay day)
+                final groupedOccurrences = _getOccurrencesForVisibleRange(
+                  scheduledPayments,
+                  paySettings,
+                );
+
+                final sortedDates = groupedOccurrences.keys.toList()..sort();
+
+                return Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
@@ -533,6 +668,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                           final dayEvents = _getEventsForDay(
                             date,
                             scheduledPayments,
+                            paySettings,
                           );
                           return _buildEventMarker(dayEvents);
                         },
@@ -664,8 +800,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                       ),
                                     ),
                                   ),
-                                  ...occurrences.map((occurrence) {
-                                    final payment = occurrence.payment;
+                                  ...occurrences.map((event) {
                                     return Padding(
                                       padding: const EdgeInsets.only(
                                         bottom: 8,
@@ -679,14 +814,14 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                             width: 8,
                                             height: 8,
                                             decoration: BoxDecoration(
-                                              color: Color(payment.colorValue),
+                                              color: Color(event.colorValue),
                                               shape: BoxShape.circle,
                                             ),
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(
-                                              payment.name,
+                                              event.name,
                                               style: fontProvider.getTextStyle(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.w500,
@@ -696,7 +831,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                           ),
                                           Text(
                                             currencyFormatter.format(
-                                              payment.amount.abs(),
+                                              event.amount.abs(),
                                             ),
                                             style: TextStyle(
                                               fontSize: 16,
@@ -709,7 +844,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                           SizedBox(
                                             width: 80,
                                             child: Text(
-                                              payment.frequencyString,
+                                              event.frequencyString,
                                               style: fontProvider.getTextStyle(
                                                 fontSize: 16,
                                                 color: theme
@@ -735,6 +870,8 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
             );
           },
         );
+      },
+    );
       },
     );
   }

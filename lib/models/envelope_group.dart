@@ -2,25 +2,49 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:hive/hive.dart';
 import '../data/material_icons_database.dart';
 
+part 'envelope_group.g.dart';
+
+@HiveType(typeId: 2)
 class EnvelopeGroup {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String name;
+
+  @HiveField(2)
   final String userId;
 
   // OLD: Single emoji field (keep for backwards compatibility)
+  @HiveField(3)
   final String? emoji;
 
   // NEW: Icon system (same as Envelope)
+  @HiveField(4)
   final String? iconType; // 'emoji', 'materialIcon', 'companyLogo'
+
+  @HiveField(5)
   final String? iconValue; // emoji char, icon name, or domain
+
+  @HiveField(6)
   final int? iconColor; // For material icons (Color.value)
 
+  @HiveField(7)
   final int colorIndex;
+
+  @HiveField(8)
   final bool payDayEnabled;
+
+  @HiveField(9)
   final bool isShared;
+
+  @HiveField(10)
   final DateTime? createdAt;
+
+  @HiveField(11)
   final DateTime? updatedAt;
 
   EnvelopeGroup({

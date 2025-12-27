@@ -1,32 +1,83 @@
 // lib/models/transaction.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 
-enum TransactionType { deposit, withdrawal, transfer }
+part 'transaction.g.dart';
 
-enum TransferDirection { in_, out_ } // only used for transfers
+@HiveType(typeId: 100)
+enum TransactionType {
+  @HiveField(0)
+  deposit,
+  @HiveField(1)
+  withdrawal,
+  @HiveField(2)
+  transfer,
+}
 
+@HiveType(typeId: 104)
+enum TransferDirection {
+  @HiveField(0)
+  in_,
+  @HiveField(1)
+  out_,
+}
+
+@HiveType(typeId: 3)
 class Transaction {
+  @HiveField(0)
   final String id; // doc id
+
+  @HiveField(1)
   final String envelopeId; // owner envelope of this row
+
+  @HiveField(2)
   final TransactionType type; // deposit/withdrawal/transfer
+
+  @HiveField(3)
   final double amount;
+
+  @HiveField(4)
   final DateTime date; // server or client date
+
+  @HiveField(5)
   final String description;
+
+  @HiveField(6)
   final String userId;
+
+  @HiveField(7)
   final bool isFuture; // Mark projected/future transactions (not stored in Firestore)
 
   // --- Transfer-specific fields (null for non-transfers) ---
+  @HiveField(8)
   final String? transferPeerEnvelopeId; // the other envelope in the transfer
+
+  @HiveField(9)
   final String? transferLinkId; // shared id linking the pair
+
+  @HiveField(10)
   final TransferDirection? transferDirection; // in_ (credit) or out_ (debit)
 
   // --- Owner/envelope metadata for rich display ---
+  @HiveField(11)
   final String? ownerId; // Owner of THIS envelope (for deposit/withdrawal)
+
+  @HiveField(12)
   final String? sourceOwnerId; // Owner of source envelope (for transfers)
+
+  @HiveField(13)
   final String? targetOwnerId; // Owner of target envelope (for transfers)
+
+  @HiveField(14)
   final String? sourceEnvelopeName; // Name of source envelope (for transfers)
+
+  @HiveField(15)
   final String? targetEnvelopeName; // Name of target envelope (for transfers)
+
+  @HiveField(16)
   final String? sourceOwnerDisplayName; // Display name of source owner
+
+  @HiveField(17)
   final String? targetOwnerDisplayName; // Display name of target owner
 
   Transaction({

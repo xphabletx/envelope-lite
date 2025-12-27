@@ -612,10 +612,11 @@ class _BinderSpreadState extends State<_BinderSpread> {
                       ],
                     ),
                     padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                         // Binder Header
                         Column(
                           children: [
@@ -840,6 +841,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           ],
                         ),
                       ],
+                    ),
                     ),
                   ),
                 ),

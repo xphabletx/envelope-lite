@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../utils/calculator_helper.dart';
 
@@ -14,6 +15,7 @@ import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../services/account_repo.dart';
 import '../widgets/time_machine_indicator.dart';
+import '../widgets/verification_banner.dart';
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
@@ -175,6 +177,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Build body with optional verification banner for unverified email/password users
+  Widget _buildBodyWithVerificationBanner(Widget child) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    // Only show banner for unverified email/password users
+    final shouldShowBanner = user != null &&
+        !user.emailVerified &&
+        !user.isAnonymous &&
+        user.providerData.isNotEmpty &&
+        user.providerData.first.providerId == 'password';
+
+    if (!shouldShowBanner) {
+      return child;
+    }
+
+    return Column(
+      children: [
+        const VerificationBanner(),
+        Expanded(child: child),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _isSpeedDialOpen.dispose();
@@ -233,14 +258,17 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         Flexible(
-                          child: Text(
-                            displayName,
-                            style: fontProvider.getTextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              displayName,
+                              style: fontProvider.getTextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -285,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              body: pages[_selectedIndex],
+              body: _buildBodyWithVerificationBanner(pages[_selectedIndex]),
               bottomNavigationBar: BottomNavigationBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 selectedItemColor: theme.colorScheme.primary,
@@ -482,6 +510,9 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
   }
 
   Future<void> _deleteSelected() async {
+    debugPrint('[HomeScreen] 📋 Showing bulk delete confirmation for ${selected.length} envelopes');
+    debugPrint('[HomeScreen] Envelope IDs: $selected');
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -504,17 +535,34 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
     );
 
     if (confirmed == true) {
-      await widget.repo.deleteEnvelopes(selected);
-      clearSelection();
+      debugPrint('[HomeScreen] ✅ User confirmed bulk delete');
+      debugPrint('[HomeScreen] 📞 Calling repo.deleteEnvelopes with ${selected.length} IDs...');
+      try {
+        await widget.repo.deleteEnvelopes(selected);
+        debugPrint('[HomeScreen] ✅ Bulk delete completed successfully');
+        clearSelection();
+      } catch (e) {
+        debugPrint('[HomeScreen] ❌ Bulk delete failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting envelopes: $e')),
+          );
+        }
+      }
+    } else {
+      debugPrint('[HomeScreen] ❌ User cancelled bulk delete');
     }
   }
 
   void _toggle(String id) {
+    debugPrint('[HomeScreen] 🔄 Toggling envelope selection: $id');
     setState(() {
       if (selected.contains(id)) {
         selected.remove(id);
+        debugPrint('[HomeScreen] Removed from selection. Total selected: ${selected.length}');
       } else {
         selected.add(id);
+        debugPrint('[HomeScreen] Added to selection. Total selected: ${selected.length}');
       }
       isMulti = selected.isNotEmpty;
       if (!isMulti) {

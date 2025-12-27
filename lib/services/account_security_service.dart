@@ -181,23 +181,24 @@ class AccountSecurityService {
   }
 
   Future<void> _performGDPRCascade(String userId) async {
+    debugPrint('[AccountSecurity::_performGDPRCascade] Starting cascade delete for user: $userId');
+
     // CRITICAL: Get user's workspace memberships BEFORE deleting user doc
     final userDoc = await _firestore.doc('users/$userId').get();
     String? workspaceId;
 
     if (userDoc.exists) {
       final userData = userDoc.data() as Map<String, dynamic>?;
-      // Check for active workspace
       workspaceId = userData?['activeWorkspaceId'] as String?;
     }
 
-    // If user is in a workspace, remove them from workspace members
+    // Remove from workspace if applicable
     if (workspaceId != null) {
       try {
         await WorkspaceHelper.leaveWorkspace(workspaceId, userId);
-        print('[AccountSecurityService] Removed user from workspace: $workspaceId');
+        debugPrint('[AccountSecurity::_performGDPRCascade] Removed user from workspace: $workspaceId');
       } catch (e) {
-        print('[AccountSecurityService] Error leaving workspace: $e');
+        debugPrint('[AccountSecurity::_performGDPRCascade] Error leaving workspace: $e');
         // Continue with deletion even if workspace removal fails
       }
     }
@@ -207,46 +208,158 @@ class AccountSecurityService {
     await prefs.remove('active_workspace_id');
     await prefs.remove('last_workspace_id');
     await prefs.remove('last_workspace_name');
-    print('[AccountSecurityService] Cleared workspace from SharedPreferences');
+    debugPrint('[AccountSecurity::_performGDPRCascade] Cleared workspace from SharedPreferences');
 
-    final batch = _firestore.batch();
+    // Use batch for atomic deletion (max 500 operations per batch)
+    // If user has >500 items in any collection, we'll need multiple batches
+    WriteBatch batch = _firestore.batch();
+    int operationCount = 0;
 
-    // 1. Delete Envelopes
-    final envelopesSnap = await _firestore
-        .collection('users/$userId/solo/data/envelopes')
-        .get();
-    for (var doc in envelopesSnap.docs) {
-      batch.delete(doc.reference);
+    // Helper to commit batch if approaching limit
+    Future<void> commitIfNeeded() async {
+      if (operationCount >= 450) {
+        // Leave buffer for safety
+        await batch.commit();
+        batch = _firestore.batch(); // Start new batch
+        operationCount = 0;
+        debugPrint('[AccountSecurity::_performGDPRCascade] Committed batch (approaching 500 operation limit)');
+      }
     }
 
-    // 2. Delete Groups
-    final groupsSnap = await _firestore
-        .collection('users/$userId/solo/data/groups')
-        .get();
-    for (var doc in groupsSnap.docs) {
-      batch.delete(doc.reference);
+    try {
+      // 1. Delete Envelopes
+      final envelopesSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('envelopes')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${envelopesSnap.docs.length} envelopes');
+      for (var doc in envelopesSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 2. Delete Groups (Binders)
+      final groupsSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('groups')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${groupsSnap.docs.length} groups');
+      for (var doc in groupsSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 3. Delete Transactions
+      final txSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('transactions')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${txSnap.docs.length} transactions');
+      for (var doc in txSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 4. Delete Scheduled Payments (FIXED PATH)
+      final schedSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('scheduledPayments')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${schedSnap.docs.length} scheduled payments');
+      for (var doc in schedSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 5. Delete Accounts (WAS MISSING!)
+      final accountsSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data')
+          .collection('accounts')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${accountsSnap.docs.length} accounts');
+      for (var doc in accountsSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 6. Delete Notifications (WAS MISSING!)
+      final notificationsSnap = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .get();
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${notificationsSnap.docs.length} notifications');
+      for (var doc in notificationsSnap.docs) {
+        batch.delete(doc.reference);
+        operationCount++;
+        await commitIfNeeded();
+      }
+
+      // 7. Delete PayDaySettings (WAS MISSING!)
+      try {
+        final paySettingsRef = _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('solo')
+            .doc('data')
+            .collection('payDaySettings')
+            .doc('settings');
+
+        final paySettingsDoc = await paySettingsRef.get();
+        if (paySettingsDoc.exists) {
+          batch.delete(paySettingsRef);
+          operationCount++;
+          debugPrint('[AccountSecurity::_performGDPRCascade] Deleted PayDaySettings');
+        }
+      } catch (e) {
+        debugPrint('[AccountSecurity::_performGDPRCascade] Error deleting PayDaySettings: $e');
+        // Continue anyway
+      }
+
+      // 8. Delete solo/data container doc
+      final soloDataDoc = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('solo')
+          .doc('data');
+      batch.delete(soloDataDoc);
+      operationCount++;
+      debugPrint('[AccountSecurity::_performGDPRCascade] Marked solo/data container for deletion');
+
+      // 9. Note: solo container collection is automatically cleaned up by Firestore
+      // when all its documents/subcollections are deleted
+
+      // 10. Delete User Profile (last!)
+      batch.delete(_firestore.doc('users/$userId'));
+      operationCount++;
+      debugPrint('[AccountSecurity::_performGDPRCascade] Marked user profile for deletion');
+
+      // Final commit
+      await batch.commit();
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Cascade delete completed successfully for user: $userId');
+    } catch (e) {
+      debugPrint('[AccountSecurity::_performGDPRCascade] ❌ Error during cascade delete: $e');
+      rethrow;
     }
-
-    // 3. Delete Transactions (Limited to <500)
-    final txSnap = await _firestore
-        .collection('users/$userId/solo/data/transactions')
-        .get();
-    for (var doc in txSnap.docs) {
-      batch.delete(doc.reference);
-    }
-
-    // 4. Delete Scheduled Payments
-    final schedSnap = await _firestore
-        .collection('scheduled_payments')
-        .where('userId', isEqualTo: userId)
-        .get();
-    for (var doc in schedSnap.docs) {
-      batch.delete(doc.reference);
-    }
-
-    // 5. Delete User Profile
-    batch.delete(_firestore.doc('users/$userId'));
-
-    await batch.commit();
   }
 }

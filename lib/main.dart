@@ -1,10 +1,12 @@
 // lib/main.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
@@ -13,20 +15,60 @@ import 'providers/app_preferences_provider.dart';
 import 'providers/workspace_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/time_machine_provider.dart';
-import 'services/user_service.dart';
 import 'services/envelope_repo.dart';
 import 'services/scheduled_payment_repo.dart';
 import 'services/notification_repo.dart';
 import 'services/tutorial_controller.dart';
+import 'services/hive_service.dart';
+import 'services/hive_migration_service.dart';
 import 'screens/home_screen.dart';
-import 'screens/sign_in_screen.dart';
-import 'screens/onboarding/onboarding_flow.dart';
-import 'models/user_profile.dart';
+import 'screens/auth/auth_wrapper.dart';
 import 'widgets/app_lifecycle_observer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase (still needed for auth and workspace sync)
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('[Main] 🔥 Firebase initialized');
+
+  // 🔥 NUCLEAR OPTION: Completely disable Firebase offline features
+  try {
+    // Configure Firestore settings BEFORE any usage
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: false,  // Disable offline cache
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,  // Valid cache size
+    );
+
+    debugPrint('[Main] ⚠️ Firebase persistence DISABLED');
+    debugPrint('[Main] ⚠️ Firebase cache size set to unlimited');
+
+  } catch (e) {
+    debugPrint('[Main] ⚠️ Could not configure Firebase settings: $e');
+    debugPrint('[Main] ⚠️ This is expected if settings were already configured');
+  }
+
+  // NEW: Initialize Hive (local storage - our primary storage)
+  await HiveService.init();
+  debugPrint('[Main] 📦 Hive initialized');
+
+  // NEW: Initialize RevenueCat
+  await _initRevenueCat();
+
+  // Check if migration is needed
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    final migrationService = HiveMigrationService(
+      FirebaseFirestore.instance,
+      FirebaseAuth.instance,
+    );
+
+    final needsMigration = await migrationService.needsMigration();
+    if (needsMigration) {
+      debugPrint('[Main] ⚠️ Migration needed - user should visit migration screen');
+      // User will be prompted to migrate via settings screen
+    }
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
@@ -50,6 +92,28 @@ void main() async {
       child: const MyApp(),
     ),
   );
+}
+
+Future<void> _initRevenueCat() async {
+  // TODO: Replace these with your actual RevenueCat API keys
+  // Get them from: https://app.revenuecat.com/projects
+  const appleApiKey = 'YOUR_APPLE_API_KEY'; // TODO: Replace with actual key
+  const googleApiKey = 'YOUR_GOOGLE_API_KEY'; // TODO: Replace with actual key
+
+  await Purchases.setLogLevel(LogLevel.debug); // Remove in production
+
+  PurchasesConfiguration? configuration;
+  if (Platform.isIOS || Platform.isMacOS) {
+    configuration = PurchasesConfiguration(appleApiKey);
+  } else if (Platform.isAndroid) {
+    configuration = PurchasesConfiguration(googleApiKey);
+  } else {
+    debugPrint('[RevenueCat] Platform not supported, skipping initialization');
+    return; // Web/Desktop not supported
+  }
+
+  await Purchases.configure(configuration);
+  debugPrint('[RevenueCat] ✅ Initialized');
 }
 
 class MyApp extends StatelessWidget {
@@ -87,7 +151,7 @@ class MyApp extends StatelessWidget {
             );
           },
           routes: {'/home': (context) => const HomeScreenWrapper()},
-          home: const AuthGate(),
+          home: const AuthGate(), // Uses AuthWrapper internally for email verification
         );
       },
     );
@@ -123,55 +187,8 @@ class _AuthGateState extends State<AuthGate> {
       return const SplashScreen();
     }
 
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (!snapshot.hasData) {
-          return const SignInScreen();
-        }
-
-        final user = snapshot.data!;
-        final userService = UserService(FirebaseFirestore.instance, user.uid);
-
-        return StreamBuilder<UserProfile?>(
-          stream: userService.userProfileStream,
-          builder: (context, profileSnap) {
-            if (profileSnap.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            final profile = profileSnap.data;
-
-            if (profile != null) {
-              // Initialize theme provider with user data if available
-              Provider.of<ThemeProvider>(
-                context,
-                listen: false,
-              ).initialize(userService);
-              // Initialize locale provider
-              Provider.of<LocaleProvider>(
-                context,
-                listen: false,
-              ).initialize(user.uid);
-            }
-
-            if (profile == null || !profile.hasCompletedOnboarding) {
-              return OnboardingFlow(userService: userService);
-            }
-
-            return const HomeScreenWrapper();
-          },
-        );
-      },
-    );
+    // Use AuthWrapper which handles email verification
+    return const AuthWrapper();
   }
 }
 

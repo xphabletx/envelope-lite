@@ -19,6 +19,7 @@ import 'envelope/omni_icon_picker_modal.dart';
 import '../models/envelope.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
+import 'calculator_widget.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -69,6 +70,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   final _targetFocus = FocusNode();
   final _subtitleFocus = FocusNode();
   final _autoFillAmountFocus = FocusNode();
+
+  // Target date
+  DateTime? _targetDate;
 
   // Auto-fill state
   bool _autoFillEnabled = false;
@@ -297,6 +301,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         name: name,
         startingAmount: start,
         targetAmount: target,
+        targetDate: _targetDate,
         subtitle: subtitle.isEmpty ? null : subtitle,
         emoji: null, // OLD, DEPRECATED
         iconType: _iconType,
@@ -520,6 +525,23 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             prefixIcon: const Icon(
                               Icons.account_balance_wallet,
                             ),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.calculate),
+                              onPressed: () async {
+                                final result = await showDialog<double>(
+                                  context: context,
+                                  builder: (context) => const Dialog(
+                                    child: CalculatorWidget(),
+                                  ),
+                                );
+                                if (result != null && mounted) {
+                                  setState(() {
+                                    _amtCtrl.text = result.toStringAsFixed(2);
+                                  });
+                                }
+                              },
+                              tooltip: 'Open Calculator',
+                            ),
                             // FIX 3: Added contentPadding
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -560,6 +582,23 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             prefixIcon: const Icon(Icons.flag),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.calculate),
+                              onPressed: () async {
+                                final result = await showDialog<double>(
+                                  context: context,
+                                  builder: (context) => const Dialog(
+                                    child: CalculatorWidget(),
+                                  ),
+                                );
+                                if (result != null && mounted) {
+                                  setState(() {
+                                    _targetCtrl.text = result.toStringAsFixed(2);
+                                  });
+                                }
+                              },
+                              tooltip: 'Open Calculator',
+                            ),
                             // FIX 3: Added contentPadding
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -574,6 +613,81 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             }
                           },
                         ),
+                        const SizedBox(height: 16),
+
+                        // Target Date field
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _targetDate ?? DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365 * 10),
+                              ),
+                            );
+                            if (picked != null && mounted) {
+                              setState(() {
+                                _targetDate = picked;
+                              });
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: theme.colorScheme.outline,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Target Date (Optional)',
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _targetDate == null
+                                            ? 'Track progress by date (e.g., loan end date)'
+                                            : '${_targetDate!.day}/${_targetDate!.month}/${_targetDate!.year}',
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 14,
+                                          color: _targetDate == null
+                                              ? Colors.grey
+                                              : theme.colorScheme.secondary,
+                                          fontWeight: _targetDate == null
+                                              ? FontWeight.normal
+                                              : FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_targetDate != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _targetDate = null;
+                                      });
+                                    },
+                                    tooltip: 'Clear date',
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 24),
 
                         Divider(color: theme.colorScheme.outline),
@@ -582,7 +696,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         // Account selection
                         if (_accountsLoaded) ...[
                           Text(
-                            tr('linked_account'),
+                            'Linked Account',
                             style: fontProvider.getTextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -593,7 +707,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           DropdownButtonFormField<String?>(
                             value: _selectedAccountId,
                             decoration: InputDecoration(
-                              labelText: tr('envelope_linked_account'),
+                              labelText: 'Select Account (Optional)',
                               labelStyle: fontProvider.getTextStyle(
                                 fontSize: 16,
                               ),
@@ -610,7 +724,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               DropdownMenuItem(
                                 value: null,
                                 child: Text(
-                                  tr('envelope_no_account'),
+                                  'No Account',
                                   style: fontProvider.getTextStyle(
                                     fontSize: 18,
                                   ),
@@ -799,6 +913,24 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               prefixIcon: const Icon(Icons.autorenew),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.calculate),
+                                onPressed: () async {
+                                  final result = await showDialog<double>(
+                                    context: context,
+                                    builder: (context) => const Dialog(
+                                      child: CalculatorWidget(),
+                                    ),
+                                  );
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _autoFillAmountCtrl.text =
+                                          result.toStringAsFixed(2);
+                                    });
+                                  }
+                                },
+                                tooltip: 'Open Calculator',
+                              ),
                               helperText: tr('envelope_autofill_helper'),
                               helperStyle: fontProvider.getTextStyle(
                                 fontSize: 14,

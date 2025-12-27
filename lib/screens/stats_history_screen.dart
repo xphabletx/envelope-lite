@@ -365,7 +365,8 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                     final inChosen = chosenIds.contains(t.envelopeId);
                     final inRange =
                         !t.date.isBefore(start) && t.date.isBefore(end);
-                    final typeMatch = widget.filterTransactionTypes == null ||
+                    final typeMatch =
+                        widget.filterTransactionTypes == null ||
                         widget.filterTransactionTypes!.contains(t.type);
                     return inChosen && inRange && typeMatch;
                   }).toList()..sort((a, b) => b.date.compareTo(a.date));
@@ -384,15 +385,18 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                       : 0.0;
 
                   // Calculate transaction stats (only for shown transaction types)
-                  final showDeposits = widget.filterTransactionTypes == null ||
+                  final showDeposits =
+                      widget.filterTransactionTypes == null ||
                       widget.filterTransactionTypes!.contains(
                         TransactionType.deposit,
                       );
-                  final showWithdrawals = widget.filterTransactionTypes == null ||
+                  final showWithdrawals =
+                      widget.filterTransactionTypes == null ||
                       widget.filterTransactionTypes!.contains(
                         TransactionType.withdrawal,
                       );
-                  final showTransfers = widget.filterTransactionTypes == null ||
+                  final showTransfers =
+                      widget.filterTransactionTypes == null ||
                       widget.filterTransactionTypes!.contains(
                         TransactionType.transfer,
                       );

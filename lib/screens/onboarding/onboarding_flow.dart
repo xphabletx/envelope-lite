@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/user_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
@@ -27,7 +28,7 @@ class OnboardingFlow extends StatefulWidget {
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
   int _currentStep = 0;
-  String? _photoURL;
+  String? _photoPath; // Changed from _photoURL to _photoPath (local path)
   String _displayName = '';
   String _selectedTheme = AppThemes.latteId;
   String _selectedFont =
@@ -58,12 +59,22 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   Future<void> _completeOnboarding() async {
-    // Create user profile in Firebase with target icon
+    debugPrint('[Onboarding] Completing onboarding...');
+
+    // Save photo path locally
+    if (_photoPath != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile_photo_path', _photoPath!);
+      debugPrint('[Onboarding] ✅ Photo path saved to SharedPreferences: $_photoPath');
+    }
+
+    // Create user profile in Firebase (displayName only, NO photoURL for solo users)
     await widget.userService.createUserProfile(
       displayName: _displayName.isEmpty ? 'User' : _displayName,
-      photoURL: _photoURL,
+      photoURL: null, // Solo users don't upload photos to Firebase Storage
       selectedTheme: _selectedTheme,
     );
+    debugPrint('[Onboarding] ✅ Profile saved to Firebase (displayName only)');
 
     // Save target icon to user settings
     final userId = widget.userService.userId;
@@ -105,7 +116,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget build(BuildContext context) {
     final steps = [
       _PhotoUploadStep(
-        onPhotoSelected: (url) => _photoURL = url,
+        onPhotoSelected: (path) => _photoPath = path,
         onNext: _nextStep,
         userService: widget.userService,
       ),
@@ -113,7 +124,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         onNameChanged: (name) => _displayName = name,
         onNext: _nextStep,
         onBack: _previousStep,
-        photoURL: _photoURL,
+        photoPath: _photoPath,
       ),
       _ThemePickerStep(
         selectedTheme: _selectedTheme,
@@ -125,6 +136,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         selectedFont: _selectedFont,
         onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
         onNext: _nextStep,
+        onBack: _previousStep,
+      ),
+      _CurrencyPickerStep(
+        selectedCurrency: _selectedCurrency,
+        onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
+        onComplete: _nextStep,
         onBack: _previousStep,
       ),
       OnboardingTargetIconStep(
@@ -144,12 +161,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           userId: widget.userService.userId,
         ),
         onBack: _previousStep,
-      ),
-      _CurrencyPickerStep(
-        selectedCurrency: _selectedCurrency,
-        onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
         onComplete: _completeOnboarding,
-        onBack: _previousStep,
       ),
     ];
 
@@ -174,7 +186,7 @@ class _PhotoUploadStep extends StatefulWidget {
 
 class _PhotoUploadStepState extends State<_PhotoUploadStep> {
   File? _image;
-  bool _uploading = false;
+  bool _saving = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -184,37 +196,54 @@ class _PhotoUploadStepState extends State<_PhotoUploadStep> {
       setState(() {
         _image = File(pickedFile.path);
       });
+      debugPrint('[Onboarding] Photo selected: ${pickedFile.path}');
     }
   }
 
-  Future<void> _uploadImage() async {
+  Future<String> _savePhotoLocally(String sourcePath) async {
+    try {
+      debugPrint('[Onboarding] Saving photo locally...');
+
+      final userId = widget.userService.userId;
+      final appDir = await getApplicationDocumentsDirectory();
+      final localPath = '${appDir.path}/profile_photo_$userId.jpg';
+
+      // Copy the selected photo to app directory
+      final sourceFile = File(sourcePath);
+      await sourceFile.copy(localPath);
+
+      debugPrint('[Onboarding] ✅ Photo saved locally: $localPath');
+      debugPrint('[Onboarding] ⏭️ Skipping Firebase Storage upload (solo mode)');
+      return localPath;
+    } catch (e) {
+      debugPrint('[Onboarding] ❌ Error saving photo: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _saveAndContinue() async {
     if (_image == null) {
+      debugPrint('[Onboarding] No photo selected, continuing...');
       widget.onPhotoSelected(null);
       widget.onNext();
       return;
     }
 
-    setState(() => _uploading = true);
+    setState(() => _saving = true);
 
     try {
-      final userId = widget.userService.userId;
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('user_photos')
-          .child('$userId.jpg');
-      await storageRef.putFile(_image!);
-      final downloadUrl = await storageRef.getDownloadURL();
-      widget.onPhotoSelected(downloadUrl);
+      final localPhotoPath = await _savePhotoLocally(_image!.path);
+      widget.onPhotoSelected(localPhotoPath);
       widget.onNext();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading photo: $e')),
+          SnackBar(content: Text('Error saving photo: $e')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _uploading = false);
+        setState(() => _saving = false);
       }
     }
   }
@@ -274,10 +303,10 @@ class _PhotoUploadStepState extends State<_PhotoUploadStep> {
               ),
             ),
             const SizedBox(height: 16),
-            _uploading
+            _saving
                 ? const CircularProgressIndicator()
                 : TextButton(
-                    onPressed: _uploadImage,
+                    onPressed: _saveAndContinue,
                     child: Text(_image == null ? 'Skip for now' : 'Continue'),
                   ),
           ],
@@ -293,13 +322,13 @@ class _DisplayNameStep extends StatefulWidget {
     required this.onNameChanged,
     required this.onNext,
     required this.onBack,
-    this.photoURL,
+    this.photoPath,
   });
 
   final Function(String) onNameChanged;
   final VoidCallback onNext;
   final VoidCallback onBack;
-  final String? photoURL;
+  final String? photoPath;
 
   @override
   State<_DisplayNameStep> createState() => _DisplayNameStepState();
@@ -335,11 +364,11 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          widget.photoURL == null
+          widget.photoPath == null
               ? const Icon(Icons.badge_outlined, size: 120, color: Colors.grey)
               : CircleAvatar(
                   radius: 60,
-                  backgroundImage: NetworkImage(widget.photoURL!),
+                  backgroundImage: FileImage(File(widget.photoPath!)),
                 ),
           const SizedBox(height: 32),
           Text(
@@ -368,6 +397,13 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
             ),
             textCapitalization: TextCapitalization.words,
             autofocus: true,
+            onTap: () {
+              // Select all text when tapped
+              _controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _controller.text.length,
+              );
+            },
             onSubmitted: (_) => _continue(),
           ),
           const SizedBox(height: 32),
@@ -726,7 +762,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                   const Icon(Icons.attach_money, size: 120, color: Colors.grey),
                   const SizedBox(height: 32),
                   Text(
-                    'Select Currency',
+                    'Select Your Currency',
                     style: fontProvider.getTextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -736,7 +772,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Choose your preferred currency',
+                    'This determines how amounts are displayed throughout the app',
                     style: fontProvider.getTextStyle(
                       fontSize: 16,
                       color: theme.colorScheme.onSurface.withAlpha(179),
@@ -843,7 +879,7 @@ class _CurrencyPickerStep extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    'Get Started 🎉',
+                    'Continue',
                     style: fontProvider.getTextStyle(
                       fontWeight: FontWeight.bold,
                     ),

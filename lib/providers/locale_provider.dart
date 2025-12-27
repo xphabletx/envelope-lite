@@ -28,9 +28,39 @@ class LocaleProvider extends ChangeNotifier {
 
   // Supported currencies
   static const List<Map<String, String>> supportedCurrencies = [
+    // Europe
     {'code': 'GBP', 'name': 'British Pound', 'symbol': '£'},
     {'code': 'EUR', 'name': 'Euro', 'symbol': '€'},
+
+    // Americas
     {'code': 'USD', 'name': 'US Dollar', 'symbol': '\$'},
+    {'code': 'CAD', 'name': 'Canadian Dollar', 'symbol': 'C\$'},
+    {'code': 'MXN', 'name': 'Mexican Peso', 'symbol': 'Mex\$'},
+    {'code': 'BRL', 'name': 'Brazilian Real', 'symbol': 'R\$'},
+    {'code': 'ARS', 'name': 'Argentine Peso', 'symbol': 'ARS\$'},
+
+    // Asia-Pacific
+    {'code': 'JPY', 'name': 'Japanese Yen', 'symbol': '¥'},
+    {'code': 'CNY', 'name': 'Chinese Yuan', 'symbol': '¥'},
+    {'code': 'INR', 'name': 'Indian Rupee', 'symbol': '₹'},
+    {'code': 'AUD', 'name': 'Australian Dollar', 'symbol': 'A\$'},
+    {'code': 'NZD', 'name': 'New Zealand Dollar', 'symbol': 'NZ\$'},
+    {'code': 'SGD', 'name': 'Singapore Dollar', 'symbol': 'S\$'},
+    {'code': 'HKD', 'name': 'Hong Kong Dollar', 'symbol': 'HK\$'},
+    {'code': 'KRW', 'name': 'South Korean Won', 'symbol': '₩'},
+
+    // Middle East & Africa
+    {'code': 'AED', 'name': 'UAE Dirham', 'symbol': 'AED'},
+    {'code': 'SAR', 'name': 'Saudi Riyal', 'symbol': 'SAR'},
+    {'code': 'ZAR', 'name': 'South African Rand', 'symbol': 'R'},
+
+    // Other
+    {'code': 'CHF', 'name': 'Swiss Franc', 'symbol': 'CHF'},
+    {'code': 'SEK', 'name': 'Swedish Krona', 'symbol': 'kr'},
+    {'code': 'NOK', 'name': 'Norwegian Krone', 'symbol': 'kr'},
+    {'code': 'DKK', 'name': 'Danish Krone', 'symbol': 'kr'},
+    {'code': 'PLN', 'name': 'Polish Złoty', 'symbol': 'zł'},
+    {'code': 'TRY', 'name': 'Turkish Lira', 'symbol': '₺'},
   ];
 
   Future<void> initialize(String userId) async {
@@ -95,16 +125,11 @@ class LocaleProvider extends ChangeNotifier {
   }
 
   String _getCurrencySymbol(String code) {
-    switch (code) {
-      case 'GBP':
-        return '£';
-      case 'EUR':
-        return '€';
-      case 'USD':
-        return '\$';
-      default:
-        return '£';
-    }
+    final currency = supportedCurrencies.firstWhere(
+      (c) => c['code'] == code,
+      orElse: () => supportedCurrencies[0],
+    );
+    return currency['symbol']!;
   }
 
   String formatCurrency(double amount) {

@@ -7,6 +7,7 @@ import '../../services/account_repo.dart';
 import '../../models/account.dart';
 import '../../providers/font_provider.dart';
 import 'pay_day_allocation_screen.dart';
+import '../../widgets/calculator_widget.dart';
 
 class PayDayAmountScreen extends StatefulWidget {
   const PayDayAmountScreen({
@@ -165,6 +166,23 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                     fontSize: 56,
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.secondary,
+                  ),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.calculate, size: 32),
+                    onPressed: () async {
+                      final result = await showDialog<double>(
+                        context: context,
+                        builder: (context) => const Dialog(
+                          child: CalculatorWidget(),
+                        ),
+                      );
+                      if (result != null && mounted) {
+                        setState(() {
+                          _amountController.text = result.toStringAsFixed(2);
+                        });
+                      }
+                    },
+                    tooltip: 'Open Calculator',
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),

@@ -1,11 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
+import 'package:rxdart/rxdart.dart';
 import '../models/scheduled_payment.dart';
+import 'hive_service.dart';
 
 class ScheduledPaymentRepo {
-  ScheduledPaymentRepo(this._db, this._userId);
+  ScheduledPaymentRepo(this._db, this._userId) {
+    // Initialize Hive box
+    _paymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+  }
 
   final FirebaseFirestore _db;
   final String _userId;
+  late final Box<ScheduledPayment> _paymentBox;
 
   // Collection reference for user's scheduled payments
   CollectionReference<Map<String, dynamic>> _collection() {
@@ -27,14 +35,27 @@ class ScheduledPaymentRepo {
 
   // Stream all scheduled payments for current user
   Stream<List<ScheduledPayment>> get scheduledPaymentsStream {
-    return _collection()
-        .orderBy('startDate', descending: false)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ScheduledPayment.fromFirestore(doc))
-              .toList(),
-        );
+    // Always use Hive for scheduled payments (they're user-specific, not workspace-shared)
+    debugPrint('[ScheduledPaymentRepo] 📦 Setting up Hive stream');
+
+    // Emit initial state immediately
+    final initialPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId)
+        .toList();
+    initialPayments.sort((a, b) => a.startDate.compareTo(b.startDate));
+    debugPrint('[ScheduledPaymentRepo] ✅ Initial state: ${initialPayments.length} payments from Hive');
+
+    // Then listen for changes
+    return Stream.value(initialPayments).asBroadcastStream().concatWith([
+      _paymentBox.watch().map((_) {
+        final payments = _paymentBox.values
+            .where((payment) => payment.userId == _userId)
+            .toList();
+        payments.sort((a, b) => a.startDate.compareTo(b.startDate));
+        debugPrint('[ScheduledPaymentRepo] ✅ Emitting ${payments.length} payments from Hive');
+        return payments;
+      })
+    ]);
   }
 
   // Get single scheduled payment
@@ -57,9 +78,13 @@ class ScheduledPaymentRepo {
     required String colorName,
     required int colorValue,
     bool isAutomatic = false,
+    ScheduledPaymentType paymentType = ScheduledPaymentType.fixedAmount,
   }) async {
-    // Validate that either envelope or group is set
-    if (envelopeId == null && groupId == null) {
+    // Special case: Allow "Pay Day" (income) entries without envelope/group
+    final isPayDayEntry = name.contains('Pay Day') || name.contains('💰');
+
+    // Validate that either envelope or group is set (unless it's a pay day entry)
+    if (!isPayDayEntry && envelopeId == null && groupId == null) {
       throw ArgumentError('Must provide either envelopeId or groupId');
     }
 
@@ -84,9 +109,16 @@ class ScheduledPaymentRepo {
       colorValue: colorValue,
       isAutomatic: isAutomatic,
       createdAt: DateTime.now(),
+      paymentType: paymentType,
     );
 
-    await doc.set(payment.toMap());
+    // ALWAYS write to Hive (scheduled payments are user-specific)
+    await _paymentBox.put(doc.id, payment);
+    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment saved to Hive: ${doc.id}');
+
+    // Note: Scheduled payments are typically user-specific and not shared in workspaces
+    // So we skip Firebase sync for now
+
     return doc.id;
   }
 
@@ -102,36 +134,74 @@ class ScheduledPaymentRepo {
     String? colorName,
     int? colorValue,
     bool? isAutomatic,
+    ScheduledPaymentType? paymentType,
   }) async {
-    final updateData = <String, dynamic>{};
-
-    if (name != null) updateData['name'] = name;
-    if (description != null) updateData['description'] = description;
-    if (amount != null) updateData['amount'] = amount;
-    if (startDate != null) {
-      updateData['startDate'] = Timestamp.fromDate(startDate);
+    // Get current payment from Hive
+    final payment = _paymentBox.get(id);
+    if (payment == null) {
+      throw Exception('Scheduled payment not found: $id');
     }
-    if (frequencyValue != null) updateData['frequencyValue'] = frequencyValue;
-    if (frequencyUnit != null) updateData['frequencyUnit'] = frequencyUnit.name;
-    if (colorName != null) updateData['colorName'] = colorName;
-    if (colorValue != null) updateData['colorValue'] = colorValue;
-    if (isAutomatic != null) updateData['isAutomatic'] = isAutomatic;
 
-    if (updateData.isEmpty) return;
+    // Create updated payment
+    final updatedPayment = ScheduledPayment(
+      id: payment.id,
+      userId: payment.userId,
+      envelopeId: payment.envelopeId,
+      groupId: payment.groupId,
+      name: name ?? payment.name,
+      description: description ?? payment.description,
+      amount: amount ?? payment.amount,
+      startDate: startDate ?? payment.startDate,
+      frequencyValue: frequencyValue ?? payment.frequencyValue,
+      frequencyUnit: frequencyUnit ?? payment.frequencyUnit,
+      colorName: colorName ?? payment.colorName,
+      colorValue: colorValue ?? payment.colorValue,
+      isAutomatic: isAutomatic ?? payment.isAutomatic,
+      createdAt: payment.createdAt,
+      lastExecuted: payment.lastExecuted,
+      paymentType: paymentType ?? payment.paymentType,
+    );
 
-    await _collection().doc(id).update(updateData);
+    // ALWAYS write to Hive
+    await _paymentBox.put(id, updatedPayment);
+    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment updated in Hive: $id');
   }
 
   // Delete scheduled payment
   Future<void> deleteScheduledPayment(String id) async {
-    await _collection().doc(id).delete();
+    await _paymentBox.delete(id);
+    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment deleted from Hive: $id');
   }
 
   // Mark payment as executed (updates lastExecuted)
   Future<void> markPaymentExecuted(String id) async {
-    await _collection().doc(id).update({
-      'lastExecuted': Timestamp.fromDate(DateTime.now()),
-    });
+    // Get current payment from Hive
+    final payment = _paymentBox.get(id);
+    if (payment == null) {
+      throw Exception('Scheduled payment not found: $id');
+    }
+
+    // Create updated payment with new lastExecuted
+    final updatedPayment = ScheduledPayment(
+      id: payment.id,
+      userId: payment.userId,
+      envelopeId: payment.envelopeId,
+      groupId: payment.groupId,
+      name: payment.name,
+      description: payment.description,
+      amount: payment.amount,
+      startDate: payment.startDate,
+      frequencyValue: payment.frequencyValue,
+      frequencyUnit: payment.frequencyUnit,
+      colorName: payment.colorName,
+      colorValue: payment.colorValue,
+      isAutomatic: payment.isAutomatic,
+      createdAt: payment.createdAt,
+      lastExecuted: DateTime.now(),
+    );
+
+    await _paymentBox.put(id, updatedPayment);
+    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment marked as executed: $id');
   }
 
   // Get all payments due today or earlier (for auto-execution)
@@ -139,9 +209,8 @@ class ScheduledPaymentRepo {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-    final snapshot = await _collection().get();
-    final allPayments = snapshot.docs
-        .map((doc) => ScheduledPayment.fromFirestore(doc))
+    final allPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId)
         .toList();
 
     // Filter for payments due today or earlier
