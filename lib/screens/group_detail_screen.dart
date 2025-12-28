@@ -13,6 +13,7 @@ import '../widgets/group_editor.dart' as editor;
 import 'envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
 import '../providers/font_provider.dart';
+import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
 
@@ -33,7 +34,6 @@ class GroupDetailScreen extends StatefulWidget {
 }
 
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
-  final currency = NumberFormat.currency(symbol: '£');
   bool isMulti = false;
   final selected = <String>{};
   late DateTime _viewingMonth;
@@ -91,6 +91,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final binderColors = _getBinderColors(
       widget.group.colorIndex,

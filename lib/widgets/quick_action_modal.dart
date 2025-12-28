@@ -9,6 +9,7 @@ import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
 import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
+import '../providers/locale_provider.dart';
 import '../utils/calculator_helper.dart';
 import '../widgets/partner_badge.dart';
 
@@ -128,6 +129,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
     final theme = Theme.of(context);
     final isTransfer = widget.type == TransactionType.transfer;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
 
     String title;
     IconData icon;
@@ -203,11 +205,13 @@ class _QuickActionModalState extends State<QuickActionModal> {
                       color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  Text(
-                    'Balance: ${NumberFormat.currency(symbol: '£').format(widget.envelope.currentAmount)}',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withAlpha(179),
+                  Consumer<LocaleProvider>(
+                    builder: (context, locale, _) => Text(
+                      'Balance: ${NumberFormat.currency(symbol: locale.currencySymbol).format(widget.envelope.currentAmount)}',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withAlpha(179),
+                      ),
                     ),
                   ),
                 ],
@@ -228,7 +232,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
             ),
             decoration: InputDecoration(
               labelText: 'Amount',
-              prefixText: '£',
+              prefixText: locale.currencySymbol,
               suffixIcon: IconButton(
                 icon: const Icon(Icons.calculate),
                 onPressed: _showCalculator,

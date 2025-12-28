@@ -11,9 +11,8 @@ import 'quick_action_modal.dart';
 import '../models/transaction.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../providers/locale_provider.dart';
 import '../services/workspace_helper.dart';
-// TUTORIAL IMPORT
-import '../services/tutorial_controller.dart';
 
 class EnvelopeTile extends StatefulWidget {
   const EnvelopeTile({
@@ -105,7 +104,8 @@ class _EnvelopeTileState extends State<EnvelopeTile>
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currencyFormat = NumberFormat.currency(symbol: locale.currencySymbol);
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
@@ -256,50 +256,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       onHorizontalDragEnd: (details) async {
         if (details.primaryVelocity != null) {
           if (details.primaryVelocity!.abs() > 300) {
-            // TUTORIAL LOGIC
-            // Check if we need to advance the tutorial on swipe
-            final tutorialController = Provider.of<TutorialController>(
-              context,
-              listen: false,
-            );
-
-            // UPDATED: Use swipeGesture (new step name) and show completion dialog
-            if (tutorialController.isActive &&
-                tutorialController.currentStep == TutorialStep.swipeGesture) {
-              // Advance tutorial
-              await tutorialController.nextStep();
-
-              // Show completion dialog
-              if (context.mounted) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (dialogContext) => AlertDialog(
-                    title: Row(
-                      children: const [
-                        Text('Tutorial Complete! '),
-                        Text('🎉', style: TextStyle(fontSize: 24)),
-                      ],
-                    ),
-                    content: const Text(
-                      'You\'re all set! Feel free to explore Envelope Lite.\n\n'
-                      'Need help? Check Settings → Help anytime!',
-                    ),
-                    actions: [
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          tutorialController.complete();
-                        },
-                        child: const Text('Get Started!'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            }
-
-            // Normal swipe logic
+            // Swipe logic
             _toggleReveal();
           }
         }

@@ -102,10 +102,15 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       selectedEnvelopeIds.add(_draftId);
     }
 
-    // Show template selector for new binders
+    // Show template selector for new binders after a short delay
+    // to let the keyboard and UI settle
     if (!isEdit) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showTemplateSelector();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Wait for the keyboard to settle before showing template selector
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          _showTemplateSelector();
+        }
       });
     }
   }
@@ -149,22 +154,37 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
 
       // Create envelopes from template NOW (if a template was selected)
       if (_selectedTemplate != null && currentGroupId != null) {
+        debugPrint('[GroupEditor] Creating envelopes from template...');
         final createdIds = await _createEnvelopesFromTemplateNow(
           _selectedTemplate!,
           currentGroupId,
         );
+
+        debugPrint('[GroupEditor] Adding ${createdIds.length} created IDs to selectedEnvelopeIds');
+        debugPrint('[GroupEditor] selectedEnvelopeIds before: ${selectedEnvelopeIds.length}');
         selectedEnvelopeIds.addAll(createdIds);
+        debugPrint('[GroupEditor] selectedEnvelopeIds after: ${selectedEnvelopeIds.length}');
+        debugPrint('[GroupEditor] All selected IDs: $selectedEnvelopeIds');
       }
 
-      // FILTER OUT DRAFT ID before saving relationships
-      final realIdsToSave =
-          selectedEnvelopeIds.where((id) => id != _draftId).toSet();
+      // FILTER OUT DRAFT IDs before saving relationships
+      final realIdsToSave = selectedEnvelopeIds
+          .where((id) => id != _draftId && !id.startsWith('DRAFT_TEMPLATE_'))
+          .toSet();
+
+      debugPrint('[GroupEditor] ========================================');
+      debugPrint('[GroupEditor] Updating group membership for binder: $currentGroupId');
+      debugPrint('[GroupEditor] Envelope IDs to assign: ${realIdsToSave.length}');
+      debugPrint('[GroupEditor] IDs: $realIdsToSave');
+      debugPrint('[GroupEditor] ========================================');
 
       await widget.envelopeRepo.updateGroupMembership(
         groupId: currentGroupId!,
         newEnvelopeIds: realIdsToSave,
         allEnvelopesStream: widget.envelopeRepo.envelopesStream(),
       );
+
+      debugPrint('[GroupEditor] ✅ Group membership updated successfully');
 
       if (!mounted) return;
       Navigator.of(context).pop(currentGroupId); // RETURN ID
@@ -402,8 +422,11 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     }
   }
 
-  /// Store template selection to create envelopes on save
+  /// Store template selection and create draft envelopes for preview
   Future<void> _createEnvelopesFromTemplate(BinderTemplate template) async {
+    // Unfocus any active text field to prevent keyboard from popping up
+    FocusScope.of(context).unfocus();
+
     // Pre-fill name and emoji from template
     _nameCtrl.text = template.name;
     selectedEmoji = template.emoji;
@@ -411,8 +434,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     selectedIconValue = template.emoji;
 
     // Store template for later (will create envelopes when binder is saved)
+    // Also create draft IDs and add to selectedEnvelopeIds for preview
     setState(() {
       _selectedTemplate = template;
+
+      // Create draft IDs for each template envelope and add to selection
+      for (int i = 0; i < template.envelopes.length; i++) {
+        final draftId = 'DRAFT_TEMPLATE_${template.id}_$i';
+        selectedEnvelopeIds.add(draftId);
+        newlyCreatedEnvelopeIds.add(draftId); // Mark as NEW
+      }
     });
 
     // Show info that envelopes will be created
@@ -433,11 +464,19 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     BinderTemplate template,
     String groupId,
   ) async {
+    debugPrint('[Template] ========================================');
+    debugPrint('[Template] Creating envelopes from template: ${template.name}');
+    debugPrint('[Template] Binder ID: $groupId');
+    debugPrint('[Template] Template has ${template.envelopes.length} envelopes');
+    debugPrint('[Template] ========================================');
+
     final createdIds = <String>[];
 
     try {
       // Create all envelopes from template with emojis and groupId
       for (final envelope in template.envelopes) {
+        debugPrint('[Template] Creating envelope: ${envelope.name} (${envelope.emoji})');
+
         final envelopeId = await widget.envelopeRepo.createEnvelope(
           name: envelope.name,
           startingAmount: 0.0,
@@ -448,10 +487,18 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           autoFillAmount: null,
           groupId: groupId, // Assign to binder immediately
         );
+
         createdIds.add(envelopeId);
+        debugPrint('[Template] ✅ Created: ${envelope.name} → Binder: $groupId (ID: $envelopeId)');
       }
-    } catch (e) {
-      debugPrint('Error creating envelopes from template: $e');
+
+      debugPrint('[Template] ========================================');
+      debugPrint('[Template] ✅ Created ${createdIds.length} envelopes');
+      debugPrint('[Template] Envelope IDs: $createdIds');
+      debugPrint('[Template] ========================================');
+    } catch (e, stackTrace) {
+      debugPrint('[Template] ❌ FAILED to create envelopes: $e');
+      debugPrint('[Template] Stack trace: $stackTrace');
       rethrow;
     }
 
@@ -459,7 +506,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   }
 
   Future<void> _createNewEnvelope() async {
-    final accountRepo = AccountRepo(widget.envelopeRepo.db, widget.envelopeRepo);
+    final accountRepo = AccountRepo(widget.envelopeRepo);
 
     // Store IDs before opening creator
     final beforeIds = await widget.envelopeRepo.envelopesStream().first;
@@ -706,7 +753,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 TextFormField(
                                   controller: _nameCtrl,
                                   textCapitalization: TextCapitalization.words,
-                                  autofocus: true,
+                                  autofocus: isEdit, // Only autofocus when editing, not creating
                                   decoration: InputDecoration(
                                     labelText: tr('group_binder_name_label'),
                                     labelStyle: fontProvider.getTextStyle(
@@ -918,6 +965,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 .toList()
                               ..sort((a, b) => a.name.compareTo(b.name));
 
+                            // Add draft envelope from envelope creator (if any)
                             if (widget.draftEnvelopeName != null &&
                                 widget.draftEnvelopeName!.isNotEmpty) {
                               final draftEnv = Envelope(
@@ -928,6 +976,22 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 currentAmount: 0,
                               );
                               allEnvelopes.insert(0, draftEnv);
+                            }
+
+                            // Add draft envelopes from template (if any)
+                            if (_selectedTemplate != null) {
+                              for (int i = 0; i < _selectedTemplate!.envelopes.length; i++) {
+                                final templateEnv = _selectedTemplate!.envelopes[i];
+                                final draftId = 'DRAFT_TEMPLATE_${_selectedTemplate!.id}_$i';
+                                final draftEnv = Envelope(
+                                  id: draftId,
+                                  name: '${templateEnv.name} (New)',
+                                  userId: widget.envelopeRepo.currentUserId,
+                                  emoji: templateEnv.emoji,
+                                  currentAmount: 0,
+                                );
+                                allEnvelopes.insert(0, draftEnv);
+                              }
                             }
 
                             if (snapshot.connectionState ==

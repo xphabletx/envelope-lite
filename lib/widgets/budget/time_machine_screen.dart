@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import 'package:hive/hive.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../models/scheduled_payment.dart';
@@ -12,6 +13,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/projection_service.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import 'time_machine_transition.dart';
 
@@ -57,8 +59,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   void initState() {
     super.initState();
 
-    // Always set target date to 30 days from today
-    _targetDate = DateTime.now().add(const Duration(days: 30));
+    // Set target date to same day next month (or last day if that day doesn't exist)
+    _targetDate = _getNextMonthSameDay(DateTime.now());
 
     // Use expectedPayAmount from PayDaySettings (not lastPayAmount)
     _payAmountController = TextEditingController(
@@ -85,6 +87,14 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
     debugPrint('  - Pay frequency: $_payFrequency');
 
     _loadData();
+  }
+
+  /// Get the same day next month, or last day of next month if day doesn't exist
+  DateTime _getNextMonthSameDay(DateTime date) {
+    final nextMonth = DateTime(date.year, date.month + 1, 1);
+    final lastDayOfNextMonth = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+    final targetDay = date.day > lastDayOfNextMonth ? lastDayOfNextMonth : date.day;
+    return DateTime(nextMonth.year, nextMonth.month, targetDay);
   }
 
   DateTime _calculateNextPayDateFromHistory(
@@ -124,15 +134,14 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   Future<void> _loadData() async {
     final envelopes = await widget.envelopeRepo.envelopesStream().first;
-    final bindersSnapshot = await widget.groupRepo.groupsCol().get();
+    // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
+    final allBinders = await widget.groupRepo.getAllGroupsAsync();
 
     if (!mounted) return;
 
     setState(() {
       _allEnvelopes = envelopes;
-      _allBinders = bindersSnapshot.docs
-          .map((doc) => EnvelopeGroup.fromFirestore(doc))
-          .toList();
+      _allBinders = allBinders;
 
       for (final env in envelopes) {
         _envelopeEnabled[env.id] = true;
@@ -145,7 +154,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   void _resetToDefaults() {
     setState(() {
-      _targetDate = DateTime.now().add(const Duration(days: 30));
+      _targetDate = _getNextMonthSameDay(DateTime.now());
       _payAmountController.text =
           widget.paySettings.lastPayAmount?.toStringAsFixed(2) ?? '0.00';
       _payFrequency = widget.paySettings.payFrequency;
@@ -210,9 +219,9 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   controller: amountController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Amount',
-                    prefixText: '£ ',
+                    prefixText: '${Provider.of<LocaleProvider>(context, listen: false).currencySymbol} ',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -293,16 +302,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
       final accounts = await widget.accountRepo.accountsStream().first;
       final envelopes = _allEnvelopes;
 
-      final paymentsSnapshot = await widget.envelopeRepo.db
-          .collection('users')
-          .doc(widget.envelopeRepo.currentUserId)
-          .collection('solo')
-          .doc('data')
-          .collection('scheduledPayments')
-          .get();
-
-      final scheduledPayments = paymentsSnapshot.docs
-          .map((doc) => ScheduledPayment.fromFirestore(doc))
+      // Fetch scheduled payments from Hive
+      final paymentBox = Hive.box<ScheduledPayment>('scheduledPayments');
+      final scheduledPayments = paymentBox.values
+          .where((p) => p.userId == widget.envelopeRepo.currentUserId)
           .toList();
 
       final scenario = ProjectionScenario(
@@ -382,7 +385,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final envelopesByBinder = <String, List<Envelope>>{};
     final individualEnvelopes = <Envelope>[];
@@ -584,7 +588,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                       );
                     },
                     decoration: InputDecoration(
-                      prefixText: '£ ',
+                      prefixText: '${locale.currencySymbol} ',
                       prefixStyle: fontProvider.getTextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

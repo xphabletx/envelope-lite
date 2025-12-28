@@ -5,6 +5,7 @@ import '../../models/account.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 
 class AccountCard extends StatelessWidget {
   const AccountCard({
@@ -24,7 +25,8 @@ class AccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return FutureBuilder<double>(
       future: accountRepo.getAssignedAmount(account.id),
@@ -32,6 +34,14 @@ class AccountCard extends StatelessWidget {
         final assigned = snapshot.data ?? 0.0;
         final available = account.currentBalance - assigned;
         final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+        // Debug logging for account balance calculation
+        if (snapshot.hasData) {
+          debugPrint('[AccountCard] ${account.name}:');
+          debugPrint('  Current Balance: ${account.currentBalance}');
+          debugPrint('  Assigned: $assigned');
+          debugPrint('  Available: $available');
+        }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),

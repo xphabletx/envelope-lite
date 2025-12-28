@@ -1,10 +1,8 @@
 // lib/screens/sign_in_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart'; // Needed for TutorialController
 
 import '../services/auth_service.dart';
-// TUTORIAL IMPORT - UPDATED
 import '../services/tutorial_controller.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -218,8 +216,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           // IMPORTANT: Reset tutorial state for new users
                           // This ensures the tutorial runs when they hit home
                           if (mounted) {
-                            // Using read because we are inside a callback
-                            context.read<TutorialController>().reset();
+                            await TutorialController.resetAll();
                           }
 
                           if (!ctx2.mounted) return;

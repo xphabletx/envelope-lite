@@ -6,6 +6,7 @@ import '../../models/envelope.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../services/localization_service.dart';
 import '../envelope/envelopes_detail_screen.dart';
 
@@ -47,9 +48,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   }
 
   Future<void> _confirmDeleteAccount(BuildContext context) async {
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final theme = Theme.of(context);
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -98,7 +96,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return StreamBuilder<Account>(
       stream: widget.accountRepo.accountStream(widget.account.id),
@@ -536,23 +535,25 @@ class _EditAccountDialogState extends State<_EditAccountDialog> {
               },
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _balanceController,
-              decoration: InputDecoration(
-                labelText: tr('account_balance'),
-                border: const OutlineInputBorder(),
-                prefixText: '£',
+            Consumer<LocaleProvider>(
+              builder: (context, locale, _) => TextFormField(
+                controller: _balanceController,
+                decoration: InputDecoration(
+                  labelText: tr('account_balance'),
+                  border: const OutlineInputBorder(),
+                  prefixText: locale.currencySymbol,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return tr('error_invalid_amount');
+                  }
+                  if (double.tryParse(value) == null) {
+                    return tr('error_invalid_amount');
+                  }
+                  return null;
+                },
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return tr('error_invalid_amount');
-                }
-                if (double.tryParse(value) == null) {
-                  return tr('error_invalid_amount');
-                }
-                return null;
-              },
             ),
           ],
         ),

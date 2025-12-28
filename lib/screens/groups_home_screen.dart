@@ -15,6 +15,7 @@ import 'envelope/envelopes_detail_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/time_machine_provider.dart';
 import '../theme/app_themes.dart';
 import '../screens/pay_day/pay_day_preview_screen.dart';
 
@@ -38,12 +39,17 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   bool _mineOnly = false;
   String _sortBy = 'name';
 
-  Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs) {
+  Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs, TimeMachineProvider timeMachine) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
-    final totSaved = inGroup.fold(0.0, (s, e) => s + e.currentAmount);
 
-    return {'totalSaved': totSaved, 'envelopes': inGroup};
+    // Apply Time Machine projections if active
+    final projectedEnvelopes = inGroup.map((e) => timeMachine.getProjectedEnvelope(e)).toList();
+    final totSaved = projectedEnvelopes.fold(0.0, (s, e) => s + e.currentAmount);
+
+    debugPrint('[GroupsHome] Binder ${g.name} total: $totSaved (${inGroup.length} envelopes, TimeMachine: ${timeMachine.isActive})');
+
+    return {'totalSaved': totSaved, 'envelopes': projectedEnvelopes};
   }
 
   void _openGroupDetail(EnvelopeGroup group) {
@@ -75,7 +81,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     return themeColors.first;
   }
 
-  List<EnvelopeGroup> _sortGroups(List<EnvelopeGroup> groups, List<Envelope> envs) {
+  List<EnvelopeGroup> _sortGroups(List<EnvelopeGroup> groups, List<Envelope> envs, TimeMachineProvider timeMachine) {
     final sorted = groups.toList();
     switch (_sortBy) {
       case 'name':
@@ -83,8 +89,8 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
         break;
       case 'total':
         sorted.sort((a, b) {
-          final valA = _statsFor(a, envs)['totalSaved'] as double;
-          final valB = _statsFor(b, envs)['totalSaved'] as double;
+          final valA = _statsFor(a, envs, timeMachine)['totalSaved'] as double;
+          final valB = _statsFor(b, envs, timeMachine)['totalSaved'] as double;
           return valB.compareTo(valA);
         });
         break;
@@ -111,6 +117,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
     final isWorkspace = widget.repo.inWorkspace;
 
     return StreamBuilder<List<Envelope>>(
@@ -129,7 +136,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               return g.isShared;
             }).toList();
 
-            final groups = _sortGroups(filteredGroups, envs);
+            final groups = _sortGroups(filteredGroups, envs, timeMachine);
 
             if (_currentPage >= groups.length && groups.isNotEmpty) {
               _currentPage = groups.length - 1;
@@ -339,7 +346,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                       },
                       itemBuilder: (context, index) {
                         final group = groups[index];
-                        final stats = _statsFor(group, envs);
+                        final stats = _statsFor(group, envs, timeMachine);
                         final groupEnvelopes =
                             stats['envelopes'] as List<Envelope>;
                         final totalSaved = stats['totalSaved'] as double;

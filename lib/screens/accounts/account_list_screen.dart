@@ -22,12 +22,18 @@ class AccountListScreen extends StatefulWidget {
 
 class _AccountListScreenState extends State<AccountListScreen> {
   bool _mineOnly = false;
+  late final AccountRepo _accountRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _accountRepo = AccountRepo(widget.envelopeRepo);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final accountRepo = AccountRepo(widget.envelopeRepo.db, widget.envelopeRepo);
     final isWorkspace = widget.envelopeRepo.inWorkspace;
 
     return Scaffold(
@@ -72,7 +78,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
         ],
       ),
       body: StreamBuilder<List<Account>>(
-        stream: accountRepo.accountsStream(),
+        stream: _accountRepo.accountsStream(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -128,7 +134,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
                 children: [
                   AccountCard(
                     account: account,
-                    accountRepo: accountRepo,
+                    accountRepo: _accountRepo,
                     envelopeRepo: widget.envelopeRepo,
                     onTap: () {
                       Navigator.push(
@@ -136,7 +142,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
                         MaterialPageRoute(
                           builder: (_) => AccountDetailScreen(
                             account: account,
-                            accountRepo: accountRepo,
+                            accountRepo: _accountRepo,
                             envelopeRepo: widget.envelopeRepo,
                           ),
                         ),
@@ -167,19 +173,19 @@ class _AccountListScreenState extends State<AccountListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAccountEditor(context, accountRepo),
+        onPressed: () => _showAccountEditor(context),
         backgroundColor: theme.colorScheme.primary,
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  void _showAccountEditor(BuildContext context, AccountRepo accountRepo) {
+  void _showAccountEditor(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AccountEditorModal(accountRepo: accountRepo),
+      builder: (_) => AccountEditorModal(accountRepo: _accountRepo),
     );
   }
 }

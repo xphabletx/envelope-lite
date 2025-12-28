@@ -30,7 +30,8 @@ import '../models/user_profile.dart';
 
 import '../services/workspace_helper.dart';
 import '../services/localization_service.dart';
-import '../services/tutorial_controller.dart';
+import '../widgets/tutorial_wrapper.dart';
+import '../data/tutorial_sequences.dart';
 
 import '../screens/envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
@@ -90,6 +91,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late int _selectedIndex;
   String? _workspaceName;
+  DateTime? _lastBackPress;
 
   // TUTORIAL KEYS
   final GlobalKey _fabKey = GlobalKey();
@@ -102,12 +104,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final ValueNotifier<bool> _isSpeedDialOpen = ValueNotifier(false);
 
-  GroupRepo get _groupRepo => GroupRepo(widget.repo.db, widget.repo);
+  // Initialize repos once
+  late final GroupRepo _groupRepo;
+  late final AccountRepo _accountRepo;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+
+    // Initialize repos once
+    _groupRepo = GroupRepo(widget.repo);
+    _accountRepo = AccountRepo(widget.repo);
+
     _restoreLastWorkspaceName();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -215,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _AllEnvelopes(
         repo: widget.repo,
         groupRepo: _groupRepo,
+        accountRepo: _accountRepo,
         firstEnvelopeKey: _firstEnvelopeKey,
       ),
       GroupsHomeScreen(repo: widget.repo, groupRepo: _groupRepo),
@@ -228,148 +238,173 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ];
 
-    return Consumer<TutorialController>(
-      builder: (context, tutorialController, child) {
-        return Stack(
-          children: [
-            Scaffold(
-              appBar: AppBar(
-                scrolledUnderElevation: 0,
-                backgroundColor: theme.scaffoldBackgroundColor,
-                elevation: 0,
-                title: StreamBuilder<UserProfile?>(
-                  stream: UserService(
-                    widget.repo.db,
-                    widget.repo.currentUserId,
-                  ).userProfileStream,
-                  builder: (context, snapshot) {
-                    final profile = snapshot.data;
-                    final displayName = profile?.displayName ?? tr('your_envelopes');
-                    final photoURL = profile?.photoURL;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
 
-                    return Row(
-                      children: [
-                        if (photoURL != null && photoURL.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 12.0),
-                            child: CircleAvatar(
-                              backgroundImage: NetworkImage(photoURL),
-                              radius: 20,
-                            ),
-                          ),
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              displayName,
-                              style: fontProvider.getTextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                actions: [
-                  // NEW: Moved Account List (Wallet) icon here
-                  IconButton(
-                    icon: const Icon(Icons.account_balance_wallet, size: 28),
-                    tooltip: 'Manage Accounts',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AccountListScreen(envelopeRepo: widget.repo),
-                        ),
-                      );
-                    },
-                    color: theme.colorScheme.primary,
-                  ),
-                  IconButton(
-                    key: _statsTabKey,
-                    icon: const Icon(Icons.bar_chart_sharp, size: 28),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => StatsHistoryScreen(repo: widget.repo),
-                        ),
-                      );
-                    },
-                    color: theme.colorScheme.primary,
-                  ),
-                  IconButton(
-                    tooltip: tr('settings'),
-                    icon: Icon(
-                      Icons.settings,
-                      color: theme.colorScheme.primary,
+        // Double-tap to exit pattern
+        final now = DateTime.now();
+        final backButtonHasNotBeenPressedOrSnackBarHasBeenClosed =
+            _lastBackPress == null ||
+            now.difference(_lastBackPress!) > const Duration(seconds: 2);
+
+        if (backButtonHasNotBeenPressedOrSnackBarHasBeenClosed) {
+          _lastBackPress = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Exit app
+          Navigator.of(context).pop();
+        }
+      },
+      child: TutorialWrapper(
+        tutorialSequence: homeTutorial,
+        spotlightKeys: {
+          'fab': _fabKey,
+          'sort_button': _statsTabKey, // Using stats as placeholder
+          'mine_only_toggle': _budgetTabKey, // Using budget as placeholder
+        },
+        child: Scaffold(
+        appBar: AppBar(
+          scrolledUnderElevation: 0,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          elevation: 0,
+          title: StreamBuilder<UserProfile?>(
+            stream: UserService(
+              widget.repo.db,
+              widget.repo.currentUserId,
+            ).userProfileStream,
+            builder: (context, snapshot) {
+              final profile = snapshot.data;
+              final displayName = profile?.displayName ?? tr('your_envelopes');
+              final photoURL = profile?.photoURL;
+
+              return Row(
+                children: [
+                  if (photoURL != null && photoURL.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: CircleAvatar(
+                        backgroundImage: NetworkImage(photoURL),
+                        radius: 20,
+                      ),
                     ),
-                    onPressed: _openSettings,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        displayName,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
+              );
+            },
+          ),
+          actions: [
+            // NEW: Moved Account List (Wallet) icon here
+            IconButton(
+              icon: const Icon(Icons.account_balance_wallet, size: 28),
+              tooltip: 'Manage Accounts',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        AccountListScreen(envelopeRepo: widget.repo),
+                  ),
+                );
+              },
+              color: theme.colorScheme.primary,
+            ),
+            IconButton(
+              key: _statsTabKey,
+              icon: const Icon(Icons.bar_chart_sharp, size: 28),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StatsHistoryScreen(repo: widget.repo),
+                  ),
+                );
+              },
+              color: theme.colorScheme.primary,
+            ),
+            IconButton(
+              tooltip: tr('settings'),
+              icon: Icon(
+                Icons.settings,
+                color: theme.colorScheme.primary,
               ),
-              body: _buildBodyWithVerificationBanner(pages[_selectedIndex]),
-              bottomNavigationBar: BottomNavigationBar(
-                backgroundColor: theme.scaffoldBackgroundColor,
-                selectedItemColor: theme.colorScheme.primary,
-                unselectedItemColor: Colors.grey.shade600,
-                elevation: 8,
-                type: BottomNavigationBarType.fixed,
-                selectedLabelStyle: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
-                items: [
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.mail_outline),
-                    activeIcon: const Icon(Icons.mail),
-                    label: tr('home_envelopes_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.menu_book_outlined),
-                    activeIcon: const Icon(Icons.menu_book),
-                    label: tr('home_binders_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      key: _budgetTabKey,
-                    ),
-                    activeIcon: const Icon(Icons.account_balance_wallet),
-                    label: tr('home_budget_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(
-                      Icons.calendar_today_outlined,
-                      key: _calendarTabKey,
-                    ),
-                    activeIcon: const Icon(Icons.calendar_today),
-                    label: tr('home_calendar_tab'),
-                  ),
-                ],
-                currentIndex: _selectedIndex,
-                onTap: (i) => setState(() => _selectedIndex = i),
-              ),
-              floatingActionButton: _selectedIndex == 0
-                  ? _AllEnvelopesFAB(
-                      repo: widget.repo,
-                      groupRepo: _groupRepo,
-                      fabKey: _fabKey,
-                      createEnvelopeKey: _createEnvelopeKey,
-                      createBinderKey: _createBinderKey,
-                      isSpeedDialOpen: _isSpeedDialOpen,
-                    )
-                  : null,
+              onPressed: _openSettings,
             ),
           ],
-        );
-      },
+        ),
+        body: _buildBodyWithVerificationBanner(pages[_selectedIndex]),
+        bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          selectedItemColor: theme.colorScheme.primary,
+          unselectedItemColor: Colors.grey.shade600,
+          elevation: 8,
+          type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: fontProvider.getTextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+          items: [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.mail_outline),
+              activeIcon: const Icon(Icons.mail),
+              label: tr('home_envelopes_tab'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.menu_book_outlined),
+              activeIcon: const Icon(Icons.menu_book),
+              label: tr('home_binders_tab'),
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                Icons.account_balance_wallet_outlined,
+                key: _budgetTabKey,
+              ),
+              activeIcon: const Icon(Icons.account_balance_wallet),
+              label: tr('home_budget_tab'),
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                Icons.calendar_today_outlined,
+                key: _calendarTabKey,
+              ),
+              activeIcon: const Icon(Icons.calendar_today),
+              label: tr('home_calendar_tab'),
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          onTap: (i) => setState(() => _selectedIndex = i),
+        ),
+        floatingActionButton: _selectedIndex == 0
+            ? _AllEnvelopesFAB(
+                repo: widget.repo,
+                groupRepo: _groupRepo,
+                fabKey: _fabKey,
+                createEnvelopeKey: _createEnvelopeKey,
+                createBinderKey: _createBinderKey,
+                isSpeedDialOpen: _isSpeedDialOpen,
+              )
+            : null,
+        ),
+      ),
     );
   }
 }
@@ -399,7 +434,6 @@ class _AllEnvelopesFAB extends StatelessWidget {
     final allEnvelopesState = context
         .findAncestorStateOfType<_AllEnvelopesState>();
     final isMulti = allEnvelopesState?.isMulti ?? false;
-    final selected = allEnvelopesState?.selected ?? {};
 
     return SpeedDial(
       key: fabKey,
@@ -446,11 +480,12 @@ class _AllEnvelopesFAB extends StatelessWidget {
                 label: tr('envelope_new'),
                 key: createEnvelopeKey,
                 onTap: () async {
+                  final homeScreenState = context.findAncestorStateOfType<_HomeScreenState>();
                   await showEnvelopeCreator(
                     context,
                     repo: repo,
                     groupRepo: groupRepo,
-                    accountRepo: AccountRepo(repo.db, repo),
+                    accountRepo: homeScreenState!._accountRepo,
                   );
                   allEnvelopesState?.refresh();
                 },
@@ -473,10 +508,12 @@ class _AllEnvelopes extends StatefulWidget {
   const _AllEnvelopes({
     required this.repo,
     required this.groupRepo,
+    required this.accountRepo,
     required this.firstEnvelopeKey,
   });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
   final GlobalKey firstEnvelopeKey;
 
   @override
@@ -617,7 +654,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
         builder: (_) => PayDayAmountScreen(
           repo: widget.repo,
           groupRepo: widget.groupRepo,
-          accountRepo: AccountRepo(widget.repo.db, widget.repo),
+          accountRepo: widget.accountRepo,
         ),
       ),
     );

@@ -10,6 +10,7 @@ import '../models/envelope_group.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
+import '../providers/locale_provider.dart';
 import '../widgets/analytics/analytics_section.dart';
 
 enum StatsViewMode { combined, envelopes, groups }
@@ -41,7 +42,7 @@ class StatsHistoryScreen extends StatefulWidget {
 }
 
 class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
-  final currency = NumberFormat.currency(symbol: '£');
+  late NumberFormat currency;
   final selectedIds = <String>{};
   StatsViewMode _viewMode = StatsViewMode.combined;
   late bool myOnly;
@@ -67,6 +68,12 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
       59,
       999,
     );
+
+    // Initialize currency formatter after context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final locale = Provider.of<LocaleProvider>(context, listen: false);
+      currency = NumberFormat.currency(symbol: locale.currencySymbol);
+    });
 
     final hasExplicit =
         (widget.initialEnvelopeIds != null &&
@@ -979,7 +986,8 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1069,7 +1077,8 @@ class _TransactionStatsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1205,7 +1214,8 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final t = transaction;
     final envName = envMap[t.envelopeId] ?? 'Unknown';

@@ -10,8 +10,9 @@ import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../add_scheduled_payment_screen.dart'; // Adjust path if necessary
-import 'envelope_settings_sheet.dart';
+import 'envelope_settings_sheet.dart' show EnvelopeSettingsSheet, EnvelopeSettingsSection;
 import '../stats_history_screen.dart';
+import 'target_screen.dart';
 
 class ModernEnvelopeHeaderCard extends StatelessWidget {
   const ModernEnvelopeHeaderCard({
@@ -35,6 +36,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
   ) {
     showModalBottomSheet(
       context: context,
+      isDismissible: true,
+      enableDrag: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(16),
@@ -357,6 +360,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                               repo: repo,
                               groupRepo: groupRepo,
                               accountRepo: accountRepo,
+                              initialSection: EnvelopeSettingsSection.autofill,
                             ),
                           ),
                         );
@@ -376,11 +380,41 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                       color: theme.colorScheme.primaryContainer,
                       textColor: theme.colorScheme.onPrimaryContainer,
                       onTap: () {
-                        Navigator.of(context).pushNamedAndRemoveUntil(
-                          '/home',
-                          (route) => false,
-                          arguments: 2, // Budget tab index
-                        );
+                        // If has target, open target screen
+                        if (envelope.targetAmount != null || envelope.targetDate != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TargetScreen(
+                                envelope: envelope,
+                                envelopeRepo: repo,
+                                groupRepo: groupRepo,
+                                accountRepo: accountRepo,
+                              ),
+                            ),
+                          );
+                        } else {
+                          // If no target, open settings to set one
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(20),
+                                ),
+                              ),
+                              child: EnvelopeSettingsSheet(
+                                envelopeId: envelope.id,
+                                repo: repo,
+                                groupRepo: groupRepo,
+                                accountRepo: accountRepo,
+                              ),
+                            ),
+                          );
+                        }
                       },
                     ),
                   ),
@@ -396,7 +430,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                       subLabel: hasPayments
                           // FIX: Added '!' to assert nextPayment is not null here
                           ? currency.format(nextPayment!.amount)
-                          : 'Tap to add',
+                          : 'Tap to see options',
                       color: hasPayments
                           ? theme.colorScheme.tertiaryContainer
                           : theme.colorScheme.surfaceContainerHighest,
@@ -407,12 +441,24 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                         if (hasPayments) {
                           _showScheduledPaymentsList(context, payments);
                         } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => AddScheduledPaymentScreen(
+                          // Show settings sheet scrolled to scheduled payments section
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(20),
+                                ),
+                              ),
+                              child: EnvelopeSettingsSheet(
+                                envelopeId: envelope.id,
                                 repo: repo,
-                                preselectedEnvelopeId: envelope.id,
+                                groupRepo: groupRepo,
+                                accountRepo: accountRepo,
+                                initialSection: EnvelopeSettingsSection.scheduledPayments,
                               ),
                             ),
                           );

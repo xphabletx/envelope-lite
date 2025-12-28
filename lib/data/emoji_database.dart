@@ -1050,8 +1050,6 @@ final emojiDatabase = {
   '❌': ['cross', 'x', 'wrong', 'no', 'cancel', 'delete', 'error', 'stop'],
   '⚠️': ['warning', 'alert', 'danger', 'caution', 'sign', 'important'],
   '❓': ['question', 'help', 'ask', 'confused', 'query', 'support'],
-  '💡': ['idea', 'light', 'bulb', 'solution', 'smart', 'thinking'],
-  '🔥': ['fire', 'hot', 'burn', 'popular', 'trend', 'energy'],
   '🔒': ['lock', 'security', 'safe', 'password', 'closed', 'protect'],
   '🔓': ['unlock', 'open', 'security', 'access', 'password'],
 };

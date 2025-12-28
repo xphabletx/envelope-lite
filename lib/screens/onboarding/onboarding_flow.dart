@@ -76,12 +76,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     );
     debugPrint('[Onboarding] ✅ Profile saved to Firebase (displayName only)');
 
-    // Save target icon to user settings
-    final userId = widget.userService.userId;
-    await FirebaseFirestore.instance.collection('users').doc(userId).set({
-      'targetIconType': _targetIconType,
-      'targetIconValue': _targetIconValue,
-    }, SetOptions(merge: true));
+    // Save target icon to SharedPreferences (local-only, UI preference)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('target_icon_type', _targetIconType ?? 'emoji');
+    await prefs.setString('target_icon_value', _targetIconValue ?? '🎯');
+    debugPrint('[Onboarding] ✅ Target icon saved locally: $_targetIconType $_targetIconValue');
 
     if (!mounted) return;
 
@@ -165,7 +164,40 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       ),
     ];
 
-    return Scaffold(body: SafeArea(child: steps[_currentStep]));
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        // If on first step, confirm exit
+        if (_currentStep == 0) {
+          final shouldExit = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Exit Onboarding?'),
+              content: const Text('Your progress will be lost. Are you sure you want to exit?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Exit'),
+                ),
+              ],
+            ),
+          );
+          if (shouldExit == true && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        } else {
+          // If not on first step, go back to previous step
+          _previousStep();
+        }
+      },
+      child: Scaffold(body: SafeArea(child: steps[_currentStep])),
+    );
   }
 }
 

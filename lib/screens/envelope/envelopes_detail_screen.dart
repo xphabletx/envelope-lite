@@ -18,13 +18,13 @@ import 'modals/withdraw_modal.dart';
 import 'modals/transfer_modal.dart';
 import '../../../services/localization_service.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/locale_provider.dart';
 import '../../../providers/time_machine_provider.dart';
 import '../../utils/calculator_helper.dart';
 import 'modern_envelope_header_card.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../widgets/time_machine_indicator.dart';
-import '../../widgets/future_transaction_tile.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -50,11 +50,22 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   final GlobalKey _transactionListKey = GlobalKey();
   final GlobalKey _fabKey = GlobalKey();
 
+  // Initialize repos once
+  late final GroupRepo _groupRepo;
+  late final AccountRepo _accountRepo;
+  late final ScheduledPaymentRepo _scheduledPaymentRepo;
+
   @override
   void initState() {
     super.initState();
     _viewingMonth = DateTime.now();
     _scrollController.addListener(_saveScrollOffset);
+
+    // Initialize repos once
+    _groupRepo = GroupRepo(widget.repo);
+    _accountRepo = AccountRepo(widget.repo);
+    _scheduledPaymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
+
     _checkTutorial();
     _checkPartnerEnvelope();
   }
@@ -138,17 +149,49 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     ).pushNamedAndRemoveUntil('/home', (route) => false, arguments: index);
   }
 
+  Future<void> _navigateToEnvelope(String envelopeId) async {
+    // Replace current route with new envelope detail
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => EnvelopeDetailScreen(
+          envelopeId: envelopeId,
+          repo: widget.repo,
+        ),
+      ),
+    );
+  }
+
+  void _handleHorizontalDragEnd(
+    DragEndDetails details,
+    List<Envelope> sortedEnvelopes,
+  ) {
+    // Find current envelope index
+    final currentIndex = sortedEnvelopes.indexWhere((e) => e.id == widget.envelopeId);
+    if (currentIndex == -1) return;
+
+    // Check swipe velocity
+    const swipeThreshold = 500.0; // pixels per second
+
+    if (details.primaryVelocity != null) {
+      if (details.primaryVelocity! > swipeThreshold) {
+        // Swipe right - go to previous envelope
+        if (currentIndex > 0) {
+          _navigateToEnvelope(sortedEnvelopes[currentIndex - 1].id);
+        }
+      } else if (details.primaryVelocity! < -swipeThreshold) {
+        // Swipe left - go to next envelope
+        if (currentIndex < sortedEnvelopes.length - 1) {
+          _navigateToEnvelope(sortedEnvelopes[currentIndex + 1].id);
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final timeMachine = Provider.of<TimeMachineProvider>(context);
-
-    // Initialize the ScheduledPaymentRepo
-    final scheduledPaymentRepo = ScheduledPaymentRepo(
-      widget.repo.db,
-      widget.repo.currentUserId,
-    );
 
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
@@ -197,50 +240,62 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             ? timeMachine.getProjectedEnvelope(realEnvelope)
             : realEnvelope;
 
-        return StreamBuilder<List<Transaction>>(
-          stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
-          builder: (context, txSnapshot) {
-            final realTransactions = txSnapshot.data ?? [];
+        return StreamBuilder<List<Envelope>>(
+          stream: widget.repo.envelopesStream(),
+          builder: (context, envelopesSnapshot) {
+            final allEnvelopes = envelopesSnapshot.data ?? [];
+            // Sort by name (same as home screen default)
+            final sortedEnvelopes = allEnvelopes.toList()
+              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-            // If in Time Machine mode, add future transactions
-            final allTransactions = timeMachine.isActive
-                ? [
-                    ...realTransactions,
-                    ...timeMachine.getFutureTransactions(widget.envelopeId),
-                  ]
-                : realTransactions;
+            return StreamBuilder<List<Transaction>>(
+              stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
+              builder: (context, txSnapshot) {
+                final realTransactions = txSnapshot.data ?? [];
 
-            // Filter transactions logic
-            final monthStart = DateTime(
-              _viewingMonth.year,
-              _viewingMonth.month,
-              1,
-            );
-            final monthEnd = DateTime(
-              _viewingMonth.year,
-              _viewingMonth.month + 1,
-              0,
-              23,
-              59,
-              59,
-            );
-            final monthTransactions = allTransactions.where((tx) {
-              return tx.date.isAfter(
-                    monthStart.subtract(const Duration(seconds: 1)),
-                  ) &&
-                  tx.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
-            }).toList();
+                // If in Time Machine mode, add future transactions
+                final allTransactions = timeMachine.isActive
+                    ? [
+                        ...realTransactions,
+                        ...timeMachine.getFutureTransactions(widget.envelopeId),
+                      ]
+                    : realTransactions;
 
-            return Scaffold(
-              backgroundColor: theme.scaffoldBackgroundColor,
-              appBar: AppBar(
+                // Filter transactions logic
+                final monthStart = DateTime(
+                  _viewingMonth.year,
+                  _viewingMonth.month,
+                  1,
+                );
+                final monthEnd = DateTime(
+                  _viewingMonth.year,
+                  _viewingMonth.month + 1,
+                  0,
+                  23,
+                  59,
+                  59,
+                );
+                final monthTransactions = allTransactions.where((tx) {
+                  return tx.date.isAfter(
+                        monthStart.subtract(const Duration(seconds: 1)),
+                      ) &&
+                      tx.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
+                }).toList();
+
+                return PopScope(
+                  canPop: true,
+                  child: GestureDetector(
+                    onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),
+                    child: Scaffold(
                 backgroundColor: theme.scaffoldBackgroundColor,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.pop(context),
-                ),
+                appBar: AppBar(
+                  backgroundColor: theme.scaffoldBackgroundColor,
+                  elevation: 0,
+                  scrolledUnderElevation: 0,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 title: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -269,9 +324,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       key: _envelopeCardKey,
                       envelope: envelope,
                       repo: widget.repo,
-                      groupRepo: GroupRepo(widget.repo.db, widget.repo),
-                      accountRepo: AccountRepo(widget.repo.db, widget.repo),
-                      scheduledPaymentRepo: scheduledPaymentRepo, // PASSED HERE
+                      groupRepo: _groupRepo,
+                      accountRepo: _accountRepo,
+                      scheduledPaymentRepo: _scheduledPaymentRepo,
                     ),
 
                     // ---------------------------------------------------
@@ -348,7 +403,11 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   : _buildThemedFAB(context, envelope, theme),
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
-            );
+            ),
+          ),
+        );
+      },
+    );
           },
         );
       },
@@ -563,7 +622,8 @@ class _TargetStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final suggestion = TargetHelper.getSuggestionText(envelope);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final suggestion = TargetHelper.getSuggestionText(envelope, locale.currencySymbol);
     final daysLeft = TargetHelper.getDaysRemaining(envelope);
 
     return Container(
@@ -607,21 +667,33 @@ class _TargetStatusCard extends StatelessWidget {
   }
 }
 
-class _BinderInfoRow extends StatelessWidget {
+class _BinderInfoRow extends StatefulWidget {
   const _BinderInfoRow({required this.binderId, required this.repo});
 
   final String binderId;
   final EnvelopeRepo repo;
 
   @override
+  State<_BinderInfoRow> createState() => _BinderInfoRowState();
+}
+
+class _BinderInfoRowState extends State<_BinderInfoRow> {
+  late final GroupRepo _groupRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _groupRepo = GroupRepo(widget.repo);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final groupRepo = GroupRepo(repo.db, repo);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return FutureBuilder<EnvelopeGroup?>(
-      future: _getBinder(groupRepo),
+      future: _getBinder(_groupRepo),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
 
@@ -632,15 +704,15 @@ class _BinderInfoRow extends StatelessWidget {
 
         return InkWell(
           onTap: () async {
-            final binderData = await _getBinder(groupRepo);
+            final binderData = await _getBinder(_groupRepo);
             if (binderData != null && context.mounted) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => GroupDetailScreen(
                     group: binderData,
-                    groupRepo: groupRepo,
-                    envelopeRepo: repo,
+                    groupRepo: _groupRepo,
+                    envelopeRepo: widget.repo,
                   ),
                 ),
               );
@@ -712,8 +784,7 @@ class _BinderInfoRow extends StatelessWidget {
   }
 
   Future<EnvelopeGroup?> _getBinder(GroupRepo groupRepo) async {
-    final snapshot = await groupRepo.groupsCol().doc(binderId).get();
-    if (!snapshot.exists) return null;
-    return EnvelopeGroup.fromFirestore(snapshot);
+    // Use getGroupAsync to read from Hive (works in both solo and workspace mode)
+    return await groupRepo.getGroupAsync(widget.binderId);
   }
 }

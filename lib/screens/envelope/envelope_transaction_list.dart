@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/transaction.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/locale_provider.dart';
 import '../../widgets/future_transaction_tile.dart';
 
 class EnvelopeTransactionList extends StatelessWidget {
@@ -144,7 +145,8 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currencyFormatter = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
 
     // Determine transaction display based on type
     IconData icon;

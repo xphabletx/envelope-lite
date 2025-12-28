@@ -11,6 +11,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../screens/stats_history_screen.dart';
 
 import '../../screens/accounts/account_list_screen.dart';
@@ -213,7 +214,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   // 1. Total Balance -> Links to AccountListScreen
   Widget _buildAccountsCard(List<Account> accounts) {
     final theme = Theme.of(context);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final totalBalance = accounts.fold(
       0.0,
@@ -240,7 +242,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
   // 2. Income -> Links to StatsHistoryScreen
   Widget _buildIncomeCard(List<Transaction> transactions) {
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final income = transactions
         .where((tx) => tx.type == TransactionType.deposit)
@@ -271,7 +274,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
   // 3. Spending -> Links to StatsHistoryScreen
   Widget _buildSpendingCard(List<Transaction> transactions) {
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final spending = transactions
         .where((tx) => tx.type == TransactionType.withdrawal)
@@ -308,7 +312,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     DateTime end,
   ) {
     final theme = Theme.of(context);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     double total = 0.0;
     int occurrenceCount = 0;
@@ -372,7 +377,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
   // 5. Auto-Fill -> Links to AutoFillListScreen
   Widget _buildAutoFillCard(List<Envelope> envelopes) {
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final autoFillTotal = envelopes
         .where((e) => e.autoFillEnabled && e.autoFillAmount != null)
@@ -393,11 +399,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
             builder: (_) => AutoFillListScreen(
               envelopeRepo: widget.envelopeRepo,
               // Instantiate required repos
-              groupRepo: GroupRepo(widget.envelopeRepo.db, widget.envelopeRepo),
-              accountRepo: AccountRepo(
-                widget.envelopeRepo.db,
-                widget.envelopeRepo,
-              ),
+              groupRepo: GroupRepo(widget.envelopeRepo),
+              accountRepo: AccountRepo(widget.envelopeRepo),
             ),
           ),
         );
@@ -464,13 +467,15 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(
-                      NumberFormat.currency(
-                        symbol: '£',
-                      ).format(env.currentAmount),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                    Consumer<LocaleProvider>(
+                      builder: (context, locale, _) => Text(
+                        NumberFormat.currency(
+                          symbol: locale.currencySymbol,
+                        ).format(env.currentAmount),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],

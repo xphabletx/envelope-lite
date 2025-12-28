@@ -2,11 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_themes.dart';
-import '../services/user_service.dart';
 
 class ThemeProvider extends ChangeNotifier {
   String _currentThemeId = AppThemes.latteId;
-  UserService? _userService;
 
   // Accept initial theme to fix startup flash
   ThemeProvider({String? initialThemeId}) {
@@ -30,42 +28,38 @@ class ThemeProvider extends ChangeNotifier {
     );
   }
 
-  // Sync with Firebase (called after login)
-  Future<void> initialize(UserService userService) async {
-    _userService = userService;
-    await _loadThemeFromFirebase();
-  }
-
-  Future<void> _loadThemeFromFirebase() async {
-    if (_userService == null) return;
-
+  /// Initialize from SharedPreferences (local-only, no Firebase)
+  Future<void> initialize() async {
     try {
-      final profile = await _userService!.getUserProfile();
-      if (profile != null && profile.selectedTheme != _currentThemeId) {
-        _currentThemeId = profile.selectedTheme;
+      final prefs = await SharedPreferences.getInstance();
+      final savedThemeId = prefs.getString('selected_theme_id');
+
+      if (savedThemeId != null && savedThemeId != _currentThemeId) {
+        _currentThemeId = savedThemeId;
         notifyListeners();
-        // Update local storage to keep in sync
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('selected_theme_id', _currentThemeId);
       }
+
+      debugPrint('[ThemeProvider] ✅ Loaded theme from SharedPreferences: $_currentThemeId');
     } catch (e) {
-      debugPrint('Error loading theme: $e');
+      debugPrint('[ThemeProvider] ❌ Error loading theme: $e');
     }
   }
 
+  /// Set theme (local-only, no Firebase sync)
   Future<void> setTheme(String themeId) async {
     if (_currentThemeId == themeId) return;
 
     _currentThemeId = themeId;
     notifyListeners();
 
-    // Save to Local Storage (Immediate)
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selected_theme_id', themeId);
+    try {
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_theme_id', themeId);
 
-    // Save to Firebase (Background)
-    if (_userService != null) {
-      await _userService!.updateUserProfile(selectedTheme: themeId);
+      debugPrint('[ThemeProvider] ✅ Theme saved locally: $themeId');
+    } catch (e) {
+      debugPrint('[ThemeProvider] ❌ Error saving theme: $e');
     }
   }
 }

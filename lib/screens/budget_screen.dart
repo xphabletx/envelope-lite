@@ -12,7 +12,7 @@ import '../models/pay_day_settings.dart';
 import '../widgets/budget/time_machine_screen.dart';
 // Note: account_list_screen.dart import removed since it's no longer used here
 
-class BudgetScreen extends StatelessWidget {
+class BudgetScreen extends StatefulWidget {
   const BudgetScreen({
     super.key,
     required this.repo,
@@ -23,14 +23,27 @@ class BudgetScreen extends StatelessWidget {
   final DateTime? initialProjectionDate;
 
   @override
+  State<BudgetScreen> createState() => _BudgetScreenState();
+}
+
+class _BudgetScreenState extends State<BudgetScreen> {
+  // Initialize repos once
+  late final AccountRepo accountRepo;
+  late final GroupRepo groupRepo;
+  late final ScheduledPaymentRepo paymentRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    accountRepo = AccountRepo(widget.repo);
+    groupRepo = GroupRepo(widget.repo);
+    paymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    // Initialize repos
-    final accountRepo = AccountRepo(repo.db, repo);
-    final groupRepo = GroupRepo(repo.db, repo);
-    final paymentRepo = ScheduledPaymentRepo(repo.db, repo.currentUserId);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -58,7 +71,7 @@ class BudgetScreen extends StatelessWidget {
             // SECTION 1: Overview Cards
             BudgetOverviewCards(
               accountRepo: accountRepo,
-              envelopeRepo: repo,
+              envelopeRepo: widget.repo,
               paymentRepo: paymentRepo,
             ),
 
@@ -141,8 +154,8 @@ class BudgetScreen extends StatelessWidget {
                     child: InkWell(
                       onTap: () async {
                         // Load pay settings using PayDaySettingsService
-                        final userId = repo.currentUserId;
-                        final payDayService = PayDaySettingsService(repo.db, userId);
+                        final userId = widget.repo.currentUserId;
+                        final payDayService = PayDaySettingsService(widget.repo.db, userId);
 
                         debugPrint('[BudgetScreen] Loading pay day settings for time machine...');
                         final paySettings = await payDayService.getPayDaySettings();
@@ -156,7 +169,7 @@ class BudgetScreen extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (_) => TimeMachineScreen(
                               accountRepo: accountRepo,
-                              envelopeRepo: repo,
+                              envelopeRepo: widget.repo,
                               groupRepo: groupRepo,
                               paySettings: paySettings ?? PayDaySettings(userId: userId),
                             ),

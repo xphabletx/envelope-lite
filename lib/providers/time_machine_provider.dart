@@ -19,45 +19,89 @@ class TimeMachineProvider extends ChangeNotifier {
     required DateTime targetDate,
     required ProjectionResult projection,
   }) {
+    debugPrint('[TimeMachine] ========================================');
+    debugPrint('[TimeMachine] ENTERING TIME MACHINE MODE');
+    debugPrint('[TimeMachine] Target Date: $targetDate');
+    debugPrint('[TimeMachine] Account Projections: ${projection.accountProjections.length}');
+    debugPrint('[TimeMachine] Timeline Events: ${projection.timeline.length}');
+    debugPrint('[TimeMachine] ========================================');
+
     _isActive = true;
     _futureDate = targetDate;
     _projectionData = projection;
     notifyListeners();
+
+    debugPrint('[TimeMachine] ✅ Time Machine activated, listeners notified');
   }
 
   /// Exit Time Machine mode and return to present
   void exitTimeMachine() {
+    debugPrint('[TimeMachine] ========================================');
+    debugPrint('[TimeMachine] EXITING TIME MACHINE MODE');
+    debugPrint('[TimeMachine] Returning to present');
+    debugPrint('[TimeMachine] ========================================');
+
     _isActive = false;
     _futureDate = null;
     _projectionData = null;
     notifyListeners();
+
+    debugPrint('[TimeMachine] ✅ Time Machine deactivated, listeners notified');
   }
 
   /// Get projected balance for an envelope
   double? getProjectedEnvelopeBalance(String envelopeId) {
-    if (!_isActive || _projectionData == null) return null;
+    if (!_isActive || _projectionData == null) {
+      debugPrint('[TimeMachine] getProjectedEnvelopeBalance($envelopeId): inactive');
+      return null;
+    }
 
     // Search through all account projections for this envelope
     for (final accountProj in _projectionData!.accountProjections.values) {
       for (final envProj in accountProj.envelopeProjections) {
         if (envProj.envelopeId == envelopeId) {
+          debugPrint('[TimeMachine] ✅ Found projection for envelope $envelopeId:');
+          debugPrint('[TimeMachine]   Current: ${envProj.currentAmount}');
+          debugPrint('[TimeMachine]   Projected: ${envProj.projectedAmount}');
+          debugPrint('[TimeMachine]   Change: ${envProj.changeAmount}');
           return envProj.projectedAmount;
         }
       }
     }
+
+    debugPrint('[TimeMachine] ⚠️ No projection found for envelope $envelopeId');
     return null;
   }
 
   /// Get projected balance for an account
   double? getProjectedAccountBalance(String accountId) {
-    if (!_isActive || _projectionData == null) return null;
+    if (!_isActive || _projectionData == null) {
+      debugPrint('[TimeMachine] getProjectedAccountBalance($accountId): inactive');
+      return null;
+    }
 
-    return _projectionData!.accountProjections[accountId]?.projectedBalance;
+    final projection = _projectionData!.accountProjections[accountId];
+    if (projection != null) {
+      debugPrint('[TimeMachine] ✅ Found projection for account $accountId:');
+      debugPrint('[TimeMachine]   Projected Balance: ${projection.projectedBalance}');
+      debugPrint('[TimeMachine]   Assigned: ${projection.assignedAmount}');
+      debugPrint('[TimeMachine]   Available: ${projection.availableAmount}');
+      return projection.projectedBalance;
+    }
+
+    debugPrint('[TimeMachine] ⚠️ No projection found for account $accountId');
+    return null;
   }
 
   /// Get "future transactions" for an envelope (scheduled payments that will execute)
   List<Transaction> getFutureTransactions(String envelopeId) {
-    if (!_isActive || _projectionData == null) return [];
+    if (!_isActive || _projectionData == null) {
+      debugPrint('[TimeMachine] getFutureTransactions($envelopeId): inactive');
+      return [];
+    }
+
+    debugPrint('[TimeMachine] Getting future transactions for envelope $envelopeId');
+    debugPrint('[TimeMachine] Total timeline events: ${_projectionData!.timeline.length}');
 
     final futureTransactions = <Transaction>[];
 
@@ -90,21 +134,31 @@ class TimeMachineProvider extends ChangeNotifier {
         );
 
         futureTransactions.add(tx);
+        debugPrint('[TimeMachine] ✅ Added future transaction: ${event.description} on ${event.date}');
       }
     }
 
     // Sort by date descending (newest first)
     futureTransactions.sort((a, b) => b.date.compareTo(a.date));
 
+    debugPrint('[TimeMachine] Returning ${futureTransactions.length} future transactions');
     return futureTransactions;
   }
 
   /// Build a modified envelope with projected balance
   Envelope getProjectedEnvelope(Envelope realEnvelope) {
-    if (!_isActive) return realEnvelope;
+    if (!_isActive) {
+      debugPrint('[TimeMachine] getProjectedEnvelope(${realEnvelope.name}): inactive, returning real envelope');
+      return realEnvelope;
+    }
 
     final projectedBalance = getProjectedEnvelopeBalance(realEnvelope.id);
-    if (projectedBalance == null) return realEnvelope;
+    if (projectedBalance == null) {
+      debugPrint('[TimeMachine] getProjectedEnvelope(${realEnvelope.name}): no projection, returning real envelope');
+      return realEnvelope;
+    }
+
+    debugPrint('[TimeMachine] ✅ Projecting envelope ${realEnvelope.name}: ${realEnvelope.currentAmount} → $projectedBalance');
 
     return Envelope(
       id: realEnvelope.id,
@@ -128,10 +182,18 @@ class TimeMachineProvider extends ChangeNotifier {
 
   /// Build a modified account with projected balance
   Account getProjectedAccount(Account realAccount) {
-    if (!_isActive) return realAccount;
+    if (!_isActive) {
+      debugPrint('[TimeMachine] getProjectedAccount(${realAccount.name}): inactive, returning real account');
+      return realAccount;
+    }
 
     final projectedBalance = getProjectedAccountBalance(realAccount.id);
-    if (projectedBalance == null) return realAccount;
+    if (projectedBalance == null) {
+      debugPrint('[TimeMachine] getProjectedAccount(${realAccount.name}): no projection, returning real account');
+      return realAccount;
+    }
+
+    debugPrint('[TimeMachine] ✅ Projecting account ${realAccount.name}: ${realAccount.currentBalance} → $projectedBalance');
 
     return Account(
       id: realAccount.id,
@@ -148,6 +210,8 @@ class TimeMachineProvider extends ChangeNotifier {
       iconType: realAccount.iconType,
       iconValue: realAccount.iconValue,
       iconColor: realAccount.iconColor,
+      accountType: realAccount.accountType,
+      creditLimit: realAccount.creditLimit,
     );
   }
 }

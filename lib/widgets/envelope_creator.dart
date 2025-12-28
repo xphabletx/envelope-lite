@@ -136,18 +136,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
 
   Future<void> _loadBinders() async {
     try {
-      final snapshot = await widget.groupRepo.groupsCol().get();
-      final allBinders = snapshot.docs
-          .map((doc) => EnvelopeGroup.fromFirestore(doc))
-          .toList();
-
-      final uniqueBinders = <String, EnvelopeGroup>{};
-      for (final binder in allBinders) {
-        uniqueBinders[binder.id] = binder;
-      }
+      // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
+      final allBinders = await widget.groupRepo.getAllGroupsAsync();
 
       setState(() {
-        _binders = uniqueBinders.values.toList()
+        _binders = allBinders
           ..sort((a, b) => a.name.compareTo(b.name));
         _bindersLoaded = true;
       });
@@ -475,6 +468,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           textCapitalization: TextCapitalization.sentences,
                           textInputAction: TextInputAction.next,
                           maxLength: 50,
+                          maxLines: 1, // FIX: Prevent multi-line expansion
                           style: fontProvider
                               .getTextStyle(fontSize: 18)
                               .copyWith(fontStyle: FontStyle.italic),

@@ -115,12 +115,12 @@ class AuthWrapper extends StatelessWidget {
         final profile = profileSnap.data;
 
         if (profile != null) {
-          // Initialize theme provider with user data if available
+          // Initialize theme provider (local-only, no UserService needed)
           Provider.of<ThemeProvider>(
             context,
             listen: false,
-          ).initialize(userService);
-          // Initialize locale provider
+          ).initialize();
+          // Initialize locale provider (local-only)
           Provider.of<LocaleProvider>(
             context,
             listen: false,

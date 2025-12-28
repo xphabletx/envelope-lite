@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../../services/envelope_repo.dart';
 import '../../../../../widgets/calculator_widget.dart';
 import '../../../../../providers/font_provider.dart';
+import '../../../../../providers/locale_provider.dart';
 import '../../../../../services/localization_service.dart';
 
 class DepositModal extends StatefulWidget {
@@ -91,11 +92,12 @@ class _DepositModalState extends State<DepositModal> {
       );
 
       if (mounted) {
+        final locale = Provider.of<LocaleProvider>(context, listen: false);
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Added ${NumberFormat.currency(symbol: '£').format(amount)}',
+              'Added ${NumberFormat.currency(symbol: locale.currencySymbol).format(amount)}',
             ),
           ),
         );
@@ -174,22 +176,24 @@ class _DepositModalState extends State<DepositModal> {
               const SizedBox(height: 24),
 
               // Amount field with calculator button
-              TextField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tr('amount'),
-                  prefixText: '£',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              Consumer<LocaleProvider>(
+                builder: (context, locale, _) => TextField(
+                  controller: _amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: tr('amount'),
+                    prefixText: locale.currencySymbol,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.calculate),
+                      onPressed: _showCalculator,
+                      tooltip: 'Open Calculator',
+                    ),
                   ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calculate),
-                    onPressed: _showCalculator,
-                    tooltip: 'Open Calculator',
-                  ),
+                  autofocus: true,
                 ),
-                autofocus: true,
               ),
 
               const SizedBox(height: 16),

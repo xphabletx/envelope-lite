@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../models/analytics_data.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 
 class SpendingDonutChart extends StatefulWidget {
   const SpendingDonutChart({
@@ -32,7 +33,8 @@ class _SpendingDonutChartState extends State<SpendingDonutChart> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     if (widget.segments.isEmpty) {
       return Container(

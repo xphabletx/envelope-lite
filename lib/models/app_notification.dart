@@ -1,22 +1,48 @@
 // lib/models/app_notification.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 
+part 'app_notification.g.dart';
+
+@HiveType(typeId: 105)
 enum NotificationType {
+  @HiveField(0)
   scheduledPaymentFailed,
+
+  @HiveField(1)
   scheduledPaymentProcessed,
+
+  @HiveField(2)
   workspaceMemberJoined,
+
+  @HiveField(3)
   workspaceMemberLeft,
 }
 
+@HiveType(typeId: 6)
 class AppNotification {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String userId;
+
+  @HiveField(2)
   final NotificationType type;
+
+  @HiveField(3)
   final String title;
+
+  @HiveField(4)
   final String message;
+
+  @HiveField(5)
   final DateTime timestamp;
+
+  @HiveField(6)
   final bool isRead;
-  final Map<String, dynamic>? metadata; // For storing additional context
+
+  @HiveField(7)
+  final Map<String, dynamic>? metadata;
 
   AppNotification({
     required this.id,
@@ -28,36 +54,6 @@ class AppNotification {
     this.isRead = false,
     this.metadata,
   });
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'id': id,
-      'userId': userId,
-      'type': type.name,
-      'title': title,
-      'message': message,
-      'timestamp': Timestamp.fromDate(timestamp),
-      'isRead': isRead,
-      'metadata': metadata,
-    };
-  }
-
-  factory AppNotification.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return AppNotification(
-      id: doc.id,
-      userId: data['userId'] ?? '',
-      type: NotificationType.values.firstWhere(
-        (e) => e.name == data['type'],
-        orElse: () => NotificationType.scheduledPaymentFailed,
-      ),
-      title: data['title'] ?? '',
-      message: data['message'] ?? '',
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
-      isRead: data['isRead'] ?? false,
-      metadata: data['metadata'] as Map<String, dynamic>?,
-    );
-  }
 
   AppNotification copyWith({
     String? id,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../providers/font_provider.dart';
+import '../providers/locale_provider.dart';
 
 class FutureTransactionTile extends StatelessWidget {
   const FutureTransactionTile({
@@ -17,7 +18,8 @@ class FutureTransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
     final dateFormat = DateFormat('MMM d, yyyy');
 
     return Container(

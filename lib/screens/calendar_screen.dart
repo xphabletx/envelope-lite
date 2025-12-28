@@ -10,6 +10,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../services/pay_day_settings_service.dart';
 import '../../services/notification_repo.dart';
+import '../../providers/locale_provider.dart';
 import 'add_scheduled_payment_screen.dart';
 import '../../services/localization_service.dart';
 import '../../providers/font_provider.dart';
@@ -84,10 +85,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
   @override
   void initState() {
     super.initState();
-    _paymentRepo = ScheduledPaymentRepo(
-      widget.repo.db,
-      widget.repo.currentUserId,
-    );
+    _paymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
     _payDayService = PayDaySettingsService(
       widget.repo.db,
       widget.repo.currentUserId,
@@ -423,7 +421,8 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currencyFormatter = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return StreamBuilder<PayDaySettings?>(
@@ -434,6 +433,11 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
         return StreamBuilder<List<ScheduledPayment>>(
           stream: _paymentRepo.scheduledPaymentsStream,
           builder: (context, paymentsSnapshot) {
+            debugPrint('[Calendar] ========================================');
+            debugPrint('[Calendar] Scheduled payments stream update');
+            debugPrint('[Calendar] Has data: ${paymentsSnapshot.hasData}');
+            debugPrint('[Calendar] All payments count: ${paymentsSnapshot.data?.length ?? 0}');
+
             return StreamBuilder<List<dynamic>>(
               stream: widget.repo.envelopesStream(),
               builder: (context, envelopesSnapshot) {
@@ -441,9 +445,22 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                 final existingEnvelopes = envelopesSnapshot.data ?? [];
                 final envelopeIds = existingEnvelopes.map((e) => e.id).toSet();
 
+                debugPrint('[Calendar] Envelope IDs: ${envelopeIds.length}');
+
                 final scheduledPayments = allPayments
                     .where((payment) => envelopeIds.contains(payment.envelopeId))
                     .toList();
+
+                debugPrint('[Calendar] Filtered scheduled payments: ${scheduledPayments.length}');
+
+                // Log each payment for debugging
+                for (final payment in allPayments) {
+                  debugPrint('[Calendar] Payment: ${payment.name}');
+                  debugPrint('[Calendar]   EnvelopeId: ${payment.envelopeId}');
+                  debugPrint('[Calendar]   Start Date: ${payment.startDate}');
+                  debugPrint('[Calendar]   Has matching envelope: ${envelopeIds.contains(payment.envelopeId)}');
+                }
+                debugPrint('[Calendar] ========================================');
 
                 // Get all calendar events (scheduled payments + pay day)
                 final groupedOccurrences = _getOccurrencesForVisibleRange(

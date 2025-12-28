@@ -9,7 +9,6 @@ import 'package:open_file/open_file.dart';
 import '../models/envelope.dart';
 import '../models/transaction.dart';
 import '../models/scheduled_payment.dart';
-import '../models/envelope_group.dart';
 import '../models/account.dart'; // New import for Account model
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
@@ -40,10 +39,8 @@ class DataExportService {
     final transactions = await _envelopeRepo.getAllTransactions();
     final scheduledPayments = await _scheduledPaymentRepo.getAllScheduledPayments();
     
-    final groupsSnapshot = await _groupRepo.groupsCol().get();
-    final groups = groupsSnapshot.docs
-        .map((doc) => EnvelopeGroup.fromFirestore(doc))
-        .toList();
+    // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
+    final groups = await _groupRepo.getAllGroupsAsync();
 
     final accounts = await _accountRepo.getAllAccounts(); // Fetch all accounts
 

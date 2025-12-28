@@ -11,16 +11,13 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
 import 'providers/font_provider.dart';
-import 'providers/app_preferences_provider.dart';
 import 'providers/workspace_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/time_machine_provider.dart';
 import 'services/envelope_repo.dart';
 import 'services/scheduled_payment_repo.dart';
 import 'services/notification_repo.dart';
-import 'services/tutorial_controller.dart';
 import 'services/hive_service.dart';
-import 'services/hive_migration_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'widgets/app_lifecycle_observer.dart';
@@ -49,26 +46,27 @@ void main() async {
   }
 
   // NEW: Initialize Hive (local storage - our primary storage)
-  await HiveService.init();
-  debugPrint('[Main] 📦 Hive initialized');
+  try {
+    await HiveService.init();
+    debugPrint('[Main] 📦 Hive initialized successfully');
+
+    // Validate all boxes are open
+    final boxStatus = HiveService.validateBoxes();
+    final allOpen = boxStatus.values.every((isOpen) => isOpen);
+    if (!allOpen) {
+      final closedBoxes = boxStatus.entries
+          .where((e) => !e.value)
+          .map((e) => e.key)
+          .toList();
+      debugPrint('[Main] ⚠️ Some Hive boxes failed to open: $closedBoxes');
+    }
+  } catch (e) {
+    debugPrint('[Main] ❌ CRITICAL: Hive initialization failed: $e');
+    debugPrint('[Main] ❌ App may not function correctly without local storage');
+  }
 
   // NEW: Initialize RevenueCat
   await _initRevenueCat();
-
-  // Check if migration is needed
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    final migrationService = HiveMigrationService(
-      FirebaseFirestore.instance,
-      FirebaseAuth.instance,
-    );
-
-    final needsMigration = await migrationService.needsMigration();
-    if (needsMigration) {
-      debugPrint('[Main] ⚠️ Migration needed - user should visit migration screen');
-      // User will be prompted to migrate via settings screen
-    }
-  }
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
@@ -81,8 +79,6 @@ void main() async {
           create: (_) => ThemeProvider(initialThemeId: savedThemeId),
         ),
         ChangeNotifierProvider(create: (_) => FontProvider()),
-        ChangeNotifierProvider(create: (_) => AppPreferencesProvider()),
-        ChangeNotifierProvider(create: (_) => TutorialController()),
         ChangeNotifierProvider(
           create: (_) => WorkspaceProvider(initialWorkspaceId: savedWorkspaceId),
         ),
@@ -136,18 +132,26 @@ class MyApp extends StatelessWidget {
               displayColor: baseTheme.colorScheme.onSurface,
             ),
           ),
-          // Global tap-to-dismiss keyboard behavior
+          // Global tap-to-dismiss keyboard behavior + back button handling
           builder: (context, child) {
-            return GestureDetector(
-              onTap: () {
-                // Unfocus any active text field when tapping outside
-                final currentFocus = FocusScope.of(context);
-                if (!currentFocus.hasPrimaryFocus &&
-                    currentFocus.focusedChild != null) {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                }
+            return PopScope(
+              canPop: true,
+              onPopInvokedWithResult: (bool didPop, dynamic result) {
+                // This callback is called after a pop is handled
+                // We don't need to do anything here as the home screen
+                // will handle its own double-tap logic
               },
-              child: child,
+              child: GestureDetector(
+                onTap: () {
+                  // Unfocus any active text field when tapping outside
+                  final currentFocus = FocusScope.of(context);
+                  if (!currentFocus.hasPrimaryFocus &&
+                      currentFocus.focusedChild != null) {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  }
+                },
+                child: child,
+              ),
             );
           },
           routes: {'/home': (context) => const HomeScreenWrapper()},
@@ -210,8 +214,8 @@ class HomeScreenWrapper extends StatelessWidget {
         );
 
         // Initialize repos for scheduled payments and notifications
-        final paymentRepo = ScheduledPaymentRepo(db, user.uid);
-        final notificationRepo = NotificationRepo(db, user.uid);
+        final paymentRepo = ScheduledPaymentRepo(user.uid);
+        final notificationRepo = NotificationRepo(userId: user.uid);
 
         final args = ModalRoute.of(context)?.settings.arguments;
         final initialIndex = args is int ? args : 0;

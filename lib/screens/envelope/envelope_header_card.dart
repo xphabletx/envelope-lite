@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/envelope.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/locale_provider.dart';
 
 class EnvelopeHeaderCard extends StatelessWidget {
   const EnvelopeHeaderCard({super.key, required this.envelope, this.onTap});
@@ -18,7 +19,8 @@ class EnvelopeHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currencyFormatter = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     // Calculate progress percentage

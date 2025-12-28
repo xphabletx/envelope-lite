@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
 import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
 import '../services/account_repo.dart';
+import '../services/group_repo.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -40,7 +42,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   String _workspaceName = '';
   String _joinCode = '';
   List<WorkspaceMember> _members = [];
-  int _selectedNavIndex = 0; // Default to first tab (envelopes)
+  final int _selectedNavIndex = 0; // Default to first tab (envelopes)
   bool _showPartnerOnly = false; // For "Mine only" toggle
   bool _hideFutureEnvelopes = false;
 
@@ -574,14 +576,10 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           value: group.isShared,
                           enabled: !isPartner,
                           onChanged: isPartner ? null : (value) async {
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(widget.currentUserId)
-                                .collection('solo')
-                                .doc('data')
-                                .collection('groups')
-                                .doc(group.id)
-                                .update({'isShared': value ?? true});
+                            // Update in Hive
+                            final groupBox = Hive.box('groups');
+                            final updatedGroup = group.copyWith(isShared: value ?? true);
+                            await groupBox.put(group.id, updatedGroup);
                           },
                           title: Row(
                             children: [
@@ -644,7 +642,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
               ),
               const SizedBox(height: 12),
               StreamBuilder<List<Account>>(
-                stream: AccountRepo(widget.repo.db, widget.repo).accountsStream(),
+                stream: AccountRepo(widget.repo).accountsStream(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
@@ -674,14 +672,10 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           value: account.isShared,
                           enabled: !isPartner,
                           onChanged: isPartner ? null : (value) async {
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(widget.currentUserId)
-                                .collection('solo')
-                                .doc('data')
-                                .collection('accounts')
-                                .doc(account.id)
-                                .update({'isShared': value ?? true});
+                            // Update in Hive
+                            final accountBox = Hive.box('accounts');
+                            final updatedAccount = account.copyWith(isShared: value ?? true);
+                            await accountBox.put(account.id, updatedAccount);
                           },
                           title: Row(
                             children: [

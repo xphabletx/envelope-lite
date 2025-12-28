@@ -2,11 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:hive/hive.dart';
 import '../../models/envelope.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import 'pay_day_preview_screen.dart';
 
 class PayDayAllocationScreen extends StatefulWidget {
@@ -43,17 +45,12 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
 
   Future<void> _loadAutoPayEnvelopes() async {
     try {
-      final snapshot = await widget.repo.db
-          .collection('users')
-          .doc(widget.repo.currentUserId)
-          .collection('solo')
-          .doc('data')
-          .collection('envelopes')
-          .get();
+      // Fetch envelopes from Hive
+      final envelopeBox = Hive.box<Envelope>('envelopes');
 
       // Filter for autoFillEnabled=true AND autoFillAmount>0
-      final envelopes = snapshot.docs
-          .map((doc) => Envelope.fromFirestore(doc))
+      final envelopes = envelopeBox.values
+          .where((e) => e.userId == widget.repo.currentUserId)
           .where(
             (e) =>
                 e.autoFillEnabled == true &&
@@ -117,7 +114,8 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

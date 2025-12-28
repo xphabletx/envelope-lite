@@ -1,31 +1,34 @@
 // lib/screens/settings_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
 import '../services/user_service.dart';
 import '../services/account_security_service.dart';
+import '../services/tutorial_controller.dart';
 import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../services/data_cleanup_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
 import '../screens/workspace_gate.dart';
 import '../screens/pay_day_settings_screen.dart';
-import '../screens/settings/tutorial_manager_screen.dart';
-import '../screens/settings/faq_screen.dart';
 import '../services/scheduled_payment_repo.dart';
 import '../services/pay_day_settings_service.dart';
+import '../providers/workspace_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -186,8 +189,9 @@ class SettingsScreen extends StatelessWidget {
                       );
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) =>
-                              PayDaySettingsScreen(service: payDayService),
+                          builder: (_) => PayDaySettingsScreen(
+                            service: payDayService,
+                          ),
                         ),
                       );
                     },
@@ -266,13 +270,12 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.file_download_outlined),
                     onTap: () => _exportDataNew(context),
                   ),
-                  // Disabled - DataCleanupService removed
-                  // _SettingsTile(
-                  //   title: 'Clean Up Orphaned Data',
-                  //   subtitle: 'Remove deleted items still in database',
-                  //   leading: const Icon(Icons.cleaning_services_outlined),
-                  //   onTap: () => _cleanupOrphanedData(context),
-                  // ),
+                  _SettingsTile(
+                    title: 'Clean Up Orphaned Data',
+                    subtitle: 'Remove deleted items still in database',
+                    leading: const Icon(Icons.cleaning_services_outlined),
+                    onTap: () => _cleanupOrphanedData(context),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
@@ -287,15 +290,16 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.policy_outlined),
                     trailing: const Icon(Icons.open_in_new, size: 20),
                     onTap: () => _openUrl(
-                      'https://develapp.tech/stuffrite/privacy.html',
+                      'https://xphabletx.github.io/envelope-lite/PRIVACY_POLICY',
                     ),
                   ),
                   _SettingsTile(
                     title: 'Terms of Service',
                     leading: const Icon(Icons.description_outlined),
                     trailing: const Icon(Icons.open_in_new, size: 20),
-                    onTap: () =>
-                        _openUrl('https://develapp.tech/stuffrite/terms.html'),
+                    onTap: () => _openUrl(
+                      'https://xphabletx.github.io/envelope-lite/TERMS_OF_SERVICE',
+                    ),
                   ),
                 ],
               ),
@@ -327,30 +331,28 @@ class SettingsScreen extends StatelessWidget {
                     },
                     trailing: const Icon(Icons.chevron_right),
                   ),
+                  // TUTORIAL RESET BUTTON - UPDATED
                   _SettingsTile(
-                    title: 'Help & FAQ',
-                    subtitle: 'Searchable frequently asked questions',
+                    title: 'Replay Tutorial',
+                    subtitle: 'Show the onboarding tour again',
                     leading: const Icon(Icons.help_outline),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const FAQScreen()),
-                      );
-                    },
-                  ),
-                  _SettingsTile(
-                    title: 'Tutorial Manager',
-                    subtitle: 'Replay tutorials for specific screens',
-                    leading: const Icon(Icons.school_outlined),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TutorialManagerScreen(repo: repo),
-                        ),
-                      );
+                    onTap: () async {
+                      // Using the new controller reset logic
+                      context.read<TutorialController>().reset();
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Tutorial reset! Return to home to start again',
+                            ),
+                          ),
+                        );
+                        // Navigate back to home
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
+                      }
                     },
                   ),
                   FutureBuilder<PackageInfo>(
@@ -412,8 +414,9 @@ class SettingsScreen extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: false,
-                          builder: (ctx) =>
-                              const Center(child: CircularProgressIndicator()),
+                          builder: (ctx) => const Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         );
 
                         try {
@@ -439,6 +442,77 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 32),
+
+              // Developer Tools (Debug Mode Only)
+              if (kDebugMode) ...[
+                _SettingsSection(
+                  title: 'Developer Tools',
+                  icon: Icons.developer_mode,
+                  children: [
+                    _SettingsTile(
+                      title: 'Reset Migration Status',
+                      subtitle: 'Reset to Firebase mode (testing only)',
+                      leading: const Icon(Icons.restore, color: Colors.orange),
+                      titleColor: Colors.orange,
+                      onTap: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Reset Migration?'),
+                            content: const Text(
+                              'This will reset your migration status back to Firebase mode. '
+                              'Only use this for testing!\n\n'
+                              'You will need to restart the app after resetting.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                ),
+                                child: const Text('Reset'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true && context.mounted) {
+                          try {
+                            await MigrationStatusService().resetMigrationStatus();
+
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Migration status reset. Please restart the app to use Firebase mode.',
+                                  ),
+                                  duration: Duration(seconds: 5),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Reset failed: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // DANGER ZONE
               const Divider(),
@@ -529,10 +603,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             if (currentPhotoURL != null)
               ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: theme.colorScheme.error,
-                ),
+                leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
                 title: Text(
                   'Remove Photo',
                   style: TextStyle(color: theme.colorScheme.error),
@@ -588,10 +659,7 @@ class SettingsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(ctx),
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -630,47 +698,21 @@ class SettingsScreen extends StatelessWidget {
     try {
       final imageFile = File(pickedFile.path);
       final userId = userService.userId;
-      final workspaceId = repo.workspaceId;
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_photos')
+          .child('$userId.jpg');
 
-      if (workspaceId != null) {
-        // WORKSPACE MODE: Upload to Firebase Storage (partner can see photo)
-        debugPrint(
-          '[Settings] 🤝 Workspace mode: uploading photo to Firebase Storage',
-        );
+      await storageRef.putFile(imageFile);
+      final downloadUrl = await storageRef.getDownloadURL();
 
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('user_photos')
-            .child('$userId.jpg');
-
-        await storageRef.putFile(imageFile);
-        final downloadUrl = await storageRef.getDownloadURL();
-
-        // Save URL to user profile
-        await userService.updateUserProfile(photoURL: downloadUrl);
-
-        debugPrint('[Settings] ✅ Photo uploaded to Firebase Storage');
-      } else {
-        // SOLO MODE: Save locally only (privacy + offline)
-        debugPrint('[Settings] 📦 Solo mode: saving photo locally');
-
-        final appDir = await getApplicationDocumentsDirectory();
-        final localPath = '${appDir.path}/profile_photo_$userId.jpg';
-
-        await imageFile.copy(localPath);
-
-        // Save path to SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile_photo_path', localPath);
-
-        debugPrint('[Settings] ✅ Photo saved locally: $localPath');
-      }
+      await userService.updateUserProfile(photoURL: downloadUrl);
 
       if (context.mounted) {
         Navigator.pop(context); // Dismiss loading dialog
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo updated')),
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -693,9 +735,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Remove Photo?'),
-        content: const Text(
-          'Are you sure you want to remove your profile photo?',
-        ),
+        content: const Text('Are you sure you want to remove your profile photo?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -718,9 +758,9 @@ class SettingsScreen extends StatelessWidget {
       await userService.updateUserProfile(photoURL: '');
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile photo removed')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo removed')),
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -741,6 +781,400 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _forceSoloMode(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Confirm with user
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Force Solo Mode?'),
+        content: const Text(
+          'This will:\n'
+          '• Clear any workspace association\n'
+          '• Use ONLY local Hive storage\n'
+          '• Stop syncing to Firebase\n'
+          '• Clear Firebase cache\n\n'
+          'Your local data will be preserved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enable Solo Mode'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      debugPrint('[Settings] 🔧 Forcing solo mode...');
+
+      // 1. Clear SharedPreferences FIRST
+      final prefs = await SharedPreferences.getInstance();
+
+      final removed1 = await prefs.remove('active_workspace_id');
+      final removed2 = await prefs.remove('last_workspace_id');
+      final removed3 = await prefs.remove('last_workspace_name');
+
+      debugPrint('[Settings] Cleared active_workspace_id: $removed1');
+      debugPrint('[Settings] Cleared last_workspace_id: $removed2');
+      debugPrint('[Settings] Cleared last_workspace_name: $removed3');
+
+      // VERIFY they're actually gone
+      final verify1 = prefs.getString('active_workspace_id');
+      final verify2 = prefs.getString('last_workspace_id');
+      final verify3 = prefs.getString('last_workspace_name');
+
+      debugPrint('[Settings] VERIFY - active_workspace_id: ${verify1 ?? "NULL ✅"}');
+      debugPrint('[Settings] VERIFY - last_workspace_id: ${verify2 ?? "NULL ✅"}');
+      debugPrint('[Settings] VERIFY - last_workspace_name: ${verify3 ?? "NULL ✅"}');
+
+      if (verify1 != null || verify2 != null || verify3 != null) {
+        throw Exception('Failed to clear workspace IDs from SharedPreferences!');
+      }
+
+      // 2. Clear workspace from Firebase user document
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+          'activeWorkspaceId': null,
+        }, SetOptions(merge: true));
+        debugPrint('[Settings] ✅ Cleared activeWorkspaceId from Firebase user document');
+      }
+
+      // 3. Update WorkspaceProvider if it exists
+      if (context.mounted) {
+        try {
+          final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+          await workspaceProvider.setWorkspaceId(null);
+          debugPrint('[Settings] ✅ WorkspaceProvider cleared');
+        } catch (e) {
+          debugPrint('[Settings] ⚠️ WorkspaceProvider not found (may not exist): $e');
+        }
+      }
+
+      // 4. Update the EnvelopeRepo to force it to re-check workspace status
+      // The repo will see workspaceId is now null when it checks
+      await repo.setWorkspace(null);
+      debugPrint('[Settings] ✅ EnvelopeRepo workspace cleared');
+
+      // 5. NEW: Clear Firebase cache to remove ghost listeners
+      try {
+        debugPrint('[Settings] 🔥 Terminating Firebase connections...');
+        await FirebaseFirestore.instance.terminate();
+
+        debugPrint('[Settings] 🔥 Clearing Firebase persistence...');
+        await FirebaseFirestore.instance.clearPersistence();
+
+        debugPrint('[Settings] ✅ Firebase cache cleared');
+      } catch (e) {
+        debugPrint('[Settings] ⚠️ Error clearing Firebase cache: $e');
+        // Continue anyway - not critical
+      }
+
+      if (!context.mounted) return;
+
+      // Show success
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✓ Solo mode enabled. App will reload...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Wait for snackbar
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Restart app by popping to root
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      debugPrint('[Settings] ❌ Error forcing solo mode: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearFirebaseCache(BuildContext context) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Firebase Cache?'),
+        content: const Text(
+          'This will:\n'
+          '• Remove all offline Firebase data\n'
+          '• Close all Firebase connections\n'
+          '• Fix ghost listener issues\n\n'
+          'Your local Hive data is safe.\n\n'
+          'The app will restart after clearing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Clear Cache'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    if (!context.mounted) return;
+
+    try {
+      debugPrint('[Settings] 🔥 Clearing Firebase cache...');
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Clearing Firebase cache...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Terminate Firebase
+      await FirebaseFirestore.instance.terminate();
+      debugPrint('[Settings] ✅ Firebase connections terminated');
+
+      // Clear persistence
+      await FirebaseFirestore.instance.clearPersistence();
+      debugPrint('[Settings] ✅ Firebase persistence cleared');
+
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show success
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Firebase cache cleared. Restarting app...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Wait for snackbar
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Restart app
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+
+    } catch (e) {
+      debugPrint('[Settings] ❌ Error clearing Firebase cache: $e');
+
+      // Close loading if still showing
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncToFirebase(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Confirm with user
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Sync to Firebase?'),
+        content: const Text(
+          'This will upload all your local data to Firebase cloud storage.\n\n'
+          'Use this to:\n'
+          '• Create a cloud backup of your local data\n'
+          '• Prepare for workspace mode\n'
+          '• Restore data to Firebase\n\n'
+          'This may take a few moments for large datasets.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sync Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show progress dialog
+    String currentProgress = 'Initializing...';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(currentProgress),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    try {
+      final migrationService = HiveMigrationService(
+        FirebaseFirestore.instance,
+        FirebaseAuth.instance,
+      );
+
+      final result = await migrationService.syncToFirebase(
+        onProgress: (progress) {
+          currentProgress = progress;
+          // Update dialog (if still mounted)
+        },
+      );
+
+      if (!context.mounted) return;
+
+      // Dismiss progress dialog
+      Navigator.of(context).pop();
+
+      if (result['success'] == true) {
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: theme.colorScheme.surface,
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text('Sync Complete'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Successfully synced to Firebase:'),
+                const SizedBox(height: 12),
+                Text('• ${result['envelopes'] ?? 0} envelopes'),
+                Text('• ${result['accounts'] ?? 0} accounts'),
+                Text('• ${result['groups'] ?? 0} groups'),
+                Text('• ${result['transactions'] ?? 0} transactions'),
+                Text('• ${result['scheduledPayments'] ?? 0} scheduled payments'),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Show error dialog
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: theme.colorScheme.surface,
+            title: Row(
+              children: [
+                Icon(Icons.error, color: theme.colorScheme.error),
+                const SizedBox(width: 8),
+                const Text('Sync Failed'),
+              ],
+            ),
+            content: Text(
+              'Failed to sync data to Firebase:\n\n${result['error'] ?? 'Unknown error'}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+
+      // Dismiss progress dialog if still showing
+      Navigator.of(context).pop();
+
+      // Show error
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          title: Row(
+            children: [
+              Icon(Icons.error, color: theme.colorScheme.error),
+              const SizedBox(width: 8),
+              const Text('Sync Failed'),
+            ],
+          ),
+          content: Text('Error syncing to Firebase:\n\n$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _exportDataNew(BuildContext context) async {
     showDialog(
       context: context,
@@ -749,9 +1183,12 @@ class SettingsScreen extends StatelessWidget {
     );
 
     try {
-      final groupRepo = GroupRepo(repo);
-      final scheduledPaymentRepo = ScheduledPaymentRepo(repo.currentUserId);
-      final accountRepo = AccountRepo(repo);
+      final groupRepo = GroupRepo(repo.db, repo);
+      final scheduledPaymentRepo = ScheduledPaymentRepo(repo.db, repo.currentUserId);
+      final accountRepo = AccountRepo(
+        repo.db,
+        repo,
+      ); // New: Instantiate AccountRepo
 
       final dataExportService = DataExportService(
         envelopeRepo: repo,
@@ -779,8 +1216,78 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  // Removed - DataCleanupService no longer exists
-  // Future<void> _cleanupOrphanedData(BuildContext context) async { ... }
+  Future<void> _cleanupOrphanedData(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Clean Up Database?'),
+        content: const Text(
+          'This will find and delete:\n'
+          '• Scheduled payments for deleted envelopes/groups\n'
+          '• Transactions for deleted envelopes\n\n'
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Clean Up'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final cleanup = DataCleanupService(
+        FirebaseFirestore.instance,
+        FirebaseAuth.instance.currentUser!.uid,
+      );
+
+      final results = await cleanup.cleanupAll();
+      final paymentsDeleted = results['payments'] ?? 0;
+      final txDeleted = results['transactions'] ?? 0;
+
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cleaned up $paymentsDeleted payment(s) and $txDeleted transaction(s)',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cleanup failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }
 
 class _SettingsSection extends StatelessWidget {

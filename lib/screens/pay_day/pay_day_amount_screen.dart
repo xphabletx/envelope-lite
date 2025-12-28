@@ -6,6 +6,7 @@ import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../models/account.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import 'pay_day_allocation_screen.dart';
 import '../../widgets/calculator_widget.dart';
 
@@ -94,6 +95,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
     final media = MediaQuery.of(context);
 
     return Scaffold(
@@ -161,7 +163,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                   color: theme.colorScheme.secondary,
                 ),
                 decoration: InputDecoration(
-                  prefixText: '£ ',
+                  prefixText: '${locale.currencySymbol} ',
                   prefixStyle: fontProvider.getTextStyle(
                     fontSize: 56,
                     fontWeight: FontWeight.bold,
@@ -172,8 +174,12 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                     onPressed: () async {
                       final result = await showDialog<double>(
                         context: context,
-                        builder: (context) => const Dialog(
-                          child: CalculatorWidget(),
+                        barrierDismissible: true,
+                        barrierColor: Colors.black54,
+                        builder: (context) => Stack(
+                          children: const [
+                            CalculatorWidget(),
+                          ],
                         ),
                       );
                       if (result != null && mounted) {

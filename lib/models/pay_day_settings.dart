@@ -1,5 +1,4 @@
 // lib/models/pay_day_settings.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive/hive.dart';
 
 part 'pay_day_settings.g.dart';
@@ -44,46 +43,6 @@ class PayDaySettings {
     this.nextPayDate,
     this.expectedPayAmount,
   });
-
-  factory PayDaySettings.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data();
-    if (data == null) {
-      return PayDaySettings(userId: doc.id);
-    }
-
-    return PayDaySettings(
-      userId: doc.id,
-      lastPayAmount: (data['lastPayAmount'] as num?)?.toDouble(),
-      payFrequency: data['payFrequency'] as String? ?? 'monthly',
-      payDayOfMonth: data['payDayOfMonth'] as int?,
-      payDayOfWeek: data['payDayOfWeek'] as int?,
-      lastPayDate: (data['lastPayDate'] as Timestamp?)?.toDate(),
-      defaultAccountId: data['defaultAccountId'] as String?,
-      nextPayDate: (data['nextPayDate'] as Timestamp?)?.toDate(),
-      expectedPayAmount: (data['expectedPayAmount'] as num?)?.toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'userId': userId,
-      'lastPayAmount': lastPayAmount,
-      'payFrequency': payFrequency,
-      'payDayOfMonth': payDayOfMonth,
-      'payDayOfWeek': payDayOfWeek,
-      'lastPayDate': lastPayDate != null
-          ? Timestamp.fromDate(lastPayDate!)
-          : null,
-      'defaultAccountId': defaultAccountId,
-      'nextPayDate': nextPayDate != null
-          ? Timestamp.fromDate(nextPayDate!)
-          : null,
-      'expectedPayAmount': expectedPayAmount,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
 
   PayDaySettings copyWith({
     double? lastPayAmount,
@@ -153,6 +112,38 @@ class PayDaySettings {
       default:
         return startDate;
     }
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'userId': userId,
+      'lastPayAmount': lastPayAmount,
+      'payFrequency': payFrequency,
+      'payDayOfMonth': payDayOfMonth,
+      'payDayOfWeek': payDayOfWeek,
+      'lastPayDate': lastPayDate?.millisecondsSinceEpoch,
+      'defaultAccountId': defaultAccountId,
+      'nextPayDate': nextPayDate?.millisecondsSinceEpoch,
+      'expectedPayAmount': expectedPayAmount,
+    };
+  }
+
+  factory PayDaySettings.fromFirestore(Map<String, dynamic> data) {
+    return PayDaySettings(
+      userId: data['userId'] as String,
+      lastPayAmount: data['lastPayAmount'] as double?,
+      payFrequency: data['payFrequency'] as String? ?? 'monthly',
+      payDayOfMonth: data['payDayOfMonth'] as int?,
+      payDayOfWeek: data['payDayOfWeek'] as int?,
+      lastPayDate: data['lastPayDate'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(data['lastPayDate'] as int)
+          : null,
+      defaultAccountId: data['defaultAccountId'] as String?,
+      nextPayDate: data['nextPayDate'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(data['nextPayDate'] as int)
+          : null,
+      expectedPayAmount: data['expectedPayAmount'] as double?,
+    );
   }
 
   @override

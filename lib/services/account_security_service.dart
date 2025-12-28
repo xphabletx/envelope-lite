@@ -3,6 +3,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:hive/hive.dart';
+import '../models/envelope.dart';
+import '../models/account.dart';
+import '../models/transaction.dart' as model;
+import '../models/envelope_group.dart';
+import '../models/scheduled_payment.dart';
+import '../models/pay_day_settings.dart';
 import 'workspace_helper.dart';
 
 class AccountSecurityService {
@@ -188,7 +195,7 @@ class AccountSecurityService {
     String? workspaceId;
 
     if (userDoc.exists) {
-      final userData = userDoc.data() as Map<String, dynamic>?;
+      final userData = userDoc.data();
       workspaceId = userData?['activeWorkspaceId'] as String?;
     }
 
@@ -210,148 +217,116 @@ class AccountSecurityService {
     await prefs.remove('last_workspace_name');
     debugPrint('[AccountSecurity::_performGDPRCascade] Cleared workspace from SharedPreferences');
 
-    // Use batch for atomic deletion (max 500 operations per batch)
-    // If user has >500 items in any collection, we'll need multiple batches
-    WriteBatch batch = _firestore.batch();
-    int operationCount = 0;
-
-    // Helper to commit batch if approaching limit
-    Future<void> commitIfNeeded() async {
-      if (operationCount >= 450) {
-        // Leave buffer for safety
-        await batch.commit();
-        batch = _firestore.batch(); // Start new batch
-        operationCount = 0;
-        debugPrint('[AccountSecurity::_performGDPRCascade] Committed batch (approaching 500 operation limit)');
-      }
-    }
-
     try {
-      // 1. Delete Envelopes
-      final envelopesSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('envelopes')
-          .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${envelopesSnap.docs.length} envelopes');
-      for (var doc in envelopesSnap.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
-      }
+      // ==========================================
+      // DELETE FROM HIVE (PRIMARY STORAGE)
+      // ==========================================
 
-      // 2. Delete Groups (Binders)
-      final groupsSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('groups')
-          .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${groupsSnap.docs.length} groups');
-      for (var doc in groupsSnap.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
+      debugPrint('[AccountSecurity::_performGDPRCascade] 🗑️ Deleting Hive data for user: $userId');
+
+      // 1. Delete Envelopes
+      final envelopeBox = Hive.box<Envelope>('envelopes');
+      final envelopesToDelete = envelopeBox.keys
+          .where((key) {
+            final envelope = envelopeBox.get(key);
+            return envelope != null && envelope.userId == userId;
+          })
+          .toList();
+
+      for (final key in envelopesToDelete) {
+        await envelopeBox.delete(key);
       }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${envelopesToDelete.length} envelopes from Hive');
+
+      // 2. Delete Accounts
+      final accountBox = Hive.box<Account>('accounts');
+      final accountsToDelete = accountBox.keys
+          .where((key) {
+            final account = accountBox.get(key);
+            return account != null && account.userId == userId;
+          })
+          .toList();
+
+      for (final key in accountsToDelete) {
+        await accountBox.delete(key);
+      }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${accountsToDelete.length} accounts from Hive');
 
       // 3. Delete Transactions
-      final txSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('transactions')
-          .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${txSnap.docs.length} transactions');
-      for (var doc in txSnap.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
-      }
+      final transactionBox = Hive.box<model.Transaction>('transactions');
+      final transactionsToDelete = transactionBox.keys
+          .where((key) {
+            final transaction = transactionBox.get(key);
+            return transaction != null && transaction.userId == userId;
+          })
+          .toList();
 
-      // 4. Delete Scheduled Payments (FIXED PATH)
-      final schedSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('scheduledPayments')
-          .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${schedSnap.docs.length} scheduled payments');
-      for (var doc in schedSnap.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
+      for (final key in transactionsToDelete) {
+        await transactionBox.delete(key);
       }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${transactionsToDelete.length} transactions from Hive');
 
-      // 5. Delete Accounts (WAS MISSING!)
-      final accountsSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('accounts')
-          .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${accountsSnap.docs.length} accounts');
-      for (var doc in accountsSnap.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
+      // 4. Delete Groups (Binders)
+      final groupBox = Hive.box<EnvelopeGroup>('groups');
+      final groupsToDelete = groupBox.keys
+          .where((key) {
+            final group = groupBox.get(key);
+            return group != null && group.userId == userId;
+          })
+          .toList();
+
+      for (final key in groupsToDelete) {
+        await groupBox.delete(key);
       }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${groupsToDelete.length} groups from Hive');
 
-      // 6. Delete Notifications (WAS MISSING!)
+      // 5. Delete Scheduled Payments
+      final paymentBox = Hive.box<ScheduledPayment>('scheduledPayments');
+      final paymentsToDelete = paymentBox.keys
+          .where((key) {
+            final payment = paymentBox.get(key);
+            return payment != null && payment.userId == userId;
+          })
+          .toList();
+
+      for (final key in paymentsToDelete) {
+        await paymentBox.delete(key);
+      }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${paymentsToDelete.length} scheduled payments from Hive');
+
+      // 6. Delete Pay Day Settings
+      final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
+      final payDayToDelete = payDayBox.keys
+          .where((key) {
+            final settings = payDayBox.get(key);
+            return settings != null && settings.userId == userId;
+          })
+          .toList();
+
+      for (final key in payDayToDelete) {
+        await payDayBox.delete(key);
+      }
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${payDayToDelete.length} pay day settings from Hive');
+
+      // ==========================================
+      // DELETE FROM FIREBASE (USER PROFILE ONLY)
+      // ==========================================
+
+      WriteBatch batch = _firestore.batch();
+
+      // Delete notifications
       final notificationsSnap = await _firestore
           .collection('users')
           .doc(userId)
           .collection('notifications')
           .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${notificationsSnap.docs.length} notifications');
+      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${notificationsSnap.docs.length} notifications from Firebase');
       for (var doc in notificationsSnap.docs) {
         batch.delete(doc.reference);
-        operationCount++;
-        await commitIfNeeded();
       }
 
-      // 7. Delete PayDaySettings (WAS MISSING!)
-      try {
-        final paySettingsRef = _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('solo')
-            .doc('data')
-            .collection('payDaySettings')
-            .doc('settings');
-
-        final paySettingsDoc = await paySettingsRef.get();
-        if (paySettingsDoc.exists) {
-          batch.delete(paySettingsRef);
-          operationCount++;
-          debugPrint('[AccountSecurity::_performGDPRCascade] Deleted PayDaySettings');
-        }
-      } catch (e) {
-        debugPrint('[AccountSecurity::_performGDPRCascade] Error deleting PayDaySettings: $e');
-        // Continue anyway
-      }
-
-      // 8. Delete solo/data container doc
-      final soloDataDoc = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data');
-      batch.delete(soloDataDoc);
-      operationCount++;
-      debugPrint('[AccountSecurity::_performGDPRCascade] Marked solo/data container for deletion');
-
-      // 9. Note: solo container collection is automatically cleaned up by Firestore
-      // when all its documents/subcollections are deleted
-
-      // 10. Delete User Profile (last!)
+      // Delete User Profile (last!)
       batch.delete(_firestore.doc('users/$userId'));
-      operationCount++;
       debugPrint('[AccountSecurity::_performGDPRCascade] Marked user profile for deletion');
 
       // Final commit

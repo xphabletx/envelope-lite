@@ -8,6 +8,7 @@ import '../../../models/envelope.dart';
 import '../../../services/envelope_repo.dart';
 import '../../../services/workspace_helper.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/locale_provider.dart';
 import '../../../utils/calculator_helper.dart';
 import '../../../widgets/partner_badge.dart';
 
@@ -184,11 +185,13 @@ class _TransferModalState extends State<TransferModal> {
                       color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  Text(
-                    'Balance: ${NumberFormat.currency(symbol: '£').format(widget.currentAmount)}',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withAlpha(179),
+                  Consumer<LocaleProvider>(
+                    builder: (context, locale, _) => Text(
+                      'Balance: ${NumberFormat.currency(symbol: locale.currencySymbol).format(widget.currentAmount)}',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withAlpha(179),
+                      ),
                     ),
                   ),
                 ],
@@ -199,25 +202,27 @@ class _TransferModalState extends State<TransferModal> {
           const SizedBox(height: 24),
 
           // Amount
-          TextField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: fontProvider.getTextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Amount',
-              prefixText: '£',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.calculate),
-                onPressed: _showCalculator,
+          Consumer<LocaleProvider>(
+            builder: (context, locale, _) => TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: fontProvider.getTextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                prefixText: locale.currencySymbol,
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.calculate),
+                  onPressed: _showCalculator,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              autofocus: true,
             ),
-            autofocus: true,
           ),
 
           const SizedBox(height: 16),

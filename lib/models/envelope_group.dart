@@ -1,5 +1,4 @@
 // lib/models/envelope_group.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:hive/hive.dart';
@@ -61,47 +60,6 @@ class EnvelopeGroup {
     this.createdAt,
     this.updatedAt,
   });
-
-  factory EnvelopeGroup.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>?;
-    return EnvelopeGroup(
-      id: doc.id,
-      name: data?['name'] ?? '',
-      userId: data?['userId'] ?? '',
-      emoji: data?['emoji'],
-      iconType: data?['iconType'],
-      iconValue: data?['iconValue'],
-      iconColor: data?['iconColor'],
-      colorIndex: data?['colorIndex'] ?? 0,
-      payDayEnabled: data?['payDayEnabled'] ?? false,
-      isShared: data?['isShared'] ?? true,
-      createdAt: data?['createdAt'] != null
-          ? (data!['createdAt'] as Timestamp).toDate()
-          : null,
-      updatedAt: data?['updatedAt'] != null
-          ? (data!['updatedAt'] as Timestamp).toDate()
-          : null,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'userId': userId,
-      'emoji': emoji,
-      'iconType': iconType,
-      'iconValue': iconValue,
-      'iconColor': iconColor,
-      'colorIndex': colorIndex,
-      'payDayEnabled': payDayEnabled,
-      'isShared': isShared,
-      'createdAt': createdAt != null
-          ? Timestamp.fromDate(createdAt!)
-          : FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
 
   EnvelopeGroup copyWith({
     String? id,

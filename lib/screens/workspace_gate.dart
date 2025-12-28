@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:hive/hive.dart';
 import '../services/localization_service.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
@@ -232,9 +233,9 @@ class _WorkspaceSharingSelectionScreenState
   final Set<String> _hiddenAccountIds = {};
   bool _hideFutureEnvelopes = false; // New Checkbox
 
-  List<DocumentSnapshot> _myEnvelopes = [];
-  List<DocumentSnapshot> _myGroups = [];
-  List<DocumentSnapshot> _myAccounts = [];
+  List<dynamic> _myEnvelopes = [];
+  List<dynamic> _myGroups = [];
+  List<dynamic> _myAccounts = [];
 
   @override
   void initState() {
@@ -247,38 +248,33 @@ class _WorkspaceSharingSelectionScreenState
     if (uid == null) return;
 
     try {
-      final envSnap = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('solo')
-          .doc('data')
-          .collection('envelopes')
-          .get();
-      final groupSnap = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('solo')
-          .doc('data')
-          .collection('groups')
-          .get();
-      final accountSnap = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('solo')
-          .doc('data')
-          .collection('accounts')
-          .get();
+      // FETCH FROM HIVE (PRIMARY STORAGE)
+      final envelopeBox = Hive.box('envelopes');
+      final groupBox = Hive.box('groups');
+      final accountBox = Hive.box('accounts');
+
+      final myEnvelopes = envelopeBox.values
+          .where((e) => e.userId == uid)
+          .toList();
+
+      final myGroups = groupBox.values
+          .where((g) => g.userId == uid)
+          .toList();
+
+      final myAccounts = accountBox.values
+          .where((a) => a.userId == uid)
+          .toList();
 
       if (mounted) {
         setState(() {
-          _myEnvelopes = envSnap.docs;
-          _myGroups = groupSnap.docs;
-          _myAccounts = accountSnap.docs;
+          _myEnvelopes = myEnvelopes;
+          _myGroups = myGroups;
+          _myAccounts = myAccounts;
           _loading = false;
         });
       }
     } catch (e) {
-      debugPrint("Error fetching data: $e");
+      debugPrint("Error fetching data from Hive: $e");
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -328,31 +324,34 @@ class _WorkspaceSharingSelectionScreenState
         print('[WorkspaceSharingSelectionScreen] DEBUG: Joined workspace with id: $workspaceId');
       }
 
-      // 2. Update Sharing Preferences (Batch)
-      print('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences.');
-      final batch = _db.batch();
+      // 2. Update Sharing Preferences in Hive
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences in Hive.');
+      final envelopeBox = Hive.box('envelopes');
+      final groupBox = Hive.box('groups');
+      final accountBox = Hive.box('accounts');
 
-      for (var doc in _myEnvelopes) {
-        final hide = _hiddenEnvelopeIds.contains(doc.id);
-        batch.update(doc.reference, {'isShared': !hide});
+      for (var envelope in _myEnvelopes) {
+        final hide = _hiddenEnvelopeIds.contains(envelope.id);
+        envelope.isShared = !hide;
+        await envelopeBox.put(envelope.id, envelope);
       }
-      for (var doc in _myGroups) {
-        final hide = _hiddenGroupIds.contains(doc.id);
-        batch.update(doc.reference, {'isShared': !hide});
+      for (var group in _myGroups) {
+        final hide = _hiddenGroupIds.contains(group.id);
+        group.isShared = !hide;
+        await groupBox.put(group.id, group);
       }
-      for (var doc in _myAccounts) {
-        final hide = _hiddenAccountIds.contains(doc.id);
-        batch.update(doc.reference, {'isShared': !hide});
+      for (var account in _myAccounts) {
+        final hide = _hiddenAccountIds.contains(account.id);
+        account.isShared = !hide;
+        await accountBox.put(account.id, account);
       }
 
-      // 3. Save "Hide Future" Preference
+      // 3. Save "Hide Future" Preference to Firebase (user profile)
       print('[WorkspaceSharingSelectionScreen] DEBUG: Step 3 - Save "Hide Future" Preference.');
-      batch.set(_db.collection('users').doc(uid), {
+      await _db.collection('users').doc(uid).set({
         'workspacePreferences': {'hideFutureEnvelopes': _hideFutureEnvelopes},
       }, SetOptions(merge: true));
-
-      await batch.commit();
-      print('[WorkspaceSharingSelectionScreen] DEBUG: Batch commit successful.');
+      print('[WorkspaceSharingSelectionScreen] DEBUG: Preferences saved successfully.');
 
       if (mounted) {
         print('[WorkspaceSharingSelectionScreen] DEBUG: Calling onComplete with workspaceId: $workspaceId');
@@ -429,13 +428,12 @@ class _WorkspaceSharingSelectionScreenState
                             ),
                           ),
                         ),
-                        ..._myGroups.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final isHidden = _hiddenGroupIds.contains(doc.id);
+                        ..._myGroups.map((group) {
+                          final isHidden = _hiddenGroupIds.contains(group.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(data['name'] ?? 'Unnamed'),
-                            secondary: Text(data['emoji'] ?? '📁'),
+                            title: Text(group.name ?? 'Unnamed'),
+                            secondary: Text(group.emoji ?? '📁'),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
                               style: TextStyle(
@@ -445,9 +443,9 @@ class _WorkspaceSharingSelectionScreenState
                             onChanged: (val) {
                               setState(() {
                                 if (val == true) {
-                                  _hiddenGroupIds.add(doc.id);
+                                  _hiddenGroupIds.add(group.id);
                                 } else {
-                                  _hiddenGroupIds.remove(doc.id);
+                                  _hiddenGroupIds.remove(group.id);
                                 }
                               });
                             },
@@ -465,12 +463,11 @@ class _WorkspaceSharingSelectionScreenState
                             ),
                           ),
                         ),
-                        ..._myEnvelopes.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final isHidden = _hiddenEnvelopeIds.contains(doc.id);
+                        ..._myEnvelopes.map((envelope) {
+                          final isHidden = _hiddenEnvelopeIds.contains(envelope.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(data['name'] ?? 'Unnamed'),
+                            title: Text(envelope.name ?? 'Unnamed'),
                             secondary: const Icon(Icons.mail_outline),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
@@ -481,9 +478,9 @@ class _WorkspaceSharingSelectionScreenState
                             onChanged: (val) {
                               setState(() {
                                 if (val == true) {
-                                  _hiddenEnvelopeIds.add(doc.id);
+                                  _hiddenEnvelopeIds.add(envelope.id);
                                 } else {
-                                  _hiddenEnvelopeIds.remove(doc.id);
+                                  _hiddenEnvelopeIds.remove(envelope.id);
                                 }
                               });
                             },
@@ -501,12 +498,11 @@ class _WorkspaceSharingSelectionScreenState
                             ),
                           ),
                         ),
-                        ..._myAccounts.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final isHidden = _hiddenAccountIds.contains(doc.id);
+                        ..._myAccounts.map((account) {
+                          final isHidden = _hiddenAccountIds.contains(account.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(data['name'] ?? 'Unnamed Account'),
+                            title: Text(account.name ?? 'Unnamed Account'),
                             secondary: const Icon(Icons.account_balance_wallet),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
@@ -517,9 +513,9 @@ class _WorkspaceSharingSelectionScreenState
                             onChanged: (val) {
                               setState(() {
                                 if (val == true) {
-                                  _hiddenAccountIds.add(doc.id);
+                                  _hiddenAccountIds.add(account.id);
                                 } else {
-                                  _hiddenAccountIds.remove(doc.id);
+                                  _hiddenAccountIds.remove(account.id);
                                 }
                               });
                             },

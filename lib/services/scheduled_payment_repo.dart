@@ -1,75 +1,64 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/services/scheduled_payment_repo.dart
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
 
+/// Scheduled Payment repository - PURE HIVE (No Firebase sync)
+///
+/// Scheduled payments are ALWAYS local-only, even in workspace mode.
+/// They are never synced to Firebase or shared with workspace partners.
 class ScheduledPaymentRepo {
-  ScheduledPaymentRepo(this._db, this._userId, {String? workspaceId}) {
-    // Initialize Hive box
+  ScheduledPaymentRepo(this._userId, {String? workspaceId}) {
     _paymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
     _workspaceId = workspaceId;
   }
 
-  final FirebaseFirestore _db;
   final String _userId;
   late final Box<ScheduledPayment> _paymentBox;
   String? _workspaceId;
 
+  // ignore: unused_element
   bool get _inWorkspace => _workspaceId != null && _workspaceId!.isNotEmpty;
 
-  // Collection reference for user's scheduled payments
-  CollectionReference<Map<String, dynamic>> _collection() {
-    return _db
-        .collection('users')
-        .doc(_userId)
-        .collection('solo')
-        .doc('data')
-        .collection('scheduledPayments');
-  }
+  // ======================= GETTERS =======================
 
-  // Get all scheduled payments
+  /// Get all scheduled payments
   Future<List<ScheduledPayment>> getAllScheduledPayments() async {
-    final snapshot = await _collection().get();
-    return snapshot.docs
-        .map((doc) => ScheduledPayment.fromFirestore(doc))
+    return _paymentBox.values
+        .where((payment) => payment.userId == _userId)
         .toList();
   }
 
-  // Stream all scheduled payments for current user
+  /// Stream all scheduled payments
   Stream<List<ScheduledPayment>> get scheduledPaymentsStream {
-    // Always use Hive for scheduled payments (they're user-specific, not workspace-shared)
-    debugPrint('[ScheduledPaymentRepo] 📦 Setting up Hive stream');
+    debugPrint('[ScheduledPaymentRepo] 📦 Streaming from Hive (local only)');
 
-    // Emit initial state immediately
     final initialPayments = _paymentBox.values
         .where((payment) => payment.userId == _userId)
         .toList();
     initialPayments.sort((a, b) => a.startDate.compareTo(b.startDate));
-    debugPrint('[ScheduledPaymentRepo] ✅ Initial state: ${initialPayments.length} payments from Hive');
 
-    // Then listen for changes
     return Stream.value(initialPayments).asBroadcastStream().concatWith([
       _paymentBox.watch().map((_) {
         final payments = _paymentBox.values
             .where((payment) => payment.userId == _userId)
             .toList();
         payments.sort((a, b) => a.startDate.compareTo(b.startDate));
-        debugPrint('[ScheduledPaymentRepo] ✅ Emitting ${payments.length} payments from Hive');
         return payments;
       })
     ]);
   }
 
-  // Get single scheduled payment
+  /// Get single scheduled payment
   Future<ScheduledPayment?> getScheduledPayment(String id) async {
-    final doc = await _collection().doc(id).get();
-    if (!doc.exists) return null;
-    return ScheduledPayment.fromFirestore(doc);
+    return _paymentBox.get(id);
   }
 
-  // Create new scheduled payment
+  // ======================= CREATE =======================
+
+  /// Create scheduled payment
   Future<String> createScheduledPayment({
     String? envelopeId,
     String? groupId,
@@ -96,10 +85,10 @@ class ScheduledPaymentRepo {
       throw ArgumentError('Cannot provide both envelopeId and groupId');
     }
 
-    final doc = _collection().doc();
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
 
     final payment = ScheduledPayment(
-      id: doc.id,
+      id: id,
       userId: _userId,
       envelopeId: envelopeId,
       groupId: groupId,
@@ -116,17 +105,15 @@ class ScheduledPaymentRepo {
       paymentType: paymentType,
     );
 
-    // ALWAYS write to Hive (scheduled payments are user-specific)
-    await _paymentBox.put(doc.id, payment);
-    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment saved to Hive: ${doc.id}');
+    await _paymentBox.put(id, payment);
+    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment created in Hive: $name');
 
-    // Note: Scheduled payments are typically user-specific and not shared in workspaces
-    // So we skip Firebase sync for now
-
-    return doc.id;
+    return id;
   }
 
-  // Update scheduled payment
+  // ======================= UPDATE =======================
+
+  /// Update scheduled payment
   Future<void> updateScheduledPayment({
     required String id,
     String? name,
@@ -140,13 +127,11 @@ class ScheduledPaymentRepo {
     bool? isAutomatic,
     ScheduledPaymentType? paymentType,
   }) async {
-    // Get current payment from Hive
     final payment = _paymentBox.get(id);
     if (payment == null) {
       throw Exception('Scheduled payment not found: $id');
     }
 
-    // Create updated payment
     final updatedPayment = ScheduledPayment(
       id: payment.id,
       userId: payment.userId,
@@ -166,26 +151,27 @@ class ScheduledPaymentRepo {
       paymentType: paymentType ?? payment.paymentType,
     );
 
-    // ALWAYS write to Hive
     await _paymentBox.put(id, updatedPayment);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment updated in Hive: $id');
   }
 
-  // Delete scheduled payment
+  // ======================= DELETE =======================
+
+  /// Delete scheduled payment
   Future<void> deleteScheduledPayment(String id) async {
     await _paymentBox.delete(id);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment deleted from Hive: $id');
   }
 
-  // Mark payment as executed (updates lastExecuted)
+  // ======================= MARK EXECUTED =======================
+
+  /// Mark payment as executed (updates lastExecuted)
   Future<void> markPaymentExecuted(String id) async {
-    // Get current payment from Hive
     final payment = _paymentBox.get(id);
     if (payment == null) {
       throw Exception('Scheduled payment not found: $id');
     }
 
-    // Create updated payment with new lastExecuted
     final updatedPayment = ScheduledPayment(
       id: payment.id,
       userId: payment.userId,
@@ -208,7 +194,9 @@ class ScheduledPaymentRepo {
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment marked as executed: $id');
   }
 
-  // Get all payments due today or earlier (for auto-execution)
+  // ======================= QUERIES =======================
+
+  /// Get all payments due today or earlier (for auto-execution)
   Future<List<ScheduledPayment>> getDuePayments() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -224,39 +212,46 @@ class ScheduledPaymentRepo {
     }).toList();
   }
 
-  // Get all automatic payments due today (for auto-execution)
+  /// Get all automatic payments due today (for auto-execution)
   Future<List<ScheduledPayment>> getAutomaticPaymentsDueToday() async {
     final duePayments = await getDuePayments();
     return duePayments.where((p) => p.isAutomatic).toList();
   }
 
-  // Get payments for specific envelope
+  /// Get payments for specific envelope
   Stream<List<ScheduledPayment>> getPaymentsForEnvelope(String envelopeId) {
-    return _collection()
-        .where('envelopeId', isEqualTo: envelopeId)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ScheduledPayment.fromFirestore(doc))
-              .toList(),
-        );
+    // Emit initial data immediately
+    final initialPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId && payment.envelopeId == envelopeId)
+        .toList();
+
+    return Stream.value(initialPayments).asBroadcastStream().concatWith([
+      _paymentBox.watch().map((_) {
+        return _paymentBox.values
+            .where((payment) => payment.userId == _userId && payment.envelopeId == envelopeId)
+            .toList();
+      })
+    ]);
   }
 
-  // Get payments for specific group
+  /// Get payments for specific group
   Stream<List<ScheduledPayment>> getPaymentsForGroup(String groupId) {
-    return _collection()
-        .where('groupId', isEqualTo: groupId)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ScheduledPayment.fromFirestore(doc))
-              .toList(),
-        );
+    // Emit initial data immediately
+    final initialPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId && payment.groupId == groupId)
+        .toList();
+
+    return Stream.value(initialPayments).asBroadcastStream().concatWith([
+      _paymentBox.watch().map((_) {
+        return _paymentBox.values
+            .where((payment) => payment.userId == _userId && payment.groupId == groupId)
+            .toList();
+      })
+    ]);
   }
 
-  // Delete all payments for an envelope (when envelope is deleted)
+  /// Delete all payments for an envelope (when envelope is deleted)
   Future<void> deletePaymentsForEnvelope(String envelopeId) async {
-    // Delete from Hive first
     final paymentsToDelete = _paymentBox.values
         .where((payment) => payment.envelopeId == envelopeId)
         .toList();
@@ -264,28 +259,11 @@ class ScheduledPaymentRepo {
     for (final payment in paymentsToDelete) {
       await _paymentBox.delete(payment.id);
     }
-    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive for envelope');
-
-    // ONLY delete from Firebase if in workspace mode
-    if (_inWorkspace) {
-      final snapshot = await _collection()
-          .where('envelopeId', isEqualTo: envelopeId)
-          .get();
-
-      final batch = _db.batch();
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-      debugPrint('[ScheduledPaymentRepo] ✅ Deleted payments from Firebase workspace');
-    } else {
-      debugPrint('[ScheduledPaymentRepo] ⏭️ Skipping Firebase delete (solo mode)');
-    }
+    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive');
   }
 
-  // Delete all payments for a group (when group is deleted)
+  /// Delete all payments for a group (when group is deleted)
   Future<void> deletePaymentsForGroup(String groupId) async {
-    // Delete from Hive first
     final paymentsToDelete = _paymentBox.values
         .where((payment) => payment.groupId == groupId)
         .toList();
@@ -293,40 +271,21 @@ class ScheduledPaymentRepo {
     for (final payment in paymentsToDelete) {
       await _paymentBox.delete(payment.id);
     }
-    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive for group');
-
-    // ONLY delete from Firebase if in workspace mode
-    if (_inWorkspace) {
-      final snapshot = await _collection()
-          .where('groupId', isEqualTo: groupId)
-          .get();
-
-      final batch = _db.batch();
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-      debugPrint('[ScheduledPaymentRepo] ✅ Deleted payments from Firebase workspace');
-    } else {
-      debugPrint('[ScheduledPaymentRepo] ⏭️ Skipping Firebase delete (solo mode)');
-    }
+    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive');
   }
 
-  // Execute a scheduled payment (create transaction in envelope/group)
-  // This should be called by EnvelopeRepo to maintain transaction logic
-  // We just mark it as executed here
+  /// Execute a scheduled payment (create transaction in envelope/group)
   Future<void> executePayment(String paymentId) async {
     await markPaymentExecuted(paymentId);
   }
 
-  // Get upcoming payments within a date range
+  /// Get upcoming payments within a date range
   Future<List<ScheduledPayment>> getPaymentsInRange(
     DateTime start,
     DateTime end,
   ) async {
-    final snapshot = await _collection().get();
-    final allPayments = snapshot.docs
-        .map((doc) => ScheduledPayment.fromFirestore(doc))
+    final allPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId)
         .toList();
 
     return allPayments.where((payment) {

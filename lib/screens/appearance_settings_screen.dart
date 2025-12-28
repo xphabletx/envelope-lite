@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
-import '../../providers/app_preferences_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../theme/app_themes.dart';
 import 'theme_picker_screen.dart';
 import '../../services/localization_service.dart';
@@ -20,7 +20,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final fontProvider = Provider.of<FontProvider>(context);
-    final prefsProvider = Provider.of<AppPreferencesProvider>(context);
+    final localeProvider = Provider.of<LocaleProvider>(context);
 
     // Common style for section headers
     final headerStyle = fontProvider.getTextStyle(
@@ -109,10 +109,10 @@ class AppearanceSettingsScreen extends StatelessWidget {
             title: tr('appearance_target_emoji'),
             subtitle: tr('appearance_target_emoji_hint'),
             leading: Text(
-              prefsProvider.celebrationEmoji,
+              localeProvider.celebrationEmoji,
               style: const TextStyle(fontSize: 24),
             ),
-            onTap: () => _showSmartEmojiPicker(context, prefsProvider),
+            onTap: () => _showSmartEmojiPicker(context, localeProvider),
           ),
         ],
       ),
@@ -122,7 +122,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
   // --- NEW EMOJI PICKER LOGIC ---
   Future<void> _showSmartEmojiPicker(
     BuildContext context,
-    AppPreferencesProvider provider,
+    LocaleProvider provider,
   ) async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,

@@ -1,31 +1,19 @@
 // lib/widgets/tutorial_overlay.dart
-import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'dart:async';
 
-/// Custom tutorial overlay that highlights widgets with holes and shows tooltips
+import 'package:flutter/material.dart';
+import '../data/tutorial_sequences.dart';
+import '../services/tutorial_controller.dart';
+
 class TutorialOverlay extends StatefulWidget {
-  final GlobalKey? targetKey;
-  final String title;
-  final String description;
-  final VoidCallback? onNext;
-  final VoidCallback? onSkipTour;
-  final VoidCallback? onSkipStep;
-  final bool showSkipStep;
-  final String? stepCounter;
-  final bool blockInteraction;
+  final TutorialSequence sequence;
+  final VoidCallback onComplete;
+  final Map<String, GlobalKey>? spotlightKeys; // Optional keys for highlighting
 
   const TutorialOverlay({
     super.key,
-    this.targetKey,
-    required this.title,
-    required this.description,
-    this.onNext,
-    this.onSkipTour,
-    this.onSkipStep,
-    this.showSkipStep = true,
-    this.stepCounter,
-    this.blockInteraction = true,
+    required this.sequence,
+    required this.onComplete,
+    this.spotlightKeys,
   });
 
   @override
@@ -34,49 +22,58 @@ class TutorialOverlay extends StatefulWidget {
 
 class _TutorialOverlayState extends State<TutorialOverlay>
     with SingleTickerProviderStateMixin {
-  late AnimationController _fadeController;
+  int _currentStepIndex = 0;
+  Rect? _spotlightRect;
+  late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  Rect? _targetRect;
-  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  TutorialStep get _currentStep => widget.sequence.steps[_currentStepIndex];
+  bool get _isLastStep =>
+      _currentStepIndex == widget.sequence.steps.length - 1;
 
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
+    _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
+      parent: _animationController,
       curve: Curves.easeOut,
     );
-    _fadeController.forward();
+    _animationController.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _calculateTargetRect();
+      _calculateSpotlight();
     });
   }
 
   @override
   void didUpdateWidget(TutorialOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.targetKey != oldWidget.targetKey) {
-      _calculateTargetRect();
-      _fadeController.reset();
-      _fadeController.forward();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateSpotlight();
+    });
   }
 
-  void _calculateTargetRect() {
-    if (widget.targetKey?.currentContext == null) {
-      setState(() => _targetRect = null);
+  void _calculateSpotlight() {
+    final spotlightKey = _currentStep.spotlightWidgetKey;
+    if (spotlightKey == null || widget.spotlightKeys == null) {
+      setState(() => _spotlightRect = null);
+      return;
+    }
+
+    final key = widget.spotlightKeys![spotlightKey];
+    if (key?.currentContext == null) {
+      setState(() => _spotlightRect = null);
       return;
     }
 
     final RenderBox? renderBox =
-        widget.targetKey!.currentContext!.findRenderObject() as RenderBox?;
+        key!.currentContext!.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.hasSize) {
-      setState(() => _targetRect = null);
+      setState(() => _spotlightRect = null);
       return;
     }
 
@@ -84,7 +81,7 @@ class _TutorialOverlayState extends State<TutorialOverlay>
     final size = renderBox.size;
 
     setState(() {
-      _targetRect = Rect.fromLTWH(
+      _spotlightRect = Rect.fromLTWH(
         offset.dx,
         offset.dy,
         size.width,
@@ -95,81 +92,63 @@ class _TutorialOverlayState extends State<TutorialOverlay>
 
   @override
   void dispose() {
-    _fadeController.dispose();
-    _audioPlayer.dispose();
+    _animationController.dispose();
     super.dispose();
+  }
+
+  void _nextStep() {
+    if (_isLastStep) {
+      _complete();
+    } else {
+      setState(() {
+        _currentStepIndex++;
+        _spotlightRect = null; // Reset spotlight
+      });
+      _animationController.reset();
+      _animationController.forward();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _calculateSpotlight();
+      });
+    }
+  }
+
+  void _complete() async {
+    await TutorialController.markScreenComplete(widget.sequence.screenId);
+    widget.onComplete();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Material(
         color: Colors.transparent,
         child: Stack(
           children: [
-            // Dimmed overlay with hole
+            // Dark overlay with optional spotlight hole
             CustomPaint(
-              painter: _HolePainter(targetRect: _targetRect, holeRadius: 12.0),
+              painter: _SpotlightPainter(
+                spotlightRect: _spotlightRect,
+                holeRadius: 12.0,
+              ),
               child: Container(),
             ),
 
-            // Tooltip
-            if (_targetRect != null)
-              _buildTooltip(context)
-            else
-              _buildCenteredTooltip(context),
-
-            // Block interaction overlay (invisible but catches taps)
-            if (widget.blockInteraction)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: () {
-                    // Eat taps to prevent interaction with underlying widgets
-                  },
-                  child: Container(color: Colors.transparent),
-                ),
+            // Prevent background taps
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {}, // Block taps
+                child: Container(color: Colors.transparent),
               ),
+            ),
+
+            // Tooltip card
+            _buildTooltipCard(context, theme, mediaQuery),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTooltip(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final theme = Theme.of(context);
-
-    // Determine tooltip position based on target location
-    bool showBelow = _targetRect!.bottom < screenSize.height / 2;
-    bool showAbove = !showBelow;
-
-    double? top;
-    double? bottom;
-    double left = 16.0;
-    double right = 16.0;
-
-    if (showBelow) {
-      top = _targetRect!.bottom + 16.0;
-    } else if (showAbove) {
-      bottom = screenSize.height - _targetRect!.top + 16.0;
-    }
-
-    return Positioned(
-      top: top,
-      bottom: bottom,
-      left: left,
-      right: right,
-      child: _buildTooltipCard(context, theme, showBelow),
-    );
-  }
-
-  Widget _buildCenteredTooltip(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: _buildTooltipCard(context, theme, true),
       ),
     );
   }
@@ -177,123 +156,147 @@ class _TutorialOverlayState extends State<TutorialOverlay>
   Widget _buildTooltipCard(
     BuildContext context,
     ThemeData theme,
-    bool arrowDown,
+    MediaQueryData mediaQuery,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.stepCounter != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                widget.stepCounter!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+    // Position tooltip intelligently based on spotlight
+    double? top;
+    double? bottom;
+    final left = 20.0;
+    final right = 20.0;
+
+    if (_spotlightRect != null) {
+      // Position below or above spotlight based on available space
+      final screenHeight = mediaQuery.size.height;
+      final spaceAbove = _spotlightRect!.top;
+      final spaceBelow = screenHeight - _spotlightRect!.bottom;
+
+      if (spaceBelow > spaceAbove && spaceBelow > 300) {
+        // Position below
+        top = _spotlightRect!.bottom + 16.0;
+      } else if (spaceAbove > 300) {
+        // Position above
+        bottom = screenHeight - _spotlightRect!.top + 16.0;
+      } else {
+        // Not enough space, use bottom default
+        bottom = 100.0;
+      }
+    } else {
+      // Default position at bottom
+      bottom = 100.0;
+    }
+
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Emoji + Title
+            Row(
+              children: [
+                Text(
+                  _currentStep.emoji,
+                  style: const TextStyle(fontSize: 32),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _currentStep.title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          Text(
-            widget.title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
+
+            const SizedBox(height: 12),
+
+            // Description
+            Text(
+              _currentStep.description,
+              style: theme.textTheme.bodyLarge,
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            widget.description,
-            style: TextStyle(
-              fontSize: 16,
-              height: 1.5,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+
+            const SizedBox(height: 20),
+
+            // Progress indicator
+            Row(
+              children: [
+                Text(
+                  '${_currentStepIndex + 1} of ${widget.sequence.steps.length}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: (_currentStepIndex + 1) /
+                        widget.sequence.steps.length,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation(
+                      theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (widget.onSkipTour != null)
+
+            const SizedBox(height: 20),
+
+            // Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
                 TextButton(
-                  onPressed: () async {
-                    await _fadeController.reverse();
-                    widget.onSkipTour!();
-                  },
-                  child: const Text(
-                    'Skip Tour',
-                    style: TextStyle(fontSize: 16),
-                  ),
+                  onPressed: _complete,
+                  child: const Text('Skip Tutorial'),
                 ),
-              const Spacer(),
-              if (widget.onSkipStep != null && widget.showSkipStep)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: TextButton(
-                    onPressed: () async {
-                      await _fadeController.reverse();
-                      widget.onSkipStep!();
-                    },
-                    child: const Text(
-                      'Skip Step',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _nextStep,
+                  child: Text(_isLastStep ? 'Got It! 🎉' : 'Next Tip'),
                 ),
-              if (widget.onNext != null)
-                ElevatedButton(
-                  onPressed: () async {
-                    await _fadeController.reverse();
-                    widget.onNext!();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Next',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Custom painter that creates a dimmed overlay with a hole
-class _HolePainter extends CustomPainter {
-  final Rect? targetRect;
+/// Custom painter that creates a dark overlay with an optional spotlight hole
+class _SpotlightPainter extends CustomPainter {
+  final Rect? spotlightRect;
   final double holeRadius;
 
-  _HolePainter({required this.targetRect, required this.holeRadius});
+  _SpotlightPainter({
+    required this.spotlightRect,
+    required this.holeRadius,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.75)
+      ..color = Colors.black.withValues(alpha: 0.7)
       ..style = PaintingStyle.fill;
 
     final holePaint = Paint()
@@ -304,18 +307,18 @@ class _HolePainter extends CustomPainter {
     canvas.saveLayer(Rect.largest, Paint());
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
 
-    // Cut out hole if target exists
-    if (targetRect != null) {
-      final expandedRect = targetRect!.inflate(8.0);
+    // Cut out spotlight hole if present
+    if (spotlightRect != null) {
+      final expandedRect = spotlightRect!.inflate(8.0);
       final rrect = RRect.fromRectAndRadius(
         expandedRect,
         Radius.circular(holeRadius),
       );
       canvas.drawRRect(rrect, holePaint);
 
-      // Draw border around hole
+      // Draw glowing border around spotlight
       final borderPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.5)
+        ..color = Colors.white.withValues(alpha: 0.6)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
       canvas.drawRRect(rrect, borderPaint);
@@ -325,98 +328,8 @@ class _HolePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_HolePainter oldDelegate) {
-    return targetRect != oldDelegate.targetRect ||
+  bool shouldRepaint(_SpotlightPainter oldDelegate) {
+    return spotlightRect != oldDelegate.spotlightRect ||
         holeRadius != oldDelegate.holeRadius;
-  }
-}
-
-/// Helper widget for typing animation with keyboard sounds
-class TypedTextField extends StatefulWidget {
-  final TextEditingController controller;
-  final String targetText;
-  final VoidCallback? onComplete;
-  final int typingSpeedMs;
-
-  const TypedTextField({
-    super.key,
-    required this.controller,
-    required this.targetText,
-    this.onComplete,
-    this.typingSpeedMs = 100,
-  });
-
-  @override
-  State<TypedTextField> createState() => _TypedTextFieldState();
-}
-
-class _TypedTextFieldState extends State<TypedTextField> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  Timer? _typingTimer;
-  int _currentIndex = 0;
-  bool _isTyping = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _startTyping();
-  }
-
-  Future<void> _startTyping() async {
-    if (_isTyping) return;
-    _isTyping = true;
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    _typingTimer = Timer.periodic(
-      Duration(milliseconds: widget.typingSpeedMs),
-      (timer) async {
-        if (_currentIndex < widget.targetText.length) {
-          setState(() {
-            widget.controller.text = widget.targetText.substring(
-              0,
-              _currentIndex + 1,
-            );
-            widget.controller.selection = TextSelection.fromPosition(
-              TextPosition(offset: widget.controller.text.length),
-            );
-          });
-
-          // Play keyboard sound
-          final char = widget.targetText[_currentIndex];
-          if (char == ' ') {
-            _playSound('keyboard_space.mp3');
-          } else {
-            _playSound('keyboard_click.mp3');
-          }
-
-          _currentIndex++;
-        } else {
-          timer.cancel();
-          _isTyping = false;
-          widget.onComplete?.call();
-        }
-      },
-    );
-  }
-
-  Future<void> _playSound(String filename) async {
-    try {
-      await _audioPlayer.play(AssetSource('sounds/$filename'), volume: 0.3);
-    } catch (e) {
-      debugPrint('Could not play sound: $filename');
-    }
-  }
-
-  @override
-  void dispose() {
-    _typingTimer?.cancel();
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox.shrink();
   }
 }

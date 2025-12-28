@@ -2,11 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 import '../../models/envelope.dart';
+import '../../models/pay_day_settings.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/account_repo.dart'; // NEW
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 
 class PayDayStuffingScreen extends StatefulWidget {
   const PayDayStuffingScreen({
@@ -117,23 +119,38 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       // Non-fatal error for UI, but important to log
     }
 
-    // 3. Update Settings History (NEW)
+    // 3. Update Settings History in Hive
     try {
       final userId = widget.repo.currentUserId;
-      await widget.repo.db
-          .collection('users')
-          .doc(userId)
-          .collection('solo')
-          .doc('data')
-          .collection('payDaySettings')
-          .doc('settings')
-          .set({
-            'userId': userId,
-            'lastPayAmount': widget.totalAmount,
-            'lastPayDate': FieldValue.serverTimestamp(),
-            'defaultAccountId': widget.accountId,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
+
+      // Get existing settings or create new
+      PayDaySettings? existingSettings;
+      String? settingsKey;
+      for (var key in payDayBox.keys) {
+        final settings = payDayBox.get(key);
+        if (settings?.userId == userId) {
+          existingSettings = settings;
+          settingsKey = key.toString();
+          break;
+        }
+      }
+
+      final updatedSettings = existingSettings?.copyWith(
+        lastPayAmount: widget.totalAmount,
+        lastPayDate: DateTime.now(),
+        defaultAccountId: widget.accountId,
+      ) ?? PayDaySettings(
+        userId: userId,
+        lastPayAmount: widget.totalAmount,
+        lastPayDate: DateTime.now(),
+        defaultAccountId: widget.accountId,
+        payFrequency: 'monthly', // Default value
+      );
+
+      // Use existing key or create new one
+      final key = settingsKey ?? 'settings_$userId';
+      await payDayBox.put(key, updatedSettings);
     } catch (e) {
       debugPrint('Error updating settings: $e');
     }
@@ -149,7 +166,8 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
 
   void _showSuccessDialog() {
     final totalStuffed = widget.allocations.values.fold(0.0, (a, b) => a + b);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final theme = Theme.of(context);
 
@@ -235,7 +253,8 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return PopScope(
       canPop: stuffingComplete,

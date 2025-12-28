@@ -4,8 +4,7 @@ import '../models/envelope.dart';
 class TargetHelper {
   /// Returns a formatted string explaining the target status
   /// e.g. "Save £50.00 / week"
-  /// Using manual '£' for now as requested, but logic is robust.
-  static String getSuggestionText(Envelope envelope) {
+  static String getSuggestionText(Envelope envelope, String currencySymbol) {
     if (envelope.targetAmount == null || envelope.targetDate == null) {
       return "Set a target date to see tracking.";
     }
@@ -32,14 +31,14 @@ class TargetHelper {
     if (daysRemaining > 60) {
       final months = daysRemaining / 30;
       final perMonth = amountNeeded / months;
-      return "Save £${perMonth.toStringAsFixed(2)} / month";
+      return "Save $currencySymbol${perMonth.toStringAsFixed(2)} / month";
     } else if (daysRemaining > 14) {
       final weeks = daysRemaining / 7;
       final perWeek = amountNeeded / weeks;
-      return "Save £${perWeek.toStringAsFixed(2)} / week";
+      return "Save $currencySymbol${perWeek.toStringAsFixed(2)} / week";
     } else {
       final perDay = amountNeeded / daysRemaining;
-      return "Save £${perDay.toStringAsFixed(2)} / day";
+      return "Save $currencySymbol${perDay.toStringAsFixed(2)} / day";
     }
   }
 

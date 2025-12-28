@@ -21,6 +21,7 @@ class SubscriptionGate extends StatefulWidget {
 
 class _SubscriptionGateState extends State<SubscriptionGate> {
   final _paywallService = PaywallService();
+  // ignore: unused_field
   bool _hasSubscription = false;
   bool _loading = true;
 
@@ -50,6 +51,7 @@ class _SubscriptionGateState extends State<SubscriptionGate> {
     // }
   }
 
+  // ignore: unused_element
   Future<void> _showPaywall() async {
     final result = await Navigator.push<bool>(
       context,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../../../providers/font_provider.dart';
+import '../../../../../providers/locale_provider.dart';
 import '../../../../../services/envelope_repo.dart';
 import '../../../../../services/localization_service.dart';
 import '../../../../../widgets/calculator_widget.dart';
@@ -100,11 +101,12 @@ class _WithdrawModalState extends State<WithdrawModal> {
       );
 
       if (mounted) {
+        final locale = Provider.of<LocaleProvider>(context, listen: false);
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Removed ${NumberFormat.currency(symbol: '£').format(amount)}',
+              'Removed ${NumberFormat.currency(symbol: locale.currencySymbol).format(amount)}',
             ),
           ),
         );
@@ -192,45 +194,49 @@ class _WithdrawModalState extends State<WithdrawModal> {
                     color: theme.colorScheme.primary.withValues(alpha: 0.2),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet,
-                      size: 20,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Available: ${NumberFormat.currency(symbol: '£').format(widget.currentAmount)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                child: Consumer<LocaleProvider>(
+                  builder: (context, locale, _) => Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet,
+                        size: 20,
                         color: theme.colorScheme.primary,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Available: ${NumberFormat.currency(symbol: locale.currencySymbol).format(widget.currentAmount)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
               const SizedBox(height: 16),
 
               // Amount field with calculator button
-              TextField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tr('amount'),
-                  prefixText: '£',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              Consumer<LocaleProvider>(
+                builder: (context, locale, _) => TextField(
+                  controller: _amountController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: tr('amount'),
+                    prefixText: locale.currencySymbol,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.calculate),
+                      onPressed: _showCalculator,
+                      tooltip: 'Open Calculator',
+                    ),
                   ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calculate),
-                    onPressed: _showCalculator,
-                    tooltip: 'Open Calculator',
-                  ),
+                  autofocus: true,
                 ),
-                autofocus: true,
               ),
 
               const SizedBox(height: 16),

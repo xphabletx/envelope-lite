@@ -51,10 +51,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _paymentRepo = ScheduledPaymentRepo(
-      widget.repo.db,
-      widget.repo.currentUserId,
-    );
+    _paymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
 
     // Initialize logic
     if (widget.paymentToEdit != null) {
@@ -610,8 +607,12 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                     onPressed: () async {
                       final result = await showDialog<double>(
                         context: context,
-                        builder: (context) => const Dialog(
-                          child: CalculatorWidget(),
+                        barrierDismissible: true,
+                        barrierColor: Colors.black54,
+                        builder: (context) => Stack(
+                          children: const [
+                            CalculatorWidget(),
+                          ],
                         ),
                       );
                       if (result != null && mounted) {

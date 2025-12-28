@@ -1,43 +1,42 @@
 // lib/services/pay_day_settings_service.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:hive/hive.dart';
 import '../models/pay_day_settings.dart';
 
 class PayDaySettingsService {
-  PayDaySettingsService(this._db, this.userId);
+  PayDaySettingsService(dynamic db, this.userId);
 
-  final FirebaseFirestore _db;
   final String userId;
 
-  /// Get reference to pay day settings document
-  DocumentReference<Map<String, dynamic>> _settingsDoc() {
-    return _db
-        .collection('users')
-        .doc(userId)
-        .collection('payDaySettings')
-        .doc('settings');
-  }
+  /// Get reference to pay day settings box
+  Box<PayDaySettings> get _settingsBox => Hive.box<PayDaySettings>('payDaySettings');
 
   /// Stream of pay day settings
   Stream<PayDaySettings?> get payDaySettingsStream {
-    return _settingsDoc().snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return PayDaySettings.fromFirestore(doc);
+    // Get initial value directly using userId as key
+    final initial = _settingsBox.get(userId);
+
+    // Return stream that emits initial value then watches for changes
+    return Stream.value(initial).asyncExpand((initialValue) async* {
+      yield initialValue;
+
+      await for (final _ in _settingsBox.watch(key: userId)) {
+        yield _settingsBox.get(userId);
+      }
     });
   }
 
   /// Get current pay day settings
   Future<PayDaySettings?> getPayDaySettings() async {
-    final doc = await _settingsDoc().get();
-    if (!doc.exists) return null;
-    return PayDaySettings.fromFirestore(doc);
+    return _settingsBox.get(userId);
   }
 
   /// Update pay day settings
   Future<void> updatePayDaySettings(PayDaySettings settings) async {
     try {
-      await _settingsDoc().set(settings.toFirestore());
-      debugPrint('[PayDaySettingsService] ✅ Settings updated');
+      // Use userId as the key in Hive
+      await _settingsBox.put(settings.userId, settings);
+      debugPrint('[PayDaySettingsService] ✅ Settings updated in Hive: ${settings.userId}');
     } catch (e) {
       debugPrint('[PayDaySettingsService] ❌ Error updating settings: $e');
       rethrow;
@@ -47,8 +46,9 @@ class PayDaySettingsService {
   /// Delete pay day settings
   Future<void> deletePayDaySettings() async {
     try {
-      await _settingsDoc().delete();
-      debugPrint('[PayDaySettingsService] ✅ Settings deleted');
+      // Delete using userId as key
+      await _settingsBox.delete(userId);
+      debugPrint('[PayDaySettingsService] ✅ Settings deleted from Hive');
     } catch (e) {
       debugPrint('[PayDaySettingsService] ❌ Error deleting settings: $e');
       rethrow;

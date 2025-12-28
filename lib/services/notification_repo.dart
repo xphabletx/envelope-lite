@@ -1,38 +1,37 @@
 // lib/services/notification_repo.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import '../models/app_notification.dart';
 
 class NotificationRepo {
-  NotificationRepo(this._db, this._userId);
+  NotificationRepo({required String userId}) : _userId = userId;
 
-  final FirebaseFirestore _db;
   final String _userId;
-
-  CollectionReference<Map<String, dynamic>> _collection() {
-    return _db
-        .collection('users')
-        .doc(_userId)
-        .collection('notifications');
-  }
+  Box<AppNotification> get _notificationBox => Hive.box<AppNotification>('notifications');
 
   // Stream of notifications (newest first)
   Stream<List<AppNotification>> get notificationsStream {
-    return _collection()
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => AppNotification.fromFirestore(doc))
-              .toList(),
-        );
+    final initial = _notificationBox.values
+        .where((n) => n.userId == _userId)
+        .toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    return Stream.value(initial).asyncExpand((initialList) async* {
+      yield initialList;
+      yield* _notificationBox.watch().asyncMap((_) async {
+        return _notificationBox.values
+            .where((n) => n.userId == _userId)
+            .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      });
+    });
   }
 
   // Stream of unread count
   Stream<int> get unreadCountStream {
-    return _collection()
-        .where('isRead', isEqualTo: false)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+    return notificationsStream.map((notifications) {
+      return notifications.where((n) => !n.isRead).length;
+    });
   }
 
   // Create notification
@@ -42,10 +41,10 @@ class NotificationRepo {
     required String message,
     Map<String, dynamic>? metadata,
   }) async {
-    final doc = _collection().doc();
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
 
     final notification = AppNotification(
-      id: doc.id,
+      id: id,
       userId: _userId,
       type: type,
       title: title,
@@ -54,43 +53,54 @@ class NotificationRepo {
       metadata: metadata,
     );
 
-    await doc.set(notification.toFirestore());
-    return doc.id;
+    await _notificationBox.put(id, notification);
+    debugPrint('[NotificationRepo] ✅ Created notification: $title');
+    return id;
   }
 
   // Mark as read
   Future<void> markAsRead(String notificationId) async {
-    await _collection().doc(notificationId).update({'isRead': true});
+    final notification = _notificationBox.get(notificationId);
+    if (notification != null) {
+      await _notificationBox.put(
+        notificationId,
+        notification.copyWith(isRead: true),
+      );
+      debugPrint('[NotificationRepo] ✅ Marked as read: $notificationId');
+    }
   }
 
   // Mark all as read
   Future<void> markAllAsRead() async {
-    final unreadDocs = await _collection()
-        .where('isRead', isEqualTo: false)
-        .get();
+    final unread = _notificationBox.values
+        .where((n) => n.userId == _userId && !n.isRead)
+        .toList();
 
-    final batch = _db.batch();
-    for (final doc in unreadDocs.docs) {
-      batch.update(doc.reference, {'isRead': true});
+    for (final notification in unread) {
+      await _notificationBox.put(
+        notification.id,
+        notification.copyWith(isRead: true),
+      );
     }
-    await batch.commit();
+    debugPrint('[NotificationRepo] ✅ Marked ${unread.length} notifications as read');
   }
 
   // Delete notification
   Future<void> deleteNotification(String notificationId) async {
-    await _collection().doc(notificationId).delete();
+    await _notificationBox.delete(notificationId);
+    debugPrint('[NotificationRepo] ✅ Deleted notification: $notificationId');
   }
 
   // Delete all read notifications
   Future<void> deleteAllRead() async {
-    final readDocs = await _collection()
-        .where('isRead', isEqualTo: true)
-        .get();
+    final read = _notificationBox.values
+        .where((n) => n.userId == _userId && n.isRead)
+        .map((n) => n.id)
+        .toList();
 
-    final batch = _db.batch();
-    for (final doc in readDocs.docs) {
-      batch.delete(doc.reference);
+    for (final id in read) {
+      await _notificationBox.delete(id);
     }
-    await batch.commit();
+    debugPrint('[NotificationRepo] ✅ Deleted ${read.length} read notifications');
   }
 }

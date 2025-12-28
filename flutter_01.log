@@ -1,0 +1,104 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter attach -d emulator-5554
+
+## exception
+
+StateError: Bad state: Stream has already been listened to.
+
+```
+#0      _StreamController._subscribe (dart:async/stream_controller.dart:695:7)
+#1      _ControllerStream._createSubscription (dart:async/stream_controller.dart:854:20)
+#2      _StreamImpl.listen (dart:async/stream_impl.dart:516:42)
+#3      new _ForwardingStreamSubscription (dart:async/stream_pipe.dart:141:37)
+#4      _ForwardingStream._createSubscription (dart:async/stream_pipe.dart:105:16)
+#5      _ForwardingStream.listen (dart:async/stream_pipe.dart:96:12)
+#6      FlutterDevice.connect (package:flutter_tools/src/resident_runner.dart:244:35)
+#7      ResidentRunner.connectToServiceProtocol (package:flutter_tools/src/resident_runner.dart:1309:21)
+#8      HotRunner._attach (package:flutter_tools/src/run_hot.dart:255:13)
+#9      HotRunner.attach (package:flutter_tools/src/run_hot.dart:240:12)
+#10     AttachCommand._attachToDevice (package:flutter_tools/src/commands/attach.dart:414:31)
+<asynchronous suspension>
+#11     AttachCommand.runCommand (package:flutter_tools/src/commands/attach.dart:262:5)
+<asynchronous suspension>
+#12     FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1581:27)
+<asynchronous suspension>
+#13     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#14     CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#15     FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:503:9)
+<asynchronous suspension>
+#16     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#17     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:438:5)
+<asynchronous suspension>
+#18     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:98:11)
+<asynchronous suspension>
+#19     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#20     main (package:flutter_tools/executable.dart:101:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[✓] Flutter (Channel stable, 3.35.7, on macOS 15.6.1 24G90 darwin-arm64, locale en-GB) [231ms]
+    • Flutter version 3.35.7 on channel stable at /opt/homebrew/share/flutter
+    • Upstream repository https://github.com/flutter/flutter.git
+    • Framework revision adc9010625 (10 weeks ago), 2025-10-21 14:16:03 -0400
+    • Engine revision 035316565a
+    • Dart version 3.9.2
+    • DevTools version 2.48.0
+    • Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop, enable-windows-desktop, enable-android, enable-ios, cli-animations, enable-lldb-debugging
+
+[!] Android toolchain - develop for Android devices (Android SDK version 36.1.0) [2.6s]
+    • Android SDK at /Users/terrymccall/Library/Android/sdk
+    • Emulator version 36.2.12.0 (build_id 14214601) (CL:N/A)
+    • Platform android-36, build-tools 36.1.0
+    • ANDROID_HOME = /Users/terrymccall/Library/Android/sdk
+    • Java binary at: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java
+      This is the JDK bundled with the latest Android Studio installation on this machine.
+      To manually set the JDK path, use: `flutter config --jdk-dir="path/to/jdk"`.
+    • Java version OpenJDK Runtime Environment (build 21.0.8+-14196175-b1038.72)
+    ! Some Android licenses not accepted. To resolve this, run: flutter doctor --android-licenses
+
+[!] Xcode - develop for iOS and macOS (Xcode 26.2) [2.3s]
+    • Xcode at /Applications/Xcode.app/Contents/Developer
+    • Build 17C52
+    ! CocoaPods 1.15.2 out of date (1.16.2 is recommended).
+        CocoaPods is a package manager for iOS or macOS platform code.
+        Without CocoaPods, plugins will not work on iOS or macOS.
+        For more info, see https://flutter.dev/to/platform-plugins
+      To update CocoaPods, see https://guides.cocoapods.org/using/getting-started.html#updating-cocoapods
+
+[✓] Chrome - develop for the web [6ms]
+    • Chrome at /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+[✓] Android Studio (version 2025.2) [5ms]
+    • Android Studio at /Applications/Android Studio.app/Contents
+    • Flutter plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/9212-flutter
+    • Dart plugin can be installed from:
+      🔨 https://plugins.jetbrains.com/plugin/6351-dart
+    • Java version OpenJDK Runtime Environment (build 21.0.8+-14196175-b1038.72)
+
+[✓] VS Code (version 1.107.0) [4ms]
+    • VS Code at /Applications/Visual Studio Code.app/Contents
+    • Flutter extension version 3.124.0
+
+[✓] Connected device (4 available) [6.5s]
+    • sdk gphone64 arm64 (mobile)     • emulator-5554         • android-arm64  • Android 15 (API 35) (emulator)
+    • macOS (desktop)                 • macos                 • darwin-arm64   • macOS 15.6.1 24G90 darwin-arm64
+    • Mac Designed for iPad (desktop) • mac-designed-for-ipad • darwin         • macOS 15.6.1 24G90 darwin-arm64
+    • Chrome (web)                    • chrome                • web-javascript • Google Chrome 143.0.7499.170
+
+[✓] Network resources [232ms]
+    • All expected network resources are available.
+
+! Doctor found issues in 2 categories.
+```

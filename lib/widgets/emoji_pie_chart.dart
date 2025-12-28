@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
-import '../providers/app_preferences_provider.dart';
+import '../providers/locale_provider.dart';
 
 class EmojiPieChart extends StatelessWidget {
   const EmojiPieChart({super.key, required this.percentage, this.size = 60});
@@ -13,7 +13,7 @@ class EmojiPieChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final prefsProvider = Provider.of<AppPreferencesProvider>(context);
+    final localeProvider = Provider.of<LocaleProvider>(context);
 
     // At 100%, show custom celebration emoji instead of pie
     if (percentage >= 1.0) {
@@ -28,7 +28,7 @@ class EmojiPieChart extends StatelessWidget {
             return Transform.scale(
               scale: scale,
               child: Text(
-                prefsProvider.celebrationEmoji,
+                localeProvider.celebrationEmoji,
                 style: const TextStyle(fontSize: 40),
               ),
             );

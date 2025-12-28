@@ -1,21 +1,20 @@
 // lib/providers/locale_provider.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LocaleProvider extends ChangeNotifier {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  String? _userId;
-
   // Current selections
   String _languageCode = 'en';
   String _currencyCode = 'GBP';
   String _currencySymbol = '£';
+  String _celebrationEmoji = '🥰';
 
   // Getters
   String get languageCode => _languageCode;
   String get currencyCode => _currencyCode;
   String get currencySymbol => _currencySymbol;
+  String get celebrationEmoji => _celebrationEmoji;
 
   // Supported languages
   static const List<Map<String, String>> supportedLanguages = [
@@ -63,64 +62,66 @@ class LocaleProvider extends ChangeNotifier {
     {'code': 'TRY', 'name': 'Turkish Lira', 'symbol': '₺'},
   ];
 
+  /// Initialize from SharedPreferences (local-only, no Firebase)
   Future<void> initialize(String userId) async {
-    _userId = userId;
-    await _loadFromFirebase();
-  }
-
-  Future<void> _loadFromFirebase() async {
-    if (_userId == null) return;
-
     try {
-      final doc = await _db.collection('users').doc(_userId).get();
-      final data = doc.data();
+      final prefs = await SharedPreferences.getInstance();
 
-      if (data != null) {
-        if (data['languageCode'] != null) {
-          _languageCode = data['languageCode'] as String;
-        }
-        if (data['currencyCode'] != null) {
-          _currencyCode = data['currencyCode'] as String;
-          _currencySymbol = _getCurrencySymbol(_currencyCode);
-        }
-      }
+      _languageCode = prefs.getString('language_code') ?? 'en';
+      _currencyCode = prefs.getString('currency_code') ?? 'GBP';
+      _currencySymbol = _getCurrencySymbol(_currencyCode);
+      _celebrationEmoji = prefs.getString('celebration_emoji') ?? '🥰';
 
+      debugPrint('[LocaleProvider] ✅ Loaded from SharedPreferences: $_languageCode, $_currencyCode, $_celebrationEmoji');
       notifyListeners();
     } catch (e) {
-      debugPrint('Error loading locale preferences: $e');
+      debugPrint('[LocaleProvider] ❌ Error loading locale preferences: $e');
     }
   }
 
+  /// Set language (local-only, no Firebase sync)
   Future<void> setLanguage(String languageCode) async {
-    if (_userId == null) return;
-
     _languageCode = languageCode;
     notifyListeners();
 
     try {
-      await _db.collection('users').doc(_userId).update({
-        'languageCode': languageCode,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('language_code', languageCode);
+
+      debugPrint('[LocaleProvider] ✅ Language saved locally: $languageCode');
     } catch (e) {
-      debugPrint('Error saving language: $e');
+      debugPrint('[LocaleProvider] ❌ Error saving language: $e');
     }
   }
 
+  /// Set currency (local-only, no Firebase sync)
   Future<void> setCurrency(String currencyCode) async {
-    if (_userId == null) return;
-
     _currencyCode = currencyCode;
     _currencySymbol = _getCurrencySymbol(currencyCode);
     notifyListeners();
 
     try {
-      await _db.collection('users').doc(_userId).update({
-        'currencyCode': currencyCode,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('currency_code', currencyCode);
+
+      debugPrint('[LocaleProvider] ✅ Currency saved locally: $currencyCode');
     } catch (e) {
-      debugPrint('Error saving currency: $e');
+      debugPrint('[LocaleProvider] ❌ Error saving currency: $e');
+    }
+  }
+
+  /// Set celebration emoji (local-only, no Firebase sync)
+  Future<void> setCelebrationEmoji(String emoji) async {
+    _celebrationEmoji = emoji;
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('celebration_emoji', emoji);
+
+      debugPrint('[LocaleProvider] ✅ Celebration emoji saved locally: $emoji');
+    } catch (e) {
+      debugPrint('[LocaleProvider] ❌ Error saving celebration emoji: $e');
     }
   }
 

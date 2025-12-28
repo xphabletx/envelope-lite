@@ -13,6 +13,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import 'add_to_pay_day_modal.dart';
 import '../../providers/font_provider.dart'; // NEW IMPORT
+import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
 // TUTORIAL IMPORT REMOVED - Logic commented out below
@@ -209,8 +210,8 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
     final today = DateTime.now();
     int successCount = 0;
     double totalDeposited = 0;
-    // FIXED: Corrected currency symbol from 'ﾂ｣' to '£'
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     try {
       for (final env in allEnvelopes) {
@@ -311,8 +312,8 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // FIXED: Corrected currency symbol from 'ﾂ｣' to '£'
-    final currency = NumberFormat.currency(symbol: '£');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
 

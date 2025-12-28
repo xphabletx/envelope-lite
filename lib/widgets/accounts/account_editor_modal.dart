@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/account.dart';
 import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../envelope/omni_icon_picker_modal.dart';
 import '../../services/icon_search_service_unlimited.dart' show IconType;
 
@@ -188,6 +189,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     final theme = Theme.of(context);
     final media = MediaQuery.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
 
     return Container(
       decoration: BoxDecoration(
@@ -330,7 +332,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        prefixText: '£ ',
+                        prefixText: '${localeProvider.currencySymbol} ',
                         prefixStyle: fontProvider.getTextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,

@@ -1,5 +1,4 @@
 // lib/models/scheduled_payment.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive/hive.dart';
 
 part 'scheduled_payment.g.dart';
@@ -140,67 +139,6 @@ class ScheduledPayment {
 
   bool get isEnvelopePayment => envelopeId != null;
   bool get isGroupPayment => groupId != null;
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'userId': userId,
-      'envelopeId': envelopeId,
-      'groupId': groupId,
-      'name': name,
-      'description': description,
-      'amount': amount,
-      'startDate': Timestamp.fromDate(startDate),
-      'frequencyValue': frequencyValue,
-      'frequencyUnit': frequencyUnit.name,
-      'colorName': colorName,
-      'colorValue': colorValue,
-      'isAutomatic': isAutomatic,
-      'lastExecuted': lastExecuted != null
-          ? Timestamp.fromDate(lastExecuted!)
-          : null,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'paymentType': paymentType.name,
-      'paymentEnvelopeId': paymentEnvelopeId,
-    };
-  }
-
-  factory ScheduledPayment.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
-    // Parse payment type
-    final typeString = data['paymentType'] as String?;
-    final paymentType = typeString == 'envelopeBalance'
-        ? ScheduledPaymentType.envelopeBalance
-        : ScheduledPaymentType.fixedAmount;
-
-    return ScheduledPayment(
-      id: doc.id,
-      userId: data['userId'] ?? '',
-      envelopeId: data['envelopeId'],
-      groupId: data['groupId'],
-      name: data['name'] ?? '',
-      description: data['description'],
-      amount: (data['amount'] ?? 0.0).toDouble(),
-      startDate: (data['startDate'] as Timestamp).toDate(),
-      frequencyValue: data['frequencyValue'] ?? 1,
-      frequencyUnit: PaymentFrequencyUnit.values.firstWhere(
-        (e) => e.name == data['frequencyUnit'],
-        orElse: () => PaymentFrequencyUnit.months,
-      ),
-      colorName: data['colorName'] ?? 'Blusher',
-      colorValue: data['colorValue'] ?? 0xFFF8BBD0,
-      isAutomatic: data['isAutomatic'] ?? false,
-      lastExecuted: data['lastExecuted'] != null
-          ? (data['lastExecuted'] as Timestamp).toDate()
-          : null,
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
-      paymentType: paymentType,
-      paymentEnvelopeId: data['paymentEnvelopeId'],
-    );
-  }
 
   ScheduledPayment copyWith({
     String? id,

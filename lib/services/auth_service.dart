@@ -365,7 +365,7 @@ class AuthService {
 
   static Future<void> signOut() async {
     try {
-      // NEW: Log out from RevenueCat first
+      // Log out from RevenueCat
       await PaywallService().logOut();
 
       await _auth.signOut();
@@ -379,6 +379,8 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('last_workspace_id');
       await prefs.remove('last_workspace_name');
+
+      debugPrint('[AuthService::signOut] ✅ Signed out successfully');
     } catch (e) {
       debugPrint('[AuthService::signOut] Error during sign out: $e');
       rethrow;

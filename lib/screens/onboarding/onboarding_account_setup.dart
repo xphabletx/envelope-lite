@@ -1,7 +1,7 @@
 // lib/screens/onboarding/onboarding_account_setup.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
@@ -115,10 +115,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
     setState(() => _saving = true);
 
     try {
-      final accountRepo = AccountRepo(
-        widget.envelopeRepo.db,
-        widget.envelopeRepo,
-      );
+      final accountRepo = AccountRepo(widget.envelopeRepo);
 
       // Create all accounts
       for (final account in _accounts) {
@@ -143,7 +140,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
       debugPrint('[Onboarding]    Next pay date: $_nextPayDate');
 
       if (payAmount != null && payAmount > 0 && _nextPayDate != null) {
-        debugPrint('[Onboarding] ✅ Saving pay day settings...');
+        debugPrint('[Onboarding] ✅ Saving pay day settings to Hive...');
         final userId = widget.envelopeRepo.currentUserId;
 
         // Create PayDaySettings object
@@ -156,15 +153,11 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
           payDayOfWeek: _nextPayDate!.weekday,
         );
 
-        // Save to Firestore
-        await widget.envelopeRepo.db
-            .collection('users')
-            .doc(userId)
-            .collection('payDaySettings')
-            .doc('settings')
-            .set(payDaySettings.toFirestore());
+        // Save to Hive (local-only)
+        final settingsBox = Hive.box<PayDaySettings>('payDaySettings');
+        await settingsBox.put(userId, payDaySettings);
 
-        debugPrint('[Onboarding] ✅ Pay day settings saved to Firestore');
+        debugPrint('[Onboarding] ✅ Pay day settings saved to Hive');
         debugPrint('[Onboarding] ℹ️ Pay day will appear in Time Machine (not as a scheduled payment)');
       } else {
         debugPrint('[Onboarding] ⏭️ Skipping pay day settings - incomplete data');
@@ -191,9 +184,36 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
     final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final currencySymbol = localeProvider.currencySymbol;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        // Confirm before going back (losing account setup progress)
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Go Back?'),
+            content: const Text('Your account setup will not be saved.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Stay'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        );
+        if (shouldPop == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
@@ -522,6 +542,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -538,6 +559,7 @@ class _AccountEntry {
     required this.nameController,
     required this.balanceController,
     required this.accountType,
+    // ignore: unused_element_parameter
     this.creditLimit,
     this.isDefault = false,
   });
@@ -563,6 +585,7 @@ class _AccountEntryCard extends StatelessWidget {
   final ThemeData theme;
   final VoidCallback onRemove;
   final Function(AccountType) onTypeChanged;
+  // ignore: unused_element_parameter
   final Function(double?) onCreditLimitChanged;
 
   @override
@@ -615,28 +638,16 @@ class _AccountEntryCard extends StatelessWidget {
               items: [
                 DropdownMenuItem(
                   value: AccountType.bankAccount,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.account_balance, size: 20),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Bank Account',
-                        style: fontProvider.getTextStyle(fontSize: 18),
-                      ),
-                    ],
+                  child: Text(
+                    'Bank Account',
+                    style: fontProvider.getTextStyle(fontSize: 18),
                   ),
                 ),
                 DropdownMenuItem(
                   value: AccountType.creditCard,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.credit_card, size: 20),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Credit Card',
-                        style: fontProvider.getTextStyle(fontSize: 18),
-                      ),
-                    ],
+                  child: Text(
+                    'Credit Card',
+                    style: fontProvider.getTextStyle(fontSize: 18),
                   ),
                 ),
               ],

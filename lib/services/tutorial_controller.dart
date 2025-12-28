@@ -1,109 +1,48 @@
 // lib/services/tutorial_controller.dart
-import 'package:flutter/material.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/tutorial_sequences.dart';
 
-/// Simplified tutorial flow - 5 steps only
-enum TutorialStep {
-  notStarted, // 0 - Tutorial hasn't begun
-  welcome, // 1 - Welcome message
-  autoCreating, // 2 - Creating envelope automatically
-  envelopeCreated, // 3 - Show the created envelope
-  swipeGesture, // 4 - Demo swipe actions
-  complete, // 5 - Tutorial finished
-}
+class TutorialController {
+  static const String _completedScreensKey = 'tutorial_completed_screens';
 
-/// Manages tutorial state and progression
-class TutorialController extends ChangeNotifier {
-  TutorialStep _currentStep = TutorialStep.notStarted;
-  bool _isActive = false;
+  // Check if screen tutorial is complete
+  static Future<bool> isScreenComplete(String screenId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final completedScreens = prefs.getStringList(_completedScreensKey) ?? [];
+    return completedScreens.contains(screenId);
+  }
 
-  TutorialStep get currentStep => _currentStep;
-  bool get isActive => _isActive;
-
-  static const String _stepKey = 'tutorial_current_step';
-  static const String _activeKey = 'tutorial_is_active';
-
-  Future<void> loadState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final stepIndex = prefs.getInt(_stepKey) ?? 0;
-      final savedActive = prefs.getBool(_activeKey) ?? false;
-
-      if (stepIndex < TutorialStep.values.length) {
-        _currentStep = TutorialStep.values[stepIndex];
-        _isActive = savedActive;
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error loading tutorial state: $e');
+  // Mark screen tutorial as complete
+  static Future<void> markScreenComplete(String screenId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final completedScreens = prefs.getStringList(_completedScreensKey) ?? [];
+    if (!completedScreens.contains(screenId)) {
+      completedScreens.add(screenId);
+      await prefs.setStringList(_completedScreensKey, completedScreens);
     }
   }
 
-  Future<void> _saveState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_stepKey, _currentStep.index);
-      await prefs.setBool(_activeKey, _isActive);
-    } catch (e) {
-      debugPrint('Error saving tutorial state: $e');
+  // Reset specific screen
+  static Future<void> resetScreen(String screenId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final completedScreens = prefs.getStringList(_completedScreensKey) ?? [];
+    completedScreens.remove(screenId);
+    await prefs.setStringList(_completedScreensKey, completedScreens);
+  }
+
+  // Reset all tutorials
+  static Future<void> resetAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_completedScreensKey);
+  }
+
+  // Get completion status for all screens
+  static Future<Map<String, bool>> getAllCompletionStatus() async {
+    final Map<String, bool> status = {};
+    for (final tutorial in allTutorials) {
+      status[tutorial.screenId] = await isScreenComplete(tutorial.screenId);
     }
+    return status;
   }
-
-  Future<void> start() async {
-    _currentStep = TutorialStep.welcome;
-    _isActive = true;
-    await _saveState();
-    notifyListeners();
-  }
-
-  Future<void> nextStep() async {
-    if (_currentStep == TutorialStep.complete) return;
-
-    final currentIndex = _currentStep.index;
-    if (currentIndex + 1 < TutorialStep.values.length) {
-      _currentStep = TutorialStep.values[currentIndex + 1];
-
-      if (_currentStep == TutorialStep.complete) {
-        _isActive = false;
-      }
-
-      await _saveState();
-      notifyListeners();
-    }
-  }
-
-  Future<void> goToStep(TutorialStep step) async {
-    _currentStep = step;
-
-    if (step == TutorialStep.complete) {
-      _isActive = false;
-    }
-
-    await _saveState();
-    notifyListeners();
-  }
-
-  Future<void> skipTour() async {
-    _currentStep = TutorialStep.complete;
-    _isActive = false;
-    await _saveState();
-    notifyListeners();
-  }
-
-  Future<void> complete() async {
-    _currentStep = TutorialStep.complete;
-    _isActive = false;
-    await _saveState();
-    notifyListeners();
-  }
-
-  Future<void> reset() async {
-    _currentStep = TutorialStep.notStarted;
-    _isActive = false;
-    await _saveState();
-    notifyListeners();
-  }
-
-  bool isOnStep(TutorialStep step) => _currentStep == step;
-  bool isPastStep(TutorialStep step) => _currentStep.index > step.index;
 }

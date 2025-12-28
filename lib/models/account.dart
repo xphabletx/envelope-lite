@@ -1,5 +1,4 @@
 // lib/models/account.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:envelope_lite/data/material_icons_database.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -178,57 +177,6 @@ class Account {
   double get creditUtilization {
     if (!isCreditCard || creditLimit == null || creditLimit == 0) return 0.0;
     return (currentBalance.abs() / creditLimit!).clamp(0.0, 1.0);
-  }
-
-  factory Account.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data()!;
-
-    // Parse account type
-    final typeString = data['accountType'] as String?;
-    final accountType = typeString == 'creditCard'
-        ? AccountType.creditCard
-        : AccountType.bankAccount;
-
-    return Account(
-      id: doc.id,
-      name: data['name'] as String? ?? 'Unnamed Account',
-      currentBalance: (data['currentBalance'] as num?)?.toDouble() ?? 0.0,
-      userId: data['userId'] as String? ?? '',
-      emoji: data['emoji'] as String?,
-      colorName: data['colorName'] as String?,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      lastUpdated:
-          (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      isDefault: data['isDefault'] as bool? ?? false,
-      isShared: data['isShared'] as bool? ?? false,
-      workspaceId: data['workspaceId'] as String?,
-      iconType: data['iconType'] as String?,
-      iconValue: data['iconValue'] as String?,
-      iconColor: data['iconColor'] as int?,
-      accountType: accountType,
-      creditLimit: (data['creditLimit'] as num?)?.toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'id': id,
-      'name': name,
-      'currentBalance': currentBalance,
-      'userId': userId,
-      'emoji': emoji,
-      'colorName': colorName,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'lastUpdated': Timestamp.fromDate(lastUpdated),
-      'isDefault': isDefault,
-      'isShared': isShared,
-      'workspaceId': workspaceId,
-      'iconType': iconType,
-      'iconValue': iconValue,
-      'iconColor': iconColor,
-      'accountType': accountType.name,
-      'creditLimit': creditLimit,
-    };
   }
 
   Account copyWith({

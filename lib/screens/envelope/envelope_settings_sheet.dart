@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../models/account.dart'; // NEW
@@ -11,10 +11,18 @@ import '../../services/group_repo.dart';
 import '../../services/account_repo.dart'; // NEW
 import '../../widgets/group_editor.dart' as editor;
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../add_scheduled_payment_screen.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
+import '../../utils/calculator_helper.dart';
+
+enum EnvelopeSettingsSection {
+  top,
+  autofill,
+  scheduledPayments,
+}
 
 class EnvelopeSettingsSheet extends StatefulWidget {
   const EnvelopeSettingsSheet({
@@ -23,12 +31,14 @@ class EnvelopeSettingsSheet extends StatefulWidget {
     required this.repo,
     required this.groupRepo,
     required this.accountRepo, // NEW
+    this.initialSection = EnvelopeSettingsSection.top,
   });
 
   final String envelopeId;
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo; // NEW
+  final EnvelopeSettingsSection initialSection;
 
   @override
   State<EnvelopeSettingsSheet> createState() => _EnvelopeSettingsSheetState();
@@ -39,17 +49,36 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   final _subtitleController = TextEditingController();
   final _targetController = TextEditingController();
   final _autoFillAmountController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  // Keys for scrolling to specific sections
+  final _autofillKey = GlobalKey();
+  final _scheduledPaymentsKey = GlobalKey();
 
   String? _selectedEmoji;
   String? _iconType;
   String? _iconValue;
   String? _selectedBinderId;
   String? _selectedAccountId; // NEW
+  DateTime? _selectedTargetDate;
   bool _autoFillEnabled = false;
   bool _isLoading = false;
   bool _initialized = false;
   List<EnvelopeGroup> _binders = [];
   bool _bindersLoaded = false;
+
+  // Track original values for unsaved changes detection
+  String? _originalName;
+  String? _originalSubtitle;
+  String? _originalTarget;
+  String? _originalAutoFillAmount;
+  String? _originalEmoji;
+  String? _originalIconType;
+  String? _originalIconValue;
+  String? _originalBinderId;
+  String? _originalAccountId;
+  DateTime? _originalTargetDate;
+  bool _originalAutoFillEnabled = false;
 
   @override
   void initState() {
@@ -63,27 +92,53 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     _subtitleController.dispose();
     _targetController.dispose();
     _autoFillAmountController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToSection(EnvelopeSettingsSection section) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+
+      GlobalKey? targetKey;
+      switch (section) {
+        case EnvelopeSettingsSection.autofill:
+          targetKey = _autofillKey;
+          break;
+        case EnvelopeSettingsSection.scheduledPayments:
+          targetKey = _scheduledPaymentsKey;
+          break;
+        case EnvelopeSettingsSection.top:
+          _scrollController.jumpTo(0);
+          return;
+      }
+
+      if (targetKey.currentContext != null) {
+        final context = targetKey.currentContext!;
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox != null) {
+          final offset = renderBox.localToGlobal(Offset.zero).dy;
+          final scrollOffset = _scrollController.offset + offset - 100; // 100px padding from top
+          _scrollController.animateTo(
+            scrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          );
+        }
+      }
+    });
   }
 
   Future<void> _loadBinders() async {
     if (_bindersLoaded) return;
 
     try {
-      final snapshot = await widget.groupRepo.groupsCol().get();
-      final allBinders = snapshot.docs
-          .map((doc) => EnvelopeGroup.fromFirestore(doc))
-          .toList();
-
-      final uniqueBinders = <String, EnvelopeGroup>{};
-      for (final binder in allBinders) {
-        uniqueBinders[binder.id] = binder;
-      }
+      // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
+      final allBinders = await widget.groupRepo.getAllGroupsAsync();
 
       if (mounted) {
         setState(() {
-          _binders = uniqueBinders.values.toList()
-            ..sort((a, b) => a.name.compareTo(b.name));
+          _binders = allBinders..sort((a, b) => a.name.compareTo(b.name));
           _bindersLoaded = true;
         });
       }
@@ -126,6 +181,41 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     }
   }
 
+  bool _hasUnsavedChanges() {
+    // Check if any fields differ from original values
+    return _nameController.text != _originalName ||
+           _subtitleController.text != _originalSubtitle ||
+           _targetController.text != _originalTarget ||
+           _autoFillAmountController.text != _originalAutoFillAmount ||
+           _selectedEmoji != _originalEmoji ||
+           _iconType != _originalIconType ||
+           _iconValue != _originalIconValue ||
+           _selectedBinderId != _originalBinderId ||
+           _selectedAccountId != _originalAccountId ||
+           _selectedTargetDate != _originalTargetDate ||
+           _autoFillEnabled != _originalAutoFillEnabled;
+  }
+
+  Future<bool?> _confirmDiscard() {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard Changes?'),
+        content: const Text('You have unsaved changes. Are you sure you want to go back?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -156,6 +246,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           _iconType = envelope.iconType;
           _iconValue = envelope.iconValue;
           _selectedAccountId = envelope.linkedAccountId; // NEW
+          _selectedTargetDate = envelope.targetDate;
 
           if (envelope.groupId != null &&
               _binders.any((b) => b.id == envelope.groupId)) {
@@ -165,15 +256,52 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           }
 
           _autoFillEnabled = envelope.autoFillEnabled;
+
+          // Save original values for unsaved changes detection
+          _originalName = envelope.name;
+          _originalSubtitle = envelope.subtitle ?? '';
+          _originalTarget = envelope.targetAmount?.toStringAsFixed(2) ?? '';
+          _originalAutoFillAmount = envelope.autoFillAmount?.toStringAsFixed(2) ?? '';
+          _originalEmoji = envelope.emoji;
+          _originalIconType = envelope.iconType;
+          _originalIconValue = envelope.iconValue;
+          _originalBinderId = _selectedBinderId;
+          _originalAccountId = envelope.linkedAccountId;
+          _originalTargetDate = envelope.targetDate;
+          _originalAutoFillEnabled = envelope.autoFillEnabled;
+
           _initialized = true;
+
+          // Scroll to the requested section after initialization
+          if (widget.initialSection != EnvelopeSettingsSection.top) {
+            _scrollToSection(widget.initialSection);
+          }
         }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (bool didPop, dynamic result) async {
+            if (didPop) return;
+
+            // Check if there are unsaved changes
+            if (_hasUnsavedChanges()) {
+              final shouldPop = await _confirmDiscard();
+              if (shouldPop == true) {
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
+              }
+            } else {
+              // No unsaved changes, allow pop
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
             children: [
               const SizedBox(height: 12),
               Container(
@@ -215,6 +343,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
               const SizedBox(height: 24),
               Expanded(
                 child: ListView(
+                  controller: _scrollController,
                   padding: EdgeInsets.only(
                     left: 24,
                     right: 24,
@@ -276,6 +405,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     // SUBTITLE
                     TextField(
                       controller: _subtitleController,
+                      maxLines: 1,
                       style: fontProvider
                           .getTextStyle(fontSize: 18)
                           .copyWith(fontStyle: FontStyle.italic),
@@ -291,27 +421,91 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                         prefixIcon: const Icon(Icons.notes),
                       ),
-                      maxLines: 2,
                     ),
                     const SizedBox(height: 16),
 
                     // TARGET AMOUNT
-                    TextField(
-                      controller: _targetController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Target Amount (£)',
-                        labelStyle: fontProvider.getTextStyle(fontSize: 18),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    Consumer<LocaleProvider>(
+                      builder: (context, locale, _) => TextField(
+                        controller: _targetController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        prefixIcon: const Icon(Icons.flag),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Target Amount (${locale.currencySymbol})',
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.flag),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.calculate_outlined),
+                            onPressed: () async {
+                              final result = await CalculatorHelper.showCalculator(context);
+                              if (result != null) {
+                                _targetController.text = result;
+                              }
+                            },
+                            tooltip: 'Calculator',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // TARGET DATE
+                    InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedTargetDate ?? DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 3650)),
+                          helpText: 'Select Target Date',
+                        );
+
+                        if (date != null) {
+                          setState(() {
+                            _selectedTargetDate = date;
+                          });
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Target Date (Optional)',
+                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                          hintText: 'Tap to select date',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          suffixIcon: _selectedTargetDate != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedTargetDate = null;
+                                    });
+                                  },
+                                  tooltip: 'Clear date',
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          _selectedTargetDate != null
+                              ? DateFormat('MMM dd, yyyy').format(_selectedTargetDate!)
+                              : 'No date set',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            color: _selectedTargetDate != null
+                                ? theme.textTheme.bodyLarge?.color
+                                : theme.hintColor,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -356,9 +550,11 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                               ..._binders.map((binder) {
                                 final binderColorOption =
                                     ThemeBinderColors.getColorsForTheme(
-                                        themeProvider.currentThemeId)[binder.colorIndex];
+                                      themeProvider.currentThemeId,
+                                    )[binder.colorIndex];
                                 // Use envelopeTextColor for better contrast, especially for light binders
-                                final textColor = binderColorOption.envelopeTextColor;
+                                final textColor =
+                                    binderColorOption.envelopeTextColor;
                                 return DropdownMenuItem(
                                   value: binder.id,
                                   child: Row(
@@ -452,9 +648,18 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(
-                                      account.emoji ?? '💳',
-                                      style: const TextStyle(fontSize: 20),
+                                    SizedBox(
+                                      height: 24,
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          account.emoji ?? '💳',
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     Flexible(
@@ -485,6 +690,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
 
                     // SCHEDULE PAYMENT LINK
                     ListTile(
+                      key: _scheduledPaymentsKey,
                       contentPadding: EdgeInsets.zero,
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -532,6 +738,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     // AUTO-FILL SECTION
                     Text(
                       'Pay Day Auto-Fill',
+                      key: _autofillKey,
                       style: fontProvider.getTextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -560,24 +767,36 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     ),
                     if (_autoFillEnabled) ...[
                       const SizedBox(height: 16),
-                      TextField(
-                        controller: _autoFillAmountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: 'Auto-Fill Amount (£)',
-                          labelStyle: fontProvider.getTextStyle(fontSize: 18),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      Consumer<LocaleProvider>(
+                        builder: (context, locale, _) => TextField(
+                          controller: _autoFillAmountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
                           ),
-                          prefixIcon: const Icon(Icons.autorenew),
-                          helperText: 'Amount to add each pay day',
-                          helperStyle: fontProvider.getTextStyle(fontSize: 14),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Auto-Fill Amount (${locale.currencySymbol})',
+                            labelStyle: fontProvider.getTextStyle(fontSize: 18),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: const Icon(Icons.autorenew),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.calculate_outlined),
+                              onPressed: () async {
+                                final result = await CalculatorHelper.showCalculator(context);
+                                if (result != null) {
+                                  _autoFillAmountController.text = result;
+                                }
+                              },
+                              tooltip: 'Calculator',
+                            ),
+                            helperText: 'Amount to add each pay day',
+                            helperStyle: fontProvider.getTextStyle(fontSize: 14),
+                          ),
                         ),
                       ),
                     ],
@@ -618,7 +837,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              debugPrint('[EnvelopeSettingsSheet] 🔴 Delete button tapped');
+                              debugPrint(
+                                '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
+                              );
                               _confirmDelete(envelope);
                             },
                       style: OutlinedButton.styleFrom(
@@ -642,6 +863,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                 ),
               ),
             ],
+            ),
           ),
         );
       },
@@ -668,44 +890,25 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ? double.tryParse(_autoFillAmountController.text)
           : null;
 
-      final Map<String, dynamic> updates = {
-        'name': _nameController.text.trim(),
-        'emoji': _selectedEmoji,
-        'iconType': _iconType,
-        'iconValue': _iconValue,
-        'targetAmount': targetAmount,
-        'autoFillEnabled': _autoFillEnabled,
-        'updatedAt': FieldValue.serverTimestamp(),
-        // Save Linked Account
-        'linkedAccountId': _selectedAccountId,
-      };
-
-      if (_subtitleController.text.trim().isEmpty) {
-        updates['subtitle'] = FieldValue.delete();
-      } else {
-        updates['subtitle'] = _subtitleController.text.trim();
-      }
-
-      if (_selectedBinderId == null) {
-        updates['groupId'] = FieldValue.delete();
-      } else {
-        updates['groupId'] = _selectedBinderId;
-      }
-
-      if (_autoFillEnabled && autoFillAmount != null) {
-        updates['autoFillAmount'] = autoFillAmount;
-      } else {
-        updates['autoFillAmount'] = FieldValue.delete();
-      }
-
-      await widget.repo.db
-          .collection('users')
-          .doc(widget.repo.currentUserId)
-          .collection('solo')
-          .doc('data')
-          .collection('envelopes')
-          .doc(widget.envelopeId)
-          .update(updates);
+      // Update envelope using repo
+      await widget.repo.updateEnvelope(
+        envelopeId: widget.envelopeId,
+        name: _nameController.text.trim(),
+        emoji: _selectedEmoji,
+        iconType: _iconType,
+        iconValue: _iconValue,
+        targetAmount: targetAmount,
+        targetDate: _selectedTargetDate,
+        autoFillEnabled: _autoFillEnabled,
+        linkedAccountId: _selectedAccountId,
+        subtitle: _subtitleController.text.trim().isEmpty
+            ? null
+            : _subtitleController.text.trim(),
+        groupId: _selectedBinderId,
+        autoFillAmount: (_autoFillEnabled && autoFillAmount != null)
+            ? autoFillAmount
+            : null,
+      );
 
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -777,7 +980,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       debugPrint('[EnvelopeSettingsSheet] Envelope ID: ${widget.envelopeId}');
       debugPrint('[EnvelopeSettingsSheet] Envelope name: ${envelope.name}');
 
-      setState(() => _isLoading = true);
+      // CRITICAL: Close the settings sheet BEFORE deleting
+      // This prevents the sheet from trying to stream the deleted envelope
+      Navigator.pop(context);
 
       try {
         debugPrint('[EnvelopeSettingsSheet] 📞 Calling repo.deleteEnvelope...');
@@ -785,9 +990,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         debugPrint('[EnvelopeSettingsSheet] ✅ Delete completed successfully');
 
         if (mounted) {
-          debugPrint('[EnvelopeSettingsSheet] Popping navigation and showing success message');
-          Navigator.pop(context);
-          Navigator.pop(context);
+          debugPrint(
+            '[EnvelopeSettingsSheet] Showing success message',
+          );
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Envelope deleted')));
@@ -798,13 +1003,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error deleting envelope: $e')),
           );
-          setState(() => _isLoading = false);
         }
       }
     } else if (confirmed == false) {
       debugPrint('[EnvelopeSettingsSheet] ❌ User cancelled delete');
     } else if (!mounted) {
-      debugPrint('[EnvelopeSettingsSheet] ⚠️ Widget not mounted, skipping delete');
+      debugPrint(
+        '[EnvelopeSettingsSheet] ⚠️ Widget not mounted, skipping delete',
+      );
     }
   }
 }
