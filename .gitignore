@@ -22,3 +22,4 @@ macos/Runner/GoogleService-Info.plist
 firebase_app_id_file.json
 *.keystore
 *.p12
+*.bak

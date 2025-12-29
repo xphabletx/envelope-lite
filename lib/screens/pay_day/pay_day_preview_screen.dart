@@ -16,7 +16,9 @@ import '../../providers/font_provider.dart'; // NEW IMPORT
 import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
-// TUTORIAL IMPORT REMOVED - Logic commented out below
+import '../../widgets/tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
+import '../../utils/responsive_helper.dart';
 
 class PayDayPreviewScreen extends StatefulWidget {
   const PayDayPreviewScreen({
@@ -346,7 +348,16 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
               return false;
             }).toList();
 
-            return Scaffold(
+            return TutorialWrapper(
+              tutorialSequence: payDayTutorial,
+              spotlightKeys: {
+                'welcome': _welcomeKey,
+                'envelopeList': _envelopeListKey,
+                'amounts': _amountsKey,
+                'previewButton': _previewButtonKey,
+                'confirmButton': _confirmButtonKey,
+              },
+              child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
@@ -384,7 +395,7 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                 ),
               ),
               body: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: context.responsive.safePadding,
                 children: [
                   // BINDERS SECTION
                   if (bindersToDisplay.isNotEmpty) ...[
@@ -711,6 +722,7 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
                   ),
                 ),
               ),
+            ),
             );
           },
         );

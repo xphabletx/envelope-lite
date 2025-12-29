@@ -82,13 +82,17 @@ class _TutorialWrapperState extends State<TutorialWrapper>
   }
 
   Future<void> _checkTutorialStatus() async {
-    debugPrint('[Tutorial] Checking status for screen: ${widget.tutorialSequence.screenId}');
+    debugPrint('[TutorialWrapper] ═══════════════════════════════════════');
+    debugPrint('[TutorialWrapper] 🔍 Checking status for screen: ${widget.tutorialSequence.screenId}');
+    debugPrint('[TutorialWrapper] Screen name: ${widget.tutorialSequence.screenName}');
+    debugPrint('[TutorialWrapper] Steps count: ${widget.tutorialSequence.steps.length}');
 
     final isComplete = await TutorialController.isScreenComplete(
       widget.tutorialSequence.screenId,
     );
 
-    debugPrint('[Tutorial] Screen ${widget.tutorialSequence.screenId} - Complete: $isComplete, Will show: ${!isComplete}');
+    debugPrint('[TutorialWrapper] Completion check result: ${isComplete ? "COMPLETED ✅" : "NOT COMPLETED ❌"}');
+    debugPrint('[TutorialWrapper] Will show tutorial: ${!isComplete ? "YES 🎯" : "NO ⏭️"}');
 
     if (mounted) {
       setState(() {
@@ -97,11 +101,19 @@ class _TutorialWrapperState extends State<TutorialWrapper>
       });
 
       if (_showTutorial) {
-        debugPrint('[Tutorial] ✅ Tutorial will be shown for ${widget.tutorialSequence.screenId}');
+        debugPrint('[TutorialWrapper] ✅ Tutorial WILL BE SHOWN for "${widget.tutorialSequence.screenName}"');
+        // Wait for next frame to ensure UI is ready
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          debugPrint('[TutorialWrapper] 🎬 Tutorial overlay should now be visible');
+        });
       } else {
-        debugPrint('[Tutorial] ⏭️ Tutorial already completed for ${widget.tutorialSequence.screenId}');
+        debugPrint('[TutorialWrapper] ⏭️ Tutorial SKIPPED - already completed for "${widget.tutorialSequence.screenName}"');
       }
+    } else {
+      debugPrint('[TutorialWrapper] ⚠️ Widget not mounted - cannot show tutorial');
     }
+
+    debugPrint('[TutorialWrapper] ═══════════════════════════════════════');
   }
 
   void _hideTutorial() {

@@ -25,6 +25,10 @@ import 'modern_envelope_header_card.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../widgets/time_machine_indicator.dart';
+import '../../widgets/tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
+import '../../utils/responsive_helper.dart';
+import '../../widgets/responsive_layout.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -141,6 +145,128 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   bool _isCurrentMonth() {
     final now = DateTime.now();
     return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
+  }
+
+  Widget _buildPortraitLayout(
+    Envelope envelope,
+    List<Transaction> monthTransactions,
+    ThemeData theme,
+  ) {
+    return SingleChildScrollView(
+      key: const PageStorageKey<String>('envelope_detail_scroll'),
+      controller: _scrollController,
+      child: Column(
+        children: [
+          // Time Machine Indicator
+          const TimeMachineIndicator(),
+
+          // ---------------------------------------------------
+          // 1. THE VECTOR ENVELOPE (CustomPaint)
+          // ---------------------------------------------------
+          ModernEnvelopeHeaderCard(
+            key: _envelopeCardKey,
+            envelope: envelope,
+            repo: widget.repo,
+            groupRepo: _groupRepo,
+            accountRepo: _accountRepo,
+            scheduledPaymentRepo: _scheduledPaymentRepo,
+          ),
+
+          // ---------------------------------------------------
+          // 2. TARGET STATUS CARD
+          // ---------------------------------------------------
+          if (envelope.targetDate != null &&
+              (envelope.targetAmount ?? 0) > envelope.currentAmount)
+            _TargetStatusCard(envelope: envelope),
+
+          // ---------------------------------------------------
+          // 3. BINDER / GROUP INFO
+          // ---------------------------------------------------
+          const SizedBox(height: 16),
+          if (envelope.groupId != null)
+            _BinderInfoRow(
+              binderId: envelope.groupId!,
+              repo: widget.repo,
+            ),
+
+          // ---------------------------------------------------
+          // 4. MONTH NAVIGATION & LIST
+          // ---------------------------------------------------
+          if (envelope.groupId != null) const SizedBox(height: 16),
+          _buildMonthNavigationBar(theme),
+          const SizedBox(height: 8),
+          EnvelopeTransactionList(
+            key: _transactionListKey,
+            transactions: monthTransactions,
+            onTransactionTap: (tx) {},
+          ),
+          const SizedBox(height: 140),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeLayout(
+    Envelope envelope,
+    List<Transaction> monthTransactions,
+    ThemeData theme,
+  ) {
+    final responsive = context.responsive;
+
+    return TwoColumnLayout(
+      leftFlex: 2,
+      rightFlex: 3,
+      left: SingleChildScrollView(
+        padding: responsive.safePadding,
+        child: Column(
+          children: [
+            // Time Machine Indicator
+            const TimeMachineIndicator(),
+
+            // Envelope Header Card
+            ModernEnvelopeHeaderCard(
+              key: _envelopeCardKey,
+              envelope: envelope,
+              repo: widget.repo,
+              groupRepo: _groupRepo,
+              accountRepo: _accountRepo,
+              scheduledPaymentRepo: _scheduledPaymentRepo,
+            ),
+
+            // Target Status Card
+            if (envelope.targetDate != null &&
+                (envelope.targetAmount ?? 0) > envelope.currentAmount)
+              _TargetStatusCard(envelope: envelope),
+
+            const SizedBox(height: 16),
+
+            // Binder Info
+            if (envelope.groupId != null)
+              _BinderInfoRow(
+                binderId: envelope.groupId!,
+                repo: widget.repo,
+              ),
+          ],
+        ),
+      ),
+      right: SingleChildScrollView(
+        padding: responsive.safePadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            _buildMonthNavigationBar(theme),
+            const SizedBox(height: 8),
+            EnvelopeTransactionList(
+              key: _transactionListKey,
+              transactions: monthTransactions,
+              onTransactionTap: (tx) {},
+            ),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onBottomNavTap(int index) {
@@ -284,9 +410,16 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
 
                 return PopScope(
                   canPop: true,
-                  child: GestureDetector(
-                    onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),
-                    child: Scaffold(
+                  child: TutorialWrapper(
+                    tutorialSequence: envelopeDetailTutorial,
+                    spotlightKeys: {
+                      'envelopeCard': _envelopeCardKey,
+                      'transactionList': _transactionListKey,
+                      'fab': _fabKey,
+                    },
+                    child: GestureDetector(
+                      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),
+                      child: Scaffold(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 appBar: AppBar(
                   backgroundColor: theme.scaffoldBackgroundColor,
@@ -309,56 +442,16 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   ),
                 ),
               ),
-              body: SingleChildScrollView(
-                key: const PageStorageKey<String>('envelope_detail_scroll'),
-                controller: _scrollController,
-                child: Column(
-                  children: [
-                    // Time Machine Indicator
-                    const TimeMachineIndicator(),
-
-                    // ---------------------------------------------------
-                    // 1. THE VECTOR ENVELOPE (CustomPaint)
-                    // ---------------------------------------------------
-                    ModernEnvelopeHeaderCard(
-                      key: _envelopeCardKey,
-                      envelope: envelope,
-                      repo: widget.repo,
-                      groupRepo: _groupRepo,
-                      accountRepo: _accountRepo,
-                      scheduledPaymentRepo: _scheduledPaymentRepo,
-                    ),
-
-                    // ---------------------------------------------------
-                    // 2. TARGET STATUS CARD
-                    // ---------------------------------------------------
-                    if (envelope.targetDate != null &&
-                        (envelope.targetAmount ?? 0) > envelope.currentAmount)
-                      _TargetStatusCard(envelope: envelope),
-
-                    // ---------------------------------------------------
-                    // 3. BINDER / GROUP INFO
-                    // ---------------------------------------------------
-                    const SizedBox(height: 16),
-                    if (envelope.groupId != null)
-                      _BinderInfoRow(
-                        binderId: envelope.groupId!,
-                        repo: widget.repo,
-                      ),
-
-                    // ---------------------------------------------------
-                    // 4. MONTH NAVIGATION & LIST
-                    // ---------------------------------------------------
-                    if (envelope.groupId != null) const SizedBox(height: 16),
-                    _buildMonthNavigationBar(theme),
-                    const SizedBox(height: 8),
-                    EnvelopeTransactionList(
-                      key: _transactionListKey, // TUTORIAL KEY
-                      transactions: monthTransactions,
-                      onTransactionTap: (tx) {},
-                    ),
-                    const SizedBox(height: 140),
-                  ],
+              body: ResponsiveLayout(
+                portrait: _buildPortraitLayout(
+                  envelope,
+                  monthTransactions,
+                  theme,
+                ),
+                landscape: _buildLandscapeLayout(
+                  envelope,
+                  monthTransactions,
+                  theme,
                 ),
               ),
 
@@ -405,6 +498,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                   FloatingActionButtonLocation.endFloat,
             ),
           ),
+        ),
         );
       },
     );

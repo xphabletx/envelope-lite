@@ -770,7 +770,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                             ),
                             Switch(
                               value: _mineOnly,
-                              activeColor: theme.colorScheme.primary,
+                              activeTrackColor: theme.colorScheme.primary,
                               onChanged: (val) => setState(() => _mineOnly = val),
                             ),
                             const SizedBox(width: 8),

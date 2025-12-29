@@ -214,9 +214,14 @@ class DataExportService {
             ListTile(
               leading: const Icon(Icons.share),
               title: const Text('Share File'),
-              onTap: () {
+              onTap: () async {
                 Navigator.of(ctx).pop();
-                Share.shareXFiles([XFile(filePath)], text: 'Envelope Lite Data Export');
+                await SharePlus.instance.share(
+                  ShareParams(
+                    files: [XFile(filePath)],
+                    text: 'Envelope Lite Data Export',
+                  ),
+                );
               },
             ),
             ListTile(

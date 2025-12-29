@@ -16,6 +16,8 @@ import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import 'time_machine_transition.dart';
+import '../tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
 
 class TimeMachineScreen extends StatefulWidget {
   const TimeMachineScreen({
@@ -73,8 +75,11 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
     // Use nextPayDate directly from PayDaySettings (not lastPayDate)
     if (widget.paySettings.nextPayDate != null) {
-      _nextPayDate = widget.paySettings.nextPayDate!;
-      debugPrint('[TimeMachine] ✅ Initialized with next pay date: $_nextPayDate');
+      // Apply weekend adjustment if enabled
+      _nextPayDate = widget.paySettings.adjustForWeekends
+          ? widget.paySettings.adjustForWeekend(widget.paySettings.nextPayDate!)
+          : widget.paySettings.nextPayDate!;
+      debugPrint('[TimeMachine] ✅ Initialized with next pay date: $_nextPayDate (adjustForWeekends: ${widget.paySettings.adjustForWeekends})');
     } else {
       _nextPayDate = DateTime.now().add(const Duration(days: 1));
       debugPrint('[TimeMachine] ⚠️ No pay date in settings, using tomorrow');
@@ -354,30 +359,30 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   }
 
   DateTime _calculateAnchorDate(DateTime target, String frequency) {
-    print('\n>>> _calculateAnchorDate DEBUG (Time Machine) <<<');
-    print('Target (Next Pay Date): $target');
-    print('Frequency: $frequency');
+    // print('\n>>> _calculateAnchorDate DEBUG (Time Machine) <<<');
+    // print('Target (Next Pay Date): $target');
+    // print('Frequency: $frequency');
 
     DateTime anchor;
     switch (frequency) {
       case 'weekly':
         anchor = target.subtract(const Duration(days: 7));
-        print('WEEKLY: Anchor = target - 7 days = $anchor');
+    // print('WEEKLY: Anchor = target - 7 days = $anchor');
         break;
       case 'biweekly':
         anchor = target.subtract(const Duration(days: 14));
-        print('BIWEEKLY: Anchor = target - 14 days = $anchor');
+    // print('BIWEEKLY: Anchor = target - 14 days = $anchor');
         break;
       case 'monthly':
         anchor = DateTime(target.year, target.month - 1, target.day);
-        print('MONTHLY: Anchor = previous month same day = $anchor');
+    // print('MONTHLY: Anchor = previous month same day = $anchor');
         break;
       default:
         anchor = target.subtract(const Duration(days: 1));
-        print('DEFAULT: Anchor = target - 1 day = $anchor');
+    // print('DEFAULT: Anchor = target - 1 day = $anchor');
         break;
     }
-    print('>>> Anchor date will be used as lastPayDate in projection <<<\n');
+    // print('>>> Anchor date will be used as lastPayDate in projection <<<\n');
     return anchor;
   }
 
@@ -398,7 +403,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
       }
     }
 
-    return Scaffold(
+    return TutorialWrapper(
+      tutorialSequence: timeMachineTutorial,
+      spotlightKeys: const {},
+      child: Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -1005,6 +1013,199 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     ),
 
                     const SizedBox(height: 20),
+
+                    // Income vs Expenses Breakdown
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.analytics_outlined,
+                                size: 20,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Income & Expenses',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildStatItem(
+                                context: context,
+                                label: 'Income',
+                                value: _calculateTotalIncome(_result!.timeline),
+                                color: Colors.green,
+                                currency: locale.currencySymbol,
+                                fontProvider: fontProvider,
+                              ),
+                              Container(
+                                width: 1,
+                                height: 40,
+                                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                              ),
+                              _buildStatItem(
+                                context: context,
+                                label: 'Expenses',
+                                value: _calculateTotalExpenses(_result!.timeline),
+                                color: Colors.red,
+                                currency: locale.currencySymbol,
+                                fontProvider: fontProvider,
+                              ),
+                              Container(
+                                width: 1,
+                                height: 40,
+                                color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                              ),
+                              _buildStatItem(
+                                context: context,
+                                label: 'Net Change',
+                                value: _calculateNetChange(_result!.timeline),
+                                color: _calculateNetChange(_result!.timeline) >= 0
+                                    ? Colors.green
+                                    : Colors.red,
+                                currency: locale.currencySymbol,
+                                fontProvider: fontProvider,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Projected Timeline
+                    if (_result!.timeline.isNotEmpty)
+                      Card(
+                        margin: EdgeInsets.zero,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ExpansionTile(
+                          title: Row(
+                            children: [
+                              Icon(
+                                Icons.timeline,
+                                size: 20,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Projected Transactions',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4, left: 32),
+                            child: Text(
+                              '${_result!.timeline.length} events',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ),
+                          children: [
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 400),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const ClampingScrollPhysics(),
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _result!.timeline.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final event = _result!.timeline[index];
+                                  final isIncome = event.isCredit;
+
+                                  return ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: isIncome
+                                            ? Colors.green.shade50
+                                            : Colors.red.shade50,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        isIncome ? Icons.add : Icons.remove,
+                                        color: isIncome ? Colors.green : Colors.red,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      event.description,
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          DateFormat('MMM d, yyyy').format(event.date),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.6),
+                                          ),
+                                        ),
+                                        if (event.envelopeName != null)
+                                          Text(
+                                            'Envelope: ${event.envelopeName}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: theme.colorScheme.primary
+                                                  .withValues(alpha: 0.7),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    trailing: Text(
+                                      '${isIncome ? '+' : '-'}${locale.currencySymbol}${event.amount.toStringAsFixed(2)}',
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: isIncome ? Colors.green : Colors.red,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 20),
                     const Divider(),
                     const SizedBox(height: 20),
 
@@ -1168,7 +1369,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         // Activate Time Machine mode
                         if (!mounted) return;
                         final timeMachine = Provider.of<TimeMachineProvider>(
-                          context,
+                          context, // ignore: use_build_context_synchronously
                           listen: false,
                         );
                         timeMachine.enterTimeMachine(
@@ -1178,9 +1379,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
                         // Close transition dialog
                         if (!mounted) return;
+                        // ignore: use_build_context_synchronously
                         Navigator.pop(context); // Close transition
 
-                        // Navigate to home screen (in future mode)
+                        // ignore: use_build_context_synchronously
                         Navigator.popUntil(context, (route) => route.isFirst);
                       },
                       style: FilledButton.styleFrom(
@@ -1208,6 +1410,54 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
           ],
         ),
       ),
+    ),
+    );
+  }
+
+  // Helper methods for stats calculation
+  double _calculateTotalIncome(List<ProjectionEvent> timeline) {
+    return timeline
+        .where((event) => event.isCredit)
+        .fold(0.0, (sum, event) => sum + event.amount);
+  }
+
+  double _calculateTotalExpenses(List<ProjectionEvent> timeline) {
+    return timeline
+        .where((event) => !event.isCredit)
+        .fold(0.0, (sum, event) => sum + event.amount);
+  }
+
+  double _calculateNetChange(List<ProjectionEvent> timeline) {
+    return _calculateTotalIncome(timeline) - _calculateTotalExpenses(timeline);
+  }
+
+  Widget _buildStatItem({
+    required BuildContext context,
+    required String label,
+    required double value,
+    required Color color,
+    required String currency,
+    required FontProvider fontProvider,
+  }) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '$currency${value.toStringAsFixed(2)}',
+          style: fontProvider.getTextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

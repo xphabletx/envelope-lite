@@ -112,24 +112,34 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                     ),
                     const SizedBox(height: 8),
                     ...availableBinders.map((binder) {
-                      return RadioListTile<String>(
-                        title: Text(
-                          binder.name,
-                          style: fontProvider.getTextStyle(fontSize: 16),
-                        ),
-                        secondary: Text(
-                          binder.emoji ?? '📁',
-                          style: const TextStyle(fontSize: 24),
-                        ),
-                        value: binder.id,
-                        groupValue: _selectedId,
-                        toggleable: true,
-                        onChanged: (val) {
+                      final isSelected = _selectedId == binder.id;
+                      return InkWell(
+                        onTap: () {
                           setState(() {
                             _selectedType = 'binder';
-                            _selectedId = val;
+                            _selectedId = isSelected ? null : binder.id;
                           });
                         },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            leading: Text(
+                              binder.emoji ?? '📁',
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                            title: Text(
+                              binder.name,
+                              style: fontProvider.getTextStyle(fontSize: 16),
+                            ),
+                            trailing: Icon(
+                              isSelected ? Icons.check_circle : Icons.circle_outlined,
+                              color: isSelected ? theme.colorScheme.primary : null,
+                            ),
+                          ),
+                        ),
                       );
                     }),
                     const SizedBox(height: 24),
@@ -147,24 +157,34 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                     ),
                     const SizedBox(height: 8),
                     ...availableEnvelopes.map((env) {
-                      return RadioListTile<String>(
-                        title: Text(
-                          env.name,
-                          style: fontProvider.getTextStyle(fontSize: 16),
-                        ),
-                        secondary: Text(
-                          env.emoji ?? '✉️',
-                          style: const TextStyle(fontSize: 24),
-                        ),
-                        value: env.id,
-                        groupValue: _selectedId,
-                        toggleable: true,
-                        onChanged: (val) {
+                      final isSelected = _selectedId == env.id;
+                      return InkWell(
+                        onTap: () {
                           setState(() {
                             _selectedType = 'envelope';
-                            _selectedId = val;
+                            _selectedId = isSelected ? null : env.id;
                           });
                         },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            leading: Text(
+                              env.emoji ?? '✉️',
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                            title: Text(
+                              env.name,
+                              style: fontProvider.getTextStyle(fontSize: 16),
+                            ),
+                            trailing: Icon(
+                              isSelected ? Icons.check_circle : Icons.circle_outlined,
+                              color: isSelected ? theme.colorScheme.primary : null,
+                            ),
+                          ),
+                        ),
                       );
                     }),
                   ],

@@ -18,6 +18,9 @@ import '../providers/theme_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../theme/app_themes.dart';
 import '../screens/pay_day/pay_day_preview_screen.dart';
+import '../widgets/tutorial_wrapper.dart';
+import '../data/tutorial_sequences.dart';
+import '../utils/responsive_helper.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -143,9 +146,12 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             }
 
             if (groups.isEmpty) {
-              return Scaffold(
-                backgroundColor: theme.scaffoldBackgroundColor,
-                appBar: AppBar(
+              return TutorialWrapper(
+                tutorialSequence: bindersTutorial,
+                spotlightKeys: const {},
+                child: Scaffold(
+                  backgroundColor: theme.scaffoldBackgroundColor,
+                  appBar: AppBar(
                   title: Row(
                     children: [
                       ElevatedButton.icon(
@@ -234,10 +240,14 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                   ),
                   onPressed: () => _openGroupEditor(null),
                 ),
-              );
+              ),
+            );
             }
 
-            return Scaffold(
+            return TutorialWrapper(
+              tutorialSequence: bindersTutorial,
+              spotlightKeys: const {},
+              child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
                 title: FittedBox(
@@ -268,7 +278,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                         ),
                         Switch(
                           value: _mineOnly,
-                          activeColor: theme.colorScheme.primary,
+                          activeTrackColor: theme.colorScheme.primary,
                           onChanged: (val) => setState(() => _mineOnly = val),
                         ),
                         const SizedBox(width: 8),
@@ -400,6 +410,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                 ),
                 onPressed: () => _openGroupEditor(null),
               ),
+            ),
             );
           },
         );
@@ -482,6 +493,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final responsive = context.responsive;
     final selectedEnvelope =
         _selectedIndex != null && _selectedIndex! < widget.envelopes.length
             ? widget.envelopes[_selectedIndex!]
@@ -510,7 +522,10 @@ class _BinderSpreadState extends State<_BinderSpread> {
 
           // LAYER 2: The "Paper" Pages
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.isLandscape ? 12 : 16,
+              vertical: responsive.isLandscape ? 12 : 16,
+            ),
             child: Row(
               children: [
                 // === LEFT PAGE (ENVELOPES) ===

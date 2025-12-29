@@ -9,6 +9,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/account_repo.dart'; // NEW
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../utils/responsive_helper.dart';
 
 class PayDayStuffingScreen extends StatefulWidget {
   const PayDayStuffingScreen({
@@ -65,6 +66,9 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
   }
 
   Future<void> _startStuffing() async {
+    // Calculate total amount to deduct from account
+    final totalAutoFillAmount = widget.allocations.values.fold(0.0, (a, b) => a + b);
+
     // 1. Stuff envelopes
     for (int i = 0; i < widget.envelopes.length; i++) {
       if (!mounted) return;
@@ -88,7 +92,7 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
         await widget.repo.deposit(
           envelopeId: env.id,
           amount: amount,
-          description: 'Pay Day',
+          description: 'Pay Day Auto-Fill',
           date: DateTime.now(),
         );
       } catch (e) {
@@ -102,18 +106,27 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // 2. Update Account Balance (NEW)
+    // 2. Update Account Balance - DEDUCT auto-fill amounts
     try {
       // Fetch current account state
       final account = await widget.accountRepo
           .accountStream(widget.accountId)
           .first;
 
-      // Update balance (add the total pay amount)
+      // CRITICAL FIX: Deduct auto-fill amounts from account
+      // The pay amount is deposited separately, here we only deduct envelope allocations
+      final newBalance = account.currentBalance + widget.totalAmount - totalAutoFillAmount;
+
       await widget.accountRepo.updateAccount(
         accountId: widget.accountId,
-        currentBalance: account.currentBalance + widget.totalAmount,
+        currentBalance: newBalance,
       );
+
+      debugPrint('[PayDay] ✅ Account updated:');
+      debugPrint('  Previous Balance: ${account.currentBalance}');
+      debugPrint('  Pay Amount: +${widget.totalAmount}');
+      debugPrint('  Auto-Fill Deduction: -$totalAutoFillAmount');
+      debugPrint('  New Balance: $newBalance');
     } catch (e) {
       debugPrint('Error updating account balance: $e');
       // Non-fatal error for UI, but important to log
@@ -262,7 +275,7 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
         backgroundColor: theme.scaffoldBackgroundColor,
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: context.responsive.safePadding,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

@@ -10,6 +10,9 @@ import './account_detail_screen.dart';
 import '../../widgets/accounts/account_card.dart';
 import '../../widgets/partner_badge.dart';
 import '../../services/workspace_helper.dart';
+import '../../widgets/tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
+import '../../utils/responsive_helper.dart';
 
 class AccountListScreen extends StatefulWidget {
   const AccountListScreen({super.key, required this.envelopeRepo});
@@ -36,7 +39,10 @@ class _AccountListScreenState extends State<AccountListScreen> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final isWorkspace = widget.envelopeRepo.inWorkspace;
 
-    return Scaffold(
+    return TutorialWrapper(
+      tutorialSequence: accountsTutorial,
+      spotlightKeys: const {},
+      child: Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -69,7 +75,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
                 ),
                 Switch(
                   value: _mineOnly,
-                  activeColor: theme.colorScheme.primary,
+                  activeTrackColor: theme.colorScheme.primary,
                   onChanged: (val) => setState(() => _mineOnly = val),
                 ),
                 const SizedBox(width: 16),
@@ -124,7 +130,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: context.responsive.safePadding,
             itemCount: accounts.length,
             itemBuilder: (context, index) {
               final account = accounts[index];
@@ -177,6 +183,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
         backgroundColor: theme.colorScheme.primary,
         child: const Icon(Icons.add),
       ),
+    ),
     );
   }
 

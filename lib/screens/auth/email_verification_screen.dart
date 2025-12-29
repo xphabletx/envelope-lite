@@ -11,7 +11,7 @@ import 'dart:async';
 /// - Manual "I've Verified" button
 /// - Sign out option
 class EmailVerificationScreen extends StatefulWidget {
-  const EmailVerificationScreen({Key? key}) : super(key: key);
+  const EmailVerificationScreen({super.key});
 
   @override
   State<EmailVerificationScreen> createState() =>

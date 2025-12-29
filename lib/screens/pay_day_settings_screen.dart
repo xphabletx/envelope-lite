@@ -6,6 +6,7 @@ import '../models/pay_day_settings.dart';
 import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
+import '../utils/responsive_helper.dart';
 
 class PayDaySettingsScreen extends StatefulWidget {
   const PayDaySettingsScreen({
@@ -25,6 +26,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
   DateTime? _nextPayDate;
   bool _isEnabled = false;
   bool _saving = false;
+  bool _adjustForWeekends = true;
 
   @override
   void initState() {
@@ -46,6 +48,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
         _amountController.text = settings.expectedPayAmount?.toStringAsFixed(2) ?? '0.00';
         _frequency = settings.payFrequency;
         _nextPayDate = settings.nextPayDate;
+        _adjustForWeekends = settings.adjustForWeekends;
       });
     }
   }
@@ -81,6 +84,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
           nextPayDate: _nextPayDate,
           payDayOfMonth: _nextPayDate!.day,
           payDayOfWeek: _nextPayDate!.weekday,
+          adjustForWeekends: _adjustForWeekends,
         );
 
         await widget.service.updatePayDaySettings(settings);
@@ -137,7 +141,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: context.responsive.safePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -290,6 +294,92 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.all(16),
                   minimumSize: const Size(double.infinity, 56),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Weekend Adjustment Toggle
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.weekend, color: theme.colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Adjust for Weekends',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Switch(
+                          value: _adjustForWeekends,
+                          onChanged: (value) {
+                            setState(() => _adjustForWeekends = value);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'If your pay day falls on a weekend, move it to Friday',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+
+                    // Show preview if weekend adjustment would apply
+                    if (_adjustForWeekends && _nextPayDate != null) ...[
+                      const SizedBox(height: 12),
+                      Builder(
+                        builder: (context) {
+                          final tempSettings = PayDaySettings(
+                            userId: 'temp',
+                            nextPayDate: _nextPayDate!,
+                          );
+                          final adjustedDate = tempSettings.adjustForWeekend(_nextPayDate!);
+
+                          if (adjustedDate != _nextPayDate) {
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Next pay day would be ${DateFormat('EEEE, MMM d').format(adjustedDate)} (moved from ${DateFormat('EEEE').format(_nextPayDate!)})',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.blue.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
+                  ],
                 ),
               ),
 

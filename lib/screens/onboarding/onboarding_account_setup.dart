@@ -2,12 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../models/account.dart';
 import '../../models/pay_day_settings.dart';
+import '../../utils/responsive_helper.dart';
 
 class OnboardingAccountSetup extends StatefulWidget {
   const OnboardingAccountSetup({
@@ -33,6 +35,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
   final _payAmountController = TextEditingController(text: '0.00');
   String _payFrequency = 'monthly';
   DateTime? _nextPayDate;
+  bool _adjustForWeekends = true;
 
   @override
   void initState() {
@@ -151,6 +154,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
           nextPayDate: _nextPayDate,
           payDayOfMonth: _nextPayDate!.day,
           payDayOfWeek: _nextPayDate!.weekday,
+          adjustForWeekends: _adjustForWeekends,
         );
 
         // Save to Hive (local-only)
@@ -219,7 +223,7 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
             children: [
             // Header
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: context.responsive.safePadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -455,6 +459,92 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
                     ),
                   ),
 
+                  const SizedBox(height: 16),
+
+                  // Weekend Adjustment Toggle
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.weekend, color: theme.colorScheme.primary),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Adjust for Weekends',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Switch(
+                              value: _adjustForWeekends,
+                              onChanged: (value) {
+                                setState(() => _adjustForWeekends = value);
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'If your pay day falls on a weekend, move it to Friday',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+
+                        // Show preview if weekend adjustment would apply
+                        if (_adjustForWeekends && _nextPayDate != null) ...[
+                          const SizedBox(height: 12),
+                          Builder(
+                            builder: (context) {
+                              final tempSettings = PayDaySettings(
+                                userId: 'temp',
+                                nextPayDate: _nextPayDate!,
+                              );
+                              final adjustedDate = tempSettings.adjustForWeekend(_nextPayDate!);
+
+                              if (adjustedDate != _nextPayDate) {
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Next pay day would be ${DateFormat('EEEE, MMM d').format(adjustedDate)} (moved from ${DateFormat('EEEE').format(_nextPayDate!)})',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.blue.shade900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
                   if (_nextPayDate != null) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -622,7 +712,7 @@ class _AccountEntryCard extends StatelessWidget {
 
             // Account type dropdown
             DropdownButtonFormField<AccountType>(
-              value: entry.accountType,
+              initialValue: entry.accountType,
               decoration: InputDecoration(
                 labelText: 'Account Type',
                 labelStyle: fontProvider.getTextStyle(fontSize: 16),

@@ -16,6 +16,7 @@ import '../../services/localization_service.dart';
 import '../../providers/font_provider.dart';
 import 'notifications_screen.dart';
 import '../screens/home_screen.dart';
+import '../../utils/responsive_helper.dart';
 
 class _PayDayOccurrence {
   final double amount;
@@ -587,7 +588,9 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
               body: Column(
                 children: [
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    margin: EdgeInsets.symmetric(
+                      horizontal: context.responsive.isLandscape ? 40 : 8,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
@@ -794,7 +797,9 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                             ),
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: context.responsive.isLandscape ? 40 : 20,
+                            ),
                             itemCount: sortedDates.length,
                             itemBuilder: (context, index) {
                               final date = sortedDates[index];

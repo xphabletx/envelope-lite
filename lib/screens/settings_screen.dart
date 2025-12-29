@@ -26,6 +26,9 @@ import '../screens/settings/tutorial_manager_screen.dart';
 import '../screens/settings/faq_screen.dart';
 import '../services/scheduled_payment_repo.dart';
 import '../services/pay_day_settings_service.dart';
+import '../widgets/tutorial_wrapper.dart';
+import '../data/tutorial_sequences.dart';
+import '../utils/responsive_helper.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -38,7 +41,10 @@ class SettingsScreen extends StatelessWidget {
     final userService = UserService(repo.db, repo.currentUserId);
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    return Scaffold(
+    return TutorialWrapper(
+      tutorialSequence: settingsTutorial,
+      spotlightKeys: const {},
+      child: Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: FittedBox(
@@ -60,9 +66,10 @@ class SettingsScreen extends StatelessWidget {
           final profile = snapshot.data;
           final displayName = profile?.displayName ?? 'User';
           final email = currentUser?.email ?? 'No email found';
+          final responsive = context.responsive;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: responsive.safePadding,
             children: [
               // Profile Section
               _SettingsSection(
@@ -477,6 +484,7 @@ class SettingsScreen extends StatelessWidget {
             ],
           );
         },
+      ),
       ),
     );
   }

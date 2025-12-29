@@ -245,7 +245,11 @@ class AccountRepo {
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
     double total = 0.0;
     for (final envelope in linkedEnvelopes) {
-      total += envelope.currentAmount;
+      // CRITICAL FIX: Use autoFillAmount (what's ALLOCATED), not currentAmount (what's IN the envelope)
+      // This shows how much of the account balance is committed to auto-fill on next pay day
+      if (envelope.autoFillEnabled && envelope.autoFillAmount != null) {
+        total += envelope.autoFillAmount!;
+      }
     }
     return total;
   }

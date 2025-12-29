@@ -32,6 +32,9 @@ class PayDaySettings {
   @HiveField(8)
   final double? expectedPayAmount; // Expected regular pay amount (take-home)
 
+  @HiveField(9)
+  final bool adjustForWeekends; // Move pay day to Friday if falls on weekend
+
   PayDaySettings({
     required this.userId,
     this.lastPayAmount,
@@ -42,7 +45,29 @@ class PayDaySettings {
     this.defaultAccountId,
     this.nextPayDate,
     this.expectedPayAmount,
+    this.adjustForWeekends = true,
   });
+
+  /// Adjusts pay day to Friday if it falls on weekend
+  DateTime adjustForWeekend(DateTime date) {
+    // If Saturday (6), move back 1 day to Friday
+    if (date.weekday == DateTime.saturday) {
+      return date.subtract(const Duration(days: 1));
+    }
+    // If Sunday (7), move back 2 days to Friday
+    if (date.weekday == DateTime.sunday) {
+      return date.subtract(const Duration(days: 2));
+    }
+    // Weekday - no adjustment needed
+    return date;
+  }
+
+  /// Calculate next pay date with weekend adjustment
+  DateTime? getNextPayDateAdjusted() {
+    final nextDate = getNextPayDate();
+    if (nextDate == null) return null;
+    return adjustForWeekend(nextDate);
+  }
 
   PayDaySettings copyWith({
     double? lastPayAmount,
@@ -53,6 +78,7 @@ class PayDaySettings {
     String? defaultAccountId,
     DateTime? nextPayDate,
     double? expectedPayAmount,
+    bool? adjustForWeekends,
   }) {
     return PayDaySettings(
       userId: userId,
@@ -64,6 +90,7 @@ class PayDaySettings {
       defaultAccountId: defaultAccountId ?? this.defaultAccountId,
       nextPayDate: nextPayDate ?? this.nextPayDate,
       expectedPayAmount: expectedPayAmount ?? this.expectedPayAmount,
+      adjustForWeekends: adjustForWeekends ?? this.adjustForWeekends,
     );
   }
 
@@ -125,6 +152,7 @@ class PayDaySettings {
       'defaultAccountId': defaultAccountId,
       'nextPayDate': nextPayDate?.millisecondsSinceEpoch,
       'expectedPayAmount': expectedPayAmount,
+      'adjustForWeekends': adjustForWeekends,
     };
   }
 
@@ -143,6 +171,7 @@ class PayDaySettings {
           ? DateTime.fromMillisecondsSinceEpoch(data['nextPayDate'] as int)
           : null,
       expectedPayAmount: data['expectedPayAmount'] as double?,
+      adjustForWeekends: data['adjustForWeekends'] as bool? ?? true,
     );
   }
 

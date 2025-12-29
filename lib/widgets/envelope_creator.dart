@@ -699,7 +699,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String?>(
-                            value: _selectedAccountId,
+                            initialValue: _selectedAccountId,
                             decoration: InputDecoration(
                               labelText: 'Select Account (Optional)',
                               labelStyle: fontProvider.getTextStyle(
@@ -772,7 +772,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String?>(
-                                  value: _selectedBinderId,
+                                  initialValue: _selectedBinderId,
                                   decoration: InputDecoration(
                                     labelText: tr('envelope_add_to_binder'),
                                     labelStyle: fontProvider.getTextStyle(

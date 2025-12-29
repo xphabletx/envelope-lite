@@ -70,24 +70,26 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed == true) {
+      if (!mounted) return;
       try {
         await widget.accountRepo.deleteAccount(widget.account.id);
-        if (mounted) {
-          Navigator.pop(context); // Go back to account list
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('success_account_deleted'))),
-          );
-        }
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        Navigator.pop(context); // Go back to account list
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('success_account_deleted'))),
+        );
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${tr('error_generic')}: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        if (!mounted) return;
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${tr('error_generic')}: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }

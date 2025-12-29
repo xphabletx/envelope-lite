@@ -7,7 +7,6 @@ import 'package:hive/hive.dart';
 import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
 import '../services/account_repo.dart';
-import '../services/group_repo.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -15,6 +14,8 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/account.dart';
 import '../widgets/partner_badge.dart';
+import '../widgets/tutorial_wrapper.dart';
+import '../data/tutorial_sequences.dart';
 
 class WorkspaceManagementScreen extends StatefulWidget {
   const WorkspaceManagementScreen({
@@ -253,7 +254,10 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       );
     }
 
-    return Scaffold(
+    return TutorialWrapper(
+      tutorialSequence: workspaceTutorial,
+      spotlightKeys: const {},
+      child: Scaffold(
       appBar: AppBar(
         title: FittedBox(
           child: Text(
@@ -366,6 +370,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         currentIndex: _selectedNavIndex,
         onTap: _onNavTapped,
       ),
+    ),
     );
   }
 

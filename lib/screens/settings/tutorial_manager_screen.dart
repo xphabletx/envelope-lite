@@ -31,20 +31,6 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
     setState(() => _completionStatus = status);
   }
 
-  Future<void> _resetScreen(String screenId) async {
-    await TutorialController.resetScreen(screenId);
-    await _loadStatus();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Tutorial reset! It will show next time you visit that screen.',
-          ),
-        ),
-      );
-    }
-  }
-
   Future<void> _resetAll() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -78,22 +64,67 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
   }
 
   void _navigateToScreen(String screenId) {
-    // Navigate to the appropriate screen based on screenId
-    // This will be implemented when the screen has TutorialWrapper
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Navigate to the "$screenId" tab in the main screen to see this tutorial.',
-        ),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    debugPrint('[TutorialManager] ═══════════════════════════════════════');
+    debugPrint('[TutorialManager] User requested navigation to: $screenId');
 
-    // Close settings to return to main app
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    // First, reset the tutorial so it will show again
+    TutorialController.resetScreen(screenId).then((_) {
+      debugPrint('[TutorialManager] ✅ Tutorial "$screenId" reset successfully');
 
-    // TODO: Navigate to specific tab based on screenId
-    // This would require passing a callback or using a navigator key
+      // Show helpful message based on the screen
+      String message;
+      switch (screenId) {
+        case 'home':
+          message = 'Tutorial reset! ✅\n\nClose settings and return to Home to see it.';
+          break;
+        case 'binders':
+          message = 'Tutorial reset! ✅\n\nNavigate to the Binders tab to see it.';
+          break;
+        case 'envelope_detail':
+          message = 'Tutorial reset! ✅\n\nOpen any envelope to see this tutorial.';
+          break;
+        case 'calendar':
+          message = 'Tutorial reset! ✅\n\nNavigate to the Calendar tab to see it.';
+          break;
+        case 'accounts':
+          message = 'Tutorial reset! ✅\n\nNavigate to Accounts to see this tutorial.';
+          break;
+        case 'settings':
+          message = 'Tutorial reset! ✅\n\nYou\'re already in Settings - back out and return to see it.';
+          break;
+        case 'pay_day':
+          message = 'Tutorial reset! ✅\n\nNavigate to Pay Day to see this tutorial.';
+          break;
+        case 'time_machine':
+          message = 'Tutorial reset! ✅\n\nNavigate to Time Machine to see this tutorial.';
+          break;
+        case 'workspace':
+          message = 'Tutorial reset! ✅\n\nNavigate to Workspace Management to see this tutorial.';
+          break;
+        default:
+          message = 'Tutorial reset! ✅\n\nNavigate to the "$screenId" screen to see it.';
+      }
+
+      debugPrint('[TutorialManager] Showing message: $message');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {},
+            ),
+          ),
+        );
+
+        // Refresh the completion status
+        _loadStatus();
+      }
+
+      debugPrint('[TutorialManager] ═══════════════════════════════════════');
+    });
   }
 
   @override
@@ -139,25 +170,27 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
                 leading: Icon(
                   isComplete ? Icons.check_circle : Icons.help_outline,
                   color: isComplete ? Colors.green : theme.colorScheme.primary,
+                  size: 32,
                 ),
-                title: Text(tutorial.screenName),
+                title: Text(
+                  tutorial.screenName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 subtitle: Text(
-                  '${tutorial.steps.length} tips • Tap to navigate',
+                  '${tutorial.steps.length} tips • ${isComplete ? "Completed" : "Not started"}',
                   style: theme.textTheme.bodySmall,
                 ),
-                trailing: isComplete
-                    ? TextButton(
-                        onPressed: () => _resetScreen(tutorial.screenId),
-                        child: const Text('Replay'),
-                      )
-                    : Text(
-                        'Not started',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.5,
-                          ),
-                        ),
-                      ),
+                trailing: IconButton(
+                  icon: Icon(
+                    Icons.play_circle_outline,
+                    color: theme.colorScheme.primary,
+                    size: 32,
+                  ),
+                  onPressed: () => _navigateToScreen(tutorial.screenId),
+                  tooltip: isComplete ? 'Review Tutorial' : 'Start Tutorial',
+                ),
               ),
             );
           }),

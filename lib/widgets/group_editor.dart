@@ -209,6 +209,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
 
   // UPDATED: Confirmation Dialog for Delete with two options
   Future<void> _confirmDelete() async {
+    // CRITICAL: Dismiss keyboard BEFORE showing dialog to prevent screen squeeze
+    FocusScope.of(context).unfocus();
+
+    // Small delay to ensure keyboard is fully dismissed
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (!mounted) return;
+
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final theme = Theme.of(context);
 
@@ -373,6 +381,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   }
 
   Future<void> pickEmoji() async {
+    // Dismiss keyboard before showing modal
+    FocusScope.of(context).unfocus();
+
     final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -513,7 +524,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     final beforeIdSet = beforeIds.map((e) => e.id).toSet();
 
     await showEnvelopeCreator(
-      context,
+      context, // ignore: use_build_context_synchronously
       repo: widget.envelopeRepo,
       groupRepo: widget.groupRepo,
       accountRepo: accountRepo,
@@ -632,6 +643,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     final bgTint = binderColorOption.paperColor;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false, // Prevent screen squeeze when keyboard appears
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         children: [
@@ -771,6 +783,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           v.trim().isEmpty)
                                       ? tr('error_enter_name')
                                       : null,
+                                  onEditingComplete: () {
+                                    // Dismiss keyboard when user presses done
+                                    FocusScope.of(context).unfocus();
+                                  },
+                                  onTapOutside: (_) {
+                                    // Dismiss keyboard when user taps outside
+                                    FocusScope.of(context).unfocus();
+                                  },
                                 ),
                                 const SizedBox(height: 16),
                                 // Icon picker

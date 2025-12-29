@@ -26,13 +26,14 @@ class PayDaySettingsAdapter extends TypeAdapter<PayDaySettings> {
       defaultAccountId: fields[6] as String?,
       nextPayDate: fields[7] as DateTime?,
       expectedPayAmount: fields[8] as double?,
+      adjustForWeekends: fields[9] as bool? ?? true,
     );
   }
 
   @override
   void write(BinaryWriter writer, PayDaySettings obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.userId)
       ..writeByte(1)
@@ -50,7 +51,9 @@ class PayDaySettingsAdapter extends TypeAdapter<PayDaySettings> {
       ..writeByte(7)
       ..write(obj.nextPayDate)
       ..writeByte(8)
-      ..write(obj.expectedPayAmount);
+      ..write(obj.expectedPayAmount)
+      ..writeByte(9)
+      ..write(obj.adjustForWeekends);
   }
 
   @override

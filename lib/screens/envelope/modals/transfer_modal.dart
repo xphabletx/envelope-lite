@@ -235,7 +235,7 @@ class _TransferModalState extends State<TransferModal> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            value: _selectedTargetId,
+            initialValue: _selectedTargetId,
             items: _availableEnvelopes
                 .map(
                   (e) {
