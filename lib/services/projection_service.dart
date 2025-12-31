@@ -80,7 +80,7 @@ class ProjectionService {
       print('  Pay day event: $date - £${payAmount.toStringAsFixed(2)}');
 
       // Create pay_day event (income arrives in account)
-      // Auto-fill to envelopes is handled during pay_day event processing
+      // Auto-fill to envelopes and accounts is handled during pay_day event processing
       events.add(
         ProjectionEvent(
           date: date,
@@ -95,6 +95,32 @@ class ProjectionService {
               .firstOrNull ?? 'Main',
         ),
       );
+
+      // Create account auto-fill transfer events (for transaction history)
+      for (final account in accounts) {
+        if (account.id == defaultAccountId) continue; // Skip default account
+        if (!account.payDayAutoFillEnabled) continue;
+
+        final accountAutoFillAmount = account.payDayAutoFillAmount ?? 0;
+        if (accountAutoFillAmount <= 0) continue;
+
+        events.add(
+          ProjectionEvent(
+            date: date,
+            type: 'account_auto_fill',
+            description: 'Auto-fill to ${account.name}',
+            amount: accountAutoFillAmount,
+            isCredit: false, // Withdrawal from source account
+            accountId: defaultAccountId,
+            accountName: accounts
+                .where((a) => a.id == defaultAccountId)
+                .map((a) => a.name)
+                .firstOrNull ?? 'Main',
+            // Store target account info in description for visibility
+          ),
+        );
+        print('    Account auto-fill event: ${account.name} - £${accountAutoFillAmount.toStringAsFixed(2)}');
+      }
     }
 
     // Generate scheduled payments
@@ -233,6 +259,39 @@ class ProjectionService {
               accountBalances[sourceAccountId] = oldAcctBal - autoFillAmount;
               print('      Assign: Account ${oldAcctBal.toStringAsFixed(2)} - ${autoFillAmount.toStringAsFixed(2)} = ${accountBalances[sourceAccountId]!.toStringAsFixed(2)}');
             }
+          }
+        }
+
+        // Step 3: Process account-to-account auto-fills
+        print('  STEP 3 - Account auto-fills:');
+        for (final account in accounts) {
+          // Skip the default account (source of pay day funds)
+          if (account.id == sourceAccountId) {
+            print('    Account "${account.name}" - is default pay day account, skipping');
+            continue;
+          }
+
+          if (!account.payDayAutoFillEnabled) {
+            print('    Account "${account.name}" - auto-fill OFF, skipping');
+            continue;
+          }
+
+          final accountAutoFillAmount = account.payDayAutoFillAmount ?? 0;
+
+          if (accountAutoFillAmount <= 0) {
+            print('    Account "${account.name}" - auto-fill amount £0, skipping');
+            continue;
+          }
+
+          // Transfer from default account to this account
+          if (sourceAccountId != null) {
+            final oldSourceBal = accountBalances[sourceAccountId] ?? 0;
+            final oldTargetBal = accountBalances[account.id] ?? 0;
+            accountBalances[sourceAccountId] = oldSourceBal - accountAutoFillAmount;
+            accountBalances[account.id] = oldTargetBal + accountAutoFillAmount;
+            print('    Account "${account.name}": Transfer £${accountAutoFillAmount.toStringAsFixed(2)}');
+            print('      Source account "${accounts.where((a) => a.id == sourceAccountId).map((a) => a.name).firstOrNull ?? "Unknown"}": ${oldSourceBal.toStringAsFixed(2)} - ${accountAutoFillAmount.toStringAsFixed(2)} = ${accountBalances[sourceAccountId]!.toStringAsFixed(2)}');
+            print('      Target account "${account.name}": ${oldTargetBal.toStringAsFixed(2)} + ${accountAutoFillAmount.toStringAsFixed(2)} = ${accountBalances[account.id]!.toStringAsFixed(2)}');
           }
         }
       } else if (!event.isCredit) {

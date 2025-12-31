@@ -240,6 +240,10 @@ class TimeMachineProvider extends ChangeNotifier {
           // Auto-fill is a WITHDRAWAL from account (money leaving to go to envelopes)
           txType = TransactionType.withdrawal;
           // Don't add suffix - badge shows "PROJECTED" already
+        } else if (event.type == 'account_auto_fill') {
+          // Account auto-fill is a TRANSFER between accounts
+          txType = TransactionType.transfer;
+          // Don't add suffix - badge shows "PROJECTED" already
         } else if (event.isCredit) {
           txType = TransactionType.deposit;
           // Don't add suffix - badge shows "PROJECTED" already
