@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../models/transaction.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
+import '../../../providers/time_machine_provider.dart';
 import '../../widgets/future_transaction_tile.dart';
 
 class EnvelopeTransactionList extends StatelessWidget {
@@ -26,8 +27,10 @@ class EnvelopeTransactionList extends StatelessWidget {
       return const _EmptyState();
     }
 
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+
     // Group transactions by date
-    final grouped = _groupByDate(transactions);
+    final grouped = _groupByDate(transactions, timeMachine);
 
     return ListView.builder(
       shrinkWrap: true,
@@ -44,12 +47,42 @@ class EnvelopeTransactionList extends StatelessWidget {
     );
   }
 
-  Map<String, List<Transaction>> _groupByDate(List<Transaction> txs) {
+  Map<String, List<Transaction>> _groupByDate(List<Transaction> txs, TimeMachineProvider timeMachine) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final weekAgo = today.subtract(const Duration(days: 7));
 
+    // If time machine is active, use different grouping
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      final targetDate = timeMachine.futureDate!;
+      final monthStart = DateTime(targetDate.year, targetDate.month, 1);
+      final monthEnd = DateTime(targetDate.year, targetDate.month + 1, 0, 23, 59, 59, 999);
+
+      final Map<String, List<Transaction>> grouped = {
+        'This Month': [],
+        'Projected': [],
+      };
+
+      for (final tx in txs) {
+        if (tx.isFuture) {
+          grouped['Projected']!.add(tx);
+        } else {
+          final txDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
+          if (txDate.isAfter(monthStart.subtract(const Duration(seconds: 1))) &&
+              txDate.isBefore(monthEnd.add(const Duration(seconds: 1)))) {
+            grouped['This Month']!.add(tx);
+          }
+        }
+      }
+
+      // Remove empty groups
+      grouped.removeWhere((key, value) => value.isEmpty);
+
+      return grouped;
+    }
+
+    // Normal grouping for present time
     final Map<String, List<Transaction>> grouped = {
       'Today': [],
       'Yesterday': [],
@@ -155,25 +188,24 @@ class _TransactionTile extends StatelessWidget {
 
     switch (transaction.type) {
       case TransactionType.deposit:
-        icon = Icons.add_circle;
+        icon = Icons.arrow_downward;
         color = Colors.green.shade700;
         prefix = '+';
         break;
       case TransactionType.withdrawal:
-        icon = Icons.remove_circle;
+        icon = Icons.arrow_upward;
         color = Colors.red.shade700;
         prefix = '-';
         break;
+      case TransactionType.scheduledPayment:
+        icon = Icons.event_repeat;
+        color = Colors.purple.shade700;
+        prefix = '-';
+        break;
       case TransactionType.transfer:
-        if (transaction.transferDirection == TransferDirection.in_) {
-          icon = Icons.arrow_downward;
-          color = Colors.blue.shade700;
-          prefix = '+';
-        } else {
-          icon = Icons.arrow_upward;
-          color = Colors.orange.shade700;
-          prefix = '-';
-        }
+        icon = Icons.swap_horiz;
+        color = Colors.blue.shade700;
+        prefix = '→';
         break;
     }
 

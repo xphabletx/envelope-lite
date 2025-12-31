@@ -218,7 +218,12 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
               children: [
                 TextField(
                   controller: nameController,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Name'),
+                  onTap: () => nameController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: nameController.text.length,
+                  ),
                 ),
                 TextField(
                   controller: amountController,
@@ -227,6 +232,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   decoration: InputDecoration(
                     labelText: 'Amount',
                     prefixText: '${Provider.of<LocaleProvider>(context, listen: false).currencySymbol} ',
+                  ),
+                  onTap: () => amountController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: amountController.text.length,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -309,9 +318,28 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
       // Fetch scheduled payments from Hive
       final paymentBox = Hive.box<ScheduledPayment>('scheduledPayments');
+
+      // Get valid envelope IDs to filter out orphaned scheduled payments
+      final validEnvelopeIds = envelopes.map((e) => e.id).toSet();
+
       final scheduledPayments = paymentBox.values
           .where((p) => p.userId == widget.envelopeRepo.currentUserId)
+          .where((p) {
+            // Include payments without envelope ID (account-level payments)
+            if (p.envelopeId == null) return true;
+
+            // Only include payments linked to existing envelopes
+            final isValid = validEnvelopeIds.contains(p.envelopeId);
+
+            if (!isValid) {
+              debugPrint('[TimeMachine] ⚠️ Filtering out orphaned scheduled payment: ${p.name} (envelope ${p.envelopeId} not found)');
+            }
+
+            return isValid;
+          })
           .toList();
+
+      debugPrint('[TimeMachine] Using ${scheduledPayments.length} valid scheduled payments for projection');
 
       final scenario = ProjectionScenario(
         startDate: DateTime.now(),

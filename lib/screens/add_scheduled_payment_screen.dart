@@ -11,7 +11,7 @@ import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../data/material_icons_database.dart';
-import '../../widgets/calculator_widget.dart';
+import '../../utils/calculator_helper.dart';
 
 class AddScheduledPaymentScreen extends StatefulWidget {
   const AddScheduledPaymentScreen({
@@ -496,6 +496,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionCtrl,
+              textCapitalization: TextCapitalization.words,
               style: fontProvider.getTextStyle(fontSize: 18),
               decoration: InputDecoration(
                 hintText: 'e.g., Monthly rent payment',
@@ -509,6 +510,12 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                 filled: true,
                 fillColor: theme.colorScheme.surface,
               ),
+              onTap: () {
+                _descriptionCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _descriptionCtrl.text.length,
+                );
+              },
             ),
 
             const SizedBox(height: 24),
@@ -602,26 +609,27 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                       ),
                     ),
                   ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calculate),
-                    onPressed: () async {
-                      final result = await showDialog<double>(
-                        context: context,
-                        barrierDismissible: true,
-                        barrierColor: Colors.black54,
-                        builder: (context) => Stack(
-                          children: const [
-                            CalculatorWidget(),
-                          ],
-                        ),
-                      );
-                      if (result != null && mounted) {
-                        setState(() {
-                          _amountCtrl.text = result.toStringAsFixed(2);
-                        });
-                      }
-                    },
-                    tooltip: 'Open Calculator',
+                  suffixIcon: Container(
+                    margin: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.calculate,
+                        color: theme.colorScheme.onPrimary,
+                      ),
+                      onPressed: () async {
+                        final result = await CalculatorHelper.showCalculator(context);
+                        if (result != null && mounted) {
+                          setState(() {
+                            _amountCtrl.text = result;
+                          });
+                        }
+                      },
+                      tooltip: 'Open Calculator',
+                    ),
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -629,6 +637,12 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                   filled: true,
                   fillColor: theme.colorScheme.surface,
                 ),
+                onTap: () {
+                  _amountCtrl.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: _amountCtrl.text.length,
+                  );
+                },
               )
             else
               Container(
@@ -760,6 +774,16 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                           controller: TextEditingController(
                             text: _frequencyValue.toString(),
                           ),
+                          onTap: () {
+                            // Select all text when tapped
+                            final controller = TextEditingController(
+                              text: _frequencyValue.toString(),
+                            );
+                            controller.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: controller.text.length,
+                            );
+                          },
                           onChanged: (value) {
                             final num = int.tryParse(value);
                             if (num != null && num > 0) {

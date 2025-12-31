@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/envelope.dart';
 import '../../../models/envelope_group.dart';
 import '../../../providers/font_provider.dart';
+import '../../../providers/time_machine_provider.dart';
 
 class PayDayAddition {
   final String? envelopeId;
@@ -45,6 +46,19 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
   }
 
   void _addItem() {
+    // Check if time machine mode is active - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (_selectedId == null) return;
 
     if (_selectedType == 'binder') {

@@ -16,6 +16,8 @@ class AnalyticsSection extends StatefulWidget {
     required this.groups,
     required this.dateRange,
     required this.onDateRangeChange,
+    this.initialFilter,
+    this.timeMachineDate,
   });
 
   final List<Transaction> transactions;
@@ -23,30 +25,62 @@ class AnalyticsSection extends StatefulWidget {
   final List<EnvelopeGroup> groups;
   final DateTimeRange dateRange;
   final Function(DateTimeRange) onDateRangeChange;
+  final AnalyticsFilter? initialFilter;
+  final DateTime? timeMachineDate; // If in time machine mode, this is the projection date
 
   @override
   State<AnalyticsSection> createState() => _AnalyticsSectionState();
 }
 
 class _AnalyticsSectionState extends State<AnalyticsSection> {
-  AnalyticsFilter _filter = AnalyticsFilter.cashOut;
+  late AnalyticsFilter _filter;
   AnalyticsPeriod _period = AnalyticsPeriod.thisMonth;
   String? _drilledDownBinderId;
 
   @override
   void initState() {
     super.initState();
-    // Schedule the period application after the build phase
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _applyPeriod(_period);
-    });
+    // Initialize filter from widget parameter or default to cashOut
+    _filter = widget.initialFilter ?? AnalyticsFilter.cashOut;
+    // Check if the provided date range matches any standard period
+    // If not, it's a custom range (e.g., from time machine)
+    _period = _detectPeriodFromDateRange(widget.dateRange);
+  }
+
+  AnalyticsPeriod _detectPeriodFromDateRange(DateTimeRange range) {
+    // Check each standard period to see if it matches the provided range
+    // Use time machine date as reference if available
+    final referenceDate = widget.timeMachineDate;
+
+    for (final period in [
+      AnalyticsPeriod.thisMonth,
+      AnalyticsPeriod.last3Months,
+      AnalyticsPeriod.last6Months,
+      AnalyticsPeriod.thisYear,
+      AnalyticsPeriod.allTime,
+    ]) {
+      final periodRange = period.getDateRange(referenceDate: referenceDate);
+      // Check if the dates match (within same day)
+      if (_isSameDay(range.start, periodRange.start) &&
+          _isSameDay(range.end, periodRange.end)) {
+        return period;
+      }
+    }
+    // If no match, it's a custom period
+    return AnalyticsPeriod.custom;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   void _applyPeriod(AnalyticsPeriod period) {
     setState(() {
       _period = period;
       if (period != AnalyticsPeriod.custom) {
-        widget.onDateRangeChange(period.getDateRange());
+        // Use time machine date as reference when calculating date range
+        final referenceDate = widget.timeMachineDate;
+        widget.onDateRangeChange(period.getDateRange(referenceDate: referenceDate));
       }
     });
   }
@@ -100,14 +134,14 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
           }
           break;
         case AnalyticsFilter.cashOut:
-          if (tx.type == TransactionType.withdrawal) {
+          if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
             amount = tx.amount;
           }
           break;
         case AnalyticsFilter.net:
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
-          } else if (tx.type == TransactionType.withdrawal) {
+          } else if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
             amount = -tx.amount;
           }
           break;
@@ -184,14 +218,14 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
           }
           break;
         case AnalyticsFilter.cashOut:
-          if (tx.type == TransactionType.withdrawal) {
+          if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
             amount = tx.amount;
           }
           break;
         case AnalyticsFilter.net:
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
-          } else if (tx.type == TransactionType.withdrawal) {
+          } else if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
             amount = -tx.amount;
           }
           break;

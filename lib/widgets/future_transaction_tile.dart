@@ -36,10 +36,17 @@ class FutureTransactionTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.schedule,
-            color: theme.colorScheme.secondary.withValues(alpha: 0.7),
-            size: 24,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondary.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.access_time,
+              color: theme.colorScheme.secondary,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -48,6 +55,11 @@ class FutureTransactionTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
+                    Text(
+                      '⏰',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         transaction.description.isNotEmpty
@@ -61,7 +73,27 @@ class FutureTransactionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
+                    if (transaction.type == TransactionType.scheduledPayment)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'SCHEDULED',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade700,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -72,7 +104,7 @@ class FutureTransactionTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'FUTURE',
+                        'PROJECTED',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -96,17 +128,40 @@ class FutureTransactionTile extends StatelessWidget {
             ),
           ),
           Text(
-            '${transaction.type == TransactionType.withdrawal ? '-' : '+'}${currency.format(transaction.amount)}',
+            _getAmountPrefix() + currency.format(transaction.amount),
             style: fontProvider.getTextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: transaction.type == TransactionType.withdrawal
-                  ? Colors.red.shade300
-                  : Colors.green.shade300,
+              color: _getAmountColor(theme),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _getAmountPrefix() {
+    switch (transaction.type) {
+      case TransactionType.deposit:
+        return '+';
+      case TransactionType.withdrawal:
+      case TransactionType.scheduledPayment:
+        return '-';
+      case TransactionType.transfer:
+        return '→';
+    }
+  }
+
+  Color _getAmountColor(ThemeData theme) {
+    switch (transaction.type) {
+      case TransactionType.deposit:
+        return Colors.green.shade300;
+      case TransactionType.withdrawal:
+        return Colors.red.shade300;
+      case TransactionType.scheduledPayment:
+        return Colors.purple.shade300;
+      case TransactionType.transfer:
+        return Colors.blue.shade300;
+    }
   }
 }

@@ -10,6 +10,7 @@ import '../providers/font_provider.dart';
 import '../widgets/budget/overview_cards.dart';
 import '../models/pay_day_settings.dart';
 import '../widgets/budget/time_machine_screen.dart';
+import '../widgets/time_machine_indicator.dart';
 // Note: account_list_screen.dart import removed since it's no longer used here
 
 class BudgetScreen extends StatefulWidget {
@@ -66,6 +67,9 @@ class _BudgetScreenState extends State<BudgetScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Time Machine Indicator at the top
+            const TimeMachineIndicator(),
+
             const SizedBox(height: 16),
 
             // SECTION 1: Overview Cards

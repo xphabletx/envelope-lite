@@ -5,6 +5,7 @@ import '../../models/scheduled_payment.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../screens/add_scheduled_payment_screen.dart';
 
 class ScheduledPaymentsListScreen extends StatelessWidget {
@@ -21,7 +22,8 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

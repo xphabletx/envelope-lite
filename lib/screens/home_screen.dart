@@ -1,5 +1,6 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
@@ -11,6 +12,7 @@ import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/run_migrations_once.dart';
 import '../services/user_service.dart';
+import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../services/account_repo.dart';
@@ -63,7 +65,10 @@ SpeedDialChild sdChild({
       fontWeight: FontWeight.bold,
     ),
     labelBackgroundColor: theme.colorScheme.surface,
-    onTap: onTap,
+    onTap: () {
+      debugPrint('[HomeScreen] 🔔 SpeedDialChild tapped: $label');
+      onTap();
+    },
   );
 }
 
@@ -101,8 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _statsTabKey = GlobalKey();
   final GlobalKey _budgetTabKey = GlobalKey();
   final GlobalKey _firstEnvelopeKey = GlobalKey();
+  final GlobalKey _sortButtonKey = GlobalKey();
+  final GlobalKey _mineOnlyToggleKey = GlobalKey();
+
+  // Key to access _AllEnvelopesState from FAB
+  final GlobalKey<_AllEnvelopesState> _allEnvelopesKey = GlobalKey<_AllEnvelopesState>();
 
   final ValueNotifier<bool> _isSpeedDialOpen = ValueNotifier(false);
+  final ValueNotifier<bool> _isMultiSelect = ValueNotifier(false);
 
   // Initialize repos once
   late final GroupRepo _groupRepo;
@@ -212,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _isSpeedDialOpen.dispose();
+    _isMultiSelect.dispose();
     super.dispose();
   }
 
@@ -222,10 +234,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final pages = <Widget>[
       _AllEnvelopes(
+        key: _allEnvelopesKey,
         repo: widget.repo,
         groupRepo: _groupRepo,
         accountRepo: _accountRepo,
         firstEnvelopeKey: _firstEnvelopeKey,
+        sortButtonKey: _sortButtonKey,
+        mineOnlyToggleKey: _mineOnlyToggleKey,
+        isMultiSelectNotifier: _isMultiSelect,
       ),
       GroupsHomeScreen(repo: widget.repo, groupRepo: _groupRepo),
       BudgetScreen(
@@ -266,8 +282,8 @@ class _HomeScreenState extends State<HomeScreen> {
         tutorialSequence: homeTutorial,
         spotlightKeys: {
           'fab': _fabKey,
-          'sort_button': _statsTabKey, // Using stats as placeholder
-          'mine_only_toggle': _budgetTabKey, // Using budget as placeholder
+          'sort_button': _sortButtonKey,
+          'mine_only_toggle': _mineOnlyToggleKey,
         },
         child: Scaffold(
         appBar: AppBar(
@@ -401,6 +417,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 createEnvelopeKey: _createEnvelopeKey,
                 createBinderKey: _createBinderKey,
                 isSpeedDialOpen: _isSpeedDialOpen,
+                allEnvelopesKey: _allEnvelopesKey,
+                isMultiSelectNotifier: _isMultiSelect,
               )
             : null,
         ),
@@ -418,6 +436,8 @@ class _AllEnvelopesFAB extends StatelessWidget {
     required this.createEnvelopeKey,
     required this.createBinderKey,
     required this.isSpeedDialOpen,
+    required this.allEnvelopesKey,
+    required this.isMultiSelectNotifier,
   });
 
   final EnvelopeRepo repo;
@@ -426,16 +446,21 @@ class _AllEnvelopesFAB extends StatelessWidget {
   final GlobalKey createEnvelopeKey;
   final GlobalKey createBinderKey;
   final ValueNotifier<bool> isSpeedDialOpen;
+  final GlobalKey<_AllEnvelopesState> allEnvelopesKey;
+  final ValueNotifier<bool> isMultiSelectNotifier;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final allEnvelopesState = context
-        .findAncestorStateOfType<_AllEnvelopesState>();
-    final isMulti = allEnvelopesState?.isMulti ?? false;
+    return ValueListenableBuilder<bool>(
+      valueListenable: isMultiSelectNotifier,
+      builder: (context, isMulti, child) {
+        final allEnvelopesState = allEnvelopesKey.currentState;
 
-    return SpeedDial(
+        debugPrint('[HomeScreen] 🔄 _AllEnvelopesFAB building - isMulti: $isMulti, state found: ${allEnvelopesState != null}');
+
+        return SpeedDial(
       key: fabKey,
       icon: isMulti ? Icons.check : Icons.add,
       activeIcon: Icons.close,
@@ -450,6 +475,10 @@ class _AllEnvelopesFAB extends StatelessWidget {
       renderOverlay: true,
       openCloseDial: isSpeedDialOpen,
       onOpen: () {},
+      onPress: isMulti ? () {
+        debugPrint('[HomeScreen] ✅ FAB onPress called (isMulti=true)');
+        allEnvelopesState?.clearSelection();
+      } : null,
       children: isMulti
           ? []
           : [
@@ -467,6 +496,19 @@ class _AllEnvelopesFAB extends StatelessWidget {
                 label: tr('group_new_binder'),
                 key: createBinderKey,
                 onTap: () async {
+                  // Check Time Machine mode
+                  final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                  if (timeMachine.shouldBlockModifications()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(timeMachine.getBlockedActionMessage()),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                    return;
+                  }
+
                   await editor.showGroupEditor(
                     context: context,
                     groupRepo: groupRepo,
@@ -480,6 +522,19 @@ class _AllEnvelopesFAB extends StatelessWidget {
                 label: tr('envelope_new'),
                 key: createEnvelopeKey,
                 onTap: () async {
+                  // Check Time Machine mode
+                  final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                  if (timeMachine.shouldBlockModifications()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(timeMachine.getBlockedActionMessage()),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                    return;
+                  }
+
                   final homeScreenState = context.findAncestorStateOfType<_HomeScreenState>();
                   await showEnvelopeCreator(
                     context,
@@ -495,10 +550,37 @@ class _AllEnvelopesFAB extends StatelessWidget {
                 icon: Icons.edit_note,
                 label: 'Delete Envelopes',
                 onTap: () {
-                  allEnvelopesState?.enableMultiSelect();
+                  // Check Time Machine mode
+                  final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                  if (timeMachine.shouldBlockModifications()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(timeMachine.getBlockedActionMessage()),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                    return;
+                  }
+
+                  debugPrint('[HomeScreen] 🔍 Delete Envelopes button tapped');
+                  debugPrint('[HomeScreen] 🔍 allEnvelopesState is null: ${allEnvelopesState == null}');
+                  if (allEnvelopesState == null) {
+                    debugPrint('[HomeScreen] ❌ ERROR: Could not find _AllEnvelopesState ancestor');
+                  } else {
+                    debugPrint('[HomeScreen] ✅ Found _AllEnvelopesState, calling enableMultiSelect()');
+                    allEnvelopesState.enableMultiSelect();
+                  }
+                  // Close the speed dial after enabling multi-select
+                  Future.microtask(() {
+                    debugPrint('[HomeScreen] 🔍 Closing speed dial');
+                    isSpeedDialOpen.value = false;
+                  });
                 },
               ),
             ],
+        );
+      },
     );
   }
 }
@@ -506,44 +588,108 @@ class _AllEnvelopesFAB extends StatelessWidget {
 // ====== All Envelopes ======
 class _AllEnvelopes extends StatefulWidget {
   const _AllEnvelopes({
+    super.key,
     required this.repo,
     required this.groupRepo,
     required this.accountRepo,
     required this.firstEnvelopeKey,
+    required this.sortButtonKey,
+    required this.mineOnlyToggleKey,
+    required this.isMultiSelectNotifier,
   });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
   final GlobalKey firstEnvelopeKey;
+  final GlobalKey sortButtonKey;
+  final GlobalKey mineOnlyToggleKey;
+  final ValueNotifier<bool> isMultiSelectNotifier;
 
   @override
   State<_AllEnvelopes> createState() => _AllEnvelopesState();
 }
 
-class _AllEnvelopesState extends State<_AllEnvelopes> {
+class _AllEnvelopesState extends State<_AllEnvelopes>
+    with SingleTickerProviderStateMixin {
   bool isMulti = false;
   final selected = <String>{};
   String _sortBy = 'name';
   bool _mineOnly = false;
 
+  // Pay Day animation
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+
   @override
   void initState() {
     super.initState();
-  }
 
-  void _showDeleteSnackBar() {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${selected.length} envelopes selected'),
-        duration: const Duration(days: 1), // Keep it open
-        action: SnackBarAction(
-          label: 'DELETE',
-          textColor: Colors.red,
-          onPressed: _deleteSelected,
-        ),
+    // Initialize pulse animation for Pay Day button
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
       ),
     );
+
+    _glowAnimation = Tween<double>(begin: 0.3, end: 0.6).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // Start animation if it's pay day
+    _checkPayDayAndAnimate();
+  }
+
+  Future<void> _checkPayDayAndAnimate() async {
+    if (await _isPayDayToday()) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  /// Check if today is pay day based on settings
+  Future<bool> _isPayDayToday() async {
+    try {
+      final payDayService = PayDaySettingsService(
+        widget.repo.db,
+        widget.repo.currentUserId,
+      );
+      final settings = await payDayService.getPayDaySettings();
+
+      if (settings == null || settings.nextPayDate == null) {
+        return false;
+      }
+
+      final today = DateTime.now();
+      DateTime payDate = settings.nextPayDate!;
+
+      // Apply weekend adjustment if enabled
+      if (settings.adjustForWeekends) {
+        payDate = settings.adjustForWeekend(payDate);
+      }
+
+      // Check if today matches pay day (ignoring time)
+      return today.year == payDate.year &&
+             today.month == payDate.month &&
+             today.day == payDate.day;
+    } catch (e) {
+      debugPrint('[HomeScreen] Error checking pay day: $e');
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _deleteSelected() async {
@@ -593,6 +739,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
 
   void _toggle(String id) {
     debugPrint('[HomeScreen] 🔄 Toggling envelope selection: $id');
+    HapticFeedback.selectionClick();
     setState(() {
       if (selected.contains(id)) {
         selected.remove(id);
@@ -602,27 +749,31 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
         debugPrint('[HomeScreen] Added to selection. Total selected: ${selected.length}');
       }
       isMulti = selected.isNotEmpty;
+      widget.isMultiSelectNotifier.value = isMulti;
       if (!isMulti) {
         clearSelection();
-      } else {
-        _showDeleteSnackBar();
       }
     });
   }
 
   void enableMultiSelect() {
+    debugPrint('[HomeScreen] 🎯 enableMultiSelect() called');
+    HapticFeedback.mediumImpact();
     setState(() {
       isMulti = true;
-      // You can optionally show a snackbar here that says "Select envelopes to delete"
-      // but the user's action of long-pressing will immediately show the count.
+      widget.isMultiSelectNotifier.value = true;
+      debugPrint('[HomeScreen] ✅ isMulti set to true');
+      // Selection mode activated via FAB
     });
   }
 
   void clearSelection() {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    debugPrint('[HomeScreen] 🧹 clearSelection() called');
     setState(() {
       selected.clear();
       isMulti = false;
+      widget.isMultiSelectNotifier.value = false;
+      debugPrint('[HomeScreen] ✅ Selection cleared, isMulti set to false');
     });
   }
 
@@ -701,7 +852,14 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
     final showPartnerEnvelopes = !_mineOnly;
     final timeMachine = Provider.of<TimeMachineProvider>(context);
 
-    return StreamBuilder<List<Envelope>>(
+    return PopScope(
+      canPop: !isMulti,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (!didPop && isMulti) {
+          clearSelection();
+        }
+      },
+      child: StreamBuilder<List<Envelope>>(
       stream: widget.repo.envelopesStream(
         showPartnerEnvelopes: showPartnerEnvelopes,
       ),
@@ -721,38 +879,111 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
               builder: (c3, s3) {
                 final sortedEnvs = _sortEnvelopes(displayEnvs);
                 return Scaffold(
-                  appBar: AppBar(
+                  appBar: isMulti ? AppBar(
+                    scrolledUnderElevation: 0,
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: clearSelection,
+                      tooltip: 'Cancel',
+                    ),
+                    title: Text(
+                      '${selected.length} selected',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          setState(() {
+                            // Toggle: if all selected, deselect all; otherwise select all
+                            final allSelected = selected.length == sortedEnvs.length;
+                            if (allSelected) {
+                              selected.clear();
+                            } else {
+                              selected.clear();
+                              for (final e in sortedEnvs) {
+                                selected.add(e.id);
+                              }
+                            }
+                          });
+                        },
+                        child: Text(
+                          selected.length == sortedEnvs.length ? 'Deselect All' : 'Select All',
+                          style: TextStyle(
+                            color: theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ) : AppBar(
                     scrolledUnderElevation: 0,
                     backgroundColor: theme.scaffoldBackgroundColor,
                     elevation: 0,
                     title: Row(
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: timeMachine.isActive ? null : _openPayDayScreen,
-                          icon: const Icon(Icons.monetization_on, size: 20),
-                          label: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              tr('home_pay_day_button'),
-                              style: fontProvider.getTextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 22,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.secondary,
-                            foregroundColor: Colors.white,
-                            elevation: 3,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
+                        FutureBuilder<bool>(
+                          future: _isPayDayToday(),
+                          builder: (context, snapshot) {
+                            final isPayDay = snapshot.data ?? false;
+
+                            return AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: isPayDay ? _scaleAnimation.value : 1.0,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: isPayDay
+                                          ? [
+                                              BoxShadow(
+                                                color: theme.colorScheme.secondary
+                                                    .withValues(alpha: _glowAnimation.value),
+                                                blurRadius: 20,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : [],
+                                    ),
+                                    child: ElevatedButton.icon(
+                                      onPressed: timeMachine.isActive ? null : _openPayDayScreen,
+                                      icon: const Icon(Icons.monetization_on, size: 20),
+                                      label: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          tr('home_pay_day_button'),
+                                          style: fontProvider.getTextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 22,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: theme.colorScheme.secondary,
+                                        foregroundColor: Colors.white,
+                                        elevation: isPayDay ? 8 : 3,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -769,6 +1000,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                               ),
                             ),
                             Switch(
+                              key: widget.mineOnlyToggleKey,
                               value: _mineOnly,
                               activeTrackColor: theme.colorScheme.primary,
                               onChanged: (val) => setState(() => _mineOnly = val),
@@ -777,6 +1009,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                           ],
                         ),
                       PopupMenuButton<String>(
+                        key: widget.sortButtonKey,
                         tooltip: tr('sort_by'),
                         icon: Icon(
                           Icons.sort,
@@ -875,8 +1108,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                                                 repo: widget.repo,
                                                 isSelected: isSel,
                                                 isMultiSelectMode: isMulti,
-                                                onLongPress: () =>
-                                                    _toggle(e.id),
+                                                // REMOVED: onLongPress (use FAB to enter selection mode)
                                                 onTap: isMulti
                                                     ? () => _toggle(e.id)
                                                     : () => _openDetails(e),
@@ -908,12 +1140,64 @@ class _AllEnvelopesState extends State<_AllEnvelopes> {
                             ),
                           ],
                         ),
+                  bottomNavigationBar: isMulti
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
+                          ),
+                          child: SafeArea(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  selected.isEmpty
+                                      ? 'Select envelopes to delete'
+                                      : '${selected.length} envelope${selected.length > 1 ? 's' : ''} selected',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed:
+                                      selected.isEmpty ? null : _deleteSelected,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    disabledBackgroundColor:
+                                        Colors.grey.shade300,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 32,
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.delete),
+                                  label: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : null,
                 );
               },
             );
           },
         );
       },
+      ),
     );
   }
 }

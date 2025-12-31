@@ -80,13 +80,32 @@ class _TutorialOverlayState extends State<TutorialOverlay>
     final offset = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
 
-    setState(() {
-      _spotlightRect = Rect.fromLTWH(
+    // Special handling for FAB - SpeedDial widget has internal structure
+    // The actual button is centered within the widget, so we need to adjust
+    Rect spotlightRect;
+    if (spotlightKey == 'fab') {
+      // For FAB, assume it's a 56x56 button positioned at bottom-right
+      // Center the spotlight on the actual FAB button
+      final fabSize = 56.0;
+      final centerX = offset.dx + (size.width / 2);
+      final centerY = offset.dy + (size.height / 2);
+
+      spotlightRect = Rect.fromCenter(
+        center: Offset(centerX, centerY),
+        width: fabSize,
+        height: fabSize,
+      );
+    } else {
+      spotlightRect = Rect.fromLTWH(
         offset.dx,
         offset.dy,
         size.width,
         size.height,
       );
+    }
+
+    setState(() {
+      _spotlightRect = spotlightRect;
     });
   }
 

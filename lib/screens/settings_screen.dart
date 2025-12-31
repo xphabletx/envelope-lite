@@ -29,6 +29,8 @@ import '../services/pay_day_settings_service.dart';
 import '../widgets/tutorial_wrapper.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
+import '../providers/locale_provider.dart';
+import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -112,10 +114,17 @@ class SettingsScreen extends StatelessWidget {
                             title: const Text('Edit Display Name'),
                             content: TextField(
                               controller: controller,
+                              textCapitalization: TextCapitalization.words,
                               decoration: const InputDecoration(
                                 labelText: 'Display Name',
                                 border: OutlineInputBorder(),
                               ),
+                              onTap: () {
+                                controller.selection = TextSelection(
+                                  baseOffset: 0,
+                                  extentOffset: controller.text.length,
+                                );
+                              },
                             ),
                             actions: [
                               TextButton(
@@ -172,6 +181,17 @@ class SettingsScreen extends StatelessWidget {
                       );
                     },
                     trailing: const Icon(Icons.chevron_right),
+                  ),
+                  Consumer<LocaleProvider>(
+                    builder: (context, localeProvider, _) {
+                      return _SettingsTile(
+                        title: 'Currency',
+                        subtitle: '${LocaleProvider.getCurrencyName(localeProvider.currencyCode)} (${localeProvider.currencySymbol})',
+                        leading: const Icon(Icons.attach_money_outlined),
+                        onTap: () => _showCurrencyPicker(context, localeProvider),
+                        trailing: const Icon(Icons.chevron_right),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -425,11 +445,11 @@ class SettingsScreen extends StatelessWidget {
 
                         try {
                           await AuthService.signOut();
-                          // Dismiss loading dialog after sign out completes
+                          // Dismiss loading dialog and pop all routes
+                          // The AuthWrapper will automatically show SignInScreen
                           if (context.mounted) {
-                            Navigator.pop(context); // Dismiss loading
+                            Navigator.of(context).popUntil((route) => route.isFirst);
                           }
-                          // Navigation to SignInScreen will be handled by auth state listener
                         } catch (e) {
                           if (context.mounted) {
                             Navigator.pop(context); // Dismiss loading
@@ -490,6 +510,122 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // --- Helpers ---
+
+  Future<void> _showCurrencyPicker(
+    BuildContext context,
+    LocaleProvider localeProvider,
+  ) async {
+    final theme = Theme.of(context);
+    final selectedCurrency = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant.withAlpha(128),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'Select Currency',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: LocaleProvider.supportedCurrencies.length,
+                itemBuilder: (context, index) {
+                  final currency = LocaleProvider.supportedCurrencies[index];
+                  final code = currency['code']!;
+                  final name = currency['name']!;
+                  final symbol = currency['symbol']!;
+                  final isSelected = localeProvider.currencyCode == code;
+
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.colorScheme.primary.withAlpha(26)
+                            : theme.colorScheme.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          symbol,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: Text(code),
+                    trailing: isSelected
+                        ? Icon(
+                            Icons.check_circle,
+                            color: theme.colorScheme.primary,
+                          )
+                        : null,
+                    selected: isSelected,
+                    onTap: () => Navigator.pop(ctx, code),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedCurrency != null) {
+      await localeProvider.setCurrency(selectedCurrency);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Currency updated to ${LocaleProvider.getCurrencyName(selectedCurrency)}',
+            ),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _showProfilePhotoOptions(
     BuildContext context,

@@ -7,8 +7,12 @@ import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
+import '../../widgets/time_machine_indicator.dart';
 import '../../services/localization_service.dart';
 import '../envelope/envelopes_detail_screen.dart';
+import '../stats_history_screen.dart';
+import 'account_settings_screen.dart';
 
 class AccountDetailScreen extends StatefulWidget {
   const AccountDetailScreen({
@@ -37,63 +41,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     );
   }
 
-  void _showEditAccountDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => _EditAccountDialog(
-        accountRepo: widget.accountRepo,
-        account: widget.account,
-      ),
-    );
-  }
-
-  Future<void> _confirmDeleteAccount(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('delete_account_title')),
-        content: Text(tr('delete_account_confirm_msg')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(tr('cancel')),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(tr('delete')),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      if (!mounted) return;
-      try {
-        await widget.accountRepo.deleteAccount(widget.account.id);
-        if (!mounted) return;
-        // ignore: use_build_context_synchronously
-        Navigator.pop(context); // Go back to account list
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('success_account_deleted'))),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${tr('error_generic')}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -116,220 +63,298 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
         final account = accountSnapshot.data!;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: FittedBox(child: Text(account.name)),
-            actions: [
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    _showEditAccountDialog(context);
-                  } else if (value == 'delete') {
-                    _confirmDeleteAccount(context);
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.edit),
-                        const SizedBox(width: 12),
-                        Text(tr('edit_account')),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.delete, color: Colors.red),
-                        const SizedBox(width: 12),
-                        Text(
-                          tr('delete_account'),
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+        return Consumer<TimeMachineProvider>(
+          builder: (context, timeMachine, _) {
+            // Use projected account if time machine is active
+            final displayAccount = timeMachine.isActive
+                ? timeMachine.getProjectedAccount(account)
+                : account;
+
+            return Scaffold(
+              appBar: AppBar(
+                title: FittedBox(child: Text(displayAccount.name)),
               ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    account.getIconWidget(theme, size: 40),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        account.name,
-                        style: fontProvider.getTextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    if (account.isDefault)
-                      const Icon(Icons.star, color: Colors.amber, size: 24),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Balance',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.colorScheme.onSurface.withAlpha(153),
-                  ),
-                ),
-                Text(
-                  currency.format(account.currentBalance),
-                  style: fontProvider.getTextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FutureBuilder<double>(
-                  future: widget.accountRepo.getAssignedAmount(account.id),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const LinearProgressIndicator();
-                    }
-                    final assigned = snapshot.data ?? 0.0;
-                    final available = account.currentBalance - assigned;
-                return Row(
-                  children: [
-                    Expanded(
+              body: Column(
+                children: [
+                  // Time Machine Indicator at the top
+                  const TimeMachineIndicator(),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Assigned',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withAlpha(153),
-                            ),
-                          ),
-                          Text(
-                            currency.format(assigned),
+                          Row(
+                            children: [
+                              displayAccount.getIconWidget(theme, size: 40),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            displayAccount.name,
                             style: fontProvider.getTextStyle(
-                              fontSize: 18,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.onSurface,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        if (displayAccount.isDefault)
+                          const Icon(Icons.star, color: Colors.amber, size: 24),
+                      ],
                     ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Available ✨',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withAlpha(153),
-                            ),
-                          ),
-                          Text(
-                            currency.format(available),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
-            StreamBuilder<List<Envelope>>(
-              stream: widget.envelopeRepo.envelopesStream(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final linkedEnvelopes = snapshot.data!
-                    .where((e) => e.linkedAccountId == widget.account.id)
-                    .toList();
-
-                if (linkedEnvelopes.isEmpty) {
-                  return Column(
-                    children: [
-                      const Text('No envelopes linked to this account.'),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () => _showLinkEnvelopesDialog(context),
-                        child: const Text('Link Envelopes'),
-                      ),
-                    ],
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    const SizedBox(height: 16),
                     Text(
-                      'Linked Envelopes',
-                      style: fontProvider.getTextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                      'Balance',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withAlpha(153),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: linkedEnvelopes.length,
-                      itemBuilder: (context, index) {
-                        final envelope = linkedEnvelopes[index];
-                        return ListTile(
-                          leading: envelope.getIconWidget(theme),
-                          title: Text(envelope.name),
-                          trailing: Text(
-                            currency.format(envelope.currentAmount),
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EnvelopeDetailScreen(
-                                  envelopeId: envelope.id,
-                                  repo: widget.envelopeRepo,
+                    Text(
+                      currency.format(displayAccount.currentBalance),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Action chips
+                    StreamBuilder<List<Envelope>>(
+                      stream: widget.envelopeRepo.envelopesStream(),
+                      builder: (context, envSnapshot) {
+                        final envelopes = envSnapshot.data ?? [];
+                        final linkedEnvelopeIds = envelopes
+                            .where((e) => e.linkedAccountId == widget.account.id)
+                            .map((e) => e.id)
+                            .toSet();
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => StatsHistoryScreen(
+                                        repo: widget.envelopeRepo,
+                                        title: '${displayAccount.name} - History',
+                                        // Filter transactions for envelopes linked to this account
+                                        initialEnvelopeIds: linkedEnvelopeIds,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.bar_chart, size: 20),
+                                label: const Text('Stats & History'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  // Check if time machine is active
+                                  if (timeMachine.shouldBlockModifications()) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(timeMachine.getBlockedActionMessage()),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AccountSettingsScreen(
+                                        account: account,
+                                        accountRepo: widget.accountRepo,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.settings, size: 20),
+                                label: const Text('Settings'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => _showLinkEnvelopesDialog(context),
-                      child: const Text('Link More Envelopes'),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<Envelope>>(
+                      stream: widget.envelopeRepo.envelopesStream(),
+                      builder: (context, envSnapshot) {
+                        if (envSnapshot.connectionState == ConnectionState.waiting) {
+                          return const LinearProgressIndicator();
+                        }
+
+                        final envelopes = envSnapshot.data ?? [];
+                        final linkedEnvelopes = envelopes
+                            .where((e) => e.linkedAccountId == widget.account.id)
+                            .toList();
+
+                        // Calculate assigned amount from projected envelopes if time machine is active
+                        double assigned = 0.0;
+                        if (timeMachine.isActive) {
+                          // Use projected envelope balances
+                          for (final env in linkedEnvelopes) {
+                            final projectedEnv = timeMachine.getProjectedEnvelope(env);
+                            assigned += projectedEnv.currentAmount;
+                          }
+                        } else {
+                          // Use real balances
+                          assigned = linkedEnvelopes.fold(0.0, (sum, env) => sum + env.currentAmount);
+                        }
+
+                        final available = displayAccount.currentBalance - assigned;
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Assigned',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface.withAlpha(153),
+                                    ),
+                                  ),
+                                  Text(
+                                    currency.format(assigned),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Available ✨',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.colorScheme.onSurface.withAlpha(153),
+                                    ),
+                                  ),
+                                  Text(
+                                    currency.format(available),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.secondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    StreamBuilder<List<Envelope>>(
+                      stream: widget.envelopeRepo.envelopesStream(),
+                      builder: (context, envelopeSnapshot) {
+                        if (!envelopeSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final allEnvelopes = envelopeSnapshot.data!;
+                        final linkedEnvelopes = allEnvelopes
+                            .where((e) => e.linkedAccountId == widget.account.id)
+                            .toList();
+
+                        if (linkedEnvelopes.isEmpty) {
+                          return Column(
+                            children: [
+                              const Text('No envelopes linked to this account.'),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: () => _showLinkEnvelopesDialog(context),
+                                child: const Text('Link Envelopes'),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Linked Envelopes',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: linkedEnvelopes.length,
+                              itemBuilder: (context, index) {
+                                final envelope = linkedEnvelopes[index];
+                                // Use projected envelope if time machine is active
+                                final displayEnvelope = timeMachine.isActive
+                                    ? timeMachine.getProjectedEnvelope(envelope)
+                                    : envelope;
+
+                                return ListTile(
+                                  leading: displayEnvelope.getIconWidget(theme),
+                                  title: Text(displayEnvelope.name),
+                                  trailing: Text(
+                                    currency.format(displayEnvelope.currentAmount),
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EnvelopeDetailScreen(
+                                          envelopeId: envelope.id,
+                                          repo: widget.envelopeRepo,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () => _showLinkEnvelopesDialog(context),
+                              child: const Text('Link More Envelopes'),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
     );
   }

@@ -26,7 +26,7 @@ class PayDaySettingsAdapter extends TypeAdapter<PayDaySettings> {
       defaultAccountId: fields[6] as String?,
       nextPayDate: fields[7] as DateTime?,
       expectedPayAmount: fields[8] as double?,
-      adjustForWeekends: fields[9] as bool? ?? true,
+      adjustForWeekends: fields[9] as bool,
     );
   }
 

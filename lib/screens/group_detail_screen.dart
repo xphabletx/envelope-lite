@@ -10,10 +10,13 @@ import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../widgets/envelope_tile.dart';
 import '../widgets/group_editor.dart' as editor;
+import '../widgets/time_machine_indicator.dart';
 import 'envelope/envelopes_detail_screen.dart';
+import 'envelope/envelope_transaction_list.dart';
 import 'stats_history_screen.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/time_machine_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
 
@@ -77,10 +80,32 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   void _previousMonth() => setState(
     () => _viewingMonth = DateTime(_viewingMonth.year, _viewingMonth.month - 1),
   );
-  void _nextMonth() => setState(
-    () => _viewingMonth = DateTime(_viewingMonth.year, _viewingMonth.month + 1),
-  );
+
+  void _nextMonth() {
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    final nextMonth = DateTime(_viewingMonth.year, _viewingMonth.month + 1);
+
+    // If time machine is active, check if next month exceeds projection date
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      if (nextMonth.isAfter(timeMachine.futureDate!)) {
+        debugPrint('[TimeMachine::GroupDetailScreen] Month Navigation:');
+        debugPrint('[TimeMachine::GroupDetailScreen]   Blocked navigation beyond ${timeMachine.futureDate}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cannot navigate beyond projection date (${DateFormat('MMM yyyy').format(timeMachine.futureDate!)})'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _viewingMonth = nextMonth);
+  }
+
   void _goToCurrentMonth() => setState(() => _viewingMonth = DateTime.now());
+
   bool _isCurrentMonth() {
     final now = DateTime.now();
     return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
@@ -99,19 +124,33 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       themeProvider.currentThemeId,
     );
 
-    return StreamBuilder<List<Envelope>>(
-      stream: widget.envelopeRepo.envelopesStream(),
-      builder: (_, sEnv) {
-        final envs = sEnv.data ?? [];
-        final inGroup = envs.where((e) => e.groupId == widget.group.id).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
+    return Consumer<TimeMachineProvider>(
+      builder: (context, timeMachine, _) {
+        return StreamBuilder<List<Envelope>>(
+          stream: widget.envelopeRepo.envelopesStream(),
+          builder: (_, sEnv) {
+            final envs = sEnv.data ?? [];
+            var inGroup = envs.where((e) => e.groupId == widget.group.id).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
 
-        final totTarget = inGroup.fold<double>(
-          0,
-          (s, e) => s + (e.targetAmount ?? 0),
-        );
-        final totSaved = inGroup.fold<double>(0, (s, e) => s + e.currentAmount);
-        final pct = totTarget > 0 ? (totSaved / totTarget) * 100 : 0.0;
+            // Use projected envelopes if time machine is active
+            if (timeMachine.isActive) {
+              inGroup = inGroup.map((env) => timeMachine.getProjectedEnvelope(env)).toList();
+              debugPrint('[TimeMachine::GroupDetailScreen] Binder Totals:');
+              debugPrint('[TimeMachine::GroupDetailScreen]   Using projected envelope balances');
+            }
+
+            final totTarget = inGroup.fold<double>(
+              0,
+              (s, e) => s + (e.targetAmount ?? 0),
+            );
+            final totSaved = inGroup.fold<double>(0, (s, e) => s + e.currentAmount);
+            final pct = totTarget > 0 ? (totSaved / totTarget) * 100 : 0.0;
+
+            if (timeMachine.isActive) {
+              debugPrint('[TimeMachine::GroupDetailScreen]   Total Saved: $totSaved');
+              debugPrint('[TimeMachine::GroupDetailScreen]   Total Target: $totTarget');
+            }
 
         return StreamBuilder<List<Transaction>>(
           stream: widget.envelopeRepo.transactionsStream,
@@ -120,6 +159,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               backgroundColor: binderColors.paperColor,
               body: CustomScrollView(
                 slivers: [
+                  // Time Machine Indicator at the top
+                  const SliverToBoxAdapter(
+                    child: TimeMachineIndicator(),
+                  ),
+
                   SliverAppBar(
                     expandedHeight: 140,
                     pinned: true,
@@ -238,8 +282,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                 _StatColumn(
                                   label: 'Target',
                                   value: currency.format(totTarget),
-                                  color: theme.colorScheme.onSurface
-                                      .withAlpha(153),
+                                  color: theme.colorScheme.onSurface.withAlpha(
+                                    153,
+                                  ),
                                 ),
                                 _StatColumn(
                                   label: 'Progress',
@@ -250,27 +295,35 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            Builder(builder: (context) {
-                              final HSLColor hslColor =
-                                  HSLColor.fromColor(binderColors.binderColor);
-                              final HSLColor lighterColor = hslColor
-                                  .withLightness(
-                                      (hslColor.lightness + 0.4).clamp(0.0, 1.0));
-                              final Color lightGroupColor =
-                                  lighterColor.toColor();
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: LinearProgressIndicator(
-                                  value: totTarget > 0
-                                      ? (totSaved / totTarget).clamp(0.0, 1.0)
-                                      : 0.0,
-                                  minHeight: 12,
-                                  backgroundColor: lightGroupColor,
-                                  valueColor: AlwaysStoppedAnimation(
-                                      binderColors.binderColor),
-                                ),
-                              );
-                            }),
+                            Builder(
+                              builder: (context) {
+                                final HSLColor hslColor = HSLColor.fromColor(
+                                  binderColors.binderColor,
+                                );
+                                final HSLColor lighterColor = hslColor
+                                    .withLightness(
+                                      (hslColor.lightness + 0.4).clamp(
+                                        0.0,
+                                        1.0,
+                                      ),
+                                    );
+                                final Color lightGroupColor = lighterColor
+                                    .toColor();
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: LinearProgressIndicator(
+                                    value: totTarget > 0
+                                        ? (totSaved / totTarget).clamp(0.0, 1.0)
+                                        : 0.0,
+                                    minHeight: 12,
+                                    backgroundColor: lightGroupColor,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      binderColors.binderColor,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -339,10 +392,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                 ? () => _toggle(e.id)
                                 : () {
                                     // Prevent access to partner's envelopes
-                                    if (e.userId != widget.envelopeRepo.currentUserId) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                    if (e.userId !=
+                                        widget.envelopeRepo.currentUserId) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text("You cannot view details of your partner's envelopes"),
+                                          content: Text(
+                                            "You cannot view details of your partner's envelopes",
+                                          ),
                                         ),
                                       );
                                       return;
@@ -373,10 +431,92 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       child: _buildMonthNavigationBar(theme),
                     ),
                   ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                  // Transaction History Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Recent Activity',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Builder(
+                        builder: (context) {
+                          final allTx = sTx.data ?? [];
+                          // Get envelope IDs in this group
+                          final envelopeIds = inGroup.map((e) => e.id).toSet();
+
+                          // Filter transactions for envelopes in this group
+                          var groupTx = allTx
+                              .where((tx) => envelopeIds.contains(tx.envelopeId))
+                              .toList()
+                            ..sort((a, b) => b.date.compareTo(a.date));
+
+                          // If time machine is active, add projected transactions
+                          if (timeMachine.isActive) {
+                            final projectedTx = timeMachine.getAllProjectedTransactions(includeTransfers: true)
+                                .where((tx) => envelopeIds.contains(tx.envelopeId))
+                                .toList();
+
+                            debugPrint('[TimeMachine::GroupDetailScreen] Transaction History:');
+                            debugPrint('[TimeMachine::GroupDetailScreen]   Real transactions: ${groupTx.length}');
+                            debugPrint('[TimeMachine::GroupDetailScreen]   Projected transactions: ${projectedTx.length}');
+
+                            groupTx = [...groupTx, ...projectedTx]
+                              ..sort((a, b) => b.date.compareTo(a.date));
+
+                            debugPrint('[TimeMachine::GroupDetailScreen]   Merged total: ${groupTx.length}');
+                          }
+
+                          // Filter by viewing month
+                          final monthStart = DateTime(_viewingMonth.year, _viewingMonth.month, 1);
+                          final monthEnd = DateTime(_viewingMonth.year, _viewingMonth.month + 1, 0, 23, 59, 59);
+
+                          final monthTx = groupTx
+                              .where((tx) =>
+                                  tx.date.isAfter(monthStart.subtract(const Duration(milliseconds: 1))) &&
+                                  tx.date.isBefore(monthEnd.add(const Duration(milliseconds: 1))))
+                              .toList();
+
+                          if (monthTx.isEmpty) {
+                            return Container(
+                              padding: const EdgeInsets.all(40),
+                              child: Center(
+                                child: Text(
+                                  'No transactions this month',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return EnvelopeTransactionList(
+                            transactions: monthTx,
+                            onTransactionTap: null,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
             );
+          },
+        );
           },
         );
       },
@@ -393,9 +533,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outline.withAlpha(51),
-        ),
+        border: Border.all(color: theme.colorScheme.outline.withAlpha(51)),
       ),
       child: Row(
         children: [

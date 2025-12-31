@@ -26,6 +26,40 @@ Future<String?> showGroupEditor({
   EnvelopeGroup? group,
   String? draftEnvelopeName,
 }) async {
+  // If creating a new binder (not editing), show template selector first
+  BinderTemplate? selectedTemplate;
+
+  if (group == null) {
+    // Get existing envelopes to check which templates have been used
+    final existingEnvelopes = await envelopeRepo.envelopesStream().first;
+
+    if (!context.mounted) return null;
+
+    // Show template selector
+    final template = await Navigator.push<BinderTemplate?>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BinderTemplateSelector(
+          existingEnvelopes: existingEnvelopes,
+        ),
+      ),
+    );
+
+    // If user cancelled the template selector (null), return null
+    if (template == null) {
+      return null;
+    }
+
+    // If user selected "from scratch", don't set a template
+    if (template.id != 'from_scratch') {
+      selectedTemplate = template;
+    }
+  }
+
+  if (!context.mounted) return null;
+
+  // Now show the binder editor with the selected template
   return await Navigator.of(context).push<String?>(
     MaterialPageRoute(
       fullscreenDialog: true,
@@ -34,6 +68,7 @@ Future<String?> showGroupEditor({
         envelopeRepo: envelopeRepo,
         group: group,
         draftEnvelopeName: draftEnvelopeName,
+        initialTemplate: selectedTemplate,
       ),
     ),
   );
@@ -45,12 +80,14 @@ class _GroupEditorScreen extends StatefulWidget {
     required this.envelopeRepo,
     this.group,
     this.draftEnvelopeName,
+    this.initialTemplate,
   });
 
   final GroupRepo groupRepo;
   final EnvelopeRepo envelopeRepo;
   final EnvelopeGroup? group;
   final String? draftEnvelopeName;
+  final BinderTemplate? initialTemplate;
 
   @override
   State<_GroupEditorScreen> createState() => _GroupEditorScreenState();
@@ -102,16 +139,27 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       selectedEnvelopeIds.add(_draftId);
     }
 
-    // Show template selector for new binders after a short delay
-    // to let the keyboard and UI settle
-    if (!isEdit) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        // Wait for the keyboard to settle before showing template selector
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) {
-          _showTemplateSelector();
-        }
-      });
+    // If a template was selected, apply it immediately
+    if (widget.initialTemplate != null) {
+      _applyTemplate(widget.initialTemplate!);
+    }
+  }
+
+  void _applyTemplate(BinderTemplate template) {
+    // Pre-fill name and emoji from template
+    _nameCtrl.text = template.name;
+    selectedEmoji = template.emoji;
+    selectedIconType = 'emoji';
+    selectedIconValue = template.emoji;
+
+    // Store template for later (will create envelopes when binder is saved)
+    _selectedTemplate = template;
+
+    // Create draft IDs for each template envelope and add to selection
+    for (int i = 0; i < template.envelopes.length; i++) {
+      final draftId = 'DRAFT_TEMPLATE_${template.id}_$i';
+      selectedEnvelopeIds.add(draftId);
+      newlyCreatedEnvelopeIds.add(draftId); // Mark as NEW
     }
   }
 
@@ -394,7 +442,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     );
 
     if (result != null) {
-      final iconType = result['type'].toString().split('.').last;
+      final iconType = result['type'] as String;
       final iconValue = result['value'] as String;
       final iconColor = result['color'] as int?;
 
@@ -408,65 +456,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           selectedEmoji = iconValue;
         }
       });
-    }
-  }
-
-  Future<void> _showTemplateSelector() async {
-    // Get existing envelopes to check which templates have been used
-    final existingEnvelopes = await widget.envelopeRepo.envelopesStream().first;
-
-    if (!mounted) return;
-
-    final template = await Navigator.push<BinderTemplate?>(
-      context,
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => BinderTemplateSelector(
-          existingEnvelopes: existingEnvelopes,
-        ),
-      ),
-    );
-
-    if (template != null && mounted) {
-      // User selected a template - create envelopes
-      await _createEnvelopesFromTemplate(template);
-    }
-  }
-
-  /// Store template selection and create draft envelopes for preview
-  Future<void> _createEnvelopesFromTemplate(BinderTemplate template) async {
-    // Unfocus any active text field to prevent keyboard from popping up
-    FocusScope.of(context).unfocus();
-
-    // Pre-fill name and emoji from template
-    _nameCtrl.text = template.name;
-    selectedEmoji = template.emoji;
-    selectedIconType = 'emoji';
-    selectedIconValue = template.emoji;
-
-    // Store template for later (will create envelopes when binder is saved)
-    // Also create draft IDs and add to selectedEnvelopeIds for preview
-    setState(() {
-      _selectedTemplate = template;
-
-      // Create draft IDs for each template envelope and add to selection
-      for (int i = 0; i < template.envelopes.length; i++) {
-        final draftId = 'DRAFT_TEMPLATE_${template.id}_$i';
-        selectedEnvelopeIds.add(draftId);
-        newlyCreatedEnvelopeIds.add(draftId); // Mark as NEW
-      }
-    });
-
-    // Show info that envelopes will be created
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${template.envelopes.length} envelopes will be created when you save the binder',
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
     }
   }
 
@@ -765,7 +754,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 TextFormField(
                                   controller: _nameCtrl,
                                   textCapitalization: TextCapitalization.words,
-                                  autofocus: isEdit, // Only autofocus when editing, not creating
                                   decoration: InputDecoration(
                                     labelText: tr('group_binder_name_label'),
                                     labelStyle: fontProvider.getTextStyle(
@@ -783,6 +771,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           v.trim().isEmpty)
                                       ? tr('error_enter_name')
                                       : null,
+                                  onTap: () => _nameCtrl.selection = TextSelection(
+                                    baseOffset: 0,
+                                    extentOffset: _nameCtrl.text.length,
+                                  ),
                                   onEditingComplete: () {
                                     // Dismiss keyboard when user presses done
                                     FocusScope.of(context).unfocus();

@@ -15,11 +15,12 @@ import '../screens/add_scheduled_payment_screen.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../providers/time_machine_provider.dart';
 import 'envelope/omni_icon_picker_modal.dart';
 import '../models/envelope.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
-import 'calculator_widget.dart';
+import '../utils/calculator_helper.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -196,7 +197,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     );
 
     if (result != null) {
-      final iconType = result['type'].toString().split('.').last;
+      final iconType = result['type'] as String;
       final iconValue = result['value'] as String;
 
       setState(() {
@@ -226,6 +227,19 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   }
 
   Future<void> _handleSave() async {
+    // Check if time machine mode is active - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (_saving) return;
 
     if (!_formKey.currentState!.validate()) {
@@ -263,6 +277,18 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         return;
       }
       target = parsed;
+    }
+
+    // Validate: target date requires target amount
+    if (_targetDate != null && (target == null || target <= 0)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Target date requires a target amount. Please enter a target amount to set a deadline.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
     }
 
     // Auto-fill amount
@@ -419,6 +445,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                           ),
                           onEditingComplete: _handleNameSubmit,
+                          onTap: () => _nameCtrl.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _nameCtrl.text.length,
+                          ),
                         ),
                         const SizedBox(height: 16),
 
@@ -465,7 +495,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         TextField(
                           controller: _subtitleCtrl,
                           focusNode: _subtitleFocus,
-                          textCapitalization: TextCapitalization.sentences,
+                          textCapitalization: TextCapitalization.words,
                           textInputAction: TextInputAction.next,
                           maxLength: 50,
                           maxLines: 1, // FIX: Prevent multi-line expansion
@@ -490,6 +520,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                           ),
                           onEditingComplete: () => _amountFocus.requestFocus(),
+                          onTap: () => _subtitleCtrl.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _subtitleCtrl.text.length,
+                          ),
                         ),
                         const SizedBox(height: 16),
 
@@ -519,22 +553,27 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             prefixIcon: const Icon(
                               Icons.account_balance_wallet,
                             ),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.calculate),
-                              onPressed: () async {
-                                final result = await showDialog<double>(
-                                  context: context,
-                                  builder: (context) => const Dialog(
-                                    child: CalculatorWidget(),
-                                  ),
-                                );
-                                if (result != null && mounted) {
-                                  setState(() {
-                                    _amtCtrl.text = result.toStringAsFixed(2);
-                                  });
-                                }
-                              },
-                              tooltip: 'Open Calculator',
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.calculate,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                                onPressed: () async {
+                                  final result = await CalculatorHelper.showCalculator(context);
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _amtCtrl.text = result;
+                                    });
+                                  }
+                                },
+                                tooltip: 'Open Calculator',
+                              ),
                             ),
                             // FIX 3: Added contentPadding
                             contentPadding: const EdgeInsets.symmetric(
@@ -576,22 +615,27 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             prefixIcon: const Icon(Icons.flag),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.calculate),
-                              onPressed: () async {
-                                final result = await showDialog<double>(
-                                  context: context,
-                                  builder: (context) => const Dialog(
-                                    child: CalculatorWidget(),
-                                  ),
-                                );
-                                if (result != null && mounted) {
-                                  setState(() {
-                                    _targetCtrl.text = result.toStringAsFixed(2);
-                                  });
-                                }
-                              },
-                              tooltip: 'Open Calculator',
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.calculate,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                                onPressed: () async {
+                                  final result = await CalculatorHelper.showCalculator(context);
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _targetCtrl.text = result;
+                                    });
+                                  }
+                                },
+                                tooltip: 'Open Calculator',
+                              ),
                             ),
                             // FIX 3: Added contentPadding
                             contentPadding: const EdgeInsets.symmetric(
@@ -606,6 +650,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               FocusScope.of(context).unfocus();
                             }
                           },
+                          onTap: () => _targetCtrl.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _targetCtrl.text.length,
+                          ),
                         ),
                         const SizedBox(height: 16),
 
@@ -907,23 +955,27 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               prefixIcon: const Icon(Icons.autorenew),
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.calculate),
-                                onPressed: () async {
-                                  final result = await showDialog<double>(
-                                    context: context,
-                                    builder: (context) => const Dialog(
-                                      child: CalculatorWidget(),
-                                    ),
-                                  );
-                                  if (result != null && mounted) {
-                                    setState(() {
-                                      _autoFillAmountCtrl.text =
-                                          result.toStringAsFixed(2);
-                                    });
-                                  }
-                                },
-                                tooltip: 'Open Calculator',
+                              suffixIcon: Container(
+                                margin: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: IconButton(
+                                  icon: Icon(
+                                    Icons.calculate,
+                                    color: theme.colorScheme.onPrimary,
+                                  ),
+                                  onPressed: () async {
+                                    final result = await CalculatorHelper.showCalculator(context);
+                                    if (result != null && mounted) {
+                                      setState(() {
+                                        _autoFillAmountCtrl.text = result;
+                                      });
+                                    }
+                                  },
+                                  tooltip: 'Open Calculator',
+                                ),
                               ),
                               helperText: tr('envelope_autofill_helper'),
                               helperStyle: fontProvider.getTextStyle(

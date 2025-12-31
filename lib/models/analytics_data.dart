@@ -29,13 +29,14 @@ extension AnalyticsPeriodExtension on AnalyticsPeriod {
     }
   }
 
-  DateTimeRange getDateRange() {
-    final now = DateTime.now();
+  DateTimeRange getDateRange({DateTime? referenceDate}) {
+    // Use reference date (for time machine) or current date
+    final now = referenceDate ?? DateTime.now();
     switch (this) {
       case AnalyticsPeriod.thisMonth:
         return DateTimeRange(
           start: DateTime(now.year, now.month, 1),
-          end: now,
+          end: DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999),
         );
       case AnalyticsPeriod.last3Months:
         return DateTimeRange(

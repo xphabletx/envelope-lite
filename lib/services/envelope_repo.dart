@@ -8,6 +8,7 @@ import 'package:rxdart/rxdart.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart' as models;
+import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
 
 /// Envelope repository - Hive-first architecture
@@ -129,6 +130,8 @@ class EnvelopeRepo {
         _envelopeBox.watch(key: id).map((_) {
           final envelope = _envelopeBox.get(id);
           if (envelope == null) {
+            // Envelope was deleted - close the stream gracefully
+            debugPrint('[EnvelopeRepo] Envelope $id was deleted, closing stream');
             throw Exception('Envelope not found: $id');
           }
           return envelope;
@@ -312,6 +315,10 @@ class EnvelopeRepo {
   // ==================== UPDATE ====================
 
   /// Update envelope
+  ///
+  /// IMPORTANT: Parameters are nullable to support partial updates.
+  /// To explicitly set a field to null (e.g., unlink an account), pass the parameter explicitly.
+  /// Fields not provided will retain their current values.
   Future<void> updateEnvelope({
     required String envelopeId,
     String? name,
@@ -327,6 +334,9 @@ class EnvelopeRepo {
     double? autoFillAmount,
     bool? isShared,
     String? linkedAccountId,
+    bool updateLinkedAccountId = false, // Flag to explicitly update linkedAccountId (including to null)
+    bool updateTargetAmount = false, // Flag to explicitly update targetAmount (including to null)
+    bool updateTargetDate = false, // Flag to explicitly update targetDate (including to null)
   }) async {
     debugPrint('[EnvelopeRepo] Updating envelope: $envelopeId');
 
@@ -336,13 +346,14 @@ class EnvelopeRepo {
     }
 
     // Create updated envelope
+    // Use the explicit flags to allow setting fields to null
     final updatedEnvelope = Envelope(
       id: envelope.id,
       name: name ?? envelope.name,
       userId: envelope.userId,
       currentAmount: envelope.currentAmount,
-      targetAmount: targetAmount ?? envelope.targetAmount,
-      targetDate: targetDate ?? envelope.targetDate,
+      targetAmount: updateTargetAmount ? targetAmount : envelope.targetAmount,
+      targetDate: updateTargetDate ? targetDate : envelope.targetDate,
       groupId: groupId ?? envelope.groupId,
       subtitle: subtitle ?? envelope.subtitle,
       emoji: emoji ?? envelope.emoji,
@@ -351,7 +362,7 @@ class EnvelopeRepo {
       iconColor: iconColor ?? envelope.iconColor,
       autoFillEnabled: autoFillEnabled ?? envelope.autoFillEnabled,
       autoFillAmount: autoFillAmount ?? envelope.autoFillAmount,
-      linkedAccountId: linkedAccountId ?? envelope.linkedAccountId,
+      linkedAccountId: updateLinkedAccountId ? linkedAccountId : envelope.linkedAccountId,
       isShared: isShared ?? envelope.isShared,
       isDebtEnvelope: envelope.isDebtEnvelope,
       startingDebt: envelope.startingDebt,
@@ -371,8 +382,6 @@ class EnvelopeRepo {
         };
         if (name != null) updateData['name'] = name;
         if (groupId != null) updateData['groupId'] = groupId;
-        if (targetAmount != null) updateData['targetAmount'] = targetAmount;
-        if (targetDate != null) updateData['targetDate'] = Timestamp.fromDate(targetDate);
         if (emoji != null) updateData['emoji'] = emoji;
         if (iconType != null) updateData['iconType'] = iconType;
         if (iconValue != null) updateData['iconValue'] = iconValue;
@@ -381,7 +390,17 @@ class EnvelopeRepo {
         if (autoFillEnabled != null) updateData['autoFillEnabled'] = autoFillEnabled;
         if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
         if (isShared != null) updateData['isShared'] = isShared;
-        if (linkedAccountId != null) updateData['linkedAccountId'] = linkedAccountId;
+
+        // Handle fields that can be explicitly set to null
+        if (updateTargetAmount) {
+          updateData['targetAmount'] = targetAmount; // Can be null
+        }
+        if (updateTargetDate) {
+          updateData['targetDate'] = targetDate != null ? Timestamp.fromDate(targetDate) : null; // Can be null
+        }
+        if (updateLinkedAccountId) {
+          updateData['linkedAccountId'] = linkedAccountId; // Can be null
+        }
 
         await _firestore
             .collection('workspaces')
@@ -417,9 +436,21 @@ class EnvelopeRepo {
     }
     debugPrint('[EnvelopeRepo] ✅ Deleted ${txsToDelete.length} transactions from Hive');
 
+    // Delete scheduled payments linked to this envelope from Hive
+    final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+    final paymentsToDelete = scheduledPaymentBox.values
+        .where((payment) => payment.envelopeId == id)
+        .map((payment) => payment.id)
+        .toList();
+
+    for (final paymentId in paymentsToDelete) {
+      await scheduledPaymentBox.delete(paymentId);
+    }
+    debugPrint('[EnvelopeRepo] ✅ Deleted ${paymentsToDelete.length} scheduled payments from Hive');
+
     // Delete envelope from Hive
     await _envelopeBox.delete(id);
-    debugPrint('[EnvelopeRepo] ✅ Deleted from Hive');
+    debugPrint('[EnvelopeRepo] ✅ Deleted envelope from Hive');
 
     // Only sync to Firebase if in workspace mode
     if (_inWorkspace && _workspaceId != null) {
@@ -445,6 +476,45 @@ class EnvelopeRepo {
     for (final id in ids) {
       await deleteEnvelope(id);
     }
+  }
+
+  /// Clean up orphaned scheduled payments (for existing data migration)
+  /// Call this during app initialization to remove scheduled payments
+  /// that reference deleted envelopes
+  Future<int> cleanupOrphanedScheduledPayments() async {
+    debugPrint('[EnvelopeRepo] Cleaning up orphaned scheduled payments...');
+
+    final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+
+    // Get all valid envelope IDs
+    final validEnvelopeIds = _envelopeBox.values
+        .where((env) => env.userId == _userId)
+        .map((env) => env.id)
+        .toSet();
+
+    // Find orphaned scheduled payments
+    final orphanedPayments = scheduledPaymentBox.values
+        .where((payment) =>
+            payment.userId == _userId &&
+            payment.envelopeId != null &&
+            !validEnvelopeIds.contains(payment.envelopeId))
+        .toList();
+
+    // Delete them
+    int deletedCount = 0;
+    for (final payment in orphanedPayments) {
+      debugPrint('[EnvelopeRepo] ⚠️ Deleting orphaned scheduled payment: ${payment.name} (envelope ${payment.envelopeId})');
+      await scheduledPaymentBox.delete(payment.id);
+      deletedCount++;
+    }
+
+    if (deletedCount > 0) {
+      debugPrint('[EnvelopeRepo] ✅ Cleaned up $deletedCount orphaned scheduled payments');
+    } else {
+      debugPrint('[EnvelopeRepo] ✅ No orphaned scheduled payments found');
+    }
+
+    return deletedCount;
   }
 
   // ==================== TRANSACTIONS ====================
@@ -570,6 +640,7 @@ class EnvelopeRepo {
     required double amount,
     required String description,
     DateTime? date,
+    bool isScheduledPayment = false,
   }) async {
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) throw Exception('Envelope not found');
@@ -606,7 +677,9 @@ class EnvelopeRepo {
       id: _firestore.collection('_temp').doc().id,
       envelopeId: envelopeId,
       userId: _userId,
-      type: models.TransactionType.withdrawal,
+      type: isScheduledPayment
+          ? models.TransactionType.scheduledPayment
+          : models.TransactionType.withdrawal,
       amount: amount,
       date: date ?? DateTime.now(),
       description: description,

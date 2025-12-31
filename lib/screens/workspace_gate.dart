@@ -6,6 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
+import '../models/envelope.dart';
+import '../models/envelope_group.dart';
+import '../models/account.dart';
 import '../services/localization_service.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
@@ -163,6 +166,10 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                   hintText: 'ABC123',
                   counterText: '',
                 ),
+                onTap: () => _joinCtrl.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _joinCtrl.text.length,
+                ),
               ),
               const SizedBox(height: 18),
               SizedBox(
@@ -249,9 +256,9 @@ class _WorkspaceSharingSelectionScreenState
 
     try {
       // FETCH FROM HIVE (PRIMARY STORAGE)
-      final envelopeBox = Hive.box('envelopes');
-      final groupBox = Hive.box('groups');
-      final accountBox = Hive.box('accounts');
+      final envelopeBox = Hive.box<Envelope>('envelopes');
+      final groupBox = Hive.box<EnvelopeGroup>('groups');
+      final accountBox = Hive.box<Account>('accounts');
 
       final myEnvelopes = envelopeBox.values
           .where((e) => e.userId == uid)
@@ -326,9 +333,9 @@ class _WorkspaceSharingSelectionScreenState
 
       // 2. Update Sharing Preferences in Hive
     // print('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences in Hive.');
-      final envelopeBox = Hive.box('envelopes');
-      final groupBox = Hive.box('groups');
-      final accountBox = Hive.box('accounts');
+      final envelopeBox = Hive.box<Envelope>('envelopes');
+      final groupBox = Hive.box<EnvelopeGroup>('groups');
+      final accountBox = Hive.box<Account>('accounts');
 
       for (var envelope in _myEnvelopes) {
         final hide = _hiddenEnvelopeIds.contains(envelope.id);

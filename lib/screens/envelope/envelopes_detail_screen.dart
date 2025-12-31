@@ -62,6 +62,22 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Initialize viewing month based on Time Machine state
+    // If Time Machine is active, start at the target date's month
+    // Otherwise, start at current month
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+        if (timeMachine.isActive && timeMachine.futureDate != null) {
+          setState(() {
+            _viewingMonth = DateTime(timeMachine.futureDate!.year, timeMachine.futureDate!.month, 1);
+          });
+          debugPrint('[EnvelopeDetail] Time Machine active: initialized viewing month to ${timeMachine.futureDate}');
+        }
+      }
+    });
+
     _viewingMonth = DateTime.now();
     _scrollController.addListener(_saveScrollOffset);
 
@@ -139,12 +155,28 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   }
 
   void _goToCurrentMonth() {
-    setState(() => _viewingMonth = DateTime.now());
+    // In Time Machine mode, "current" means the target date
+    // Otherwise, it's today's date
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      setState(() => _viewingMonth = DateTime(timeMachine.futureDate!.year, timeMachine.futureDate!.month, 1));
+      debugPrint('[EnvelopeDetail] Go to current month (Time Machine): ${timeMachine.futureDate}');
+    } else {
+      setState(() => _viewingMonth = DateTime.now());
+    }
   }
 
   bool _isCurrentMonth() {
-    final now = DateTime.now();
-    return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
+    // In Time Machine mode, check against target date
+    // Otherwise, check against today
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      final targetMonth = timeMachine.futureDate!;
+      return _viewingMonth.year == targetMonth.year && _viewingMonth.month == targetMonth.month;
+    } else {
+      final now = DateTime.now();
+      return _viewingMonth.year == now.year && _viewingMonth.month == now.month;
+    }
   }
 
   Widget _buildPortraitLayout(

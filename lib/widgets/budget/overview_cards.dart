@@ -12,6 +12,7 @@ import '../../services/group_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
 import '../../screens/stats_history_screen.dart';
 
 import '../../screens/accounts/account_list_screen.dart';
@@ -35,9 +36,9 @@ class BudgetOverviewCards extends StatefulWidget {
 }
 
 class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
-  // Historical range for Income/Spending only
-  DateTime _historyStart = DateTime.now().subtract(const Duration(days: 30));
-  DateTime _historyEnd = DateTime.now();
+  // User-selected custom range (if any)
+  DateTime? _userSelectedStart;
+  DateTime? _userSelectedEnd;
 
   final PageController _pageController = PageController(viewportFraction: 0.85);
   int _currentPage = 0;
@@ -53,24 +54,50 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     });
   }
 
+  // Calculate history range based on time machine state
+  DateTimeRange _getHistoryRange(TimeMachineProvider timeMachine) {
+    // If user selected a custom range, use it
+    if (_userSelectedStart != null && _userSelectedEnd != null) {
+      return DateTimeRange(start: _userSelectedStart!, end: _userSelectedEnd!);
+    }
+
+    // Otherwise, calculate based on time machine state
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      // Time Machine: 30 days before target date
+      final targetDate = timeMachine.futureDate!;
+      return DateTimeRange(
+        start: targetDate.subtract(const Duration(days: 30)),
+        end: targetDate,
+      );
+    } else {
+      // Normal: last 30 days from now
+      final now = DateTime.now();
+      return DateTimeRange(
+        start: now.subtract(const Duration(days: 30)),
+        end: now,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _selectHistoryRange() async {
+  Future<void> _selectHistoryRange(TimeMachineProvider timeMachine) async {
+    final currentRange = _getHistoryRange(timeMachine);
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDateRange: DateTimeRange(start: _historyStart, end: _historyEnd),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: currentRange,
       helpText: 'Select History Range',
     );
     if (picked != null) {
       setState(() {
-        _historyStart = picked.start;
-        _historyEnd = picked.end;
+        _userSelectedStart = picked.start;
+        _userSelectedEnd = picked.end;
       });
     }
   }
@@ -80,135 +107,164 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
-    // Hardcoded range for Scheduled Payments projection
-    final futureStart = DateTime.now();
-    final futureEnd = DateTime.now().add(const Duration(days: 30));
+    return Consumer<TimeMachineProvider>(
+      builder: (context, timeMachine, _) {
+        // Get dynamic history range based on time machine state
+        final historyRange = _getHistoryRange(timeMachine);
+        final historyStart = historyRange.start;
+        final historyEnd = historyRange.end;
 
-    return Column(
-      children: [
-        // Date range header (Explicitly labeled History)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(Icons.history, size: 20, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'History: ${_formatDateRange()}',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+        // Calculate future range for Scheduled Payments
+        final futureStart = timeMachine.isActive && timeMachine.futureDate != null
+            ? timeMachine.futureDate!.subtract(const Duration(days: 30))
+            : DateTime.now();
+        final futureEnd = timeMachine.isActive && timeMachine.futureDate != null
+            ? timeMachine.futureDate!
+            : DateTime.now().add(const Duration(days: 30));
+
+        return Column(
+          children: [
+            // Date range header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.history, size: 20, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'History: ${_formatDateRange(historyStart, historyEnd)}',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
                   ),
-                ),
+                  TextButton.icon(
+                    onPressed: () => _selectHistoryRange(timeMachine),
+                    icon: const Icon(Icons.edit_calendar, size: 16),
+                    label: Text(
+                      'Change',
+                      style: fontProvider.getTextStyle(fontSize: 14),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(60, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
               ),
-              TextButton.icon(
-                onPressed: _selectHistoryRange,
-                icon: const Icon(Icons.edit_calendar, size: 16),
-                label: Text(
-                  'Change',
-                  style: fontProvider.getTextStyle(fontSize: 14),
-                ),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(60, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
 
-        // Cards PageView
-        SizedBox(
-          height: 200,
-          child: StreamBuilder<List<Account>>(
-            stream: widget.accountRepo.accountsStream(),
-            builder: (context, accountSnapshot) {
-              return StreamBuilder<List<Envelope>>(
-                stream: widget.envelopeRepo.envelopesStream(),
-                builder: (context, envelopeSnapshot) {
-                  return StreamBuilder<List<Transaction>>(
-                    stream: widget.envelopeRepo.transactionsStream,
-                    builder: (context, txSnapshot) {
-                      return StreamBuilder<List<ScheduledPayment>>(
-                        stream: widget.paymentRepo.scheduledPaymentsStream,
-                        builder: (context, paymentSnapshot) {
-                          // Handle loading states gracefully
-                          final accounts = accountSnapshot.data ?? [];
-                          final envelopes = envelopeSnapshot.data ?? [];
-                          final allTx = txSnapshot.data ?? [];
-                          final scheduledPayments = paymentSnapshot.data ?? [];
+            // Cards PageView
+            SizedBox(
+              height: 200,
+              child: StreamBuilder<List<Account>>(
+                stream: widget.accountRepo.accountsStream(),
+                builder: (context, accountSnapshot) {
+                  return StreamBuilder<List<Envelope>>(
+                    stream: widget.envelopeRepo.envelopesStream(),
+                    builder: (context, envelopeSnapshot) {
+                      return StreamBuilder<List<Transaction>>(
+                        stream: widget.envelopeRepo.transactionsStream,
+                        builder: (context, txSnapshot) {
+                          return StreamBuilder<List<ScheduledPayment>>(
+                            stream: widget.paymentRepo.scheduledPaymentsStream,
+                            builder: (context, paymentSnapshot) {
+                              // Handle loading states gracefully
+                              var accounts = accountSnapshot.data ?? [];
+                              final envelopes = envelopeSnapshot.data ?? [];
+                              var allTx = txSnapshot.data ?? [];
+                              final scheduledPayments = paymentSnapshot.data ?? [];
 
-                          // Filter transactions in HISTORY range
-                          final txInRange = allTx.where((tx) {
-                            return tx.date.isAfter(
-                                  _historyStart.subtract(
-                                    const Duration(seconds: 1),
-                                  ),
-                                ) &&
-                                tx.date.isBefore(
-                                  _historyEnd.add(const Duration(days: 1)),
+                              // Merge with projected data if time machine is active
+                              if (timeMachine.isActive) {
+                                // Get projected transactions
+                                final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
+                                  historyStart,
+                                  historyEnd,
+                                  includeTransfers: true,
                                 );
-                          }).toList();
+                                allTx = [...allTx, ...projectedTx];
 
-                          return PageView(
-                            controller: _pageController,
-                            children: [
-                              _buildAccountsCard(accounts),
-                              _buildIncomeCard(txInRange),
-                              _buildSpendingCard(txInRange),
-                              // Use FUTURE range for Scheduled Payments
-                              _buildScheduledPaymentsCard(
-                                scheduledPayments,
-                                futureStart,
-                                futureEnd,
-                              ),
-                              _buildAutoFillCard(envelopes),
-                              _buildTopEnvelopesCard(envelopes),
-                            ],
+                                // Transform accounts to use projected balances
+                                accounts = accounts.map((account) {
+                                  return timeMachine.getProjectedAccount(account);
+                                }).toList();
+                              }
+
+                              // Filter transactions in HISTORY range
+                              final txInRange = allTx.where((tx) {
+                                return tx.date.isAfter(
+                                      historyStart.subtract(
+                                        const Duration(seconds: 1),
+                                      ),
+                                    ) &&
+                                    tx.date.isBefore(
+                                      historyEnd.add(const Duration(days: 1)),
+                                    );
+                              }).toList();
+
+                              return PageView(
+                                controller: _pageController,
+                                children: [
+                                  _buildAccountsCard(accounts),
+                                  _buildIncomeCard(txInRange, historyStart, historyEnd),
+                                  _buildSpendingCard(txInRange, historyStart, historyEnd),
+                                  // Use FUTURE range for Scheduled Payments
+                                  _buildScheduledPaymentsCard(
+                                    scheduledPayments,
+                                    futureStart,
+                                    futureEnd,
+                                  ),
+                                  _buildAutoFillCard(envelopes),
+                                  _buildTopEnvelopesCard(envelopes),
+                                ],
+                              );
+                            },
                           );
                         },
                       );
                     },
                   );
                 },
-              );
-            },
-          ),
-        ),
-
-        // Page indicator
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(6, (index) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _currentPage == index
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.3),
               ),
-            );
-          }),
-        ),
-      ],
+            ),
+
+            // Page indicator
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(6, (index) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _currentPage == index
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                );
+              }),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  String _formatDateRange() {
+  String _formatDateRange(DateTime start, DateTime end) {
     final format = DateFormat('MMM d');
-    if (_historyStart.year == _historyEnd.year &&
-        _historyStart.month == _historyEnd.month &&
-        _historyStart.day == _historyEnd.day) {
-      return format.format(_historyStart);
+    if (start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day) {
+      return format.format(start);
     }
-    return '${format.format(_historyStart)} - ${format.format(_historyEnd)}';
+    return '${format.format(start)} - ${format.format(end)}';
   }
 
   // 1. Total Balance -> Links to AccountListScreen
@@ -241,7 +297,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   }
 
   // 2. Income -> Links to StatsHistoryScreen
-  Widget _buildIncomeCard(List<Transaction> transactions) {
+  Widget _buildIncomeCard(List<Transaction> transactions, DateTime historyStart, DateTime historyEnd) {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
@@ -256,14 +312,18 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
       subtitle: 'In selected history range',
       color: Colors.green,
       onTap: () {
+        debugPrint('[TimeMachine::OverviewCards] ========================================');
+        debugPrint('[TimeMachine::OverviewCards] Income card tapped!');
+        debugPrint('[TimeMachine::OverviewCards] Navigating to Stats & History');
+        debugPrint('[TimeMachine::OverviewCards] Will use entry → target date in time machine mode');
+        debugPrint('[TimeMachine::OverviewCards] ========================================');
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => StatsHistoryScreen(
               repo: widget.envelopeRepo,
               title: 'Income & History',
-              initialStart: _historyStart,
-              initialEnd: _historyEnd,
+              // Don't pass explicit dates - let screen use entry → target date in time machine
               filterTransactionTypes: {TransactionType.deposit},
             ),
           ),
@@ -273,12 +333,13 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   }
 
   // 3. Spending -> Links to StatsHistoryScreen
-  Widget _buildSpendingCard(List<Transaction> transactions) {
+  Widget _buildSpendingCard(List<Transaction> transactions, DateTime historyStart, DateTime historyEnd) {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
+    // Include both withdrawals and scheduled payments
     final spending = transactions
-        .where((tx) => tx.type == TransactionType.withdrawal)
+        .where((tx) => tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment)
         .fold(0.0, (sum, tx) => sum + tx.amount);
 
     return _OverviewCard(
@@ -294,9 +355,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
             builder: (_) => StatsHistoryScreen(
               repo: widget.envelopeRepo,
               title: 'Spending & History',
-              initialStart: _historyStart,
-              initialEnd: _historyEnd,
-              filterTransactionTypes: {TransactionType.withdrawal},
+              // Don't pass explicit dates - let screen use entry → target date in time machine
+              filterTransactionTypes: {TransactionType.withdrawal, TransactionType.scheduledPayment},
             ),
           ),
         );

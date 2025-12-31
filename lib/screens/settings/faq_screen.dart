@@ -39,6 +39,7 @@ class _FAQScreenState extends State<FAQScreen> {
             padding: const EdgeInsets.all(16),
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value),
+              textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 hintText: 'Search for help...',
                 prefixIcon: const Icon(Icons.search),

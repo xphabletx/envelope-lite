@@ -104,6 +104,8 @@ class TransactionTypeAdapter extends TypeAdapter<TransactionType> {
         return TransactionType.withdrawal;
       case 2:
         return TransactionType.transfer;
+      case 3:
+        return TransactionType.scheduledPayment;
       default:
         return TransactionType.deposit;
     }
@@ -120,6 +122,9 @@ class TransactionTypeAdapter extends TypeAdapter<TransactionType> {
         break;
       case TransactionType.transfer:
         writer.writeByte(2);
+        break;
+      case TransactionType.scheduledPayment:
+        writer.writeByte(3);
         break;
     }
   }

@@ -1,4 +1,5 @@
 // lib/screens/sign_in_screen.dart
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -37,6 +38,26 @@ class _SignInScreenState extends State<SignInScreen> {
     });
     try {
       await AuthService.signInWithGoogle();
+    } on FirebaseAuthException catch (e) {
+      final msg = e.message ?? 'Authentication error.';
+      setState(() => _error = msg);
+      _showSnack(msg);
+    } catch (e) {
+      final msg = e.toString();
+      setState(() => _error = msg);
+      _showSnack(msg);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _withApple() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await AuthService.signInWithApple();
     } on FirebaseAuthException catch (e) {
       final msg = e.message ?? 'Authentication error.';
       setState(() => _error = msg);
@@ -697,6 +718,38 @@ class _SignInScreenState extends State<SignInScreen> {
                               onPressed: busy ? null : _withGoogle,
                             ),
                           ),
+                          // Only show Apple Sign-In on iOS (not required for Android)
+                          if (Platform.isIOS) ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 56,
+                              child: FilledButton.icon(
+                                icon: const Icon(
+                                  Icons.apple,
+                                  size: 28,
+                                  color: Color(0xFFF8FAF6),
+                                ),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: const Text(
+                                    'Continue with Apple',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontFamily: null,
+                                    ),
+                                  ),
+                                ),
+                                onPressed: busy ? null : _withApple,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF5D4A2F),
+                                  foregroundColor: const Color(0xFFF8FAF6),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                         ],
                       ),

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../models/envelope.dart';
 import '../../models/scheduled_payment.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
@@ -34,6 +36,9 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     BuildContext context,
     List<ScheduledPayment> payments,
   ) {
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
     showModalBottomSheet(
       context: context,
       isDismissible: true,
@@ -62,9 +67,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        NumberFormat.simpleCurrency(
-                          locale: 'en_GB',
-                        ).format(p.amount),
+                        currency.format(p.amount),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(width: 8),
@@ -127,31 +130,65 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
+    final locale = Provider.of<LocaleProvider>(context);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Logic: Progress
-    double progress = 0;
+    // Logic: Progress (Amount-based)
+    double amountProgress = 0;
     if (envelope.targetAmount != null && envelope.targetAmount! > 0) {
-      progress = (envelope.currentAmount / envelope.targetAmount!).clamp(
+      amountProgress = (envelope.currentAmount / envelope.targetAmount!).clamp(
         0.0,
         1.0,
       );
     }
 
-    // Logic: Pay Days text
-    String? payDayText;
-    if (envelope.targetAmount != null &&
-        envelope.autoFillEnabled &&
-        envelope.autoFillAmount != null &&
-        envelope.autoFillAmount! > 0) {
-      final remaining = envelope.targetAmount! - envelope.currentAmount;
-      if (remaining > 0) {
-        final cycles = (remaining / envelope.autoFillAmount!).ceil();
-        payDayText = '$cycles pay days left';
-      } else {
-        payDayText = 'Goal reached!';
-      }
+    // Logic: Time Progress (Timestamp-based for granular progress)
+    double timeProgress = 0;
+    int daysRemaining = 0;
+    DateTime? startDate;
+    if (envelope.targetDate != null) {
+      final now = DateTime.now();
+      // Estimate start date as 30 days ago with current time (since we don't track envelope creation date)
+      startDate = now.subtract(const Duration(days: 30));
+
+      // Target date at midnight + 1 second (00:00:01)
+      final targetWithTime = DateTime(
+        envelope.targetDate!.year,
+        envelope.targetDate!.month,
+        envelope.targetDate!.day,
+        0, 0, 1, // 00:00:01
+      );
+
+      // Calculate using full timestamps for granular progress
+      final totalDuration = targetWithTime.difference(startDate);
+      final elapsedDuration = now.difference(startDate);
+
+      // Progress based on actual time elapsed (not just days)
+      timeProgress = totalDuration.inMicroseconds > 0
+          ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
+          : 0.0;
+
+      daysRemaining = targetWithTime.difference(now).inDays;
     }
+
+    // Determine which progress to show
+    double progress = 0;
+    String progressText = '';
+
+    if (envelope.targetAmount != null && envelope.targetDate != null) {
+      // Both amount and time targets - show amount progress with time info
+      progress = amountProgress;
+      progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysRemaining days left';
+    } else if (envelope.targetAmount != null) {
+      // Amount target only
+      progress = amountProgress;
+      progressText = '${(amountProgress * 100).toStringAsFixed(1)}% of ${currency.format(envelope.targetAmount)}';
+    } else if (envelope.targetDate != null) {
+      // Time target only
+      progress = timeProgress;
+      progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysRemaining days to ${DateFormat('MMM d').format(envelope.targetDate!)}';
+    }
+
 
     return Column(
       children: [
@@ -231,7 +268,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
               ),
 
               // LAYER 4: Progress Bar
-              if (envelope.targetAmount != null)
+              if (envelope.targetAmount != null || envelope.targetDate != null)
                 Positioned(
                   bottom: 20,
                   left: 40,
@@ -251,7 +288,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '${(progress * 100).toInt()}% of ${currency.format(envelope.targetAmount)}',
+                        progressText,
                         style: fontProvider.getTextStyle(
                           color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 14,
@@ -287,6 +324,18 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     _EnvelopeIconButton(
                       icon: Icons.settings,
                       onTap: () {
+                        // Check if time machine is active
+                        final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                        if (timeMachine.shouldBlockModifications()) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(timeMachine.getBlockedActionMessage()),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
                         showModalBottomSheet(
                           context: context,
                           isScrollControlled: true,
@@ -315,7 +364,20 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
           ),
         ),
 
-        // 2. THE CHIPS (Action Buttons)
+        // Swipe Hint
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text(
+            '← Swipe left or right for next/previous envelope →',
+            style: fontProvider.getTextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+
+        // 2. THE CHIPS (2 Wider Chips for Auto-Fill & Scheduled Payments)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: StreamBuilder<List<ScheduledPayment>>(
@@ -333,14 +395,15 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
 
               return Row(
                 children: [
-                  // 1. Auto-Fill Chip
+                  // 1. Auto-Fill Chip (Wider)
                   Expanded(
+                    flex: 1,
                     child: _InfoChip(
                       icon: Icons.autorenew,
                       label: envelope.autoFillEnabled
                           ? 'Auto-fill: ${currency.format(envelope.autoFillAmount ?? 0)}'
                           : 'Auto-fill Off',
-                      subLabel: 'Tap to configure',
+                      subLabel: 'Tap for details',
                       color: theme.colorScheme.secondaryContainer,
                       textColor: theme.colorScheme.onSecondaryContainer,
                       onTap: () {
@@ -369,68 +432,17 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
 
-                  // 2. Target Chip
+                  // 2. Scheduled Payment Chip (Wider)
                   Expanded(
-                    child: _InfoChip(
-                      icon: Icons.track_changes,
-                      label: payDayText ?? 'Set Target',
-                      subLabel: envelope.targetAmount != null
-                          ? 'Goal: ${currency.format(envelope.targetAmount)}'
-                          : 'Tap to set goal',
-                      color: theme.colorScheme.primaryContainer,
-                      textColor: theme.colorScheme.onPrimaryContainer,
-                      onTap: () {
-                        // If has target, open target screen
-                        if (envelope.targetAmount != null || envelope.targetDate != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => TargetScreen(
-                                envelope: envelope,
-                                envelopeRepo: repo,
-                                groupRepo: groupRepo,
-                                accountRepo: accountRepo,
-                              ),
-                            ),
-                          );
-                        } else {
-                          // If no target, open settings to set one
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).scaffoldBackgroundColor,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(20),
-                                ),
-                              ),
-                              child: EnvelopeSettingsSheet(
-                                envelopeId: envelope.id,
-                                repo: repo,
-                                groupRepo: groupRepo,
-                                accountRepo: accountRepo,
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 3. Scheduled Payment Chip
-                  Expanded(
+                    flex: 1,
                     child: _InfoChip(
                       icon: Icons.calendar_month,
                       label: hasPayments
                           ? 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}'
                           : 'Schedule: Off',
                       subLabel: hasPayments
-                          // FIX: Added '!' to assert nextPayment is not null here
                           ? currency.format(nextPayment!.amount)
-                          : 'Tap to see options',
+                          : 'Tap for details',
                       color: hasPayments
                           ? theme.colorScheme.tertiaryContainer
                           : theme.colorScheme.surfaceContainerHighest,
@@ -471,6 +483,25 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
             },
           ),
         ),
+
+        // 3. LARGER TARGET TILE
+        if (envelope.targetAmount != null || envelope.targetDate != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _LargeTargetTile(
+              envelope: envelope,
+              repo: repo,
+              groupRepo: groupRepo,
+              accountRepo: accountRepo,
+              amountProgress: amountProgress,
+              timeProgress: timeProgress,
+              daysRemaining: daysRemaining,
+              startDate: startDate,
+              currency: currency,
+              fontProvider: fontProvider,
+              theme: theme,
+            ),
+          ),
       ],
     );
   }
@@ -603,6 +634,191 @@ class ClosedEnvelopePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// --- HELPER WIDGET: LARGE TARGET TILE ---
+class _LargeTargetTile extends StatelessWidget {
+  final Envelope envelope;
+  final EnvelopeRepo repo;
+  final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
+  final double amountProgress;
+  final double timeProgress;
+  final int daysRemaining;
+  final DateTime? startDate;
+  final NumberFormat currency;
+  final FontProvider fontProvider;
+  final ThemeData theme;
+
+  const _LargeTargetTile({
+    required this.envelope,
+    required this.repo,
+    required this.groupRepo,
+    required this.accountRepo,
+    required this.amountProgress,
+    required this.timeProgress,
+    required this.daysRemaining,
+    required this.startDate,
+    required this.currency,
+    required this.fontProvider,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAmountTarget = envelope.targetAmount != null;
+    final hasTimeTarget = envelope.targetDate != null;
+
+    return Material(
+      color: theme.colorScheme.primaryContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TargetScreen(
+                envelope: envelope,
+                envelopeRepo: repo,
+                groupRepo: groupRepo,
+                accountRepo: accountRepo,
+              ),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.track_changes,
+                    color: theme.colorScheme.onPrimaryContainer,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Target Progress',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Tap for details',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.6),
+                    size: 20,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Amount Progress
+              if (hasAmountTarget) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Amount Progress',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                      ),
+                    ),
+                    Text(
+                      '${(amountProgress * 100).toStringAsFixed(1)}%',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: amountProgress,
+                    backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                    minHeight: 8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${currency.format(envelope.currentAmount)} of ${currency.format(envelope.targetAmount)} • ${currency.format(envelope.targetAmount! - envelope.currentAmount)} remaining',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                  ),
+                ),
+                if (hasTimeTarget) const SizedBox(height: 16),
+              ],
+
+              // Time Progress
+              if (hasTimeTarget) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Time Progress',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                      ),
+                    ),
+                    Text(
+                      '${(timeProgress * 100).toStringAsFixed(1)}%',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: timeProgress,
+                    backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.tertiary),
+                    minHeight: 8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  startDate != null
+                      ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • $daysRemaining days remaining'
+                      : '$daysRemaining days until ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // --- HELPER WIDGET: ENVELOPE ICON BUTTON ---

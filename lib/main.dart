@@ -213,6 +213,14 @@ class HomeScreenWrapper extends StatelessWidget {
           workspaceId: workspaceProvider.workspaceId,
         );
 
+        // Clean up any orphaned scheduled payments from deleted envelopes
+        // This is a one-time migration for existing users
+        repo.cleanupOrphanedScheduledPayments().then((count) {
+          if (count > 0) {
+            debugPrint('[Main] Cleaned up $count orphaned scheduled payments');
+          }
+        });
+
         // Initialize repos for scheduled payments and notifications
         final paymentRepo = ScheduledPaymentRepo(user.uid);
         final notificationRepo = NotificationRepo(userId: user.uid);
@@ -281,19 +289,13 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final imageSize = screenSize.width * 0.8; // 80% of screen width
-
     return Scaffold(
-      backgroundColor: const Color(0xFF1C1F25),
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SizedBox.expand(
           child: Image.asset(
-            'assets/logo/develapp_logo.png',
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.contain,
+            'assets/logo/splash_screen_stuffrite.png',
+            fit: BoxFit.cover,
           ),
         ),
       ),

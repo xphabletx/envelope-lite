@@ -135,7 +135,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
       ),
     );
 
-    if (result != null && result['type'] == IconType.emoji) {
+    if (result != null && result['type'] == 'emoji') {
       // Only accept emoji type for celebration emoji
       final emoji = result['value'] as String;
       provider.setCelebrationEmoji(emoji);

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'email_verification_screen.dart';
 import '../sign_in_screen.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../../services/user_service.dart';
-import '../../models/user_profile.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../main.dart';
@@ -101,38 +101,41 @@ class AuthWrapper extends StatelessWidget {
 
   /// Build the user profile wrapper (same logic as before)
   Widget _buildUserProfileWrapper(User user) {
-    final userService = UserService(FirebaseFirestore.instance, user.uid);
-
-    return StreamBuilder<UserProfile?>(
-      stream: userService.userProfileStream,
-      builder: (context, profileSnap) {
-        if (profileSnap.connectionState == ConnectionState.waiting) {
+    return FutureBuilder<bool>(
+      future: _hasCompletedOnboarding(user.uid),
+      builder: (context, snapshot) {
+        // Show loading while checking onboarding status
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        final profile = profileSnap.data;
+        final hasCompletedOnboarding = snapshot.data ?? false;
 
-        if (profile != null) {
-          // Initialize theme provider (local-only, no UserService needed)
-          Provider.of<ThemeProvider>(
-            context,
-            listen: false,
-          ).initialize();
-          // Initialize locale provider (local-only)
-          Provider.of<LocaleProvider>(
-            context,
-            listen: false,
-          ).initialize(user.uid);
-        }
+        // Initialize providers (local-only)
+        Provider.of<ThemeProvider>(
+          context,
+          listen: false,
+        ).initialize();
+        Provider.of<LocaleProvider>(
+          context,
+          listen: false,
+        ).initialize(user.uid);
 
-        if (profile == null || !profile.hasCompletedOnboarding) {
+        if (!hasCompletedOnboarding) {
+          final userService = UserService(FirebaseFirestore.instance, user.uid);
           return OnboardingFlow(userService: userService);
         }
 
         return const HomeScreenWrapper();
       },
     );
+  }
+
+  /// Check if user has completed onboarding (local-only via SharedPreferences)
+  Future<bool> _hasCompletedOnboarding(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
   }
 }

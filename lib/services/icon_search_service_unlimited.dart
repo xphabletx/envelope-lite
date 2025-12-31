@@ -65,6 +65,7 @@ class IconSearchService {
     'internet': ['broadband', 'wifi', 'network', 'connection'],
     'gym': ['fitness', 'exercise', 'workout', 'health'],
     'shop': ['shopping', 'store', 'retail', 'mall'],
+    'flower': ['flowers', 'bouquet', 'floral', 'blossom', 'rose', 'plant', 'nature', 'garden'],
   };
 
   /// Get all search terms including synonyms

@@ -16,6 +16,7 @@ import '../../services/envelope_repo.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'onboarding_target_icon_step.dart';
 import 'onboarding_account_setup.dart';
+import 'welcome_screen.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key, required this.userService});
@@ -61,14 +62,17 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Future<void> _completeOnboarding() async {
     debugPrint('[Onboarding] Completing onboarding...');
 
+    final prefs = await SharedPreferences.getInstance();
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+
     // Save photo path locally
     if (_photoPath != null) {
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('profile_photo_path', _photoPath!);
       debugPrint('[Onboarding] ✅ Photo path saved to SharedPreferences: $_photoPath');
     }
 
     // Create user profile in Firebase (displayName only, NO photoURL for solo users)
+    // This is ONLY for workspace display - not for app functionality
     await widget.userService.createUserProfile(
       displayName: _displayName.isEmpty ? 'User' : _displayName,
       photoURL: null, // Solo users don't upload photos to Firebase Storage
@@ -77,10 +81,15 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     debugPrint('[Onboarding] ✅ Profile saved to Firebase (displayName only)');
 
     // Save target icon to SharedPreferences (local-only, UI preference)
-    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('target_icon_type', _targetIconType ?? 'emoji');
     await prefs.setString('target_icon_value', _targetIconValue ?? '🎯');
     debugPrint('[Onboarding] ✅ Target icon saved locally: $_targetIconType $_targetIconValue');
+
+    // Mark onboarding as complete (local-only via SharedPreferences)
+    if (userId != null) {
+      await prefs.setBool('hasCompletedOnboarding_$userId', true);
+      debugPrint('[Onboarding] ✅ Onboarding marked complete locally for user: $userId');
+    }
 
     if (!mounted) return;
 
@@ -98,7 +107,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   void _nextStep() {
-    if (_currentStep < 6) {
+    if (_currentStep < 7) {
       setState(() => _currentStep++);
     } else {
       _completeOnboarding();
@@ -114,35 +123,47 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   @override
   Widget build(BuildContext context) {
     final steps = [
-      _PhotoUploadStep(
-        onPhotoSelected: (path) => _photoPath = path,
-        onNext: _nextStep,
-        userService: widget.userService,
+      // Step 0: Welcome Screen
+      WelcomeScreen(
+        onContinue: _nextStep,
       ),
+      // Step 1: Display Name (moved before photo)
       _DisplayNameStep(
         onNameChanged: (name) => _displayName = name,
         onNext: _nextStep,
         onBack: _previousStep,
         photoPath: _photoPath,
       ),
+      // Step 2: Photo Upload (now skippable)
+      _PhotoUploadStep(
+        onPhotoSelected: (path) => _photoPath = path,
+        onNext: _nextStep,
+        onSkip: _nextStep,
+        onBack: _previousStep,
+        userService: widget.userService,
+      ),
+      // Step 3: Theme Picker
       _ThemePickerStep(
         selectedTheme: _selectedTheme,
         onThemeSelected: (themeId) => setState(() => _selectedTheme = themeId),
         onNext: _nextStep,
         onBack: _previousStep,
       ),
+      // Step 4: Font Picker
       _FontPickerStep(
         selectedFont: _selectedFont,
         onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
         onNext: _nextStep,
         onBack: _previousStep,
       ),
+      // Step 5: Currency Picker
       _CurrencyPickerStep(
         selectedCurrency: _selectedCurrency,
         onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
         onComplete: _nextStep,
         onBack: _previousStep,
       ),
+      // Step 6: Target Icon
       OnboardingTargetIconStep(
         initialIconType: _targetIconType,
         initialIconValue: _targetIconValue,
@@ -153,6 +174,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         onNext: _nextStep,
         onBack: _previousStep,
       ),
+      // Step 7: Account Setup
       OnboardingAccountSetup(
         envelopeRepo: EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
@@ -201,15 +223,20 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 }
 
-// Step 1: Photo Upload
+// Step 2: Photo Upload
 class _PhotoUploadStep extends StatefulWidget {
-  const _PhotoUploadStep(
-      {required this.onPhotoSelected,
-      required this.onNext,
-      required this.userService});
+  const _PhotoUploadStep({
+    required this.onPhotoSelected,
+    required this.onNext,
+    required this.onSkip,
+    required this.onBack,
+    required this.userService,
+  });
 
   final Function(String?) onPhotoSelected;
   final VoidCallback onNext;
+  final VoidCallback onSkip;
+  final VoidCallback onBack;
   final UserService userService;
 
   @override
@@ -283,64 +310,117 @@ class _PhotoUploadStepState extends State<_PhotoUploadStep> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFE8DFD0), // Latte Love background
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF5D4A2F)),
+          onPressed: widget.onBack,
+        ),
         actions: [
-          TextButton.icon(
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-              }
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Log Out'),
+          TextButton(
+            onPressed: widget.onSkip,
+            child: const Text(
+              'Skip',
+              style: TextStyle(
+                color: Color(0xFF8B6F47),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _image == null
-                ? const Icon(Icons.account_circle, size: 120, color: Colors.grey)
-                : CircleAvatar(
-                    radius: 60,
-                    backgroundImage: FileImage(_image!),
-                  ),
-            const SizedBox(height: 32),
-            Text(
-              'Add a Profile Photo',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            // Progress indicator
+            LinearProgressIndicator(
+              value: 0.25, // 2 of 8 steps
+              backgroundColor: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+              minHeight: 6,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Help your workspace members recognize you',
-              style: Theme.of(context).textTheme.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 48),
-            ElevatedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.photo_camera),
-              label: const Text('Choose Photo'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 24),
+
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 20),
+                    _image == null
+                        ? const Icon(Icons.account_circle, size: 100, color: Colors.grey)
+                        : CircleAvatar(
+                            radius: 50,
+                            backgroundImage: FileImage(_image!),
+                          ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Add a Profile Photo',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Caveat',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Optional - you can add this later',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: const Color(0xFF8B6F47),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    ElevatedButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.photo_camera),
+                      label: const Text('Choose Photo'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF8B6F47),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            _saving
-                ? const CircularProgressIndicator()
-                : TextButton(
-                    onPressed: _saveAndContinue,
-                    child: Text(_image == null ? 'Skip for now' : 'Continue'),
+
+            // Continue button
+            if (!_saving)
+              FilledButton(
+                onPressed: _saveAndContinue,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B6F47),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  minimumSize: const Size(double.infinity, 56),
+                ),
+                child: Text(
+                  _image == null ? 'Skip for Now' : 'Continue',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else
+              const CircularProgressIndicator(),
+
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -348,7 +428,7 @@ class _PhotoUploadStepState extends State<_PhotoUploadStep> {
   }
 }
 
-// Step 2: Display Name
+// Step 1: Display Name
 class _DisplayNameStep extends StatefulWidget {
   const _DisplayNameStep({
     required this.onNameChanged,
@@ -391,85 +471,103 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          widget.photoPath == null
-              ? const Icon(Icons.badge_outlined, size: 120, color: Colors.grey)
-              : CircleAvatar(
-                  radius: 60,
-                  backgroundImage: FileImage(File(widget.photoPath!)),
-                ),
-          const SizedBox(height: 32),
-          Text(
-            'What should we call you?',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'This name will appear in your workspace',
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          TextField(
-            controller: _controller,
-            decoration: InputDecoration(
-              labelText: 'Display Name',
-              hintText: 'e.g., Sarah\'s Budget',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              prefixIcon: const Icon(Icons.person_outline),
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8DFD0), // Latte Love background
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF5D4A2F)),
+          onPressed: widget.onBack,
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Progress indicator
+            LinearProgressIndicator(
+              value: 0.125, // 1 of 8 steps
+              backgroundColor: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+              minHeight: 6,
             ),
-            textCapitalization: TextCapitalization.words,
-            autofocus: true,
-            onTap: () {
-              // Select all text when tapped
-              _controller.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _controller.text.length,
-              );
-            },
-            onSubmitted: (_) => _continue(),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: widget.onBack,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+            const SizedBox(height: 40),
+
+            // Title
+            const Text(
+              'What should we call you?',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Caveat',
+                color: Color(0xFF5D4A2F),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Subtitle
+            const Text(
+              'This is how you\'ll appear in shared workspaces',
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFF8B6F47),
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // Name input
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'Your Name',
+                hintText: 'e.g. Sarah',
+                prefixIcon: const Icon(Icons.person),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFD4AF37),
+                    width: 2,
                   ),
-                  child: const Text('Back'),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: _continue,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Continue'),
+              onSubmitted: (_) => _continue(),
+            ),
+
+            const Spacer(),
+
+            // Continue button
+            FilledButton(
+              onPressed: _continue,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF8B6F47),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                minimumSize: const Size(double.infinity, 56),
+              ),
+              child: const Text(
+                'Continue',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -492,6 +590,7 @@ class _ThemePickerStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themes = AppThemes.getAllThemes();
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -530,7 +629,10 @@ class _ThemePickerStep extends StatelessWidget {
                 final isSelected = selectedTheme == theme.id;
 
                 return GestureDetector(
-                  onTap: () => onThemeSelected(theme.id),
+                  onTap: () {
+                    onThemeSelected(theme.id);
+                    themeProvider.setTheme(theme.id);
+                  },
                   child: Container(
                     decoration: BoxDecoration(
                       color: theme.surfaceColor,

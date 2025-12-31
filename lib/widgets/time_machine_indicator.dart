@@ -5,8 +5,36 @@ import 'package:intl/intl.dart';
 import '../providers/time_machine_provider.dart';
 import '../providers/font_provider.dart';
 
-class TimeMachineIndicator extends StatelessWidget {
+class TimeMachineIndicator extends StatefulWidget {
   const TimeMachineIndicator({super.key});
+
+  @override
+  State<TimeMachineIndicator> createState() => _TimeMachineIndicatorState();
+}
+
+class _TimeMachineIndicatorState extends State<TimeMachineIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,32 +64,75 @@ class TimeMachineIndicator extends StatelessWidget {
             width: 3,
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.access_time,
-            color: theme.colorScheme.secondary,
-            size: 28,
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _pulseAnimation.value,
+                child: Icon(
+                  Icons.access_time,
+                  color: theme.colorScheme.secondary,
+                  size: 28,
+                ),
+              );
+            },
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'TIME MACHINE MODE',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.secondary,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'TIME MACHINE MODE',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.error,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'READ-ONLY',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onError,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   'Viewing: ${dateFormat.format(timeMachine.futureDate!)}',
                   style: TextStyle(
                     fontSize: 14,
                     color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

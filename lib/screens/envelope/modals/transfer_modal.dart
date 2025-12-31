@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/envelope.dart';
+import '../../../models/account.dart';
 import '../../../services/envelope_repo.dart';
+import '../../../services/account_repo.dart';
 import '../../../services/workspace_helper.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
+import '../../../providers/time_machine_provider.dart';
 import '../../../utils/calculator_helper.dart';
 import '../../../widgets/partner_badge.dart';
 
@@ -30,6 +33,25 @@ class TransferModal extends StatefulWidget {
   State<TransferModal> createState() => _TransferModalState();
 }
 
+// Helper class to represent transfer destinations (envelope or account)
+class _TransferDestination {
+  final String id;
+  final String name;
+  final double balance;
+  final bool isAccount;
+  final Widget icon;
+  final String? userId; // For partner badges
+
+  _TransferDestination({
+    required this.id,
+    required this.name,
+    required this.balance,
+    required this.isAccount,
+    required this.icon,
+    this.userId,
+  });
+}
+
 class _TransferModalState extends State<TransferModal> {
   final _amountController = TextEditingController();
   final _descController = TextEditingController();
@@ -37,11 +59,14 @@ class _TransferModalState extends State<TransferModal> {
   String? _selectedTargetId;
   bool _isLoading = false;
   List<Envelope> _availableEnvelopes = [];
+  List<Account> _availableAccounts = [];
+  late AccountRepo _accountRepo;
 
   @override
   void initState() {
     super.initState();
-    _loadEnvelopes();
+    _accountRepo = AccountRepo(widget.repo);
+    _loadEnvelopesAndAccounts();
   }
 
   @override
@@ -51,8 +76,9 @@ class _TransferModalState extends State<TransferModal> {
     super.dispose();
   }
 
-  Future<void> _loadEnvelopes() async {
-    final subscription = widget.repo.envelopesStream().listen((envelopes) {
+  Future<void> _loadEnvelopesAndAccounts() async {
+    // Load envelopes
+    final envelopeSubscription = widget.repo.envelopesStream().listen((envelopes) {
       if (mounted) {
         setState(() {
           _availableEnvelopes = envelopes
@@ -62,8 +88,54 @@ class _TransferModalState extends State<TransferModal> {
       }
     });
 
-    // Clean up subscription when done
-    Future.delayed(const Duration(seconds: 1), () => subscription.cancel());
+    // Load accounts (include ALL accounts - default and non-default)
+    final accountSubscription = _accountRepo.accountsStream().listen((accounts) {
+      if (mounted) {
+        setState(() {
+          _availableAccounts = accounts;
+        });
+      }
+    });
+
+    // Clean up subscriptions when done
+    Future.delayed(const Duration(seconds: 1), () {
+      envelopeSubscription.cancel();
+      accountSubscription.cancel();
+    });
+  }
+
+  // Get combined list of transfer destinations (envelopes + accounts), alphabetized
+  List<_TransferDestination> _getTransferDestinations(ThemeData theme) {
+    final destinations = <_TransferDestination>[];
+
+    // Add envelopes
+    for (final envelope in _availableEnvelopes) {
+      destinations.add(_TransferDestination(
+        id: 'envelope_${envelope.id}',
+        name: envelope.name,
+        balance: envelope.currentAmount,
+        isAccount: false,
+        icon: envelope.getIconWidget(theme, size: 20),
+        userId: envelope.userId,
+      ));
+    }
+
+    // Add accounts
+    for (final account in _availableAccounts) {
+      destinations.add(_TransferDestination(
+        id: 'account_${account.id}',
+        name: account.name,
+        balance: account.currentBalance,
+        isAccount: true,
+        icon: account.getIconWidget(theme, size: 20),
+        userId: account.userId,
+      ));
+    }
+
+    // Sort alphabetically by name
+    destinations.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    return destinations;
   }
 
   void _showCalculator() async {
@@ -77,9 +149,22 @@ class _TransferModalState extends State<TransferModal> {
   }
 
   Future<void> _submit() async {
+    // Check if time machine mode is active - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (_selectedTargetId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a destination envelope')),
+        const SnackBar(content: Text('Please select a destination')),
       );
       return;
     }
@@ -102,13 +187,40 @@ class _TransferModalState extends State<TransferModal> {
     setState(() => _isLoading = true);
 
     try {
-      await widget.repo.transfer(
-        fromEnvelopeId: widget.sourceEnvelopeId,
-        toEnvelopeId: _selectedTargetId!,
-        amount: amount,
-        description: _descController.text.trim(),
-        date: _selectedDate,
-      );
+      final description = _descController.text.trim();
+
+      // Check if transferring to account or envelope
+      if (_selectedTargetId!.startsWith('account_')) {
+        // Transfer to account: withdraw from envelope, deposit to account
+        final accountId = _selectedTargetId!.substring('account_'.length);
+
+        // Withdraw from envelope
+        await widget.repo.withdraw(
+          envelopeId: widget.sourceEnvelopeId,
+          amount: amount,
+          description: description.isEmpty
+              ? 'Transfer to account'
+              : description,
+          date: _selectedDate,
+        );
+
+        // Deposit to account
+        await _accountRepo.adjustBalance(
+          accountId: accountId,
+          amount: amount, // Positive amount = deposit
+        );
+
+      } else {
+        // Transfer to envelope
+        final envelopeId = _selectedTargetId!.substring('envelope_'.length);
+        await widget.repo.transfer(
+          fromEnvelopeId: widget.sourceEnvelopeId,
+          toEnvelopeId: envelopeId,
+          amount: amount,
+          description: description,
+          date: _selectedDate,
+        );
+      }
 
       if (mounted) {
         Navigator.pop(context);
@@ -213,69 +325,118 @@ class _TransferModalState extends State<TransferModal> {
               decoration: InputDecoration(
                 labelText: 'Amount',
                 prefixText: locale.currencySymbol,
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.calculate),
-                  onPressed: _showCalculator,
+                suffixIcon: Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.calculate,
+                      color: theme.colorScheme.onPrimary,
+                    ),
+                    onPressed: _showCalculator,
+                  ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              autofocus: true,
+              onTap: () => _amountController.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _amountController.text.length,
+              ),
             ),
           ),
 
           const SizedBox(height: 16),
 
           // Transfer Target Dropdown
-          DropdownButtonFormField<String>(
-            decoration: InputDecoration(
-              labelText: 'To Envelope',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            initialValue: _selectedTargetId,
-            items: _availableEnvelopes
-                .map(
-                  (e) {
-                    final isPartner = e.userId != widget.repo.currentUserId;
-                    return DropdownMenuItem(
-                      value: e.id,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          e.getIconWidget(Theme.of(context), size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              e.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: fontProvider.getTextStyle(fontSize: 16),
-                            ),
-                          ),
-                          if (isPartner) ...[
-                            const SizedBox(width: 8),
-                            FutureBuilder<String>(
-                              future: WorkspaceHelper.getUserDisplayName(
-                                e.userId,
-                                widget.repo.currentUserId,
+          Consumer<LocaleProvider>(
+            builder: (context, localeProvider, _) {
+              final destinations = _getTransferDestinations(theme);
+
+              return DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'To Envelope or Account',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  // Add clear button (X) as suffix
+                  suffixIcon: _selectedTargetId != null
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () => setState(() => _selectedTargetId = null),
+                        )
+                      : null,
+                ),
+                initialValue: _selectedTargetId,
+                items: destinations
+                    .map(
+                      (dest) {
+                        final isPartner = dest.userId != null &&
+                            dest.userId != widget.repo.currentUserId;
+
+                        return DropdownMenuItem(
+                          value: dest.id,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Icon
+                              dest.icon,
+                              const SizedBox(width: 8),
+                              // Name
+                              Expanded(
+                                child: Text(
+                                  dest.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: fontProvider.getTextStyle(fontSize: 16),
+                                ),
                               ),
-                              builder: (context, snapshot) {
-                                return PartnerBadge(
-                                  partnerName: snapshot.data ?? 'Partner',
-                                  size: PartnerBadgeSize.small,
-                                );
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                )
-                .toList(),
-            onChanged: (v) => setState(() => _selectedTargetId = v),
+                              const SizedBox(width: 8),
+                              // Balance
+                              Text(
+                                '${localeProvider.currencySymbol}${dest.balance.toStringAsFixed(2)}',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  color: theme.colorScheme.onSurface.withAlpha(153),
+                                ),
+                              ),
+                              // Partner badge if applicable
+                              if (isPartner) ...[
+                                const SizedBox(width: 8),
+                                FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    dest.userId!,
+                                    widget.repo.currentUserId,
+                                  ),
+                                  builder: (context, snapshot) {
+                                    return PartnerBadge(
+                                      partnerName: snapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                ),
+                              ],
+                              // Account badge for accounts
+                              if (dest.isAccount) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.account_balance_wallet,
+                                  size: 16,
+                                  color: theme.colorScheme.primary.withAlpha(153),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedTargetId = v),
+              );
+            },
           ),
 
           const SizedBox(height: 16),
@@ -283,7 +444,7 @@ class _TransferModalState extends State<TransferModal> {
           // Description
           TextField(
             controller: _descController,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: 'Description (Optional)',
               border: OutlineInputBorder(
@@ -291,6 +452,10 @@ class _TransferModalState extends State<TransferModal> {
               ),
             ),
             style: fontProvider.getTextStyle(fontSize: 16),
+            onTap: () => _descController.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _descController.text.length,
+            ),
           ),
 
           const SizedBox(height: 16),

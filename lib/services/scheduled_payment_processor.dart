@@ -6,6 +6,7 @@ import 'scheduled_payment_repo.dart';
 import 'notification_repo.dart';
 import '../models/app_notification.dart';
 import '../models/scheduled_payment.dart';
+import '../models/envelope.dart';
 
 class ScheduledPaymentProcessingResult {
   final int processedCount;
@@ -72,10 +73,25 @@ class ScheduledPaymentProcessor {
         try {
           // Handle envelope-based payments
           if (payment.envelopeId != null) {
-            final envelope = allEnvelopes.firstWhere(
-              (e) => e.id == payment.envelopeId,
-              orElse: () => throw Exception('Envelope not found'),
-            );
+            // Try to find the envelope, skip if it doesn't exist (deleted)
+            final envelope = allEnvelopes
+                .cast<Envelope?>()
+                .firstWhere(
+                  (e) => e?.id == payment.envelopeId,
+                  orElse: () => null,
+                );
+
+            // If envelope was deleted, skip this payment and log it
+            if (envelope == null) {
+              debugPrint('Skipped: ${payment.name} - envelope no longer exists (deleted)');
+              errors.add(ScheduledPaymentError(
+                paymentName: payment.name,
+                envelopeName: 'Deleted Envelope',
+                amount: payment.amount,
+                reason: 'The linked envelope has been deleted',
+              ));
+              continue;
+            }
 
             // Determine the amount to deduct based on payment type
             double amountToDeduct;
@@ -136,6 +152,7 @@ class ScheduledPaymentProcessor {
               amount: amountToDeduct,
               description: description,
               date: DateTime.now(),
+              isScheduledPayment: true,
             );
 
             // Mark as executed

@@ -218,6 +218,12 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                onTap: () {
+                  _amountController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: _amountController.text.length,
+                  );
+                },
               ),
 
               const SizedBox(height: 24),
@@ -514,8 +520,20 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
     final dates = <DateTime>[];
     var currentDate = _nextPayDate!;
 
+    // Create temp settings object to access weekend adjustment logic
+    final tempSettings = PayDaySettings(
+      userId: 'temp',
+      nextPayDate: currentDate,
+      adjustForWeekends: _adjustForWeekends,
+    );
+
     for (int i = 0; i < 3; i++) {
-      dates.add(currentDate);
+      // Apply weekend adjustment if enabled
+      final adjustedDate = _adjustForWeekends
+          ? tempSettings.adjustForWeekend(currentDate)
+          : currentDate;
+
+      dates.add(adjustedDate);
       currentDate = PayDaySettings.calculateNextPayDate(currentDate, _frequency);
     }
 

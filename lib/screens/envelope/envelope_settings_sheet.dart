@@ -100,31 +100,34 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
 
-      GlobalKey? targetKey;
       switch (section) {
         case EnvelopeSettingsSection.autofill:
-          targetKey = _autofillKey;
-          break;
-        case EnvelopeSettingsSection.scheduledPayments:
-          targetKey = _scheduledPaymentsKey;
-          break;
-        case EnvelopeSettingsSection.top:
-          _scrollController.jumpTo(0);
-          return;
-      }
-
-      if (targetKey.currentContext != null) {
-        final context = targetKey.currentContext!;
-        final renderBox = context.findRenderObject() as RenderBox?;
-        if (renderBox != null) {
-          final offset = renderBox.localToGlobal(Offset.zero).dy;
-          final scrollOffset = _scrollController.offset + offset - 100; // 100px padding from top
+          // For autofill, scroll to the bottom to ensure the section is visible above sticky buttons
           _scrollController.animateTo(
-            scrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+            _scrollController.position.maxScrollExtent,
             duration: const Duration(milliseconds: 500),
             curve: Curves.easeInOut,
           );
-        }
+          break;
+        case EnvelopeSettingsSection.scheduledPayments:
+          final targetKey = _scheduledPaymentsKey;
+          if (targetKey.currentContext != null) {
+            final context = targetKey.currentContext!;
+            final renderBox = context.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              final offset = renderBox.localToGlobal(Offset.zero).dy;
+              final scrollOffset = _scrollController.offset + offset - 100;
+              _scrollController.animateTo(
+                scrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+          break;
+        case EnvelopeSettingsSection.top:
+          _scrollController.jumpTo(0);
+          break;
       }
     });
   }
@@ -167,12 +170,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(),
+      builder: (_) => OmniIconPickerModal(
+        initialQuery: envelope.name, // Pre-populate with envelope name
+      ),
     );
 
     if (result != null) {
       setState(() {
-        _iconType = result['type'].toString().split('.').last;
+        _iconType = result['type'] as String;
         _iconValue = result['value'] as String;
         if (_iconType == 'emoji') {
           _selectedEmoji = _iconValue;
@@ -225,6 +230,17 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
       builder: (context, envelopeSnapshot) {
+        // Handle envelope deletion - close the sheet if envelope is deleted
+        if (envelopeSnapshot.hasError) {
+          debugPrint('[EnvelopeSettingsSheet] Stream error: ${envelopeSnapshot.error}');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          });
+          return const Center(child: CircularProgressIndicator());
+        }
+
         if (!envelopeSnapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -303,6 +319,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             ),
             child: Column(
             children: [
+              // Header section (non-scrollable)
               const SizedBox(height: 12),
               Container(
                 width: 40,
@@ -341,13 +358,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Scrollable content section
               Expanded(
                 child: ListView(
                   controller: _scrollController,
                   padding: EdgeInsets.only(
                     left: 24,
                     right: 24,
-                    top: 8,
                     bottom: MediaQuery.of(context).viewInsets.bottom + 24,
                   ),
                   physics: const ClampingScrollPhysics(),
@@ -355,6 +373,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     // NAME INPUT
                     TextField(
                       controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -367,6 +386,12 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                         prefixIcon: const Icon(Icons.mail),
                       ),
+                      onTap: () {
+                        _nameController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: _nameController.text.length,
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -406,6 +431,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     TextField(
                       controller: _subtitleController,
                       maxLines: 1,
+                      textCapitalization: TextCapitalization.words,
                       style: fontProvider
                           .getTextStyle(fontSize: 18)
                           .copyWith(fontStyle: FontStyle.italic),
@@ -421,6 +447,12 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                         prefixIcon: const Icon(Icons.notes),
                       ),
+                      onTap: () {
+                        _subtitleController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: _subtitleController.text.length,
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 
@@ -442,17 +474,33 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           prefixIcon: const Icon(Icons.flag),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.calculate_outlined),
-                            onPressed: () async {
-                              final result = await CalculatorHelper.showCalculator(context);
-                              if (result != null) {
-                                _targetController.text = result;
-                              }
-                            },
-                            tooltip: 'Calculator',
+                          suffixIcon: Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.calculate,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                              onPressed: () async {
+                                final result = await CalculatorHelper.showCalculator(context);
+                                if (result != null) {
+                                  _targetController.text = result;
+                                }
+                              },
+                              tooltip: 'Calculator',
+                            ),
                           ),
                         ),
+                        onTap: () {
+                          _targetController.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _targetController.text.length,
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -748,8 +796,20 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       value: _autoFillEnabled,
-                      onChanged: (value) =>
-                          setState(() => _autoFillEnabled = value),
+                      onChanged: (value) {
+                        setState(() => _autoFillEnabled = value);
+                        // When enabled, scroll to bottom to reveal the amount field
+                        if (value && _scrollController.hasClients) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted || !_scrollController.hasClients) return;
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            );
+                          });
+                        }
+                      },
                       title: Text(
                         'Enable Auto-Fill',
                         style: fontProvider.getTextStyle(
@@ -784,24 +844,63 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             prefixIcon: const Icon(Icons.autorenew),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.calculate_outlined),
-                              onPressed: () async {
-                                final result = await CalculatorHelper.showCalculator(context);
-                                if (result != null) {
-                                  _autoFillAmountController.text = result;
-                                }
-                              },
-                              tooltip: 'Calculator',
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.calculate,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                                onPressed: () async {
+                                  final result = await CalculatorHelper.showCalculator(context);
+                                  if (result != null) {
+                                    _autoFillAmountController.text = result;
+                                  }
+                                },
+                                tooltip: 'Calculator',
+                              ),
                             ),
                             helperText: 'Amount to add each pay day',
                             helperStyle: fontProvider.getTextStyle(fontSize: 14),
                           ),
+                          onTap: () {
+                            _autoFillAmountController.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: _autoFillAmountController.text.length,
+                            );
+                          },
                         ),
                       ),
                     ],
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
 
+              // Sticky buttons section at bottom
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  border: Border(
+                    top: BorderSide(
+                      color: theme.colorScheme.outline.withAlpha(77),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                padding: EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  top: 16,
+                  bottom: MediaQuery.of(context).padding.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     // SAVE BUTTON
                     FilledButton(
                       onPressed: _isLoading
@@ -812,6 +911,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        minimumSize: const Size(double.infinity, 0),
                       ),
                       child: _isLoading
                           ? const SizedBox(
@@ -830,7 +930,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                               ),
                             ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
 
                     // DELETE BUTTON
                     OutlinedButton(
@@ -848,6 +948,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         side: BorderSide(color: Colors.red.shade600),
+                        minimumSize: const Size(double.infinity, 0),
                       ),
                       child: Text(
                         'Delete Envelope',
@@ -858,7 +959,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
                   ],
                 ),
               ),
@@ -885,6 +985,18 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ? null
           : double.tryParse(_targetController.text);
 
+      // Validate: target date requires target amount
+      if (_selectedTargetDate != null && (targetAmount == null || targetAmount <= 0)) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Target date requires a target amount. Please enter a target amount to set a deadline.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
       final autoFillAmount =
           _autoFillEnabled && _autoFillAmountController.text.isNotEmpty
           ? double.tryParse(_autoFillAmountController.text)
@@ -901,6 +1013,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         targetDate: _selectedTargetDate,
         autoFillEnabled: _autoFillEnabled,
         linkedAccountId: _selectedAccountId,
+        updateLinkedAccountId: true, // Always update linkedAccountId (allows unlinking)
+        updateTargetAmount: true, // Always update targetAmount (allows clearing)
+        updateTargetDate: true, // Always update targetDate (allows clearing)
         subtitle: _subtitleController.text.trim().isEmpty
             ? null
             : _subtitleController.text.trim(),

@@ -11,8 +11,10 @@ import '../../widgets/accounts/account_card.dart';
 import '../../widgets/partner_badge.dart';
 import '../../services/workspace_helper.dart';
 import '../../widgets/tutorial_wrapper.dart';
+import '../../widgets/time_machine_indicator.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
+import '../../providers/time_machine_provider.dart';
 
 class AccountListScreen extends StatefulWidget {
   const AccountListScreen({super.key, required this.envelopeRepo});
@@ -83,10 +85,16 @@ class _AccountListScreenState extends State<AccountListScreen> {
             ),
         ],
       ),
-      body: StreamBuilder<List<Account>>(
-        stream: _accountRepo.accountsStream(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+      body: Column(
+        children: [
+          // Time Machine Indicator at the top
+          const TimeMachineIndicator(),
+
+          Expanded(
+            child: StreamBuilder<List<Account>>(
+              stream: _accountRepo.accountsStream(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -177,6 +185,9 @@ class _AccountListScreenState extends State<AccountListScreen> {
             },
           );
         },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAccountEditor(context),

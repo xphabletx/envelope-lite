@@ -8,9 +8,12 @@ import 'package:intl/intl.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
+import '../models/analytics_data.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/time_machine_provider.dart';
+import '../widgets/time_machine_indicator.dart';
 import '../widgets/analytics/analytics_section.dart';
 
 enum StatsViewMode { combined, envelopes, groups }
@@ -54,20 +57,53 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
   void initState() {
     super.initState();
     myOnly = widget.myOnlyDefault;
-    start =
-        widget.initialStart ??
-        DateTime.now().subtract(const Duration(days: 30));
-    final defaultEnd = DateTime.now();
-    final providedEnd = widget.initialEnd ?? defaultEnd;
-    end = DateTime(
-      providedEnd.year,
-      providedEnd.month,
-      providedEnd.day,
-      23,
-      59,
-      59,
-      999,
-    );
+
+    // Initialize dates immediately - check time machine state before first build
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+
+    if (widget.initialStart != null && widget.initialEnd != null) {
+      // Explicit dates provided (e.g., from Budget Screen cards)
+      start = widget.initialStart!;
+      final providedEnd = widget.initialEnd!;
+      end = DateTime(
+        providedEnd.year,
+        providedEnd.month,
+        providedEnd.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      debugPrint('[TimeMachine::StatsHistoryScreen] Using explicit dates: $start to $end');
+    } else if (timeMachine.isActive && timeMachine.entryDate != null && timeMachine.futureDate != null) {
+      // Time machine active, no explicit dates - use entry date → target date
+      start = timeMachine.entryDate!;
+      final targetDate = timeMachine.futureDate!;
+      end = DateTime(
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      debugPrint('[TimeMachine::StatsHistoryScreen] Time Machine active: using entry → target date $start to $end');
+    } else {
+      // Normal mode - last 30 days
+      start = DateTime.now().subtract(const Duration(days: 30));
+      final defaultEnd = DateTime.now();
+      end = DateTime(
+        defaultEnd.year,
+        defaultEnd.month,
+        defaultEnd.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      debugPrint('[TimeMachine::StatsHistoryScreen] Normal mode: last 30 days');
+    }
 
     // Initialize currency formatter after context is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,10 +126,20 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
   }
 
   Future<void> _pickRange() async {
+    // If time machine is active, cap lastDate at projection date
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    DateTime effectiveLastDate = DateTime.now().add(const Duration(days: 365));
+
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      effectiveLastDate = timeMachine.futureDate!;
+      debugPrint('[TimeMachine::StatsHistoryScreen] Date Range Picker:');
+      debugPrint('[TimeMachine::StatsHistoryScreen]   Capped lastDate at ${timeMachine.futureDate}');
+    }
+
     final r = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: effectiveLastDate,
       initialDateRange: DateTimeRange(start: start, end: end),
     );
     if (r != null) {
@@ -102,6 +148,26 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
         end = DateTime(r.end.year, r.end.month, r.end.day, 23, 59, 59, 999);
       });
     }
+  }
+
+  AnalyticsFilter _getInitialAnalyticsFilter() {
+    // Determine initial analytics filter based on filterTransactionTypes
+    if (widget.filterTransactionTypes != null) {
+      final hasDeposits = widget.filterTransactionTypes!.contains(TransactionType.deposit);
+      final hasWithdrawals = widget.filterTransactionTypes!.contains(TransactionType.withdrawal);
+      final hasScheduledPayments = widget.filterTransactionTypes!.contains(TransactionType.scheduledPayment);
+
+      // If filtering for deposits/income, show Cash In
+      if (hasDeposits && !hasWithdrawals && !hasScheduledPayments) {
+        return AnalyticsFilter.cashIn;
+      }
+      // If filtering for withdrawals/scheduled payments, show Cash Out
+      if ((hasWithdrawals || hasScheduledPayments) && !hasDeposits) {
+        return AnalyticsFilter.cashOut;
+      }
+    }
+    // Default to Cash Out for all other cases
+    return AnalyticsFilter.cashOut;
   }
 
   void _showSelectionSheet<T>({
@@ -269,6 +335,14 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] ========================================');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] Build called');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] widget.initialStart = ${widget.initialStart}');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] widget.initialEnd = ${widget.initialEnd}');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] Current start = $start');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] Current end = $end');
+    debugPrint('[TimeMachine::StatsHistoryScreen::build] ========================================');
+
     final title = widget.title ?? 'Statistics & History';
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
@@ -295,20 +369,44 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
           ),
         ),
       ),
-      body: StreamBuilder<List<Envelope>>(
-        stream: widget.repo.envelopesStream(),
-        builder: (_, sEnv) {
-          final envelopes = sEnv.data ?? const <Envelope>[];
+      body: Column(
+        children: [
+          // Time Machine Indicator at the top
+          const TimeMachineIndicator(),
 
-          return StreamBuilder<List<EnvelopeGroup>>(
+          Expanded(
+            child: StreamBuilder<List<Envelope>>(
+              stream: widget.repo.envelopesStream(),
+              builder: (_, sEnv) {
+                final envelopes = sEnv.data ?? const <Envelope>[];
+
+                return StreamBuilder<List<EnvelopeGroup>>(
             stream: widget.repo.groupsStream,
             builder: (_, sGrp) {
               final groups = sGrp.data ?? const <EnvelopeGroup>[];
 
-              return StreamBuilder<List<Transaction>>(
-                stream: widget.repo.transactionsStream,
-                builder: (_, sTx) {
-                  final txs = sTx.data ?? const <Transaction>[];
+              return Consumer<TimeMachineProvider>(
+                builder: (context, timeMachine, _) {
+                  return StreamBuilder<List<Transaction>>(
+                    stream: widget.repo.transactionsStream,
+                    builder: (_, sTx) {
+                      var txs = sTx.data ?? const <Transaction>[];
+
+                      // If time machine is active, merge with projected transactions
+                      if (timeMachine.isActive) {
+                        final projectedTxs = timeMachine.getProjectedTransactionsForDateRange(
+                          start,
+                          end,
+                          includeTransfers: true,
+                        );
+
+                        debugPrint('[TimeMachine::StatsHistoryScreen] Transaction Filtering:');
+                        debugPrint('[TimeMachine::StatsHistoryScreen]   Real transactions: ${txs.length}');
+                        debugPrint('[TimeMachine::StatsHistoryScreen]   Projected transactions: ${projectedTxs.length}');
+
+                        txs = [...txs, ...projectedTxs];
+                        debugPrint('[TimeMachine::StatsHistoryScreen]   Merged total: ${txs.length}');
+                      }
 
                   // Auto-select all if no explicit selection
                   if (!_didApplyExplicitInitialSelection &&
@@ -369,7 +467,10 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                   // Filter transactions
                   final shownTxs = txs.where((t) {
-                    final inChosen = chosenIds.contains(t.envelopeId);
+                    // Include transactions that belong to chosen envelopes
+                    // OR transactions with no envelopeId (e.g., pay day deposits)
+                    final inChosen = chosenIds.contains(t.envelopeId) ||
+                                     (t.envelopeId.isEmpty && t.type == TransactionType.deposit);
                     final inRange =
                         !t.date.isBefore(start) && t.date.isBefore(end);
                     final typeMatch =
@@ -378,15 +479,38 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                     return inChosen && inRange && typeMatch;
                   }).toList()..sort((a, b) => b.date.compareTo(a.date));
 
-                  // Calculate stats
-                  final double totalTarget = chosen.fold(
-                    0.0,
-                    (s, e) => s + (e.targetAmount ?? 0),
-                  );
-                  final double totalSaved = chosen.fold(
-                    0.0,
-                    (s, e) => s + e.currentAmount,
-                  );
+                  // Calculate stats - use projected data if time machine is active
+                  double totalTarget;
+                  double totalSaved;
+
+                  if (timeMachine.isActive) {
+                    // Use projected envelope data
+                    final projectedChosen = chosen
+                        .map((e) => timeMachine.getProjectedEnvelope(e))
+                        .toList();
+
+                    totalTarget = projectedChosen.fold(
+                      0.0,
+                      (s, e) => s + (e.targetAmount ?? 0),
+                    );
+                    totalSaved = projectedChosen.fold(
+                      0.0,
+                      (s, e) => s + e.currentAmount,
+                    );
+
+                    debugPrint('[TimeMachine::StatsHistoryScreen] Summary Statistics:');
+                    debugPrint('[TimeMachine::StatsHistoryScreen]   Total Saved (projected): $totalSaved');
+                    debugPrint('[TimeMachine::StatsHistoryScreen]   Total Target (projected): $totalTarget');
+                  } else {
+                    totalTarget = chosen.fold(
+                      0.0,
+                      (s, e) => s + (e.targetAmount ?? 0),
+                    );
+                    totalSaved = chosen.fold(
+                      0.0,
+                      (s, e) => s + e.currentAmount,
+                    );
+                  }
                   final double pct = totalTarget > 0
                       ? (totalSaved / totalTarget).clamp(0.0, 1.0) * 100
                       : 0.0;
@@ -402,6 +526,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                       widget.filterTransactionTypes!.contains(
                         TransactionType.withdrawal,
                       );
+                  final showScheduledPayments =
+                      widget.filterTransactionTypes == null ||
+                      widget.filterTransactionTypes!.contains(
+                        TransactionType.scheduledPayment,
+                      );
                   final showTransfers =
                       widget.filterTransactionTypes == null ||
                       widget.filterTransactionTypes!.contains(
@@ -416,6 +545,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                   final double totWdr = showWithdrawals
                       ? shownTxs
                             .where((t) => t.type == TransactionType.withdrawal)
+                            .fold(0.0, (s, t) => s + t.amount)
+                      : 0.0;
+                  final double totSchPay = showScheduledPayments
+                      ? shownTxs
+                            .where((t) => t.type == TransactionType.scheduledPayment)
                             .fold(0.0, (s, t) => s + t.amount)
                       : 0.0;
                   final double totTrnOut = showTransfers
@@ -527,6 +661,8 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                           envelopes: envelopes,
                           groups: groups,
                           dateRange: DateTimeRange(start: start, end: end),
+                          initialFilter: _getInitialAnalyticsFilter(),
+                          timeMachineDate: timeMachine.isActive ? timeMachine.futureDate : null,
                           onDateRangeChange: (range) {
                             setState(() {
                               start = DateTime(
@@ -573,6 +709,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                             end: end,
                             deposited: totDep,
                             withdrawn: totWdr,
+                            scheduledPayments: totSchPay,
                             transferred: totTrnOut,
                           ),
                         ),
@@ -682,11 +819,16 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         ),
                     ],
                   );
+                    },
+                  );
                 },
               );
             },
           );
         },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1065,6 +1207,7 @@ class _TransactionStatsCard extends StatelessWidget {
     required this.deposited,
     required this.withdrawn,
     required this.transferred,
+    this.scheduledPayments = 0.0,
   });
 
   final DateTime start;
@@ -1072,6 +1215,7 @@ class _TransactionStatsCard extends StatelessWidget {
   final double deposited;
   final double withdrawn;
   final double transferred;
+  final double scheduledPayments;
 
   @override
   Widget build(BuildContext context) {
@@ -1128,6 +1272,12 @@ class _TransactionStatsCard extends StatelessWidget {
             value: currency.format(withdrawn),
             color: Colors.red.shade700,
             icon: Icons.arrow_upward,
+          ),
+          _StatRow(
+            label: 'Scheduled Payments',
+            value: currency.format(scheduledPayments),
+            color: Colors.purple.shade700,
+            icon: Icons.event_repeat,
           ),
           _StatRow(
             label: 'Transferred Out',
@@ -1244,6 +1394,8 @@ class _TransactionTile extends StatelessWidget {
       final prefix = isMyEnvelope ? '' : '$ownerName: ';
       if (t.type == TransactionType.deposit) {
         title = '${prefix}Deposit to $envName';
+      } else if (t.type == TransactionType.scheduledPayment) {
+        title = '${prefix}Scheduled Payment from $envName';
       } else {
         title = '${prefix}Withdrawal from $envName';
       }
@@ -1261,6 +1413,10 @@ class _TransactionTile extends StatelessWidget {
     } else if (t.type == TransactionType.withdrawal) {
       color = Colors.red.shade700;
       iconData = Icons.arrow_upward;
+      amountStr = '-${currency.format(t.amount)}';
+    } else if (t.type == TransactionType.scheduledPayment) {
+      color = Colors.purple.shade700;
+      iconData = Icons.event_repeat;
       amountStr = '-${currency.format(t.amount)}';
     } else {
       color = Colors.blue.shade700;

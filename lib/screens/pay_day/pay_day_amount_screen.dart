@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
+import '../../services/pay_day_settings_service.dart';
 import '../../models/account.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import 'pay_day_allocation_screen.dart';
-import '../../widgets/calculator_widget.dart';
+import '../../utils/calculator_helper.dart';
+import '../../widgets/tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
 
 class PayDayAmountScreen extends StatefulWidget {
   const PayDayAmountScreen({
@@ -30,20 +33,34 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
   final _amountController = TextEditingController(text: '0.00');
   final _amountFocus = FocusNode();
   String? _selectedAccountId;
+  late final Stream<List<Account>> _accountsStream;
+  bool _hasUserModifiedAmount = false; // Track if user has manually changed amount
 
   @override
   void initState() {
     super.initState();
-    // Auto-focus and select all when screen opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _amountFocus.requestFocus();
-        _amountController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _amountController.text.length,
-        );
-      }
-    });
+    // Initialize the stream once to prevent multiple subscriptions
+    _accountsStream = widget.accountRepo.accountsStream();
+    _loadSavedPayAmount();
+  }
+
+  /// Load saved pay amount from settings
+  Future<void> _loadSavedPayAmount() async {
+    final payDayService = PayDaySettingsService(
+      widget.repo.db,
+      widget.repo.currentUserId,
+    );
+    final settings = await payDayService.getPayDaySettings();
+
+    // Only load saved amount if user hasn't manually changed it
+    if (settings != null &&
+        settings.expectedPayAmount != null &&
+        mounted &&
+        !_hasUserModifiedAmount) {
+      setState(() {
+        _amountController.text = settings.expectedPayAmount!.toStringAsFixed(2);
+      });
+    }
   }
 
   @override
@@ -98,7 +115,10 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final media = MediaQuery.of(context);
 
-    return Scaffold(
+    return TutorialWrapper(
+      tutorialSequence: payDayTutorial,
+      spotlightKeys: const {},
+      child: Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -162,6 +182,10 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.secondary,
                 ),
+                onChanged: (value) {
+                  // Mark as modified when user types
+                  _hasUserModifiedAmount = true;
+                },
                 decoration: InputDecoration(
                   prefixText: '${locale.currencySymbol} ',
                   prefixStyle: fontProvider.getTextStyle(
@@ -169,26 +193,28 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.secondary,
                   ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calculate, size: 32),
-                    onPressed: () async {
-                      final result = await showDialog<double>(
-                        context: context,
-                        barrierDismissible: true,
-                        barrierColor: Colors.black54,
-                        builder: (context) => Stack(
-                          children: const [
-                            CalculatorWidget(),
-                          ],
-                        ),
-                      );
-                      if (result != null && mounted) {
-                        setState(() {
-                          _amountController.text = result.toStringAsFixed(2);
-                        });
-                      }
-                    },
-                    tooltip: 'Open Calculator',
+                  suffixIcon: Container(
+                    margin: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.calculate,
+                        color: theme.colorScheme.onPrimary,
+                      ),
+                      onPressed: () async {
+                        final result = await CalculatorHelper.showCalculator(context);
+                        if (result != null && mounted) {
+                          setState(() {
+                            _amountController.text = result;
+                            _hasUserModifiedAmount = true; // Mark as modified
+                          });
+                        }
+                      },
+                      tooltip: 'Open Calculator',
+                    ),
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -223,7 +249,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
               ),
               const SizedBox(height: 12),
               StreamBuilder<List<Account>>(
-                stream: widget.accountRepo.accountsStream(),
+                stream: _accountsStream,
                 builder: (context, snapshot) {
                   // FIX: Handle waiting state to prevent the "red flash"
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -365,6 +391,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

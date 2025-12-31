@@ -14,11 +14,14 @@ import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
+import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../theme/app_themes.dart';
-import '../screens/pay_day/pay_day_preview_screen.dart';
+import '../screens/pay_day/pay_day_amount_screen.dart';
+import '../services/account_repo.dart';
 import '../widgets/tutorial_wrapper.dart';
+import '../widgets/time_machine_indicator.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
 
@@ -41,6 +44,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   int _currentPage = 0;
   bool _mineOnly = false;
   String _sortBy = 'name';
+
+  // TUTORIAL KEYS
+  final GlobalKey _viewHistoryButtonKey = GlobalKey();
 
   Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs, TimeMachineProvider timeMachine) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
@@ -68,6 +74,19 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   }
 
   Future<void> _openGroupEditor(EnvelopeGroup? group) async {
+    // Check Time Machine mode - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     await editor.showGroupEditor(
       context: context,
       groupRepo: widget.groupRepo,
@@ -117,7 +136,8 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final timeMachine = Provider.of<TimeMachineProvider>(context);
@@ -148,7 +168,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             if (groups.isEmpty) {
               return TutorialWrapper(
                 tutorialSequence: bindersTutorial,
-                spotlightKeys: const {},
+                spotlightKeys: {
+                  'view_history_button': _viewHistoryButtonKey,
+                },
                 child: Scaffold(
                   backgroundColor: theme.scaffoldBackgroundColor,
                   appBar: AppBar(
@@ -156,12 +178,14 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                     children: [
                       ElevatedButton.icon(
                         onPressed: () {
+                          final accountRepo = Provider.of<AccountRepo>(context, listen: false);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PayDayPreviewScreen(
+                              builder: (_) => PayDayAmountScreen(
                                 repo: widget.repo,
                                 groupRepo: widget.groupRepo,
+                                accountRepo: accountRepo,
                               ),
                             ),
                           );
@@ -196,33 +220,42 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                   backgroundColor: theme.scaffoldBackgroundColor,
                   elevation: 0,
                 ),
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.folder_off_outlined,
-                        size: 64,
-                        color: Colors.grey.shade400,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        tr('group_no_binders'),
-                        style: fontProvider.getTextStyle(
-                          fontSize: 28,
-                          color: Colors.grey.shade600,
+                body: Column(
+                  children: [
+                    // Time Machine Indicator at the top
+                    const TimeMachineIndicator(),
+
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.folder_off_outlined,
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              tr('group_no_binders'),
+                              style: fontProvider.getTextStyle(
+                                fontSize: 28,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              tr('group_create_first_binder'),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        tr('group_create_first_binder'),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 floatingActionButton: FloatingActionButton.extended(
                   backgroundColor: theme.colorScheme.secondary,
@@ -246,7 +279,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
 
             return TutorialWrapper(
               tutorialSequence: bindersTutorial,
-              spotlightKeys: const {},
+              spotlightKeys: {
+                'view_history_button': _viewHistoryButtonKey,
+              },
               child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
@@ -298,6 +333,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               ),
               body: Column(
                 children: [
+                  // Time Machine Indicator at the top
+                  const TimeMachineIndicator(),
+
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
@@ -385,6 +423,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             theme: theme,
                             repo: widget.repo,
                             isPartner: isPartner && !_mineOnly,
+                            viewHistoryButtonKey: index == 0 ? _viewHistoryButtonKey : null,
                           ),
                         );
                       },
@@ -430,6 +469,7 @@ class _BinderSpread extends StatefulWidget {
   final ThemeData theme;
   final EnvelopeRepo repo;
   final bool isPartner;
+  final GlobalKey? viewHistoryButtonKey;
 
   const _BinderSpread({
     required this.group,
@@ -442,6 +482,7 @@ class _BinderSpread extends StatefulWidget {
     required this.theme,
     required this.repo,
     required this.isPartner,
+    this.viewHistoryButtonKey,
   });
 
   @override
@@ -828,6 +869,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
+                                key: widget.viewHistoryButtonKey,
                                 style: OutlinedButton.styleFrom(
                                   side: BorderSide(
                                     color: widget.binderColors.binderColor

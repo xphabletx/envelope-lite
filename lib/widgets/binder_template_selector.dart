@@ -111,10 +111,10 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Return the selected template ID (or null for "from scratch")
+          // Return the selected template (or fromScratchTemplate for "from scratch")
           final template = selectedTemplateId != null
               ? binderTemplates.firstWhere((t) => t.id == selectedTemplateId)
-              : null;
+              : fromScratchTemplate;
           Navigator.pop(context, template);
         },
         backgroundColor: theme.colorScheme.secondary,

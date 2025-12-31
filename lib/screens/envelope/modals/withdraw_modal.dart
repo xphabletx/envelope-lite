@@ -3,9 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../../../providers/font_provider.dart';
 import '../../../../../providers/locale_provider.dart';
+import '../../../../../providers/time_machine_provider.dart';
 import '../../../../../services/envelope_repo.dart';
 import '../../../../../services/localization_service.dart';
-import '../../../../../widgets/calculator_widget.dart';
+import '../../../../../utils/calculator_helper.dart';
 
 class WithdrawModal extends StatefulWidget {
   const WithdrawModal({
@@ -39,14 +40,11 @@ class _WithdrawModalState extends State<WithdrawModal> {
   }
 
   void _showCalculator() async {
-    final result = await showDialog<double>(
-      context: context,
-      builder: (context) => const Dialog(child: CalculatorWidget()),
-    );
+    final result = await CalculatorHelper.showCalculator(context);
 
     if (result != null && mounted) {
       setState(() {
-        _amountController.text = result.toStringAsFixed(2);
+        _amountController.text = result;
       });
     }
   }
@@ -67,6 +65,19 @@ class _WithdrawModalState extends State<WithdrawModal> {
   }
 
   Future<void> _withdraw() async {
+    // Check if time machine mode is active - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final amountText = _amountController.text.trim();
     if (amountText.isEmpty) {
       ScaffoldMessenger.of(
@@ -229,13 +240,26 @@ class _WithdrawModalState extends State<WithdrawModal> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.calculate),
-                      onPressed: _showCalculator,
-                      tooltip: 'Open Calculator',
+                    suffixIcon: Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.calculate,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                        onPressed: _showCalculator,
+                        tooltip: 'Open Calculator',
+                      ),
                     ),
                   ),
-                  autofocus: true,
+                  onTap: () => _amountController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: _amountController.text.length,
+                  ),
                 ),
               ),
 
@@ -250,6 +274,10 @@ class _WithdrawModalState extends State<WithdrawModal> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
+                ),
+                onTap: () => _descriptionController.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: _descriptionController.text.length,
                 ),
               ),
 

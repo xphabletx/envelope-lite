@@ -6,6 +6,7 @@ import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../screens/envelope/envelope_settings_sheet.dart';
 
 class AutoFillListScreen extends StatelessWidget {
@@ -24,7 +25,8 @@ class AutoFillListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final currency = NumberFormat.simpleCurrency(locale: 'en_GB');
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

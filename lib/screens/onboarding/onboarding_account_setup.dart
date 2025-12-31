@@ -170,6 +170,11 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
       if (mounted) {
         // Complete onboarding
         widget.onComplete?.call();
+
+        // Navigate to home screen
+        if (context.mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+        }
       }
     } catch (e) {
       setState(() => _saving = false);
@@ -294,6 +299,43 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
                     onTypeChanged: (type) {
                       setState(() {
                         _accounts[index].accountType = type;
+
+                        // If changing the default account to credit card, we need to reassign default
+                        if (_accounts[index].isDefault && type == AccountType.creditCard) {
+                          // Find the first bank account and make it default
+                          final firstBankAccount = _accounts.firstWhere(
+                            (acc) => acc.accountType == AccountType.bankAccount && acc != _accounts[index],
+                            orElse: () => _accounts[index], // If no bank accounts, keep this one (will be handled below)
+                          );
+
+                          // Only reassign if we found a different bank account
+                          if (firstBankAccount != _accounts[index]) {
+                            _accounts[index] = _AccountEntry(
+                              nameController: _accounts[index].nameController,
+                              balanceController: _accounts[index].balanceController,
+                              accountType: type,
+                              isDefault: false, // Remove default status
+                              creditLimit: _accounts[index].creditLimit,
+                            );
+
+                            // Make the bank account default
+                            final bankIndex = _accounts.indexOf(firstBankAccount);
+                            _accounts[bankIndex] = _AccountEntry(
+                              nameController: _accounts[bankIndex].nameController,
+                              balanceController: _accounts[bankIndex].balanceController,
+                              accountType: _accounts[bankIndex].accountType,
+                              isDefault: true,
+                              creditLimit: _accounts[bankIndex].creditLimit,
+                            );
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Credit cards cannot be set as default. Default reassigned to first bank account.'),
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        }
                       });
                     },
                     onCreditLimitChanged: (limit) {
@@ -608,6 +650,10 @@ class _OnboardingAccountSetupState extends State<OnboardingAccountSetup> {
                   TextButton(
                     onPressed: () {
                       widget.onComplete?.call();
+                      // Navigate to home screen
+                      if (context.mounted) {
+                        Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+                      }
                     },
                     child: Text(
                       'Skip for now',
@@ -753,6 +799,7 @@ class _AccountEntryCard extends StatelessWidget {
             // Account name
             TextField(
               controller: entry.nameController,
+              textCapitalization: TextCapitalization.words,
               style: fontProvider.getTextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,

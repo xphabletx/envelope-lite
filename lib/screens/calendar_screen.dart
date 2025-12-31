@@ -11,6 +11,8 @@ import '../../services/scheduled_payment_repo.dart';
 import '../../services/pay_day_settings_service.dart';
 import '../../services/notification_repo.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
+import '../../widgets/time_machine_indicator.dart';
 import 'add_scheduled_payment_screen.dart';
 import '../../services/localization_service.dart';
 import '../../providers/font_provider.dart';
@@ -91,6 +93,20 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       widget.repo.db,
       widget.repo.currentUserId,
     );
+
+    // Check if time machine is active and jump to target date
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+      if (timeMachine.isActive && timeMachine.futureDate != null) {
+        setState(() {
+          _focusedDay = timeMachine.futureDate!;
+          _selectedDay = timeMachine.futureDate!;
+        });
+        debugPrint('[TimeMachine::CalendarScreen] Calendar Initialization:');
+        debugPrint('[TimeMachine::CalendarScreen]   Jumped to future date: ${timeMachine.futureDate}');
+      }
+    });
+
     _selectedDay = _focusedDay;
     _restoreViewPreference();
   }
@@ -216,9 +232,14 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     // Generate occurrences within range
     while (current.isBefore(end)) {
       if (!current.isBefore(start)) {
+        // Apply weekend adjustment if enabled
+        final adjustedDate = paySettings.adjustForWeekends
+            ? paySettings.adjustForWeekend(current)
+            : current;
+
         occurrences.add(_PayDayOccurrence(
           paySettings.expectedPayAmount ?? 0.0,
-          current,
+          adjustedDate,
           paySettings.payFrequency,
         ));
       }
@@ -288,6 +309,16 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       // Since check is `isBefore`, Jan 31st events were excluded.
       // Day 1 gives the 1st of the *next* month (e.g. Feb 1), fully including Jan 31st.
       endRange = DateTime(baseDate.year, baseDate.month + 1, 1);
+    }
+
+    // If time machine is active, cap end range at projection date
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.isActive && timeMachine.futureDate != null) {
+      if (endRange.isAfter(timeMachine.futureDate!)) {
+        endRange = timeMachine.futureDate!.add(const Duration(days: 1));
+        debugPrint('[TimeMachine::CalendarScreen] Event Generation:');
+        debugPrint('[TimeMachine::CalendarScreen]   Capped end range at ${timeMachine.futureDate}');
+      }
     }
 
     final events = <_CalendarEvent>[];
@@ -587,6 +618,9 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
               ),
               body: Column(
                 children: [
+                  // Time Machine Indicator at the top
+                  const TimeMachineIndicator(),
+
                   Container(
                     margin: EdgeInsets.symmetric(
                       horizontal: context.responsive.isLandscape ? 40 : 8,
@@ -669,6 +703,23 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                         ),
                       ),
                       onDaySelected: (selectedDay, focusedDay) {
+                        // Check if time machine is active and prevent selecting beyond projection date
+                        final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                        if (timeMachine.isActive && timeMachine.futureDate != null) {
+                          if (selectedDay.isAfter(timeMachine.futureDate!)) {
+                            debugPrint('[TimeMachine::CalendarScreen] Date Selection:');
+                            debugPrint('[TimeMachine::CalendarScreen]   Blocked selection of ${selectedDay} beyond ${timeMachine.futureDate}');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Cannot select dates beyond projection date (${DateFormat('MMM dd, yyyy').format(timeMachine.futureDate!)})'),
+                                backgroundColor: Colors.orange,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                        }
+
                         setState(() {
                           _selectedDay = selectedDay;
                           _focusedDay = focusedDay;

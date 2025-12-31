@@ -582,7 +582,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           enabled: !isPartner,
                           onChanged: isPartner ? null : (value) async {
                             // Update in Hive
-                            final groupBox = Hive.box('groups');
+                            final groupBox = Hive.box<EnvelopeGroup>('groups');
                             final updatedGroup = group.copyWith(isShared: value ?? true);
                             await groupBox.put(group.id, updatedGroup);
                           },
@@ -678,7 +678,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                           enabled: !isPartner,
                           onChanged: isPartner ? null : (value) async {
                             // Update in Hive
-                            final accountBox = Hive.box('accounts');
+                            final accountBox = Hive.box<Account>('accounts');
                             final updatedAccount = account.copyWith(isShared: value ?? true);
                             await accountBox.put(account.id, updatedAccount);
                           },

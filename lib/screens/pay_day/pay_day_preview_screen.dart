@@ -11,7 +11,9 @@ import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
+import '../../services/account_repo.dart';
 import 'add_to_pay_day_modal.dart';
+import 'pay_day_stuffing_screen.dart';
 import '../../providers/font_provider.dart'; // NEW IMPORT
 import '../../providers/locale_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -25,10 +27,18 @@ class PayDayPreviewScreen extends StatefulWidget {
     super.key,
     required this.repo,
     required this.groupRepo,
+    required this.accountRepo,
+    required this.totalAmount,
+    required this.accountId,
+    this.preselectedAllocations,
   });
 
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final AccountRepo accountRepo;
+  final double totalAmount;
+  final String accountId;
+  final Map<String, double>? preselectedAllocations;
 
   @override
   State<PayDayPreviewScreen> createState() => _PayDayPreviewScreenState();
@@ -45,8 +55,6 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
   // Custom amounts for manually added items
   Map<String, double> customAmounts = {};
 
-  bool _loading = false;
-
   // TUTORIAL KEYS
   final GlobalKey _welcomeKey = GlobalKey();
   final GlobalKey _envelopeListKey =
@@ -61,6 +69,16 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
   ) {
     if (envelopeCheckedState.isNotEmpty) return; // Already initialized
 
+    // If we have preselected allocations from the allocation screen, use those
+    if (widget.preselectedAllocations != null) {
+      for (final envelopeId in widget.preselectedAllocations!.keys) {
+        envelopeCheckedState[envelopeId] = true;
+        customAmounts[envelopeId] = widget.preselectedAllocations![envelopeId]!;
+      }
+      return;
+    }
+
+    // Otherwise, use the original auto-fill logic
     // NEW LOGIC: Show binder if payDayEnabled=true OR has ANY auto-fill envelopes
     for (final group in allGroups) {
       // Check if this binder has ANY envelopes with auto-fill
@@ -207,60 +225,49 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
   }
 
   Future<void> _executePayDay(List<Envelope> allEnvelopes) async {
-    setState(() => _loading = true);
+    // Build allocations map from checked envelopes
+    final Map<String, double> allocations = {};
+    final List<Envelope> envelopesToStuff = [];
 
-    final today = DateTime.now();
-    int successCount = 0;
-    double totalDeposited = 0;
-    final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
-
-    try {
-      for (final env in allEnvelopes) {
-        if (envelopeCheckedState[env.id] == true) {
-          final amount = customAmounts[env.id] ?? env.autoFillAmount;
-          if (amount != null && amount > 0) {
-            await widget.repo.deposit(
-              envelopeId: env.id,
-              amount: amount,
-              description: 'Pay Day',
-              date: today,
-            );
-            successCount++;
-            totalDeposited += amount;
-          }
+    for (final env in allEnvelopes) {
+      if (envelopeCheckedState[env.id] == true) {
+        final amount = customAmounts[env.id] ?? env.autoFillAmount;
+        if (amount != null && amount > 0) {
+          allocations[env.id] = amount;
+          envelopesToStuff.add(env);
         }
       }
+    }
 
-      // TODO: Re-implement tutorial completion with new Controller
-      /*
-      // TUTORIAL COMPLETE
-      final phase = await TutorialService.getCurrentPhase();
-      if (phase == TutorialPhase.payDay) {
-        await TutorialService.completeTutorial();
-      }
-      */
+    if (envelopesToStuff.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one envelope'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-      if (mounted) {
-        Navigator.pop(context);
-
-        // 💰 DOPAMINE RESTORED! 💰
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => _PayDaySuccessDialog(
-            envelopesFilled: successCount,
-            totalAmount: totalDeposited,
-            currency: currency,
+    // Navigate to stuffing screen with animation
+    if (mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PayDayStuffingScreen(
+            repo: widget.repo,
+            accountRepo: widget.accountRepo,
+            allocations: allocations,
+            envelopes: envelopesToStuff,
+            totalAmount: widget.totalAmount,
+            accountId: widget.accountId,
           ),
-        );
-      }
-    } catch (e) {
+        ),
+      );
+
+      // After stuffing completes, pop back to home
       if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        Navigator.pop(context); // Close preview screen
       }
     }
   }
@@ -698,22 +705,13 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
               ),
               floatingActionButton: FloatingActionButton.extended(
                 key: _confirmButtonKey, // TUTORIAL KEY
-                onPressed: _loading ? null : () => _executePayDay(allEnvelopes),
+                onPressed: () => _executePayDay(allEnvelopes),
                 backgroundColor: theme.colorScheme.secondary,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.check_circle),
+                icon: const Icon(Icons.check_circle),
                 label: FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    _loading ? 'Processing...' : 'Confirm Pay Day',
+                    'Confirm Pay Day',
                     // UPDATED: FontProvider
                     style: fontProvider.getTextStyle(
                       fontSize: 20,
@@ -727,106 +725,6 @@ class _PayDayPreviewScreenState extends State<PayDayPreviewScreen> {
           },
         );
       },
-    );
-  }
-}
-
-// ... rest of file (SuccessDialog) remains unchanged ...
-class _PayDaySuccessDialog extends StatefulWidget {
-  const _PayDaySuccessDialog({
-    required this.envelopesFilled,
-    required this.totalAmount,
-    required this.currency,
-  });
-
-  final int envelopesFilled;
-  final double totalAmount;
-  final NumberFormat currency;
-
-  @override
-  State<_PayDaySuccessDialog> createState() => _PayDaySuccessDialogState();
-}
-
-class _PayDaySuccessDialogState extends State<_PayDaySuccessDialog>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut,
-    );
-    _controller.forward();
-
-    // Auto-dismiss after 2.5 seconds
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) Navigator.pop(context);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: AlertDialog(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // FIXED: Corrected corrupted confetti emoji '脂' to '🎉'
-            const Text('🎉', style: TextStyle(fontSize: 72)),
-            const SizedBox(height: 16),
-            Text(
-              'Pay Day Complete!',
-              // UPDATED: FontProvider
-              style: fontProvider.getTextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.currency.format(widget.totalAmount),
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${widget.envelopesFilled} ${widget.envelopesFilled == 1 ? 'envelope' : 'envelopes'} filled',
-              // UPDATED: FontProvider
-              style: fontProvider.getTextStyle(
-                fontSize: 20,
-                // FIX: withOpacity -> withAlpha
-                color: theme.colorScheme.onSurface.withAlpha(179),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

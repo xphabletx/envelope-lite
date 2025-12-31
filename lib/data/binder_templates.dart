@@ -29,6 +29,15 @@ class BinderTemplate {
   });
 }
 
+// Special template for "From Scratch" option
+const BinderTemplate fromScratchTemplate = BinderTemplate(
+  id: 'from_scratch',
+  name: '',
+  emoji: '📁',
+  description: 'Create an empty binder',
+  envelopes: [],
+);
+
 const List<BinderTemplate> binderTemplates = [
   BinderTemplate(
     id: 'household',

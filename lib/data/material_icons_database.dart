@@ -994,4 +994,92 @@ final materialIconsDatabase = {
     'keywords': ['category', 'shapes', 'misc', 'other', 'general', 'type'],
     'category': 'misc',
   },
+
+  // ==================================================
+  // NATURE & FLOWERS
+  // ==================================================
+  'local_florist': {
+    'icon': Icons.local_florist,
+    'keywords': [
+      'flower',
+      'flowers',
+      'florist',
+      'bouquet',
+      'floral',
+      'blossom',
+      'rose',
+      'nature',
+      'garden',
+      'plant',
+    ],
+    'category': 'nature',
+  },
+  'nature': {
+    'icon': Icons.nature,
+    'keywords': [
+      'nature',
+      'tree',
+      'forest',
+      'plant',
+      'green',
+      'environment',
+      'eco',
+      'outdoor',
+    ],
+    'category': 'nature',
+  },
+  'nature_people': {
+    'icon': Icons.nature_people,
+    'keywords': [
+      'nature',
+      'tree',
+      'person',
+      'people',
+      'park',
+      'outdoor',
+      'environment',
+    ],
+    'category': 'nature',
+  },
+  'park': {
+    'icon': Icons.park,
+    'keywords': [
+      'park',
+      'tree',
+      'nature',
+      'outdoor',
+      'green',
+      'garden',
+      'forest',
+      'recreation',
+    ],
+    'category': 'nature',
+  },
+  'eco': {
+    'icon': Icons.eco,
+    'keywords': [
+      'eco',
+      'leaf',
+      'nature',
+      'green',
+      'environment',
+      'organic',
+      'plant',
+      'sustainable',
+    ],
+    'category': 'nature',
+  },
+  'grass': {
+    'icon': Icons.grass,
+    'keywords': [
+      'grass',
+      'lawn',
+      'nature',
+      'green',
+      'garden',
+      'plant',
+      'yard',
+    ],
+    'category': 'nature',
+  },
 };

@@ -223,4 +223,64 @@ class HiveService {
     _initialized = false;
     debugPrint('[HiveService] Hive closed');
   }
+
+  /// Clear all data from all Hive boxes (used for account deletion and sign out)
+  static Future<void> clearAllData() async {
+    if (!_initialized) {
+      debugPrint('[HiveService] Cannot clear data - not initialized');
+      return;
+    }
+
+    debugPrint('[HiveService] 🗑️ Clearing all Hive data...');
+
+    try {
+      // Clear each box using the correct type
+      if (Hive.isBoxOpen('envelopes')) {
+        final box = Hive.box<Envelope>('envelopes');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: envelopes');
+      }
+
+      if (Hive.isBoxOpen('accounts')) {
+        final box = Hive.box<Account>('accounts');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: accounts');
+      }
+
+      if (Hive.isBoxOpen('groups')) {
+        final box = Hive.box<EnvelopeGroup>('groups');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: groups');
+      }
+
+      if (Hive.isBoxOpen('transactions')) {
+        final box = Hive.box<Transaction>('transactions');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: transactions');
+      }
+
+      if (Hive.isBoxOpen('scheduledPayments')) {
+        final box = Hive.box<ScheduledPayment>('scheduledPayments');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: scheduledPayments');
+      }
+
+      if (Hive.isBoxOpen('payDaySettings')) {
+        final box = Hive.box<PayDaySettings>('payDaySettings');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: payDaySettings');
+      }
+
+      if (Hive.isBoxOpen('notifications')) {
+        final box = Hive.box<AppNotification>('notifications');
+        await box.clear();
+        debugPrint('[HiveService] ✅ Cleared box: notifications');
+      }
+
+      debugPrint('[HiveService] ✅ All Hive data cleared');
+    } catch (e) {
+      debugPrint('[HiveService] ❌ Error clearing Hive data: $e');
+      rethrow;
+    }
+  }
 }

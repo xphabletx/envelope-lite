@@ -6,6 +6,7 @@ import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
 
 class AccountCard extends StatelessWidget {
   const AccountCard({
@@ -27,18 +28,25 @@ class AccountCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
 
-    return FutureBuilder<double>(
-      future: accountRepo.getAssignedAmount(account.id),
+    // Use projected account if time machine is active
+    final displayAccount = timeMachine.isActive
+        ? timeMachine.getProjectedAccount(account)
+        : account;
+
+    return StreamBuilder<double>(
+      stream: accountRepo.assignedAmountStream(account.id),
       builder: (context, snapshot) {
         final assigned = snapshot.data ?? 0.0;
-        final available = account.currentBalance - assigned;
-        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final available = displayAccount.currentBalance - assigned;
+        final isLoading = !snapshot.hasData;
 
         // Debug logging for account balance calculation
         if (snapshot.hasData) {
           debugPrint('[AccountCard] ${account.name}:');
-          debugPrint('  Current Balance: ${account.currentBalance}');
+          debugPrint('  Time Machine Active: ${timeMachine.isActive}');
+          debugPrint('  Current Balance: ${displayAccount.currentBalance}');
           debugPrint('  Assigned: $assigned');
           debugPrint('  Available: $available');
         }
@@ -89,7 +97,7 @@ class AccountCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      currency.format(account.currentBalance),
+                      currency.format(displayAccount.currentBalance),
                       style: fontProvider.getTextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.bold,

@@ -145,10 +145,26 @@ class DataExportService {
 
 
     for (final tx in transactions) {
+      String typeLabel;
+      switch (tx.type) {
+        case TransactionType.deposit:
+          typeLabel = 'Deposit';
+          break;
+        case TransactionType.withdrawal:
+          typeLabel = 'Withdrawal';
+          break;
+        case TransactionType.scheduledPayment:
+          typeLabel = 'Scheduled Payment';
+          break;
+        case TransactionType.transfer:
+          typeLabel = 'Transfer';
+          break;
+      }
+
       sheet.appendRow([
         TextCellValue(tx.date.toIso8601String()),
         DoubleCellValue(tx.amount),
-        TextCellValue(tx.type == TransactionType.deposit ? 'Deposit' : 'Withdrawal'),
+        TextCellValue(typeLabel),
         TextCellValue(envelopeMap[tx.envelopeId] ?? 'N/A'),
         TextCellValue(tx.description),
         TextCellValue(tx.userId),

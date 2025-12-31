@@ -68,9 +68,20 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
   void _confirm() {
     if (_selectedIcon != null) {
       Navigator.pop(context, {
-        'type': _selectedIcon!.type,
+        'type': _getTypeString(_selectedIcon!.type),
         'value': _selectedIcon!.value,
       });
+    }
+  }
+
+  String _getTypeString(IconType type) {
+    switch (type) {
+      case IconType.materialIcon:
+        return 'material';
+      case IconType.companyLogo:
+        return 'companyLogo';
+      case IconType.emoji:
+        return 'emoji';
     }
   }
 
@@ -134,7 +145,7 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
             child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
-              autofocus: true,
+              textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 hintText: 'Search icons, logos, emojis...',
                 hintStyle: fontProvider.getTextStyle(

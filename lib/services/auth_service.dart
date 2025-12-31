@@ -8,6 +8,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../services/run_migrations_once.dart';
 import '../services/paywall_service.dart';
+import '../services/hive_service.dart';
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -368,17 +369,29 @@ class AuthService {
       // Log out from RevenueCat
       await PaywallService().logOut();
 
+      // Sign out from Firebase
       await _auth.signOut();
+
+      // Sign out from Google if there's an active session
       try {
-        await _google.signOut();
-        await _google.disconnect();
+        // Check if user is currently signed in to Google
+        final googleUser = await _google.signInSilently();
+        if (googleUser != null) {
+          debugPrint('[AuthService::signOut] Google user found, signing out...');
+          await _google.signOut();
+        }
       } catch (e) {
         // Continue even if Google sign-out fails - Firebase sign-out is more important
         debugPrint('[AuthService::signOut] Google sign-out error (continuing): $e');
       }
+
+      // Clear all local data on sign out
+      await HiveService.clearAllData();
+      debugPrint('[AuthService::signOut] ✅ Cleared all Hive data');
+
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('last_workspace_id');
-      await prefs.remove('last_workspace_name');
+      await prefs.clear();
+      debugPrint('[AuthService::signOut] ✅ Cleared all SharedPreferences');
 
       debugPrint('[AuthService::signOut] ✅ Signed out successfully');
     } catch (e) {

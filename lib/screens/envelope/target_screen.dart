@@ -455,21 +455,37 @@ class _TargetScreenState extends State<TargetScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.calculate_outlined),
-                      onPressed: () async {
-                        final result =
-                            await CalculatorHelper.showCalculator(context);
-                        if (result != null) {
-                          _contributionAmountController.text = result;
-                          setState(() {});
-                        }
-                      },
-                      tooltip: 'Calculator',
+                    suffixIcon: Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.calculate,
+                          color: theme.colorScheme.onPrimary,
+                        ),
+                        onPressed: () async {
+                          final result =
+                              await CalculatorHelper.showCalculator(context);
+                          if (result != null) {
+                            _contributionAmountController.text = result;
+                            setState(() {});
+                          }
+                        },
+                        tooltip: 'Calculator',
+                      ),
                     ),
                   ),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  onTap: () {
+                    _contributionAmountController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _contributionAmountController.text.length,
+                    );
+                  },
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 16),
@@ -824,7 +840,7 @@ class _TargetScreenState extends State<TargetScreen> {
       // Calculate balance change
       if (tx.type == TransactionType.deposit) {
         runningBalance += tx.amount;
-      } else if (tx.type == TransactionType.withdrawal) {
+      } else if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
         runningBalance -= tx.amount;
       } else if (tx.type == TransactionType.transfer) {
         if (tx.transferDirection == TransferDirection.in_) {

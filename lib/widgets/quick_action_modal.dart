@@ -10,6 +10,7 @@ import '../services/envelope_repo.dart';
 import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 import '../providers/locale_provider.dart';
+import '../providers/time_machine_provider.dart';
 import '../utils/calculator_helper.dart';
 import '../widgets/partner_badge.dart';
 
@@ -57,6 +58,19 @@ class _QuickActionModalState extends State<QuickActionModal> {
   }
 
   Future<void> _submit() async {
+    // Check if time machine mode is active - block modifications
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    if (timeMachine.shouldBlockModifications()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(timeMachine.getBlockedActionMessage()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,6 +160,12 @@ class _QuickActionModalState extends State<QuickActionModal> {
         icon = Icons.remove_circle;
         color = theme.colorScheme.error;
         break;
+      case TransactionType.scheduledPayment:
+        // This shouldn't be used in quick actions, but include for completeness
+        title = 'Scheduled Payment';
+        icon = Icons.event_repeat;
+        color = Colors.purple.shade700;
+        break;
       case TransactionType.transfer:
         title = 'Move Money';
         icon = Icons.swap_horiz;
@@ -233,15 +253,28 @@ class _QuickActionModalState extends State<QuickActionModal> {
             decoration: InputDecoration(
               labelText: 'Amount',
               prefixText: locale.currencySymbol,
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.calculate),
-                onPressed: _showCalculator,
+              suffixIcon: Container(
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    Icons.calculate,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                  onPressed: _showCalculator,
+                ),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            autofocus: true,
+            onTap: () => _amountController.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _amountController.text.length,
+            ),
           ),
 
           if (isTransfer) ...[
@@ -304,7 +337,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
           // Description
           TextField(
             controller: _descController,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: 'Description (Optional)',
               border: OutlineInputBorder(
@@ -313,6 +346,10 @@ class _QuickActionModalState extends State<QuickActionModal> {
             ),
             // UPDATED: FontProvider
             style: fontProvider.getTextStyle(fontSize: 16),
+            onTap: () => _descController.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _descController.text.length,
+            ),
           ),
 
           const SizedBox(height: 16),

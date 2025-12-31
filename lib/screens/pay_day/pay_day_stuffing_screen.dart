@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:hive/hive.dart';
 import '../../models/envelope.dart';
+import '../../models/account.dart';
 import '../../models/pay_day_settings.dart';
 import '../../services/envelope_repo.dart';
-import '../../services/account_repo.dart'; // NEW
+import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/responsive_helper.dart';
@@ -15,19 +16,23 @@ class PayDayStuffingScreen extends StatefulWidget {
   const PayDayStuffingScreen({
     super.key,
     required this.repo,
-    required this.accountRepo, // NEW
+    required this.accountRepo,
     required this.allocations,
     required this.envelopes,
+    this.accountAllocations = const {},
+    this.accounts = const [],
     required this.totalAmount,
-    required this.accountId, // NEW
+    required this.accountId,
   });
 
   final EnvelopeRepo repo;
-  final AccountRepo accountRepo; // NEW
+  final AccountRepo accountRepo;
   final Map<String, double> allocations;
   final List<Envelope> envelopes;
+  final Map<String, double> accountAllocations;
+  final List<Account> accounts;
   final double totalAmount;
-  final String accountId; // NEW
+  final String accountId;
 
   @override
   State<PayDayStuffingScreen> createState() => _PayDayStuffingScreenState();
@@ -66,8 +71,27 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
   }
 
   Future<void> _startStuffing() async {
-    // Calculate total amount to deduct from account
-    final totalAutoFillAmount = widget.allocations.values.fold(0.0, (a, b) => a + b);
+    // Calculate total amounts
+    final totalEnvelopeAutoFill = widget.allocations.values.fold(0.0, (a, b) => a + b);
+    final totalAccountAutoFill = widget.accountAllocations.values.fold(0.0, (a, b) => a + b);
+
+    debugPrint('[PayDay] ═══════════════════════════════════════');
+    debugPrint('[PayDay] Starting Pay Day Processing');
+    debugPrint('[PayDay] Pay Amount: ${widget.totalAmount}');
+    debugPrint('[PayDay] Envelope Auto-Fill: $totalEnvelopeAutoFill');
+    debugPrint('[PayDay] Account Auto-Fill: $totalAccountAutoFill');
+    debugPrint('[PayDay] ═══════════════════════════════════════');
+
+    // 0. Record Pay Day deposit to default account
+    try {
+      await widget.accountRepo.recordPayDayDeposit(
+        accountId: widget.accountId,
+        amount: widget.totalAmount,
+      );
+      debugPrint('[PayDay] ✅ Recorded Pay Day deposit: ${widget.totalAmount}');
+    } catch (e) {
+      debugPrint('[PayDay] ⚠️ Error recording Pay Day deposit: $e');
+    }
 
     // 1. Stuff envelopes
     for (int i = 0; i < widget.envelopes.length; i++) {
@@ -89,12 +113,22 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       }
 
       try {
+        // Deposit to envelope
         await widget.repo.deposit(
           envelopeId: env.id,
           amount: amount,
-          description: 'Pay Day Auto-Fill',
+          description: 'Auto-fill to ${env.name}',
           date: DateTime.now(),
         );
+
+        // Record withdrawal from default account
+        await widget.accountRepo.recordAutoFillWithdrawal(
+          accountId: widget.accountId,
+          targetName: env.name,
+          amount: amount,
+        );
+
+        debugPrint('[PayDay] ✅ Auto-filled envelope: ${env.name} = $amount');
       } catch (e) {
         debugPrint('Error depositing to ${env.name}: $e');
         if (mounted) {
@@ -106,26 +140,80 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // 2. Update Account Balance - DEDUCT auto-fill amounts
+    // 2. Process account auto-fills (transfers to other accounts)
+    for (int i = 0; i < widget.accounts.length; i++) {
+      if (!mounted) return;
+
+      setState(() {
+        currentIndex = widget.envelopes.length + i;
+        currentProgress = 0.0;
+      });
+
+      final targetAccount = widget.accounts[i];
+      final amount = widget.accountAllocations[targetAccount.id] ?? 0.0;
+
+      for (double progress = 0.0; progress <= 1.0; progress += 0.05) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (mounted) {
+          setState(() => currentProgress = progress);
+        }
+      }
+
+      try {
+        // Record Pay Day deposit to target account
+        await widget.accountRepo.recordPayDayDeposit(
+          accountId: targetAccount.id,
+          amount: amount,
+        );
+
+        // Record Auto-fill withdrawal from default account
+        await widget.accountRepo.recordAutoFillWithdrawal(
+          accountId: widget.accountId,
+          targetName: targetAccount.name,
+          amount: amount,
+        );
+
+        // Update target account balance
+        await widget.accountRepo.adjustBalance(
+          accountId: targetAccount.id,
+          amount: amount,
+        );
+
+        debugPrint('[PayDay] ✅ Auto-filled account: ${targetAccount.name} = $amount');
+      } catch (e) {
+        debugPrint('Error auto-filling account ${targetAccount.name}: $e');
+        if (mounted) {
+          setState(() => errorMessage = 'Error filling ${targetAccount.name}');
+        }
+        await Future.delayed(const Duration(seconds: 1));
+      }
+
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    // 3. Update Default Account Balance
     try {
       // Fetch current account state
       final account = await widget.accountRepo
           .accountStream(widget.accountId)
           .first;
 
-      // CRITICAL FIX: Deduct auto-fill amounts from account
-      // The pay amount is deposited separately, here we only deduct envelope allocations
-      final newBalance = account.currentBalance + widget.totalAmount - totalAutoFillAmount;
+      // Calculate new balance:
+      // + Pay amount (income)
+      // - Envelope auto-fills (allocations to envelopes)
+      // - Account auto-fills (transfers to other accounts)
+      final newBalance = account.currentBalance + widget.totalAmount - totalEnvelopeAutoFill - totalAccountAutoFill;
 
       await widget.accountRepo.updateAccount(
         accountId: widget.accountId,
         currentBalance: newBalance,
       );
 
-      debugPrint('[PayDay] ✅ Account updated:');
+      debugPrint('[PayDay] ✅ Default account updated:');
       debugPrint('  Previous Balance: ${account.currentBalance}');
       debugPrint('  Pay Amount: +${widget.totalAmount}');
-      debugPrint('  Auto-Fill Deduction: -$totalAutoFillAmount');
+      debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
+      debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
       debugPrint('  New Balance: $newBalance');
     } catch (e) {
       debugPrint('Error updating account balance: $e');

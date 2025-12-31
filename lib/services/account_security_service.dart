@@ -3,14 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:hive/hive.dart';
-import '../models/envelope.dart';
-import '../models/account.dart';
-import '../models/transaction.dart' as model;
-import '../models/envelope_group.dart';
-import '../models/scheduled_payment.dart';
-import '../models/pay_day_settings.dart';
 import 'workspace_helper.dart';
+import 'hive_service.dart';
 
 class AccountSecurityService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -163,15 +157,20 @@ class AccountSecurityService {
 
   Future<String?> _promptForPassword(BuildContext context) {
     String? inputPassword;
+    final TextEditingController controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Password'),
         content: TextField(
+          controller: controller,
           obscureText: true,
-          autofocus: true,
           decoration: const InputDecoration(labelText: 'Password'),
           onChanged: (val) => inputPassword = val,
+          onTap: () => controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: controller.text.length,
+          ),
         ),
         actions: [
           TextButton(
@@ -210,103 +209,23 @@ class AccountSecurityService {
       }
     }
 
-    // Clear workspace from SharedPreferences
+    // Clear ALL SharedPreferences (complete reset)
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('active_workspace_id');
-    await prefs.remove('last_workspace_id');
-    await prefs.remove('last_workspace_name');
-    debugPrint('[AccountSecurity::_performGDPRCascade] Cleared workspace from SharedPreferences');
+    await prefs.clear();
+    debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Cleared all SharedPreferences (complete reset)');
 
     try {
       // ==========================================
       // DELETE FROM HIVE (PRIMARY STORAGE)
       // ==========================================
 
-      debugPrint('[AccountSecurity::_performGDPRCascade] 🗑️ Deleting Hive data for user: $userId');
+      debugPrint('[AccountSecurity::_performGDPRCascade] 🗑️ Clearing ALL Hive data...');
 
-      // 1. Delete Envelopes
-      final envelopeBox = Hive.box<Envelope>('envelopes');
-      final envelopesToDelete = envelopeBox.keys
-          .where((key) {
-            final envelope = envelopeBox.get(key);
-            return envelope != null && envelope.userId == userId;
-          })
-          .toList();
+      // Clear ALL Hive data (not just this user's data)
+      // This ensures a complete clean slate when deleting account
+      await HiveService.clearAllData();
 
-      for (final key in envelopesToDelete) {
-        await envelopeBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${envelopesToDelete.length} envelopes from Hive');
-
-      // 2. Delete Accounts
-      final accountBox = Hive.box<Account>('accounts');
-      final accountsToDelete = accountBox.keys
-          .where((key) {
-            final account = accountBox.get(key);
-            return account != null && account.userId == userId;
-          })
-          .toList();
-
-      for (final key in accountsToDelete) {
-        await accountBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${accountsToDelete.length} accounts from Hive');
-
-      // 3. Delete Transactions
-      final transactionBox = Hive.box<model.Transaction>('transactions');
-      final transactionsToDelete = transactionBox.keys
-          .where((key) {
-            final transaction = transactionBox.get(key);
-            return transaction != null && transaction.userId == userId;
-          })
-          .toList();
-
-      for (final key in transactionsToDelete) {
-        await transactionBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${transactionsToDelete.length} transactions from Hive');
-
-      // 4. Delete Groups (Binders)
-      final groupBox = Hive.box<EnvelopeGroup>('groups');
-      final groupsToDelete = groupBox.keys
-          .where((key) {
-            final group = groupBox.get(key);
-            return group != null && group.userId == userId;
-          })
-          .toList();
-
-      for (final key in groupsToDelete) {
-        await groupBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${groupsToDelete.length} groups from Hive');
-
-      // 5. Delete Scheduled Payments
-      final paymentBox = Hive.box<ScheduledPayment>('scheduledPayments');
-      final paymentsToDelete = paymentBox.keys
-          .where((key) {
-            final payment = paymentBox.get(key);
-            return payment != null && payment.userId == userId;
-          })
-          .toList();
-
-      for (final key in paymentsToDelete) {
-        await paymentBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${paymentsToDelete.length} scheduled payments from Hive');
-
-      // 6. Delete Pay Day Settings
-      final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
-      final payDayToDelete = payDayBox.keys
-          .where((key) {
-            final settings = payDayBox.get(key);
-            return settings != null && settings.userId == userId;
-          })
-          .toList();
-
-      for (final key in payDayToDelete) {
-        await payDayBox.delete(key);
-      }
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Deleted ${payDayToDelete.length} pay day settings from Hive');
+      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ All Hive data cleared');
 
       // ==========================================
       // DELETE FROM FIREBASE (USER PROFILE ONLY)

@@ -71,7 +71,6 @@ Future<String?> showEmojiPickerSheet({
             ),
             child: TextField(
               controller: controller,
-              autofocus: true,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 64),
               decoration: const InputDecoration(

@@ -12,6 +12,8 @@ enum TransactionType {
   withdrawal,
   @HiveField(2)
   transfer,
+  @HiveField(3)
+  scheduledPayment,
 }
 
 @HiveType(typeId: 104)

@@ -59,9 +59,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/icon/app_icon_stuffrite.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  adaptive_icon_foreground: "assets/icon/app_icon_stuffrite.png"
   remove_alpha_ios: true
 
 flutter:
@@ -69,6 +69,7 @@ flutter:
 
   # Assets Section
   assets:
-    - assets/icon/app_icon.png
+    - assets/icon/app_icon_stuffrite.png
     - assets/sounds/
-    - assets/logo/develapp_logo.png
+    - assets/logo/splash_screen_stuffrite.png
+    - assets/welcome/welcome_screen.png

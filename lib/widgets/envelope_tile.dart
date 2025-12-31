@@ -143,6 +143,17 @@ class _EnvelopeTileState extends State<EnvelopeTile>
           children: [
             Row(
               children: [
+                // Show checkbox in multi-select mode
+                if (widget.isMultiSelectMode) ...[
+                  Checkbox(
+                    value: widget.isSelected,
+                    onChanged: (_) => widget.onTap?.call(),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 SizedBox(
                   width: 44,
                   height: 44,
@@ -247,7 +258,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     if (widget.isMultiSelectMode) {
       return GestureDetector(
         onTap: widget.onTap,
-        onLongPress: widget.onLongPress,
+        // REMOVED: onLongPress in multi-select mode (only tap to toggle)
         child: tileContent,
       );
     }
@@ -268,7 +279,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
           widget.onTap?.call();
         }
       },
-      onLongPress: widget.onLongPress,
+      // REMOVED: onLongPress in normal mode (use FAB to enter selection mode)
       child: Stack(
         children: [
           Positioned.fill(
