@@ -438,74 +438,8 @@ class AccountRepo {
   }
 
   // ======================= ACCOUNT TRANSACTIONS =======================
-
-  /// Get or create a virtual "Available Balance" envelope for an account
-  /// This envelope holds account-level transactions (pay day deposits, auto-fill withdrawals)
-  Future<String> _getOrCreateAccountEnvelope(String accountId) async {
-    final virtualEnvelopeId = '_account_available_$accountId';
-
-    // Check if it already exists by getting all envelopes
-    final allEnvelopes = await _envelopeRepo.getAllEnvelopes();
-    final existing = allEnvelopes.where((e) => e.id == virtualEnvelopeId).firstOrNull;
-
-    if (existing != null) {
-      return virtualEnvelopeId;
-    }
-
-    // Create virtual envelope for account transactions
-    final account = await getAccount(accountId);
-    if (account == null) {
-      throw Exception('Account not found: $accountId');
-    }
-
-    // Create the envelope using the standard method
-    final createdId = await _envelopeRepo.createEnvelope(
-      name: '_Available Balance (${account.name})',
-      startingAmount: 0,
-      emoji: '💰',
-      linkedAccountId: accountId,
-    );
-
-    debugPrint('[AccountRepo] ✅ Created virtual account envelope: $createdId');
-    return createdId;
-  }
-
-  /// Record a pay day deposit to an account
-  Future<void> recordPayDayDeposit({
-    required String accountId,
-    required double amount,
-    DateTime? date,
-  }) async {
-    final envelopeId = await _getOrCreateAccountEnvelope(accountId);
-
-    await _envelopeRepo.deposit(
-      envelopeId: envelopeId,
-      amount: amount,
-      description: 'Pay Day',
-      date: date ?? DateTime.now(),
-    );
-
-    debugPrint('[AccountRepo] ✅ Recorded Pay Day deposit: \$$amount to account $accountId');
-  }
-
-  /// Record an auto-fill withdrawal from account
-  Future<void> recordAutoFillWithdrawal({
-    required String accountId,
-    required String targetName,
-    required double amount,
-    DateTime? date,
-  }) async {
-    final envelopeId = await _getOrCreateAccountEnvelope(accountId);
-
-    await _envelopeRepo.withdraw(
-      envelopeId: envelopeId,
-      amount: amount,
-      description: 'Auto-fill to $targetName',
-      date: date ?? DateTime.now(),
-    );
-
-    debugPrint('[AccountRepo] ✅ Recorded Auto-fill withdrawal: \$$amount from account $accountId to $targetName');
-  }
+  // Note: Account transactions are now tracked at the account level only.
+  // We removed the virtual envelope system that was creating phantom envelopes.
 
   // ======================= PRIVATE HELPERS =======================
 

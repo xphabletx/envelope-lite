@@ -237,8 +237,9 @@ class TimeMachineProvider extends ChangeNotifier {
           txType = TransactionType.scheduledPayment;
           // Don't add suffix - badge shows "PROJECTED" already
         } else if (event.type == 'auto_fill') {
-          // Auto-fill is a WITHDRAWAL from account (money leaving to go to envelopes)
-          txType = TransactionType.withdrawal;
+          // Auto-fill is a DEPOSIT to envelope from account (pay day auto-fill)
+          txType = TransactionType.deposit;
+          // Use the description from the event (already formatted as "Deposit from X - Pay Day")
           // Don't add suffix - badge shows "PROJECTED" already
         } else if (event.type == 'account_auto_fill') {
           // Account auto-fill is a TRANSFER between accounts

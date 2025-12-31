@@ -191,31 +191,14 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    StreamBuilder<List<Envelope>>(
-                      stream: widget.envelopeRepo.envelopesStream(),
-                      builder: (context, envSnapshot) {
-                        if (envSnapshot.connectionState == ConnectionState.waiting) {
+                    StreamBuilder<double>(
+                      stream: widget.accountRepo.assignedAmountStream(widget.account.id),
+                      builder: (context, assignedSnapshot) {
+                        if (assignedSnapshot.connectionState == ConnectionState.waiting) {
                           return const LinearProgressIndicator();
                         }
 
-                        final envelopes = envSnapshot.data ?? [];
-                        final linkedEnvelopes = envelopes
-                            .where((e) => e.linkedAccountId == widget.account.id)
-                            .toList();
-
-                        // Calculate assigned amount from projected envelopes if time machine is active
-                        double assigned = 0.0;
-                        if (timeMachine.isActive) {
-                          // Use projected envelope balances
-                          for (final env in linkedEnvelopes) {
-                            final projectedEnv = timeMachine.getProjectedEnvelope(env);
-                            assigned += projectedEnv.currentAmount;
-                          }
-                        } else {
-                          // Use real balances
-                          assigned = linkedEnvelopes.fold(0.0, (sum, env) => sum + env.currentAmount);
-                        }
-
+                        final assigned = assignedSnapshot.data ?? 0.0;
                         final available = displayAccount.currentBalance - assigned;
 
                         return Row(

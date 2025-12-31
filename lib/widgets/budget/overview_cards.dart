@@ -14,10 +14,8 @@ import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../../screens/stats_history_screen.dart';
-
-import '../../screens/accounts/account_list_screen.dart';
 import 'scheduled_payments_list_screen.dart';
-import 'auto_fill_list_screen.dart'; // NEW import
+import 'auto_fill_list_screen.dart';
 
 class BudgetOverviewCards extends StatefulWidget {
   const BudgetOverviewCards({
@@ -115,11 +113,13 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
         final historyEnd = historyRange.end;
 
         // Calculate future range for Scheduled Payments
+        // In time machine: show 30 days INTO THE FUTURE from target date
+        // Outside time machine: show next 30 days from now
         final futureStart = timeMachine.isActive && timeMachine.futureDate != null
-            ? timeMachine.futureDate!.subtract(const Duration(days: 30))
+            ? timeMachine.futureDate!
             : DateTime.now();
         final futureEnd = timeMachine.isActive && timeMachine.futureDate != null
-            ? timeMachine.futureDate!
+            ? timeMachine.futureDate!.add(const Duration(days: 30))
             : DateTime.now().add(const Duration(days: 30));
 
         return Column(
@@ -267,11 +267,12 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     return '${format.format(start)} - ${format.format(end)}';
   }
 
-  // 1. Total Balance -> Links to AccountListScreen
+  // 1. Total Balance -> Links to StatsHistoryScreen showing account-level transactions
   Widget _buildAccountsCard(List<Account> accounts) {
     final theme = Theme.of(context);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
 
     final totalBalance = accounts.fold(
       0.0,
@@ -280,16 +281,39 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
     return _OverviewCard(
       icon: Icons.account_balance_wallet,
-      title: 'Total Balance',
+      title: 'Total Accounts Balance',
       value: currency.format(totalBalance),
       subtitle: '${accounts.length} account${accounts.length != 1 ? 's' : ''}',
       color: theme.colorScheme.primary,
       onTap: () {
+        // Navigate to stats with entry → target date range
+        // Show account-level transactions: pay day deposits, auto-fills (withdrawals), and transfers
+        DateTime? initialStart;
+        DateTime? initialEnd;
+
+        if (timeMachine.isActive && timeMachine.entryDate != null && timeMachine.futureDate != null) {
+          initialStart = timeMachine.entryDate!;
+          initialEnd = timeMachine.futureDate!;
+        }
+
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                AccountListScreen(envelopeRepo: widget.envelopeRepo),
+            builder: (_) => StatsHistoryScreen(
+              repo: widget.envelopeRepo,
+              title: 'Accounts Balance & History',
+              initialStart: initialStart,
+              initialEnd: initialEnd,
+              // Filter to show account-level transactions only:
+              // - Deposits with no envelope (pay day to account)
+              // - Withdrawals with no envelope (auto-fills from account)
+              // - Transfers (account-to-account)
+              filterTransactionTypes: {
+                TransactionType.deposit,
+                TransactionType.withdrawal,
+                TransactionType.transfer,
+              },
+            ),
           ),
         );
       },
@@ -307,7 +331,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
     return _OverviewCard(
       icon: Icons.arrow_downward,
-      title: 'Income',
+      title: 'Total Envelope Income',
       value: currency.format(income),
       subtitle: 'In selected history range',
       color: Colors.green,
@@ -322,7 +346,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
           MaterialPageRoute(
             builder: (_) => StatsHistoryScreen(
               repo: widget.envelopeRepo,
-              title: 'Income & History',
+              title: 'Envelope Income & History',
               // Don't pass explicit dates - let screen use entry → target date in time machine
               filterTransactionTypes: {TransactionType.deposit},
             ),
@@ -344,7 +368,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
     return _OverviewCard(
       icon: Icons.arrow_upward,
-      title: 'Spending',
+      title: 'Total Envelope Spending',
       value: currency.format(spending),
       subtitle: 'In selected history range',
       color: Colors.red,
@@ -354,7 +378,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
           MaterialPageRoute(
             builder: (_) => StatsHistoryScreen(
               repo: widget.envelopeRepo,
-              title: 'Spending & History',
+              title: 'Envelope Spending & History',
               // Don't pass explicit dates - let screen use entry → target date in time machine
               filterTransactionTypes: {TransactionType.withdrawal, TransactionType.scheduledPayment},
             ),

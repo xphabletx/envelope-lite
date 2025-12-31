@@ -14,7 +14,6 @@ import '../../widgets/tutorial_wrapper.dart';
 import '../../widgets/time_machine_indicator.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
-import '../../providers/time_machine_provider.dart';
 
 class AccountListScreen extends StatefulWidget {
   const AccountListScreen({super.key, required this.envelopeRepo});

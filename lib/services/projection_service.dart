@@ -202,6 +202,9 @@ class ProjectionService {
     events.sort((a, b) => a.date.compareTo(b.date));
     print('Total events to process: ${events.length}');
 
+    // Collect auto-fill events separately to avoid concurrent modification
+    final autoFillEvents = <ProjectionEvent>[];
+
     for (final event in events) {
       print('\n[${event.date}] Processing: ${event.type} - ${event.description} £${event.amount.toStringAsFixed(2)}');
 
@@ -242,6 +245,25 @@ class ProjectionService {
           final oldEnvBalance = envelopeBalances[envelope.id] ?? 0;
           envelopeBalances[envelope.id] = oldEnvBalance + autoFillAmount;
           print('    Envelope "${envelope.name}": ${oldEnvBalance.toStringAsFixed(2)} + ${autoFillAmount.toStringAsFixed(2)} = ${envelopeBalances[envelope.id]!.toStringAsFixed(2)}');
+
+          // Create auto_fill event for envelope transaction history (deposit to envelope)
+          final sourceAccountName = accounts
+              .where((a) => a.id == sourceAccountId)
+              .map((a) => a.name)
+              .firstOrNull ?? 'Main';
+          autoFillEvents.add(
+            ProjectionEvent(
+              date: event.date,
+              type: 'auto_fill',
+              description: 'Deposit from $sourceAccountName - Pay Day',
+              amount: autoFillAmount,
+              isCredit: true, // Credit to envelope
+              envelopeId: envelope.id,
+              envelopeName: envelope.name,
+              accountId: sourceAccountId,
+              accountName: sourceAccountName,
+            ),
+          );
 
           // Deduct from account
           if (sourceAccountId != null && targetAccountId != null) {
@@ -320,6 +342,10 @@ class ProjectionService {
         }
       }
     }
+
+    // Add auto-fill events to timeline for transaction history visibility
+    print('\n--- Adding ${autoFillEvents.length} auto-fill events to timeline ---');
+    events.addAll(autoFillEvents);
 
     // --- 4. BUILD RESULTS ---
     print('\n--- 4. BUILDING FINAL RESULTS ---');

@@ -467,10 +467,24 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                   // Filter transactions
                   final shownTxs = txs.where((t) {
-                    // Include transactions that belong to chosen envelopes
-                    // OR transactions with no envelopeId (e.g., pay day deposits)
-                    final inChosen = chosenIds.contains(t.envelopeId) ||
-                                     (t.envelopeId.isEmpty && t.type == TransactionType.deposit);
+                    // Determine if this is an account-level view (deposits + withdrawals + transfers filter indicates accounts)
+                    final isAccountView = widget.filterTransactionTypes != null &&
+                        widget.filterTransactionTypes!.contains(TransactionType.deposit) &&
+                        widget.filterTransactionTypes!.contains(TransactionType.withdrawal) &&
+                        widget.filterTransactionTypes!.contains(TransactionType.transfer) &&
+                        widget.filterTransactionTypes!.length == 3;
+
+                    bool inChosen;
+                    if (isAccountView) {
+                      // For account view: show transactions with no envelopeId (account-level transactions)
+                      inChosen = t.envelopeId.isEmpty;
+                    } else {
+                      // For envelope view: show transactions that belong to chosen envelopes
+                      // OR transactions with no envelopeId but are deposits (pay day to envelopes)
+                      inChosen = chosenIds.contains(t.envelopeId) ||
+                                       (t.envelopeId.isEmpty && t.type == TransactionType.deposit);
+                    }
+
                     final inRange =
                         !t.date.isBefore(start) && t.date.isBefore(end);
                     final typeMatch =
@@ -1381,7 +1395,7 @@ class _TransactionTile extends StatelessWidget {
 
     // Build title
     String title;
-    String? subtitle = t.description.isNotEmpty ? t.description : null;
+    String? subtitle;
 
     if (isTransfer) {
       final sourceOwner = userNames['source'] ?? 'Unknown';
@@ -1389,15 +1403,29 @@ class _TransactionTile extends StatelessWidget {
       final sourceName = t.sourceEnvelopeName ?? 'Unknown';
       final targetName = t.targetEnvelopeName ?? 'Unknown';
       title = '$sourceOwner: $sourceName → $targetOwner: $targetName';
+      subtitle = t.description.isNotEmpty ? t.description : null;
     } else {
       final ownerName = userNames['owner'] ?? '';
       final prefix = isMyEnvelope ? '' : '$ownerName: ';
-      if (t.type == TransactionType.deposit) {
+
+      // For account-level transactions (no envelopeId), use description as title
+      if (t.envelopeId.isEmpty && t.description.isNotEmpty) {
+        title = t.description;
+        subtitle = null;
+      }
+      // For projected transactions with descriptions, use the description as title
+      else if (t.isFuture && t.description.isNotEmpty && t.description.contains('Deposit from')) {
+        title = t.description;
+        subtitle = null; // No subtitle for projected auto-fill deposits
+      } else if (t.type == TransactionType.deposit) {
         title = '${prefix}Deposit to $envName';
+        subtitle = t.description.isNotEmpty ? t.description : null;
       } else if (t.type == TransactionType.scheduledPayment) {
         title = '${prefix}Scheduled Payment from $envName';
+        subtitle = t.description.isNotEmpty ? t.description : null;
       } else {
         title = '${prefix}Withdrawal from $envName';
+        subtitle = t.description.isNotEmpty ? t.description : null;
       }
     }
 

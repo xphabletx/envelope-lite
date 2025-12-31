@@ -82,16 +82,9 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
     debugPrint('[PayDay] Account Auto-Fill: $totalAccountAutoFill');
     debugPrint('[PayDay] ═══════════════════════════════════════');
 
-    // 0. Record Pay Day deposit to default account
-    try {
-      await widget.accountRepo.recordPayDayDeposit(
-        accountId: widget.accountId,
-        amount: widget.totalAmount,
-      );
-      debugPrint('[PayDay] ✅ Recorded Pay Day deposit: ${widget.totalAmount}');
-    } catch (e) {
-      debugPrint('[PayDay] ⚠️ Error recording Pay Day deposit: $e');
-    }
+    // 0. Pay Day deposit to default account
+    // Note: Account balance is updated at the end (step 3), no need to record separately
+    debugPrint('[PayDay] 💰 Pay Day deposit: ${widget.totalAmount} (will update account balance after auto-fills)');
 
     // 1. Stuff envelopes
     for (int i = 0; i < widget.envelopes.length; i++) {
@@ -119,13 +112,6 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
           amount: amount,
           description: 'Auto-fill to ${env.name}',
           date: DateTime.now(),
-        );
-
-        // Record withdrawal from default account
-        await widget.accountRepo.recordAutoFillWithdrawal(
-          accountId: widget.accountId,
-          targetName: env.name,
-          amount: amount,
         );
 
         debugPrint('[PayDay] ✅ Auto-filled envelope: ${env.name} = $amount');
@@ -160,20 +146,7 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       }
 
       try {
-        // Record Pay Day deposit to target account
-        await widget.accountRepo.recordPayDayDeposit(
-          accountId: targetAccount.id,
-          amount: amount,
-        );
-
-        // Record Auto-fill withdrawal from default account
-        await widget.accountRepo.recordAutoFillWithdrawal(
-          accountId: widget.accountId,
-          targetName: targetAccount.name,
-          amount: amount,
-        );
-
-        // Update target account balance
+        // Update target account balance (transfer from default account)
         await widget.accountRepo.adjustBalance(
           accountId: targetAccount.id,
           amount: amount,
