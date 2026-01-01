@@ -81,18 +81,20 @@ class ProjectionService {
 
       // Create pay_day event (income arrives in account)
       // Auto-fill to envelopes and accounts is handled during pay_day event processing
+      final defaultAccountName = accounts
+          .where((a) => a.id == defaultAccountId)
+          .map((a) => a.name)
+          .firstOrNull ?? 'Main';
+
       events.add(
         ProjectionEvent(
           date: date,
           type: 'pay_day',
-          description: 'Pay Day',
+          description: 'PAY DAY!',
           amount: payAmount,
           isCredit: true,
           accountId: defaultAccountId,
-          accountName: accounts
-              .where((a) => a.id == defaultAccountId)
-              .map((a) => a.name)
-              .firstOrNull ?? 'Main',
+          accountName: defaultAccountName,
         ),
       );
 
@@ -104,22 +106,33 @@ class ProjectionService {
         final accountAutoFillAmount = account.payDayAutoFillAmount ?? 0;
         if (accountAutoFillAmount <= 0) continue;
 
+        // Deposit to target account
         events.add(
           ProjectionEvent(
             date: date,
             type: 'account_auto_fill',
-            description: 'Auto-fill to ${account.name}',
+            description: 'Auto-fill deposit from $defaultAccountName',
             amount: accountAutoFillAmount,
-            isCredit: false, // Withdrawal from source account
-            accountId: defaultAccountId,
-            accountName: accounts
-                .where((a) => a.id == defaultAccountId)
-                .map((a) => a.name)
-                .firstOrNull ?? 'Main',
-            // Store target account info in description for visibility
+            isCredit: true, // Credit to target account receiving the funds
+            accountId: account.id, // Target account receiving the funds
+            accountName: account.name,
           ),
         );
-        print('    Account auto-fill event: ${account.name} - £${accountAutoFillAmount.toStringAsFixed(2)}');
+
+        // Withdrawal from default account
+        events.add(
+          ProjectionEvent(
+            date: date,
+            type: 'account_auto_fill_withdrawal',
+            description: '${account.name} - Withdrawal auto-fill',
+            amount: accountAutoFillAmount,
+            isCredit: false, // Debit from default account
+            accountId: defaultAccountId, // Default account being debited
+            accountName: defaultAccountName,
+          ),
+        );
+
+        print('    Account auto-fill events: ${account.name} - £${accountAutoFillAmount.toStringAsFixed(2)} (deposit + withdrawal)');
       }
     }
 
@@ -251,15 +264,31 @@ class ProjectionService {
               .where((a) => a.id == sourceAccountId)
               .map((a) => a.name)
               .firstOrNull ?? 'Main';
+
+          // Deposit to envelope
           autoFillEvents.add(
             ProjectionEvent(
               date: event.date,
               type: 'auto_fill',
-              description: 'Deposit from $sourceAccountName - Pay Day',
+              description: 'Auto-fill deposit from $sourceAccountName',
               amount: autoFillAmount,
               isCredit: true, // Credit to envelope
               envelopeId: envelope.id,
               envelopeName: envelope.name,
+              accountId: sourceAccountId,
+              accountName: sourceAccountName,
+            ),
+          );
+
+          // Withdrawal from account (for account transaction history)
+          autoFillEvents.add(
+            ProjectionEvent(
+              date: event.date,
+              type: 'envelope_auto_fill_withdrawal',
+              description: '${envelope.name} - Withdrawal auto-fill',
+              amount: autoFillAmount,
+              isCredit: false, // Debit from account
+              envelopeId: '', // Account-level transaction (no envelope)
               accountId: sourceAccountId,
               accountName: sourceAccountName,
             ),

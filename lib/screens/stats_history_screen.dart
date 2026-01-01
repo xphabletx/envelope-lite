@@ -9,14 +9,16 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
 import '../models/analytics_data.dart';
+import '../models/account.dart';
 import '../services/envelope_repo.dart';
+import '../services/account_repo.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../widgets/time_machine_indicator.dart';
 import '../widgets/analytics/analytics_section.dart';
 
-enum StatsViewMode { combined, envelopes, groups }
+enum StatsFilterType { envelopes, groups, accounts }
 
 class StatsHistoryScreen extends StatefulWidget {
   const StatsHistoryScreen({
@@ -47,7 +49,7 @@ class StatsHistoryScreen extends StatefulWidget {
 class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
   late NumberFormat currency;
   final selectedIds = <String>{};
-  StatsViewMode _viewMode = StatsViewMode.combined;
+  final activeFilters = <StatsFilterType>{}; // Track which filters are active
   late bool myOnly;
   late DateTime start;
   late DateTime end;
@@ -156,8 +158,13 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
       final hasDeposits = widget.filterTransactionTypes!.contains(TransactionType.deposit);
       final hasWithdrawals = widget.filterTransactionTypes!.contains(TransactionType.withdrawal);
       final hasScheduledPayments = widget.filterTransactionTypes!.contains(TransactionType.scheduledPayment);
+      final hasTransfers = widget.filterTransactionTypes!.contains(TransactionType.transfer);
 
-      // If filtering for deposits/income, show Cash In
+      // If filtering for account-level transactions (deposits, withdrawals, and transfers), show Net
+      if (hasDeposits && hasWithdrawals && hasTransfers && !hasScheduledPayments) {
+        return AnalyticsFilter.net;
+      }
+      // If filtering for deposits/income only, show Cash In
       if (hasDeposits && !hasWithdrawals && !hasScheduledPayments) {
         return AnalyticsFilter.cashIn;
       }
@@ -385,12 +392,20 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
             builder: (_, sGrp) {
               final groups = sGrp.data ?? const <EnvelopeGroup>[];
 
-              return Consumer<TimeMachineProvider>(
-                builder: (context, timeMachine, _) {
-                  return StreamBuilder<List<Transaction>>(
-                    stream: widget.repo.transactionsStream,
-                    builder: (_, sTx) {
-                      var txs = sTx.data ?? const <Transaction>[];
+              // Get AccountRepo from context
+              final accountRepo = AccountRepo(widget.repo);
+
+              return StreamBuilder<List<Account>>(
+                stream: accountRepo.accountsStream(),
+                builder: (_, sAcc) {
+                  final accounts = sAcc.data ?? const <Account>[];
+
+                  return Consumer<TimeMachineProvider>(
+                    builder: (context, timeMachine, _) {
+                      return StreamBuilder<List<Transaction>>(
+                        stream: widget.repo.transactionsStream,
+                        builder: (_, sTx) {
+                          var txs = sTx.data ?? const <Transaction>[];
 
                       // If time machine is active, merge with projected transactions
                       if (timeMachine.isActive) {
@@ -408,14 +423,33 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         debugPrint('[TimeMachine::StatsHistoryScreen]   Merged total: ${txs.length}');
                       }
 
-                  // Auto-select all if no explicit selection
+                  // Auto-select all and set default filters if no explicit selection
                   if (!_didApplyExplicitInitialSelection &&
                       selectedIds.isEmpty &&
-                      (envelopes.isNotEmpty || groups.isNotEmpty)) {
+                      (envelopes.isNotEmpty || groups.isNotEmpty || accounts.isNotEmpty)) {
                     selectedIds
                       ..clear()
                       ..addAll(envelopes.map((e) => e.id))
-                      ..addAll(groups.map((g) => g.id));
+                      ..addAll(groups.map((g) => g.id))
+                      ..addAll(accounts.map((a) => a.id));
+
+                    // Determine default active filters based on filterTransactionTypes
+                    activeFilters.clear();
+
+                    // Check if this is an account-level view
+                    final isAccountView = widget.filterTransactionTypes != null &&
+                        widget.filterTransactionTypes!.contains(TransactionType.deposit) &&
+                        widget.filterTransactionTypes!.contains(TransactionType.withdrawal) &&
+                        widget.filterTransactionTypes!.contains(TransactionType.transfer);
+
+                    if (isAccountView) {
+                      // Account view: activate accounts filter only
+                      activeFilters.add(StatsFilterType.accounts);
+                    } else {
+                      // Default: activate envelopes and groups
+                      activeFilters.add(StatsFilterType.envelopes);
+                      activeFilters.add(StatsFilterType.groups);
+                    }
                   }
 
                   final filteredEnvelopes = myOnly
@@ -430,59 +464,61 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                             .toList()
                       : groups;
 
+                  final filteredAccounts = accounts; // Accounts are always local-only
+
                   final selectedGroupIds = selectedIds
                       .where((id) => groups.any((g) => g.id == id))
                       .toSet();
                   final selectedEnvelopeIds = selectedIds
                       .where((id) => envelopes.any((e) => e.id == id))
                       .toSet();
+                  // selectedAccountIds not needed since account filtering is based on empty envelopeId
 
-                  // Calculate chosen envelopes based on view mode
-                  List<Envelope> chosen;
-                  if (_viewMode == StatsViewMode.envelopes) {
-                    chosen = filteredEnvelopes
-                        .where((e) => selectedEnvelopeIds.contains(e.id))
-                        .toList();
-                  } else if (_viewMode == StatsViewMode.groups) {
-                    chosen = filteredEnvelopes
-                        .where(
-                          (e) =>
-                              e.groupId != null &&
-                              selectedGroupIds.contains(e.groupId),
-                        )
-                        .toList();
-                  } else {
-                    chosen = filteredEnvelopes
-                        .where(
-                          (e) =>
-                              selectedEnvelopeIds.contains(e.id) ||
-                              (e.groupId != null &&
-                                  selectedGroupIds.contains(e.groupId)),
-                        )
-                        .toList();
+                  // Calculate chosen envelopes based on active filters
+                  List<Envelope> chosen = [];
+
+                  if (activeFilters.contains(StatsFilterType.envelopes)) {
+                    chosen.addAll(
+                      filteredEnvelopes.where((e) => selectedEnvelopeIds.contains(e.id))
+                    );
                   }
+
+                  if (activeFilters.contains(StatsFilterType.groups)) {
+                    chosen.addAll(
+                      filteredEnvelopes.where(
+                        (e) => e.groupId != null && selectedGroupIds.contains(e.groupId)
+                      )
+                    );
+                  }
+
+                  // Remove duplicates if any envelope is in both selected directly and via group
+                  chosen = chosen.toSet().toList();
 
                   final envMap = {for (final e in envelopes) e.id: e.name};
                   final chosenIds = chosen.map((e) => e.id).toSet();
 
-                  // Filter transactions
+                  // Filter transactions based on active filters
                   final shownTxs = txs.where((t) {
-                    // Determine if this is an account-level view (deposits + withdrawals + transfers filter indicates accounts)
-                    final isAccountView = widget.filterTransactionTypes != null &&
-                        widget.filterTransactionTypes!.contains(TransactionType.deposit) &&
-                        widget.filterTransactionTypes!.contains(TransactionType.withdrawal) &&
-                        widget.filterTransactionTypes!.contains(TransactionType.transfer) &&
-                        widget.filterTransactionTypes!.length == 3;
+                    bool inChosen = false;
 
-                    bool inChosen;
-                    if (isAccountView) {
-                      // For account view: show transactions with no envelopeId (account-level transactions)
-                      inChosen = t.envelopeId.isEmpty;
-                    } else {
-                      // For envelope view: show transactions that belong to chosen envelopes
-                      // OR transactions with no envelopeId but are deposits (pay day to envelopes)
-                      inChosen = chosenIds.contains(t.envelopeId) ||
-                                       (t.envelopeId.isEmpty && t.type == TransactionType.deposit);
+                    // Check if transaction should be included based on active filters
+                    if (activeFilters.contains(StatsFilterType.accounts)) {
+                      // For account view: show account-level transactions (no envelopeId)
+                      // This includes:
+                      // - Pay day deposits (from Time Machine projections)
+                      // - Account auto-fill transfers (from Time Machine projections)
+                      // - Real account-level transactions with no envelopeId
+                      if (t.envelopeId.isEmpty) {
+                        inChosen = true;
+                      }
+                    }
+
+                    if (activeFilters.contains(StatsFilterType.envelopes) ||
+                        activeFilters.contains(StatsFilterType.groups)) {
+                      // For envelope/group view: show transactions from chosen envelopes
+                      if (chosenIds.contains(t.envelopeId)) {
+                        inChosen = true;
+                      }
                     }
 
                     final inRange =
@@ -582,6 +618,9 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                   final grpSelectedCount = filteredGroups
                       .where((g) => selectedIds.contains(g.id))
                       .length;
+                  final accSelectedCount = filteredAccounts
+                      .where((a) => selectedIds.contains(a.id))
+                      .length;
 
                   return CustomScrollView(
                     slivers: [
@@ -593,54 +632,88 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                             start: start,
                             end: end,
                             myOnly: myOnly,
+                            inWorkspace: widget.repo.inWorkspace,
                             onDateTap: _pickRange,
                             onToggleMyOnly: (v) => setState(() => myOnly = v),
                           ),
                         ),
                       ),
 
-                      // Filter Buttons
+                      // Filter Toggle Buttons
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Expanded(
-                                child: _FilterButton(
-                                  icon: Icons.mail_outline,
-                                  label: 'Envelopes',
-                                  count: envSelectedCount,
-                                  onPressed: () =>
-                                      _showSelectionSheet<Envelope>(
-                                        title: 'Select Envelopes',
-                                        items: filteredEnvelopes,
-                                        getId: (e) => e.id,
-                                        getLabel: (e) async {
-                                          final isMyEnvelope =
-                                              e.userId ==
-                                              widget.repo.currentUserId;
-                                          final owner = await widget.repo
-                                              .getUserDisplayName(e.userId);
-                                          return isMyEnvelope
-                                              ? e.name
-                                              : '$owner - ${e.name}';
-                                        },
-                                      ),
+                              _ToggleFilterButton(
+                                icon: Icons.mail_outline,
+                                count: envSelectedCount,
+                                isActive: activeFilters.contains(StatsFilterType.envelopes),
+                                onTap: () {
+                                  setState(() {
+                                    if (activeFilters.contains(StatsFilterType.envelopes)) {
+                                      activeFilters.remove(StatsFilterType.envelopes);
+                                    } else {
+                                      activeFilters.add(StatsFilterType.envelopes);
+                                    }
+                                  });
+                                },
+                                onLongPress: () => _showSelectionSheet<Envelope>(
+                                  title: 'Select Envelopes',
+                                  items: filteredEnvelopes,
+                                  getId: (e) => e.id,
+                                  getLabel: (e) async {
+                                    final isMyEnvelope =
+                                        e.userId == widget.repo.currentUserId;
+                                    final owner = await widget.repo
+                                        .getUserDisplayName(e.userId);
+                                    return isMyEnvelope
+                                        ? e.name
+                                        : '$owner - ${e.name}';
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(
-                                child: _FilterButton(
-                                  icon: Icons.folder_open,
-                                  label: 'Binders',
-                                  count: grpSelectedCount,
-                                  onPressed: () =>
-                                      _showSelectionSheet<EnvelopeGroup>(
-                                        title: 'Select Binders',
-                                        items: filteredGroups,
-                                        getId: (g) => g.id,
-                                        getLabel: (g) async => g.name,
-                                      ),
+                              _ToggleFilterButton(
+                                icon: Icons.folder_open,
+                                count: grpSelectedCount,
+                                isActive: activeFilters.contains(StatsFilterType.groups),
+                                onTap: () {
+                                  setState(() {
+                                    if (activeFilters.contains(StatsFilterType.groups)) {
+                                      activeFilters.remove(StatsFilterType.groups);
+                                    } else {
+                                      activeFilters.add(StatsFilterType.groups);
+                                    }
+                                  });
+                                },
+                                onLongPress: () => _showSelectionSheet<EnvelopeGroup>(
+                                  title: 'Select Binders',
+                                  items: filteredGroups,
+                                  getId: (g) => g.id,
+                                  getLabel: (g) async => g.name,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              _ToggleFilterButton(
+                                icon: Icons.account_balance_wallet,
+                                count: accSelectedCount,
+                                isActive: activeFilters.contains(StatsFilterType.accounts),
+                                onTap: () {
+                                  setState(() {
+                                    if (activeFilters.contains(StatsFilterType.accounts)) {
+                                      activeFilters.remove(StatsFilterType.accounts);
+                                    } else {
+                                      activeFilters.add(StatsFilterType.accounts);
+                                    }
+                                  });
+                                },
+                                onLongPress: () => _showSelectionSheet<Account>(
+                                  title: 'Select Accounts',
+                                  items: filteredAccounts,
+                                  getId: (a) => a.id,
+                                  getLabel: (a) async => a.name,
                                 ),
                               ),
                             ],
@@ -648,30 +721,33 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         ),
                       ),
 
-                      // View Mode Chips
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Wrap(
-                            spacing: 8,
-                            children: [
-                              _viewModeChip(StatsViewMode.combined, 'Combined'),
-                              _viewModeChip(
-                                StatsViewMode.envelopes,
-                                'Envelopes',
-                              ),
-                              _viewModeChip(StatsViewMode.groups, 'Binders'),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                      const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
                       // Analytics Section
                       SliverToBoxAdapter(
                         child: AnalyticsSection(
-                          transactions: shownTxs,
+                          // Pass transactions filtered by envelope/group/account and date range
+                          // but NOT by transaction type - this allows switching between Cash In/Out/Net
+                          transactions: txs.where((t) {
+                            bool inChosen = false;
+
+                            // Check if transaction should be included based on active filters
+                            if (activeFilters.contains(StatsFilterType.accounts)) {
+                              if (t.envelopeId.isEmpty) {
+                                inChosen = true;
+                              }
+                            }
+
+                            if (activeFilters.contains(StatsFilterType.envelopes) ||
+                                activeFilters.contains(StatsFilterType.groups)) {
+                              if (chosenIds.contains(t.envelopeId)) {
+                                inChosen = true;
+                              }
+                            }
+
+                            final inRange = !t.date.isBefore(start) && t.date.isBefore(end);
+                            return inChosen && inRange;
+                          }).toList(),
                           envelopes: envelopes,
                           groups: groups,
                           dateRange: DateTimeRange(start: start, end: end),
@@ -703,7 +779,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: _SummaryCard(
-                            viewMode: _viewMode,
+                            activeFilters: activeFilters,
                             count: chosen.length,
                             totalTarget: totalTarget,
                             totalSaved: totalSaved,
@@ -823,6 +899,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                     transaction: t,
                                     envMap: envMap,
                                     envelopes: envelopes,
+                                    accounts: accounts,
                                     userNames: userNames,
                                     currentUserId: widget.repo.currentUserId,
                                   );
@@ -833,6 +910,8 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         ),
                     ],
                   );
+                        },
+                      );
                     },
                   );
                 },
@@ -844,34 +923,6 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _viewModeChip(StatsViewMode mode, String label) {
-    final isSelected = _viewMode == mode;
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (v) {
-        if (v) setState(() => _viewMode = mode);
-      },
-      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-      selectedColor: theme.colorScheme.secondary,
-      labelStyle: fontProvider.getTextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-      ),
-      side: BorderSide(
-        color: isSelected
-            ? theme.colorScheme.secondary
-            : theme.colorScheme.outline,
-        width: 2,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }
 
@@ -972,6 +1023,7 @@ class _DateRangeCard extends StatelessWidget {
     required this.start,
     required this.end,
     required this.myOnly,
+    required this.inWorkspace,
     required this.onDateTap,
     required this.onToggleMyOnly,
   });
@@ -979,6 +1031,7 @@ class _DateRangeCard extends StatelessWidget {
   final DateTime start;
   final DateTime end;
   final bool myOnly;
+  final bool inWorkspace;
   final VoidCallback onDateTap;
   final ValueChanged<bool> onToggleMyOnly;
 
@@ -1041,23 +1094,25 @@ class _DateRangeCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Mine only',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              // Only show "Mine only" toggle when in workspace mode
+              if (inWorkspace)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Mine only',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
                     ),
-                  ),
-                  Switch(
-                    value: myOnly,
-                    activeTrackColor: theme.colorScheme.secondary,
-                    onChanged: onToggleMyOnly,
-                  ),
-                ],
-              ),
+                    Switch(
+                      value: myOnly,
+                      activeTrackColor: theme.colorScheme.secondary,
+                      onChanged: onToggleMyOnly,
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -1066,47 +1121,62 @@ class _DateRangeCard extends StatelessWidget {
   }
 }
 
-class _FilterButton extends StatelessWidget {
-  const _FilterButton({
+class _ToggleFilterButton extends StatelessWidget {
+  const _ToggleFilterButton({
     required this.icon,
-    required this.label,
     required this.count,
-    required this.onPressed,
+    required this.isActive,
+    required this.onTap,
+    required this.onLongPress,
   });
 
   final IconData icon;
-  final String label;
   final int count;
-  final VoidCallback onPressed;
+  final bool isActive;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        side: BorderSide(color: theme.colorScheme.outline, width: 2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              '$label ($count)',
-              style: fontProvider.getTextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive
+              ? theme.colorScheme.primary.withValues(alpha: 0.2)
+              : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline.withValues(alpha: 0.3),
+            width: 2,
           ),
-        ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 22,
+              color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '($count)',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1114,28 +1184,28 @@ class _FilterButton extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
-    required this.viewMode,
+    required this.activeFilters,
     required this.count,
     required this.totalTarget,
     required this.totalSaved,
     required this.progress,
   });
 
-  final StatsViewMode viewMode;
+  final Set<StatsFilterType> activeFilters;
   final int count;
   final double totalTarget;
   final double totalSaved;
   final double progress;
 
   String get _title {
-    switch (viewMode) {
-      case StatsViewMode.combined:
-        return 'Combined Summary';
-      case StatsViewMode.envelopes:
-        return 'Envelopes Only';
-      case StatsViewMode.groups:
-        return 'Binders Only';
-    }
+    final filters = <String>[];
+    if (activeFilters.contains(StatsFilterType.envelopes)) filters.add('Envelopes');
+    if (activeFilters.contains(StatsFilterType.groups)) filters.add('Binders');
+    if (activeFilters.contains(StatsFilterType.accounts)) filters.add('Accounts');
+
+    if (filters.isEmpty) return 'No Filters Selected';
+    if (filters.length == 1) return '${filters[0]} Summary';
+    return '${filters.join(' + ')} Summary';
   }
 
   @override
@@ -1364,6 +1434,7 @@ class _TransactionTile extends StatelessWidget {
     required this.transaction,
     required this.envMap,
     required this.envelopes,
+    required this.accounts,
     required this.userNames,
     required this.currentUserId,
   });
@@ -1371,6 +1442,7 @@ class _TransactionTile extends StatelessWidget {
   final Transaction transaction;
   final Map<String, String> envMap;
   final List<Envelope> envelopes;
+  final List<Account> accounts;
   final Map<String, String> userNames;
   final String currentUserId;
 
@@ -1382,73 +1454,145 @@ class _TransactionTile extends StatelessWidget {
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final t = transaction;
-    final envName = envMap[t.envelopeId] ?? 'Unknown';
-    final isTransfer = t.type == TransactionType.transfer;
-    final isMyEnvelope =
-        envelopes
-            .firstWhere(
-              (e) => e.id == t.envelopeId,
-              orElse: () => Envelope(id: '', name: '', userId: ''),
-            )
-            .userId ==
-        currentUserId;
 
-    // Build title
+    // Find related envelope if exists
+    final envelope = envelopes.firstWhere(
+      (e) => e.id == t.envelopeId,
+      orElse: () => Envelope(id: '', name: '', userId: ''),
+    );
+
+    // Determine display properties based on transaction type
     String title;
-    String? subtitle;
+    Widget leadingIcon;
+    Color color;
+    String amountStr;
 
-    if (isTransfer) {
+    // Transaction type 1: Envelope Auto-Fill Deposits (from linked account)
+    if (t.type == TransactionType.deposit && t.description.contains('Auto-fill deposit from')) {
+      // Extract account name from description
+      final match = RegExp(r'Auto-fill deposit from (.+)').firstMatch(t.description);
+      final accountName = match?.group(1) ?? 'Unknown Account';
+
+      title = '${envelope.name} - Auto-fill deposit from $accountName';
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+      color = Colors.green.shade700;
+      amountStr = '+${currency.format(t.amount)}';
+    }
+    // Transaction type 2: Scheduled Payments (from envelopes)
+    else if (t.type == TransactionType.scheduledPayment) {
+      title = '${envelope.name} - Scheduled payment';
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+      color = Colors.purple.shade700;
+      amountStr = '-${currency.format(t.amount)}';
+    }
+    // Transaction type 3: Pay Day (income to default account)
+    else if (t.type == TransactionType.deposit && t.envelopeId.isEmpty && t.description == 'PAY DAY!') {
+      // Find default account
+      final defaultAccount = accounts.firstWhere(
+        (a) => a.isDefault,
+        orElse: () => accounts.isNotEmpty ? accounts.first : Account(
+          id: '', name: 'Main', currentBalance: 0, userId: '',
+          createdAt: DateTime.now(), lastUpdated: DateTime.now()
+        ),
+      );
+
+      title = '${defaultAccount.name} - PAY DAY!';
+      leadingIcon = defaultAccount.getIconWidget(theme, size: 24);
+      color = Colors.green.shade700;
+      amountStr = '+${currency.format(t.amount)}';
+    }
+    // Transaction type 4: Account Auto-Fill (other accounts/credit cards receiving from default)
+    else if (t.type == TransactionType.deposit && t.description.contains('Auto-fill deposit from')) {
+      // This is for account-level transactions (no envelope)
+      final match = RegExp(r'Auto-fill deposit from (.+)').firstMatch(t.description);
+      final sourceAccountName = match?.group(1) ?? 'Unknown Account';
+
+      // The transaction's accountId should be set, but we need to find the target account
+      // For account-level transactions, we need to infer from context
+      // This is a deposit, so find the non-default account that matches
+      final targetAccount = accounts.firstWhere(
+        (a) => !a.isDefault,
+        orElse: () => Account(
+          id: '', name: 'Other Account', currentBalance: 0, userId: '',
+          createdAt: DateTime.now(), lastUpdated: DateTime.now()
+        ),
+      );
+
+      title = '${targetAccount.name} - Auto-fill deposit from $sourceAccountName';
+      leadingIcon = targetAccount.getIconWidget(theme, size: 24);
+      color = Colors.green.shade700;
+      amountStr = '+${currency.format(t.amount)}';
+    }
+    // Transaction type 5: When viewing Default Account History (money leaving to envelopes)
+    else if (t.type == TransactionType.withdrawal && t.description.contains('Withdrawal auto-fill') && !t.description.contains(' - ')) {
+      // Old format without " - " separator, generic withdrawal
+      title = t.description;
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+      color = Colors.red.shade700;
+      amountStr = '-${currency.format(t.amount)}';
+    }
+    // Transaction type 5 & 6: Withdrawal auto-fill (to envelope or account)
+    else if (t.type == TransactionType.withdrawal && t.description.contains(' - Withdrawal auto-fill')) {
+      // Extract entity name from description "[Entity Name] - Withdrawal auto-fill"
+      final entityName = t.description.replaceAll(' - Withdrawal auto-fill', '');
+
+      // Try to find envelope first
+      final env = envelopes.firstWhere(
+        (e) => e.name == entityName,
+        orElse: () => Envelope(id: '', name: '', userId: ''),
+      );
+
+      if (env.id.isNotEmpty) {
+        // Transaction type 5: Money leaving to envelope
+        title = '$entityName - Withdrawal auto-fill';
+        leadingIcon = env.getIconWidget(theme, size: 24);
+      } else {
+        // Transaction type 6: Money leaving to another account
+        final account = accounts.firstWhere(
+          (a) => a.name == entityName,
+          orElse: () => Account(
+            id: '', name: entityName, currentBalance: 0, userId: '',
+            createdAt: DateTime.now(), lastUpdated: DateTime.now()
+          ),
+        );
+        title = '$entityName - Withdrawal auto-fill';
+        leadingIcon = account.getIconWidget(theme, size: 24);
+      }
+
+      color = Colors.red.shade700;
+      amountStr = '-${currency.format(t.amount)}';
+    }
+    // Regular envelope transactions (deposit/withdrawal)
+    else if (t.type == TransactionType.deposit || t.type == TransactionType.withdrawal) {
+      final envName = envMap[t.envelopeId] ?? 'Unknown';
+      title = envName;
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+
+      if (t.type == TransactionType.deposit) {
+        color = Colors.green.shade700;
+        amountStr = '+${currency.format(t.amount)}';
+      } else {
+        color = Colors.red.shade700;
+        amountStr = '-${currency.format(t.amount)}';
+      }
+    }
+    // Transfer transactions
+    else {
       final sourceOwner = userNames['source'] ?? 'Unknown';
       final targetOwner = userNames['target'] ?? 'Unknown';
       final sourceName = t.sourceEnvelopeName ?? 'Unknown';
       final targetName = t.targetEnvelopeName ?? 'Unknown';
       title = '$sourceOwner: $sourceName → $targetOwner: $targetName';
-      subtitle = t.description.isNotEmpty ? t.description : null;
-    } else {
-      final ownerName = userNames['owner'] ?? '';
-      final prefix = isMyEnvelope ? '' : '$ownerName: ';
-
-      // For account-level transactions (no envelopeId), use description as title
-      if (t.envelopeId.isEmpty && t.description.isNotEmpty) {
-        title = t.description;
-        subtitle = null;
-      }
-      // For projected transactions with descriptions, use the description as title
-      else if (t.isFuture && t.description.isNotEmpty && t.description.contains('Deposit from')) {
-        title = t.description;
-        subtitle = null; // No subtitle for projected auto-fill deposits
-      } else if (t.type == TransactionType.deposit) {
-        title = '${prefix}Deposit to $envName';
-        subtitle = t.description.isNotEmpty ? t.description : null;
-      } else if (t.type == TransactionType.scheduledPayment) {
-        title = '${prefix}Scheduled Payment from $envName';
-        subtitle = t.description.isNotEmpty ? t.description : null;
-      } else {
-        title = '${prefix}Withdrawal from $envName';
-        subtitle = t.description.isNotEmpty ? t.description : null;
-      }
-    }
-
-    // Get color and icon
-    Color color;
-    IconData iconData;
-    String amountStr;
-
-    if (t.type == TransactionType.deposit) {
-      color = Colors.green.shade700;
-      iconData = Icons.arrow_downward;
-      amountStr = '+${currency.format(t.amount)}';
-    } else if (t.type == TransactionType.withdrawal) {
-      color = Colors.red.shade700;
-      iconData = Icons.arrow_upward;
-      amountStr = '-${currency.format(t.amount)}';
-    } else if (t.type == TransactionType.scheduledPayment) {
-      color = Colors.purple.shade700;
-      iconData = Icons.event_repeat;
-      amountStr = '-${currency.format(t.amount)}';
-    } else {
+      leadingIcon = Icon(Icons.swap_horiz, size: 24, color: theme.colorScheme.primary);
       color = Colors.blue.shade700;
-      iconData = Icons.swap_horiz;
       amountStr = '→${currency.format(t.amount)}';
     }
 
@@ -1470,31 +1614,16 @@ class _TransactionTile extends StatelessWidget {
               color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(iconData, color: color, size: 18),
+            child: SizedBox(width: 24, height: 24, child: leadingIcon),
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: fontProvider.getTextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ],
+            child: Text(
+              title,
+              style: fontProvider.getTextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           Column(

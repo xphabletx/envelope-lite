@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/transaction.dart';
+import '../../../models/account.dart';
+import '../../../models/envelope.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
 import '../../../providers/time_machine_provider.dart';
@@ -16,10 +18,14 @@ class EnvelopeTransactionList extends StatelessWidget {
     super.key,
     required this.transactions,
     this.onTransactionTap,
+    this.accounts,
+    this.envelopes,
   });
 
   final List<Transaction> transactions;
   final Function(Transaction)? onTransactionTap;
+  final List<Account>? accounts;
+  final List<Envelope>? envelopes;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +48,8 @@ class EnvelopeTransactionList extends StatelessWidget {
           groupName: entry.key,
           transactions: entry.value,
           onTransactionTap: onTransactionTap,
+          accounts: accounts,
+          envelopes: envelopes,
         );
       },
     );
@@ -116,11 +124,15 @@ class _TransactionGroup extends StatelessWidget {
     required this.groupName,
     required this.transactions,
     this.onTransactionTap,
+    this.accounts,
+    this.envelopes,
   });
 
   final String groupName;
   final List<Transaction> transactions;
   final Function(Transaction)? onTransactionTap;
+  final List<Account>? accounts;
+  final List<Envelope>? envelopes;
 
   @override
   Widget build(BuildContext context) {
@@ -149,12 +161,18 @@ class _TransactionGroup extends StatelessWidget {
           (tx) {
             // Use FutureTransactionTile for projected transactions
             if (tx.isFuture) {
-              return FutureTransactionTile(transaction: tx);
+              return FutureTransactionTile(
+                transaction: tx,
+                accounts: accounts,
+                envelopes: envelopes,
+              );
             }
 
             // Use regular tile for real transactions
             return _TransactionTile(
               transaction: tx,
+              accounts: accounts,
+              envelopes: envelopes,
               onTap: onTransactionTap != null
                   ? () => onTransactionTap!(tx)
                   : null,
@@ -169,71 +187,139 @@ class _TransactionGroup extends StatelessWidget {
 }
 
 class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.transaction, this.onTap});
+  const _TransactionTile({
+    required this.transaction,
+    this.onTap,
+    this.accounts,
+    this.envelopes,
+  });
 
   final Transaction transaction;
   final VoidCallback? onTap;
+  final List<Account>? accounts;
+  final List<Envelope>? envelopes;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Determine transaction display based on type
-    IconData icon;
+    final t = transaction;
+
+    // Find related envelope if exists
+    final envelope = (envelopes ?? []).firstWhere(
+      (e) => e.id == t.envelopeId,
+      orElse: () => Envelope(id: '', name: '', userId: ''),
+    );
+
+    // Determine display properties based on transaction type
+    String title;
+    Widget leadingIcon;
     Color color;
-    String prefix;
+    String amountStr;
 
-    switch (transaction.type) {
-      case TransactionType.deposit:
-        icon = Icons.arrow_downward;
-        color = Colors.green.shade700;
-        prefix = '+';
-        break;
-      case TransactionType.withdrawal:
-        icon = Icons.arrow_upward;
-        color = Colors.red.shade700;
-        prefix = '-';
-        break;
-      case TransactionType.scheduledPayment:
-        icon = Icons.event_repeat;
-        color = Colors.purple.shade700;
-        prefix = '-';
-        break;
-      case TransactionType.transfer:
-        icon = Icons.swap_horiz;
-        color = Colors.blue.shade700;
-        prefix = '→';
-        break;
+    // Transaction type 1: Envelope Auto-Fill Deposits (from linked account)
+    if (t.type == TransactionType.deposit && t.description.contains('Auto-fill deposit from')) {
+      // Extract account name from description
+      final match = RegExp(r'Auto-fill deposit from (.+)').firstMatch(t.description);
+      final accountName = match?.group(1) ?? 'Unknown Account';
+
+      title = '${envelope.name} - Auto-fill deposit from $accountName';
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+      color = Colors.green.shade700;
+      amountStr = '+${currency.format(t.amount)}';
     }
+    // Transaction type 2: Scheduled Payments (from envelopes)
+    else if (t.type == TransactionType.scheduledPayment) {
+      title = '${envelope.name} - Scheduled payment';
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+      color = Colors.purple.shade700;
+      amountStr = '-${currency.format(t.amount)}';
+    }
+    // Transaction type 3: Pay Day (income to default account)
+    else if (t.type == TransactionType.deposit && t.envelopeId.isEmpty && t.description == 'PAY DAY!') {
+      // Find default account
+      final defaultAccount = (accounts ?? []).firstWhere(
+        (a) => a.isDefault,
+        orElse: () => (accounts?.isNotEmpty ?? false) ? accounts!.first : Account(
+          id: '', name: 'Main', currentBalance: 0, userId: '',
+          createdAt: DateTime.now(), lastUpdated: DateTime.now()
+        ),
+      );
 
-    // Build description based on transaction type
-    String description = transaction.description;
-    String? subtitle;
+      title = '${defaultAccount.name} - PAY DAY!';
+      leadingIcon = defaultAccount.getIconWidget(theme, size: 24);
+      color = Colors.green.shade700;
+      amountStr = '+${currency.format(t.amount)}';
+    }
+    // Transaction type 5 & 6: Withdrawal auto-fill (to envelope or account)
+    else if (t.type == TransactionType.withdrawal && t.description.contains(' - Withdrawal auto-fill')) {
+      // Extract entity name from description "[Entity Name] - Withdrawal auto-fill"
+      final entityName = t.description.replaceAll(' - Withdrawal auto-fill', '');
 
-    if (transaction.type == TransactionType.transfer) {
-      if (transaction.transferDirection == TransferDirection.in_) {
-        subtitle = 'From: ${transaction.sourceEnvelopeName ?? "Unknown"}';
-        if (transaction.sourceOwnerDisplayName != null) {
-          subtitle += ' (${transaction.sourceOwnerDisplayName})';
-        }
+      // Try to find envelope first
+      final env = (envelopes ?? []).firstWhere(
+        (e) => e.name == entityName,
+        orElse: () => Envelope(id: '', name: '', userId: ''),
+      );
+
+      if (env.id.isNotEmpty) {
+        // Transaction type 5: Money leaving to envelope
+        title = '$entityName - Withdrawal auto-fill';
+        leadingIcon = env.getIconWidget(theme, size: 24);
       } else {
-        subtitle = 'To: ${transaction.targetEnvelopeName ?? "Unknown"}';
-        if (transaction.targetOwnerDisplayName != null) {
-          subtitle += ' (${transaction.targetOwnerDisplayName})';
-        }
+        // Transaction type 6: Money leaving to another account
+        final account = (accounts ?? []).firstWhere(
+          (a) => a.name == entityName,
+          orElse: () => Account(
+            id: '', name: entityName, currentBalance: 0, userId: '',
+            createdAt: DateTime.now(), lastUpdated: DateTime.now()
+          ),
+        );
+        title = '$entityName - Withdrawal auto-fill';
+        leadingIcon = account.getIconWidget(theme, size: 24);
       }
+
+      color = Colors.red.shade700;
+      amountStr = '-${currency.format(t.amount)}';
+    }
+    // Regular envelope transactions (deposit/withdrawal)
+    else if (t.type == TransactionType.deposit || t.type == TransactionType.withdrawal) {
+      title = t.description.isNotEmpty ? t.description : (t.type == TransactionType.deposit ? 'Deposit' : 'Withdrawal');
+      leadingIcon = envelope.id.isNotEmpty
+          ? envelope.getIconWidget(theme, size: 24)
+          : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
+
+      if (t.type == TransactionType.deposit) {
+        color = Colors.green.shade700;
+        amountStr = '+${currency.format(t.amount)}';
+      } else {
+        color = Colors.red.shade700;
+        amountStr = '-${currency.format(t.amount)}';
+      }
+    }
+    // Transfer transactions
+    else {
+      if (t.transferDirection == TransferDirection.in_) {
+        title = 'From: ${t.sourceEnvelopeName ?? "Unknown"}';
+      } else {
+        title = 'To: ${t.targetEnvelopeName ?? "Unknown"}';
+      }
+      leadingIcon = Icon(Icons.swap_horiz, size: 24, color: theme.colorScheme.primary);
+      color = Colors.blue.shade700;
+      amountStr = '→${currency.format(t.amount)}';
     }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        // BUG FIX: Use theme surface color instead of hardcoded/white
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        // FIX: withOpacity -> withValues
         border: Border.all(
           color: theme.colorScheme.primary.withValues(alpha: 0.2),
         ),
@@ -244,36 +330,23 @@ class _TransactionTile extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            // FIX: withOpacity -> withValues
             color: color.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: color, size: 20),
+          child: Center(
+            child: SizedBox(width: 24, height: 24, child: leadingIcon),
+          ),
         ),
         title: Text(
-          description.isEmpty ? 'No description' : description,
+          title,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
-        subtitle: subtitle != null
-            ? Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  subtitle,
-                  // UPDATED: FontProvider
-                  style: fontProvider.getTextStyle(
-                    fontSize: 14,
-                    // FIX: withOpacity -> withValues
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-              )
-            : null,
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '$prefix${currencyFormatter.format(transaction.amount.abs())}',
+              amountStr,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -282,10 +355,9 @@ class _TransactionTile extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              DateFormat('HH:mm').format(transaction.date),
+              DateFormat('HH:mm').format(t.date),
               style: TextStyle(
                 fontSize: 11,
-                // FIX: withOpacity -> withValues
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),

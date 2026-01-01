@@ -517,6 +517,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       repo: widget.envelopeRepo,
       groupRepo: widget.groupRepo,
       accountRepo: accountRepo,
+      preselectedBinderId: editingGroupId,
     );
 
     // Check for newly created envelope

@@ -352,6 +352,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                               repo: repo,
                               groupRepo: groupRepo,
                               accountRepo: accountRepo,
+                              scheduledPaymentRepo: scheduledPaymentRepo,
                             ),
                           ),
                         );
@@ -423,6 +424,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                               repo: repo,
                               groupRepo: groupRepo,
                               accountRepo: accountRepo,
+                              scheduledPaymentRepo: scheduledPaymentRepo,
                               initialSection: EnvelopeSettingsSection.autofill,
                             ),
                           ),
@@ -438,10 +440,14 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     child: _InfoChip(
                       icon: Icons.calendar_month,
                       label: hasPayments
-                          ? 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}'
+                          ? (payments.length > 1
+                              ? '${payments.length} Payments'
+                              : 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}')
                           : 'Schedule: Off',
                       subLabel: hasPayments
-                          ? currency.format(nextPayment!.amount)
+                          ? (payments.length > 1
+                              ? 'Next: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}'
+                              : currency.format(nextPayment!.amount))
                           : 'Tap for details',
                       color: hasPayments
                           ? theme.colorScheme.tertiaryContainer
@@ -470,6 +476,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                                 repo: repo,
                                 groupRepo: groupRepo,
                                 accountRepo: accountRepo,
+                                scheduledPaymentRepo: scheduledPaymentRepo,
                                 initialSection: EnvelopeSettingsSection.scheduledPayments,
                               ),
                             ),

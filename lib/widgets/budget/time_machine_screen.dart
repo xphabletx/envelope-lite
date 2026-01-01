@@ -26,12 +26,14 @@ class TimeMachineScreen extends StatefulWidget {
     required this.envelopeRepo,
     required this.groupRepo,
     required this.paySettings,
+    this.scrollToSettings = false,
   });
 
   final AccountRepo accountRepo;
   final EnvelopeRepo envelopeRepo;
   final GroupRepo groupRepo;
   final PayDaySettings paySettings;
+  final bool scrollToSettings;
 
   @override
   State<TimeMachineScreen> createState() => _TimeMachineScreenState();
@@ -56,6 +58,11 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   List<Envelope> _allEnvelopes = [];
   List<EnvelopeGroup> _allBinders = [];
+
+  // Scroll controller and keys for navigation
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _settingsKey = GlobalKey();
+  final GlobalKey _resultsKey = GlobalKey();
 
   @override
   void initState() {
@@ -92,6 +99,36 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
     debugPrint('  - Pay frequency: $_payFrequency');
 
     _loadData();
+
+    // Auto-scroll to settings after frame is rendered
+    if (widget.scrollToSettings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSettings();
+      });
+    }
+  }
+
+  void _scrollToSettings() {
+    final context = _settingsKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _scrollToResults() {
+    final context = _resultsKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOut,
+        alignment: 0.1, // Show near top of screen
+      );
+    }
   }
 
   /// Get the same day next month, or last day of next month if day doesn't exist
@@ -134,6 +171,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   void dispose() {
     _payAmountController.dispose();
     _payAmountFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -376,6 +414,11 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
         _result = result;
         _calculating = false;
       });
+
+      // Scroll to results after calculation
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToResults();
+      });
     } catch (e) {
       setState(() => _calculating = false);
       if (mounted) {
@@ -458,12 +501,14 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
         ),
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ========== SECTION 1: SETTINGS ==========
             Container(
+              key: _settingsKey,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
@@ -958,6 +1003,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
             // ========== SECTION 3: RESULTS ==========
             if (_result != null) ...[
               Container(
+                key: _resultsKey,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color:
@@ -1237,6 +1283,16 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     const Divider(),
                     const SizedBox(height: 20),
 
+                    // Enter Time Machine Button (with pulsing animation)
+                    _PulsingEnterButton(
+                      targetDate: _targetDate,
+                      result: _result!,
+                    ),
+
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 20),
+
                     // Account Breakdowns
                     ..._result!.accountProjections.values.map((accountProj) {
                       return Card(
@@ -1374,61 +1430,6 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         ),
                       );
                     }),
-
-                    const SizedBox(height: 24),
-
-                    // Enter Time Machine Button
-                    FilledButton.icon(
-                      onPressed: () async {
-                        if (_result == null) return;
-
-                        // Show cool transition animation
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (context) => TimeMachineTransition(
-                            targetDate: _targetDate,
-                          ),
-                        );
-
-                        // Wait for animation
-                        await Future.delayed(const Duration(milliseconds: 1500));
-
-                        // Activate Time Machine mode
-                        if (!mounted) return;
-                        final timeMachine = Provider.of<TimeMachineProvider>(
-                          context, // ignore: use_build_context_synchronously
-                          listen: false,
-                        );
-                        timeMachine.enterTimeMachine(
-                          targetDate: _targetDate,
-                          projection: _result!,
-                        );
-
-                        // Close transition dialog
-                        if (!mounted) return;
-                        // ignore: use_build_context_synchronously
-                        Navigator.pop(context); // Close transition
-
-                        // ignore: use_build_context_synchronously
-                        Navigator.popUntil(context, (route) => route.isFirst);
-                      },
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        minimumSize: const Size(double.infinity, 60),
-                        backgroundColor: theme.colorScheme.secondaryContainer,
-                        foregroundColor:
-                            theme.colorScheme.onSecondaryContainer,
-                      ),
-                      icon: const Icon(Icons.access_time, size: 28),
-                      label: Text(
-                        'Enter Time Machine',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -1560,5 +1561,131 @@ class _SummaryCard extends StatelessWidget {
     );
 
     return card;
+  }
+}
+
+// Pulsing Enter Time Machine Button Widget
+class _PulsingEnterButton extends StatefulWidget {
+  const _PulsingEnterButton({
+    required this.targetDate,
+    required this.result,
+  });
+
+  final DateTime targetDate;
+  final ProjectionResult result;
+
+  @override
+  State<_PulsingEnterButton> createState() => _PulsingEnterButtonState();
+}
+
+class _PulsingEnterButtonState extends State<_PulsingEnterButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.secondary.withValues(
+                  alpha: _glowAnimation.value,
+                ),
+                blurRadius: 20 * _glowAnimation.value,
+                spreadRadius: 5 * _glowAnimation.value,
+              ),
+            ],
+          ),
+          child: Transform.scale(
+            scale: _scaleAnimation.value,
+            child: FilledButton.icon(
+              onPressed: () async {
+                // Show cool transition animation
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => TimeMachineTransition(
+                    targetDate: widget.targetDate,
+                  ),
+                );
+
+                // Wait for animation
+                await Future.delayed(const Duration(milliseconds: 1500));
+
+                // Activate Time Machine mode
+                if (!context.mounted) return;
+                final timeMachine = Provider.of<TimeMachineProvider>(
+                  context,
+                  listen: false,
+                );
+                timeMachine.enterTimeMachine(
+                  targetDate: widget.targetDate,
+                  projection: widget.result,
+                );
+
+                // Close transition dialog
+                if (!context.mounted) return;
+                Navigator.pop(context); // Close transition
+
+                // Pop back to budget screen
+                if (!context.mounted) return;
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
+                minimumSize: const Size(double.infinity, 70),
+                backgroundColor: theme.colorScheme.secondary,
+                foregroundColor: theme.colorScheme.onSecondary,
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.access_time, size: 32),
+              label: Text(
+                'Enter Time Machine',
+                style: fontProvider.getTextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSecondary,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

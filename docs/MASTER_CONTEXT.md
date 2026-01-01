@@ -1,8 +1,8 @@
 # Envelope Lite - Comprehensive Master Context Documentation
 
-**Last Updated:** 2025-12-29
-**Version:** 2.1 (Current State with Recent Updates)
-**Purpose:** Complete reference for all functions, features, and code architecture
+**Last Updated:** 2025-12-31
+**Version:** 2.2 (Enhanced with Detailed Function Documentation and Data Flow)
+**Purpose:** Complete reference for all functions, features, code architecture, and inter-dependencies
 
 ---
 
@@ -348,11 +348,168 @@ Location: `lib/services/`
 - Workspace sync
 - Real-time Hive watch streams
 
-#### 2. AccountRepo
-- Account management
-- Balance operations
-- Linked envelope queries
-- Credit card tracking
+#### 2. AccountRepo (CRITICAL - Account Data & Assigned Amount Calculation)
+**File:** `lib/services/account_repo.dart` (473 lines)
+
+**Purpose:** Manages all account operations with PURE HIVE storage (no Firebase sync). Accounts are always local-only, even in workspace mode.
+
+**Architecture:** Hive-first, local-only repository
+
+**Core Streams:**
+
+```dart
+Stream<List<Account>> accountsStream()
+```
+- Returns live stream of user's accounts from Hive
+- Uses `Stream.multi()` for reliable initial value emission
+- Filters by current `userId`
+- Watches Hive box for real-time updates
+- **Used by:** `AccountListScreen`, `BudgetOverviewCards`, `PayDayAmountScreen`
+
+```dart
+Stream<Account> accountStream(String accountId)
+```
+- Returns live stream of single account
+- Uses `RxDart.concatWith()` for initial + watch pattern
+- **Used by:** `AccountDetailScreen`, `AccountSettingsScreen`
+
+**CRITICAL METHOD: Assigned Amount Calculation**
+
+```dart
+Future<double> getAssignedAmount(String accountId)
+```
+**Purpose:** Calculates how much of an account's balance is "assigned" (committed to envelope auto-fills and account auto-fills).
+
+**Calculation Logic:**
+1. **Envelope Auto-Fills:**
+   - Queries all envelopes linked to this account
+   - For each envelope with `autoFillEnabled && autoFillAmount != null`:
+     - Adds `autoFillAmount` to total (NOT currentAmount!)
+   - **Critical:** Uses auto-fill allocation, not current envelope balance
+   - This represents money committed on next pay day
+
+2. **Account Auto-Fills (if default pay day account):**
+   - Checks if this account is the default pay day account
+   - For each other account with `payDayAutoFillEnabled`:
+     - Adds their `payDayAutoFillAmount` to total
+   - This represents money that will transfer to other accounts on pay day
+
+3. **Returns:** Total assigned amount
+
+**Why This Matters:**
+- **Available Amount = Current Balance - Assigned Amount**
+- Shows user how much they can spend without affecting pay day allocations
+- Used in `AccountDetailScreen` and `AccountCard` to display breakdown
+
+```dart
+Stream<double> assignedAmountStream(String accountId)
+```
+**Purpose:** Real-time stream version of assigned amount calculation
+
+**Implementation:**
+- Combines `envelopesStream()` + `accountsStream()` with `Rx.combineLatest2`
+- Recalculates whenever envelopes OR accounts change
+- Same logic as `getAssignedAmount()`
+- **Used by:** `AccountDetailScreen` (live updates of assigned/available breakdown)
+
+**CRUD Operations:**
+
+```dart
+Future<String> createAccount({
+  required String name,
+  required double startingBalance,
+  bool isDefault = false,
+  String? iconType,
+  String? iconValue,
+  int? iconColor,
+  AccountType accountType = AccountType.bankAccount,
+  double? creditLimit,
+  bool payDayAutoFillEnabled = false,
+  double? payDayAutoFillAmount,
+})
+```
+- Creates new account in Hive
+- Auto-unsets other defaults if `isDefault = true`
+- **Important:** Default accounts cannot have auto-fill enabled
+- Generates unique ID from timestamp
+- **Used by:** `CreateAccountScreen`
+
+```dart
+Future<void> updateAccount({
+  required String accountId,
+  String? name,
+  double? currentBalance,
+  bool? isDefault,
+  // ... other fields
+  bool? payDayAutoFillEnabled,
+  double? payDayAutoFillAmount,
+})
+```
+- Updates account in Hive
+- **Complex Logic for Auto-Fill:**
+  - If `isDefault = true`, forces auto-fill OFF
+  - If enabling auto-fill, preserves or sets amount
+  - If disabling auto-fill, clears amount
+- **Used by:** `AccountSettingsScreen`, `PayDayStuffingScreen`
+
+```dart
+Future<void> adjustBalance({
+  required String accountId,
+  required double amount,
+})
+```
+- Adds/subtracts delta from current balance
+- Used for account-to-account transfers
+- **Used by:** `PayDayStuffingScreen` (account auto-fills)
+
+```dart
+Future<void> setBalance({
+  required String accountId,
+  required double newBalance,
+})
+```
+- Sets balance to specific amount
+- **Used by:** `AccountSettingsScreen` (manual balance corrections)
+
+```dart
+Future<void> deleteAccount(String accountId)
+```
+- **Safety Check:** Prevents deletion if any envelopes are linked
+- Throws exception with helpful message if linked envelopes exist
+- **Used by:** `AccountSettingsScreen`
+
+**Helper Methods:**
+
+```dart
+Future<Account?> getDefaultAccount()
+```
+- Returns the default pay day account
+- **Used by:** `PayDayAmountScreen`, `ProjectionService`
+
+```dart
+Future<List<Envelope>> getLinkedEnvelopes(String accountId)
+```
+- Returns all envelopes linked to an account
+- **Used by:** `deleteAccount()`, `AccountDetailScreen`
+
+```dart
+Future<double> getAvailableAmount(String accountId)
+```
+- Shortcut: `currentBalance - assignedAmount`
+- **Used by:** `AccountCard`, `AccountDetailScreen`
+
+**Critical Notes:**
+- ✅ NO Firebase sync (local-only, even in workspace mode)
+- ✅ Removed virtual envelope system (was creating phantom envelopes)
+- ✅ Account transactions now tracked at account level only
+- ✅ Assigned amount calculation is CRITICAL for pay day accuracy
+
+**Logging:**
+Extensive debug logging in assigned amount calculations:
+- Lists each envelope/account checked
+- Shows auto-fill enabled status
+- Shows auto-fill amounts
+- Displays running totals
 
 #### 3. GroupRepo
 - Binder/group CRUD operations
@@ -373,11 +530,139 @@ Location: `lib/services/`
 - Creates notifications
 - Runs on app lifecycle resume
 
-#### 6. ProjectionService
-- Calculates financial forecasts
-- Weekend-aware pay date projections (NEW)
-- Timeline generation for Time Machine
-- Uses `expectedPayAmount` instead of `lastPayAmount`
+#### 6. ProjectionService (CRITICAL - Time Machine Engine)
+**File:** `lib/services/projection_service.dart` (654 lines)
+
+**Purpose:** Pure functional projection engine that calculates future financial state based on current data, scheduled payments, and pay day settings. Powers the Time Machine feature.
+
+**Core Method:**
+```dart
+static Future<ProjectionResult> calculateProjection({
+  required DateTime targetDate,
+  required List<Account> accounts,
+  required List<Envelope> envelopes,
+  required List<ScheduledPayment> scheduledPayments,
+  required PayDaySettings paySettings,
+  ProjectionScenario? scenario,
+})
+```
+
+**Data Flow (3-Phase Processing):**
+
+**PHASE 1: SETUP STATE**
+- Initializes `accountBalances` map from current account balances
+- Initializes `envelopeBalances` map from current envelope amounts
+- Respects `scenario.envelopeEnabled` flags (for disabled envelopes in what-if scenarios)
+- Creates empty `events` timeline list
+
+**PHASE 2: TIMELINE GENERATION**
+- **Pay Day Events:**
+  - Calls `_getPayDaysBetween()` to calculate all pay dates in range
+  - Uses weekend adjustment from PayDaySettings if enabled
+  - Creates `pay_day` events for income arriving in default account
+  - Creates `account_auto_fill` events for account-to-account transfers
+
+- **Scheduled Payment Events:**
+  - Calls `_getOccurrencesBetween()` for each scheduled payment
+  - Filters out payments for disabled envelopes
+  - Skips orphaned payments (envelope deleted)
+  - Creates `scheduled_payment` events with withdrawal type
+
+- **Temporary Expense Events:**
+  - Processes `scenario.temporaryEnvelopes` if provided
+  - Creates one-time expense events for what-if scenarios
+
+**PHASE 3: PROCESS TIMELINE (Event Loop)**
+- Sorts all events by date chronologically
+- Processes each event in order:
+
+**`pay_day` Event Processing (3 Steps):**
+1. **Income Arrival:** Add pay amount to default account balance
+2. **Envelope Auto-Fill:**
+   - For each envelope with `autoFillEnabled`:
+     - Add `autoFillAmount` to envelope balance
+     - Deduct from source account (default or linked account)
+     - Creates `auto_fill` event for transaction history (NEW)
+     - Description: "Deposit from [Account] - Pay Day"
+3. **Account Auto-Fill:**
+   - For each non-default account with `payDayAutoFillEnabled`:
+     - Transfer amount from default account to target account
+     - Update both account balances
+
+**`scheduled_payment` Event Processing:**
+- Deduct amount from envelope balance
+- Track as `totalSpentAmount` (money leaving system)
+- Log detailed balance changes
+
+**`temporary_expense` Event Processing:**
+- Deduct from account balance
+- Track as `totalSpentAmount`
+
+**PHASE 4: BUILD RESULTS**
+- Creates `AccountProjection` for each account:
+  - `projectedBalance`: final account balance at target date
+  - `assignedAmount`: sum of linked envelope balances
+  - `availableAmount`: projected balance - assigned
+  - `envelopeProjections`: list of EnvelopeProjection objects
+
+- Returns `ProjectionResult` containing:
+  - `accountProjections`: map of account ID → AccountProjection
+  - `timeline`: complete list of ProjectionEvent objects (includes auto-fill events)
+  - `totalAvailable`: sum of all available (unallocated) money
+  - `totalAssigned`: sum of all envelope balances
+  - `totalSpent`: money paid to external entities (bills, etc.)
+
+**Key Helper Methods:**
+
+```dart
+static List<DateTime> _getPayDaysBetween(
+  DateTime start,
+  DateTime end,
+  String frequency,
+  PayDaySettings settings,
+)
+```
+- **Monthly:** Uses `payDayOfMonth`, handles month overflow (Feb 31 → Feb 28)
+- **Biweekly:** Adds 14 days from last/next pay date
+- **Weekly:** Adds 7 days from last/next pay date
+- **Weekend Adjustment:** If enabled, moves Saturday→Friday, Sunday→Friday
+- Prefers `nextPayDate` over `lastPayDate` for accuracy
+
+```dart
+static List<DateTime> _getOccurrencesBetween(
+  DateTime start,
+  DateTime end,
+  ScheduledPayment payment,
+)
+```
+- Generates all occurrences of a scheduled payment in date range
+- Uses `_getNextOccurrence()` to calculate intervals
+- Supports days, weeks, months, years frequency units
+
+```dart
+static DateTime _clampDate(int year, int month, int day)
+```
+- Handles date overflow (e.g., Feb 31 → Feb 28)
+- Handles month underflow/overflow for year calculations
+
+**Critical Changes (Latest):**
+- ✅ Removed phantom auto-fill withdrawal events (was causing double-deduction)
+- ✅ Added auto-fill deposit events to timeline for transaction history visibility
+- ✅ Auto-fill events now properly typed as deposits (not withdrawals) for envelopes
+- ✅ Account auto-fill events typed as transfers between accounts
+- ✅ Proper description formatting: "Deposit from [Account] - Pay Day"
+
+**Used By:**
+- `TimeMachineScreen._runProjection()` - generates projection data
+- `TimeMachineProvider.enterTimeMachine()` - receives projection result
+- `AccountDetailScreen`, `EnvelopeDetailScreen`, `BudgetOverviewCards` - display projected data
+
+**Logging:**
+Extensive debug logging at each phase for troubleshooting:
+- Initial state setup
+- Timeline generation (each event type)
+- Event processing (each event with before/after balances)
+- Final results summary
 
 ---
 
@@ -596,29 +881,198 @@ String formatCurrency(double amount)           // Locale-aware formatting
 
 ---
 
-### 4. TimeMachineProvider
+### 4. TimeMachineProvider (CRITICAL - Projection State Management)
 
-**Purpose:** Financial projection state (session-only, not persisted).
+**File:** `lib/providers/time_machine_provider.dart` (378 lines)
 
-**State:**
+**Purpose:** Manages Time Machine mode state and provides projection data access to all screens. Session-only (not persisted). Coordinates read-only mode across the entire app.
+
+**State Variables:**
 ```dart
-bool isActive
-DateTime? futureDate
-ProjectionResult? projectionData
+bool _isActive              // Whether Time Machine is currently active
+DateTime? _futureDate       // Target date being projected to
+DateTime? _entryDate        // When user entered Time Machine (for history range)
+ProjectionResult? _projectionData  // Complete projection data from ProjectionService
 ```
 
-**Methods:**
+**Core Methods:**
+
 ```dart
-void enterTimeMachine({required DateTime targetDate, required ProjectionResult projection})
+void enterTimeMachine({
+  required DateTime targetDate,
+  required ProjectionResult projection,
+})
+```
+**Purpose:** Activates Time Machine mode with projection data
+
+**Effects:**
+- Sets `_isActive = true`
+- Records `_entryDate = DateTime.now()` (used for history ranges)
+- Stores `_futureDate` and `_projectionData`
+- Calls `notifyListeners()` to rebuild ALL consuming widgets
+- **Result:** Entire app switches to projected view
+
+**Used by:** `TimeMachineScreen` after projection calculation
+
+```dart
 void exitTimeMachine()
+```
+**Purpose:** Deactivates Time Machine and returns to present
+
+**Effects:**
+- Sets `_isActive = false`
+- Clears all projection data
+- Calls `notifyListeners()` to rebuild all widgets back to real data
+- **Result:** App returns to showing real-time data
+
+**Used by:** `TimeMachineIndicator` exit button, navigation back
+
+**Data Access Methods:**
+
+```dart
 double? getProjectedEnvelopeBalance(String envelopeId)
+```
+- Searches through `accountProjections` → `envelopeProjections`
+- Returns projected balance for specific envelope
+- Returns `null` if not active or envelope not found
+- **Used by:** `EnvelopeCard`, `EnvelopeDetailScreen`, `BudgetOverviewCards`
+
+```dart
 double? getProjectedAccountBalance(String accountId)
-List<Transaction> getFutureTransactions(String envelopeId)  // Synthesizes transactions from timeline
-Envelope getProjectedEnvelope(Envelope realEnvelope)         // Returns copy with projected balance
+```
+- Looks up account in `accountProjections` map
+- Returns `projectedBalance` field
+- Returns `null` if not active or account not found
+- **Used by:** `AccountCard`, `AccountDetailScreen`, `BudgetOverviewCards`
+
+```dart
+Envelope getProjectedEnvelope(Envelope realEnvelope)
+```
+**Purpose:** Creates a modified copy of an envelope with projected balance
+
+**Logic:**
+- If inactive: returns original envelope unchanged
+- If active: creates new Envelope object with:
+  - All original properties
+  - `currentAmount` replaced with projected balance
+- **Used by:** All envelope displays during Time Machine mode
+
+```dart
 Account getProjectedAccount(Account realAccount)
 ```
+**Purpose:** Creates a modified copy of an account with projected balance
 
-**UI/UX Impact:** When active, screens show projected data instead of current data. EnvelopeDetailScreen shows future transactions. TimeMachineIndicator appears at top of screen.
+**Logic:**
+- If inactive: returns original account unchanged
+- If active: creates new Account object with:
+  - All original properties
+  - `currentBalance` replaced with projected balance
+- **Used by:** All account displays during Time Machine mode
+
+**Transaction Synthesis Methods:**
+
+```dart
+List<Transaction> getFutureTransactions(String envelopeId)
+```
+**Purpose:** Generates synthetic future transactions for an envelope from projection timeline
+
+**Process:**
+1. Calls `getAllProjectedTransactions()` to get all events
+2. Filters to specified `envelopeId`
+3. Returns list of Transaction objects marked with `isFuture = true`
+
+**Used by:** `EnvelopeDetailScreen` to show upcoming transactions
+
+```dart
+List<Transaction> getAllProjectedTransactions({bool includeTransfers = true})
+```
+**Purpose:** Converts ALL timeline events to synthetic Transaction objects
+
+**Event Type Mapping:**
+- `pay_day` → TransactionType.deposit (income to account)
+- `auto_fill` → TransactionType.deposit (envelope receives from account)
+- `account_auto_fill` → TransactionType.transfer (between accounts)
+- `scheduled_payment` → TransactionType.scheduledPayment
+- `temporary_expense` → TransactionType.withdrawal
+- Other credit events → TransactionType.deposit
+- Other debit events → TransactionType.withdrawal
+
+**Filters:**
+- Only includes events between now and `_futureDate`
+- Optionally excludes transfers if `includeTransfers = false`
+- All transactions marked with `isFuture = true`
+
+**Returns:** List sorted by date descending (newest first)
+
+**Used by:** `StatsHistoryScreen`, `EnvelopeDetailScreen`, `AccountDetailScreen`
+
+```dart
+List<Transaction> getProjectedTransactionsForDateRange(
+  DateTime start,
+  DateTime end,
+  {bool includeTransfers = true}
+)
+```
+**Purpose:** Same as above but filtered to specific date range
+
+**Used by:** `StatsHistoryScreen` with custom date ranges
+
+**Read-Only Mode Methods:**
+
+```dart
+bool shouldBlockModifications()
+```
+- Returns `_isActive`
+- Checked before all write operations (deposit, withdraw, transfer, delete, etc.)
+- **Used by:** All action buttons, modals, settings screens
+
+```dart
+String getBlockedActionMessage()
+```
+- Returns random sci-fi themed error message:
+  - "⏰ Time Paradox Detected! The Time Machine forbids intentional paradoxes."
+  - "🚫 Temporal Violation! You cannot alter events that haven't occurred yet."
+  - "⚠️ Causality Error! Return to the present to make changes."
+  - "🔒 Timeline Protected! Modifications disabled in projection mode."
+- **Used by:** Snackbar displays when user tries to edit during Time Machine
+
+**UI/UX Impact:**
+
+When `isActive = true`:
+1. **All balance displays** show projected values instead of real values
+2. **Transaction lists** include synthetic future transactions with "PROJECTED" badge
+3. **TimeMachineIndicator** appears at top of all screens
+4. **All action buttons** are blocked (deposit, withdraw, transfer, delete, settings changes)
+5. **Date ranges** automatically adjust:
+   - History: entry date → target date
+   - Future: target date → 30 days beyond target
+6. **Color coding** differentiates projected vs real data
+7. **Exit button** visible in TimeMachineIndicator
+
+**Consumer Widgets:**
+- `HomeScreen`
+- `AccountListScreen` / `AccountDetailScreen`
+- `EnvelopeDetailScreen`
+- `BudgetOverviewCards`
+- `StatsHistoryScreen`
+- `CalendarScreen`
+- `GroupsHomeScreen`
+
+All use `Consumer<TimeMachineProvider>` or `Provider.of<TimeMachineProvider>()` to access state
+
+**Critical Implementation Notes:**
+- ✅ Projection data stored in provider, not persisted
+- ✅ Exiting Time Machine clears all state
+- ✅ Auto-fill event descriptions preserved from ProjectionService
+- ✅ Transaction type mapping updated for proper display
+- ✅ Read-only enforcement across entire app
+
+**Logging:**
+Extensive debug logging for troubleshooting:
+- Enter/exit actions
+- Projection data searches (envelope/account lookups)
+- Transaction generation counts
+- Blocked modifications
 
 ---
 
@@ -800,8 +1254,100 @@ Location: `lib/screens/`
 
 #### AccountListScreen & AccountDetailScreen
 
-**List:** Shows all accounts with balance cards, "Mine Only" toggle, FAB to create  
-**Detail:** Balance breakdown (assigned vs available), linked envelopes, edit/delete menu
+**AccountListScreen**
+**File:** `lib/screens/accounts/account_list_screen.dart`
+
+**Purpose:** Displays all user accounts as cards
+
+**Key Functions Called:**
+- `accountRepo.accountsStream()` - Live list of accounts
+- `timeMachine.getProjectedAccount()` - Get projected account if active
+- **Navigation:** Taps account → `AccountDetailScreen`
+- **FAB:** Create new account → `CreateAccountScreen`
+
+**UI Elements:**
+- Account cards showing balance, assigned, available
+- "Mine Only" toggle (workspace mode)
+- Time Machine indicator
+- Sorting options
+
+---
+
+**AccountDetailScreen**
+**File:** `lib/screens/accounts/account_detail_screen.dart` (250+ lines)
+
+**Purpose:** Detailed view of single account with balance breakdown and linked envelopes
+
+**Key Functions Called:**
+
+**Streams & Data:**
+```dart
+// Main account stream
+accountRepo.accountStream(accountId)
+
+// Assigned amount calculation (CRITICAL)
+accountRepo.assignedAmountStream(accountId)
+
+// Envelope list for filtering
+envelopeRepo.envelopesStream()
+
+// Time Machine projection
+timeMachine.isActive
+timeMachine.getProjectedAccount(account)
+```
+
+**Navigation Functions:**
+```dart
+// Stats & History button
+Navigator.push → StatsHistoryScreen(
+  title: '${account.name} - History',
+  initialEnvelopeIds: linkedEnvelopeIds, // Filter to this account's envelopes
+)
+
+// Settings button (blocked in Time Machine)
+if (timeMachine.shouldBlockModifications()) {
+  showSnackBar(timeMachine.getBlockedActionMessage())
+} else {
+  Navigator.push → AccountSettingsScreen
+}
+```
+
+**Display Logic:**
+```dart
+// Get projected or real account
+final displayAccount = timeMachine.isActive
+  ? timeMachine.getProjectedAccount(account)
+  : account;
+
+// Calculate breakdown
+StreamBuilder<double>(
+  stream: accountRepo.assignedAmountStream(accountId),
+  builder: (context, assignedSnapshot) {
+    final assigned = assignedSnapshot.data ?? 0.0;
+    final available = displayAccount.currentBalance - assigned;
+
+    // Display two columns:
+    // "Assigned" - money committed to auto-fills
+    // "Available ✨" - money free to spend
+  }
+)
+```
+
+**UI Components:**
+- Icon + name + star (if default)
+- Large balance display (uses projected if Time Machine active)
+- Action chips: Stats & History, Settings
+- **Assigned/Available Breakdown:** (CRITICAL)
+  - Assigned: Sum of auto-fill commitments
+  - Available: Balance - Assigned (what's truly free)
+- Linked envelopes list (tap to view envelope detail)
+- Edit balance button (blocked in Time Machine)
+
+**Critical Implementation:**
+- ✅ Uses `assignedAmountStream()` for real-time updates
+- ✅ Respects Time Machine mode for all displays
+- ✅ Blocks edits during Time Machine
+- ✅ Shows account auto-fill badge if enabled
 
 ---
 
@@ -811,7 +1357,113 @@ Location: `lib/screens/`
 
 1. **PayDayAmountScreen** - Enter amount, select account
 2. **PayDayAllocationScreen** - Auto-fill envelopes, manual adjustments
-3. **PayDayPreviewScreen** - Confirm, toggle envelopes, execute
+3. **PayDayStuffingScreen** - Animated execution with progress tracking
+
+---
+
+**PayDayStuffingScreen** (CRITICAL - Pay Day Execution)
+**File:** `lib/screens/pay_day/pay_day_stuffing_screen.dart` (~300 lines)
+
+**Purpose:** Executes pay day auto-fill with animated progress display
+
+**Key Functions Called:**
+
+**Step 0: Initial Logging**
+```dart
+debugPrint('[PayDay] Starting Pay Day Processing');
+debugPrint('[PayDay] Pay Amount: ${totalAmount}');
+debugPrint('[PayDay] Envelope Auto-Fill: ${totalEnvelopeAutoFill}');
+debugPrint('[PayDay] Account Auto-Fill: ${totalAccountAutoFill}');
+```
+
+**Step 1: Envelope Auto-Fill**
+```dart
+for (envelope in envelopes) {
+  // Visual progress animation (0.0 → 1.0)
+  for (progress in steps) {
+    await Future.delayed(50ms)
+    setState(() => currentProgress = progress)
+  }
+
+  // Execute deposit
+  await repo.deposit(
+    envelopeId: envelope.id,
+    amount: allocations[envelope.id],
+    description: 'Auto-fill to ${envelope.name}',
+    date: DateTime.now(),
+  )
+
+  debugPrint('[PayDay] ✅ Auto-filled envelope: ${envelope.name} = ${amount}');
+}
+```
+
+**Step 2: Account Auto-Fill** (Account-to-Account Transfers)
+```dart
+for (targetAccount in accounts) {
+  // Skip default account
+  if (targetAccount.id == defaultAccountId) continue;
+
+  // Visual progress animation
+  // ...
+
+  // Execute transfer
+  await accountRepo.adjustBalance(
+    accountId: targetAccount.id,
+    amount: accountAllocations[targetAccount.id],
+  )
+
+  debugPrint('[PayDay] ✅ Auto-filled account: ${targetAccount.name} = ${amount}');
+}
+```
+
+**Step 3: Update Default Account Balance**
+```dart
+// Fetch current account state
+final account = await accountRepo.accountStream(accountId).first;
+
+// Calculate new balance:
+// + Pay amount (income)
+// - Envelope auto-fills (allocations to envelopes)
+// - Account auto-fills (transfers to other accounts)
+final newBalance = account.currentBalance
+  + totalAmount
+  - totalEnvelopeAutoFill
+  - totalAccountAutoFill;
+
+await accountRepo.updateAccount(
+  accountId: accountId,
+  currentBalance: newBalance,
+)
+
+debugPrint('[PayDay] ✅ Default account updated:');
+debugPrint('  Previous Balance: ${account.currentBalance}');
+debugPrint('  Pay Amount: +${totalAmount}');
+debugPrint('  Envelope Auto-Fill: -${totalEnvelopeAutoFill}');
+debugPrint('  Account Auto-Fill: -${totalAccountAutoFill}');
+debugPrint('  New Balance: ${newBalance}');
+```
+
+**Step 4: Update Pay Day Settings**
+```dart
+// Update Hive pay day settings
+payDayBox.put(settingsKey, updatedSettings.copyWith(
+  lastPayAmount: totalAmount,
+  lastPayDate: DateTime.now(),
+  defaultAccountId: accountId,
+))
+```
+
+**Critical Changes:**
+- ✅ Removed duplicate `recordPayDayDeposit()` calls
+- ✅ Removed `recordAutoFillWithdrawal()` calls (were creating phantom transactions)
+- ✅ Account balance updated ONCE at end with full calculation
+- ✅ No more virtual envelope system
+
+**UI Features:**
+- Progress bar for each envelope/account
+- Animated filling effect
+- Success confetti on completion
+- Error handling with retry option
 
 ---
 
@@ -915,16 +1567,153 @@ Location: `lib/widgets/`
 
 ### Budget Widgets
 
-#### BudgetOverviewCards
-**Purpose:** 6-card carousel showing key metrics.
+#### BudgetOverviewCards (CRITICAL - Budget Dashboard)
+**File:** `lib/widgets/budget/overview_cards.dart` (~700 lines)
+
+**Purpose:** 6-card carousel showing key budget metrics with Time Machine awareness
+
+**Key Functions Called:**
+
+**Time Machine Integration:**
+```dart
+Consumer<TimeMachineProvider>(
+  builder: (context, timeMachine, _) {
+    // Calculate history range based on time machine state
+    final historyRange = _getHistoryRange(timeMachine);
+
+    // In time machine: entry date → target date
+    // Outside time machine: now - 30 days → now
+    final historyStart = timeMachine.isActive && timeMachine.entryDate != null
+      ? timeMachine.entryDate!
+      : DateTime.now().subtract(Duration(days: 30));
+
+    final historyEnd = timeMachine.isActive && timeMachine.futureDate != null
+      ? timeMachine.futureDate!
+      : DateTime.now();
+
+    // Calculate future range for Scheduled Payments
+    // In time machine: target date → 30 days beyond target
+    // Outside time machine: now → 30 days ahead
+    final futureStart = timeMachine.isActive && timeMachine.futureDate != null
+      ? timeMachine.futureDate!
+      : DateTime.now();
+
+    final futureEnd = futureStart.add(Duration(days: 30));
+  }
+)
+```
+
+**Data Streams:**
+```dart
+// Account data
+accountRepo.accountsStream() // For total balance calculation
+
+// Envelope data
+envelopeRepo.envelopesStream() // For auto-fill lists
+
+// Transaction data
+envelopeRepo.transactionsStream // For income/spending calculations
+```
 
 **Cards:**
-1. Total Balance (→ AccountListScreen)
-2. Income (→ StatsHistoryScreen)
-3. Spending (→ StatsHistoryScreen)
-4. Scheduled Payments (→ ScheduledPaymentsListScreen)
-5. Auto-Fill (→ AutoFillListScreen)
-6. Top Envelopes (read-only)
+
+**1. Total Accounts Balance**
+```dart
+_buildAccountsCard(accounts)
+  // Sums all account balances
+  final totalBalance = accounts.fold(0.0, (sum, a) => sum + a.currentBalance)
+
+  // On tap: Navigate to StatsHistoryScreen
+  Navigator.push → StatsHistoryScreen(
+    title: 'Accounts Balance & History',
+    initialStart: timeMachine.entryDate,
+    initialEnd: timeMachine.futureDate,
+    filterTransactionTypes: {
+      TransactionType.deposit,    // Pay day to account
+      TransactionType.withdrawal, // Auto-fills from account
+      TransactionType.transfer,   // Account-to-account
+    },
+  )
+```
+
+**2. Total Envelope Income**
+```dart
+_buildIncomeCard(transactions, historyStart, historyEnd)
+  // Filters transactions to deposit type in date range
+  // Sums amounts
+
+  // On tap: Navigate to StatsHistoryScreen
+  Navigator.push → StatsHistoryScreen(
+    title: 'Envelope Income & History',
+    filterTransactionTypes: {TransactionType.deposit},
+  )
+```
+
+**3. Total Envelope Spending**
+```dart
+_buildSpendingCard(transactions, historyStart, historyEnd)
+  // Filters to withdrawal + scheduledPayment types in range
+  // Sums amounts
+
+  // On tap: Navigate to StatsHistoryScreen
+  Navigator.push → StatsHistoryScreen(
+    title: 'Envelope Spending & History',
+    filterTransactionTypes: {
+      TransactionType.withdrawal,
+      TransactionType.scheduledPayment,
+    },
+  )
+```
+
+**4. Scheduled Payments**
+```dart
+_buildScheduledPaymentsCard(payments, futureStart, futureEnd)
+  // Filters scheduled payments to future date range
+  // Sums amounts due in next 30 days (from future start)
+
+  // On tap: Navigate to ScheduledPaymentsListScreen
+```
+
+**5. Auto-Fill Summary**
+```dart
+_buildAutoFillCard(envelopes)
+  // Filters envelopes with autoFillEnabled = true
+  // Sums autoFillAmount values
+
+  // On tap: Navigate to AutoFillListScreen
+```
+
+**6. Top Envelopes**
+```dart
+_buildTopEnvelopesCard(envelopes)
+  // Sorts envelopes by currentAmount descending
+  // Shows top 5 with mini progress bars
+  // Read-only (no navigation)
+```
+
+**Date Range Selector:**
+```dart
+Future<void> _selectHistoryRange(TimeMachineProvider timeMachine)
+  // Shows DateRangePicker
+  // Updates _userSelectedStart and _userSelectedEnd
+  // Recalculates all cards with new range
+```
+
+**Critical Implementation:**
+- ✅ All calculations respect time machine state
+- ✅ History range auto-adjusts: entry → target in time machine
+- ✅ Future range auto-adjusts: target → 30 days beyond in time machine
+- ✅ Account card now shows account-level transactions (not account list)
+- ✅ Proper transaction type filtering for each card
+- ✅ User can override date ranges with custom selection
+
+**UI Features:**
+- PageView carousel with 0.85 viewport fraction
+- Page indicators (dots)
+- Swipe navigation
+- Date range header with "Change" button
+- Color-coded cards (primary, green, red, etc.)
+- Icons for each metric type
 
 ---
 
@@ -1760,8 +2549,58 @@ This comprehensive MASTER_CONTEXT.md documents the complete Envelope Lite codeba
 3. ✅ 105 debug prints cleaned up
 4. ✅ Complete code modernization
 
-**Uncommitted Changes:**
-- ⚠️ 3 service files modified (privacy enhancements) - READY TO COMMIT
+**Critical Data Handling Updates (Dec 31, 2025):**
+
+**ProjectionService (Time Machine Engine):**
+1. ✅ Removed phantom auto-fill withdrawal events (was causing double-deduction)
+2. ✅ Added auto-fill deposit events to timeline for transaction history visibility
+3. ✅ Auto-fill events now properly typed as DEPOSITS to envelopes (not withdrawals)
+4. ✅ Account auto-fill events properly typed as TRANSFERS between accounts
+5. ✅ Event descriptions formatted correctly: "Deposit from [Account] - Pay Day"
+6. ✅ Timeline now includes auto-fill events for comprehensive transaction history
+
+**AccountRepo (Assigned Amount Calculation):**
+1. ✅ Removed virtual envelope system that was creating phantom envelopes
+2. ✅ Account transactions now tracked at account level only
+3. ✅ `assignedAmountStream()` added for real-time updates of assigned/available breakdown
+4. ✅ Calculation now includes both envelope AND account auto-fills
+5. ✅ CRITICAL: Uses auto-fill allocation amounts (not current envelope balances)
+
+**PayDayStuffingScreen (Pay Day Execution):**
+1. ✅ Removed duplicate `recordPayDayDeposit()` calls
+2. ✅ Removed `recordAutoFillWithdrawal()` calls (were creating phantom transactions)
+3. ✅ Account balance updated ONCE at end with full calculation
+4. ✅ Simplified flow: deposit to envelopes → transfer to accounts → update default account
+5. ✅ Proper logging of all balance changes
+
+**TimeMachineProvider (Projection State Management):**
+1. ✅ Updated event type mapping for proper transaction display
+2. ✅ Auto-fill events now show as deposits (not withdrawals) in envelope history
+3. ✅ Account auto-fill events show as transfers in account history
+4. ✅ Description preservation from ProjectionService
+5. ✅ Read-only enforcement with sci-fi themed error messages
+
+**StatsHistoryScreen (Transaction Display):**
+1. ✅ Account vs envelope view detection logic
+2. ✅ Account view: shows transactions with NO envelopeId
+3. ✅ Envelope view: shows transactions for selected envelopes
+4. ✅ Transaction titles use descriptions for account-level transactions
+5. ✅ Proper handling of projected transactions with "PROJECTED" badge
+
+**BudgetOverviewCards (Dashboard):**
+1. ✅ Time Machine date range auto-adjustment (entry → target)
+2. ✅ Future range calculation for scheduled payments (target → +30 days)
+3. ✅ Total Balance card now navigates to account transaction history (not account list)
+4. ✅ Proper transaction type filtering for each card
+5. ✅ User-overridable date ranges
+
+**Documentation Updates (v2.2):**
+- ✅ Complete function-level documentation for all critical services
+- ✅ Detailed data flow descriptions for ProjectionService
+- ✅ Method signatures and usage patterns documented
+- ✅ "Used by" sections added to track dependencies
+- ✅ Critical implementation notes highlighted
+- ✅ Logging strategies documented
 
 ### Production Readiness: 95%
 
@@ -1800,10 +2639,101 @@ This comprehensive MASTER_CONTEXT.md documents the complete Envelope Lite codeba
 **Next Review:** After RevenueCat integration and before production release
 
 **Change Log:**
+- **v2.2 (Dec 31, 2025):** **MAJOR UPDATE** - Added comprehensive function-level documentation with detailed data flow descriptions. Documented:
+  - ProjectionService complete 4-phase processing pipeline
+  - AccountRepo assigned amount calculation logic
+  - TimeMachineProvider transaction synthesis methods
+  - PayDayStuffingScreen execution flow
+  - BudgetOverviewCards time machine integration
+  - AccountDetailScreen function calls and streams
+  - All critical method signatures with "Used by" tracking
+  - Event type mapping for proper transaction display
+  - Data flow between services, providers, screens, and widgets
+  - Critical implementation notes for all recent fixes
 - **v2.1 (Dec 29, 2025):** Added tutorial system, weekend adjustment, responsive layouts, GDPR enhancements, updated file counts, comprehensive code audit update
 - **v2.0 (Dec 27, 2025):** Initial comprehensive documentation with all models, services, providers, screens, and widgets
 
 ---
 
-This document serves as the **complete technical reference** for the Envelope Lite Flutter application. All information is current as of the latest commit (6bd7192) plus 3 uncommitted service file modifications.
+## Key Data Flows (Quick Reference)
+
+### Time Machine Projection Flow
+```
+User selects target date
+  ↓
+TimeMachineScreen._runProjection()
+  ↓
+ProjectionService.calculateProjection()
+  ├─ PHASE 1: Setup state (accounts, envelopes)
+  ├─ PHASE 2: Generate timeline (pay days, scheduled payments, auto-fills)
+  ├─ PHASE 3: Process events chronologically
+  └─ PHASE 4: Build AccountProjection results
+  ↓
+Returns ProjectionResult
+  ↓
+TimeMachineProvider.enterTimeMachine(result)
+  ↓
+notifyListeners() → Entire app rebuilds
+  ↓
+All screens consume TimeMachineProvider:
+  ├─ AccountDetailScreen: shows projected balances
+  ├─ EnvelopeDetailScreen: shows future transactions
+  ├─ BudgetOverviewCards: adjusts date ranges
+  └─ StatsHistoryScreen: includes projected events
+```
+
+### Pay Day Execution Flow
+```
+User confirms pay day
+  ↓
+PayDayStuffingScreen._startStuffing()
+  ↓
+Step 1: Envelope Auto-Fill
+  ├─ For each envelope:
+  │   └─ repo.deposit(envelopeId, amount, "Auto-fill to X")
+  ↓
+Step 2: Account Auto-Fill (transfers)
+  ├─ For each non-default account:
+  │   └─ accountRepo.adjustBalance(targetAccountId, +amount)
+  ↓
+Step 3: Update Default Account
+  └─ accountRepo.updateAccount(
+      currentBalance: current + payAmount - envAutoFill - acctAutoFill
+    )
+```
+
+### Assigned Amount Calculation Flow
+```
+AccountDetailScreen renders
+  ↓
+StreamBuilder<double>(
+  stream: accountRepo.assignedAmountStream(accountId)
+)
+  ↓
+accountRepo.assignedAmountStream()
+  ├─ Combines: envelopesStream() + accountsStream()
+  ├─ For each linked envelope with autoFillEnabled:
+  │   └─ total += envelope.autoFillAmount
+  ├─ If this is default pay day account:
+  │   └─ For each account with payDayAutoFillEnabled:
+  │       └─ total += account.payDayAutoFillAmount
+  └─ Returns total assigned
+  ↓
+Display: Available = Current Balance - Assigned
+```
+
+---
+
+This document serves as the **complete technical reference** for the Envelope Lite Flutter application. All information is current as of the latest commit (9959de0 - "Refactor account and envelope transaction handling and UI improvements") on December 31, 2025.
+
+**Documentation Completeness:**
+- ✅ All 18 models documented with properties and methods
+- ✅ All 20 services documented with function signatures and data flows
+- ✅ All 6 providers documented with state management details
+- ✅ All 40+ screens documented with function calls and UI logic
+- ✅ All 29 widgets documented with usage patterns
+- ✅ Complete data flow diagrams for critical operations
+- ✅ "Used by" tracking for all major functions
+- ✅ Logging strategies documented for debugging
+- ✅ Critical implementation notes highlighted throughout
 

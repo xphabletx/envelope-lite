@@ -209,13 +209,34 @@ class AccountRepo {
 
   /// Delete account
   Future<void> deleteAccount(String accountId) async {
-    // Check for linked envelopes - prevent deletion if any exist
+    final account = _accountBox.get(accountId);
+    if (account == null) {
+      throw Exception('Account not found: $accountId');
+    }
+
+    // Prevent deletion of default account
+    if (account.isDefault) {
+      throw Exception(
+        'Cannot delete the default account. Please set another account as default first.',
+      );
+    }
+
+    // Get linked envelopes and unlink them (don't delete them)
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
 
     if (linkedEnvelopes.isNotEmpty) {
-      throw Exception(
-        'Cannot delete account with linked envelopes. Please unlink or delete ${linkedEnvelopes.length} envelope(s) first.',
-      );
+      debugPrint('[AccountRepo] 🔗 Unlinking ${linkedEnvelopes.length} envelope(s) from account: $accountId');
+
+      for (final envelope in linkedEnvelopes) {
+        debugPrint('[AccountRepo]    - Unlinking envelope: ${envelope.name}');
+        await _envelopeRepo.updateEnvelope(
+          envelopeId: envelope.id,
+          linkedAccountId: null,
+          updateLinkedAccountId: true,
+        );
+      }
+
+      debugPrint('[AccountRepo] ✅ All envelopes unlinked');
     }
 
     await _accountBox.delete(accountId);

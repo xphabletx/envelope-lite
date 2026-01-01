@@ -28,6 +28,7 @@ Future<void> showEnvelopeCreator(
   required EnvelopeRepo repo,
   required GroupRepo groupRepo,
   required AccountRepo accountRepo,
+  String? preselectedBinderId,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute(
@@ -36,6 +37,7 @@ Future<void> showEnvelopeCreator(
         repo: repo,
         groupRepo: groupRepo,
         accountRepo: accountRepo,
+        preselectedBinderId: preselectedBinderId,
       ),
     ),
   );
@@ -46,10 +48,12 @@ class _EnvelopeCreatorScreen extends StatefulWidget {
     required this.repo,
     required this.groupRepo,
     required this.accountRepo,
+    this.preselectedBinderId,
   });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final String? preselectedBinderId;
 
   @override
   State<_EnvelopeCreatorScreen> createState() => _EnvelopeCreatorScreenState();
@@ -98,6 +102,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedBinderId = widget.preselectedBinderId;
     _loadBinders();
     _loadAccounts();
 

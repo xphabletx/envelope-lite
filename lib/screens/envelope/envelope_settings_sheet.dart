@@ -17,6 +17,7 @@ import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../utils/calculator_helper.dart';
+import '../../services/scheduled_payment_repo.dart';
 
 enum EnvelopeSettingsSection {
   top,
@@ -32,6 +33,7 @@ class EnvelopeSettingsSheet extends StatefulWidget {
     required this.groupRepo,
     required this.accountRepo, // NEW
     this.initialSection = EnvelopeSettingsSection.top,
+    this.scheduledPaymentRepo, // NEW
   });
 
   final String envelopeId;
@@ -39,6 +41,7 @@ class EnvelopeSettingsSheet extends StatefulWidget {
   final GroupRepo groupRepo;
   final AccountRepo accountRepo; // NEW
   final EnvelopeSettingsSection initialSection;
+  final ScheduledPaymentRepo? scheduledPaymentRepo; // NEW
 
   @override
   State<EnvelopeSettingsSheet> createState() => _EnvelopeSettingsSheetState();
@@ -54,6 +57,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   // Keys for scrolling to specific sections
   final _autofillKey = GlobalKey();
   final _scheduledPaymentsKey = GlobalKey();
+
+  // Scheduled payment repo
+  late final ScheduledPaymentRepo _scheduledPaymentRepo;
 
   String? _selectedEmoji;
   String? _iconType;
@@ -83,6 +89,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   @override
   void initState() {
     super.initState();
+    _scheduledPaymentRepo = widget.scheduledPaymentRepo ?? ScheduledPaymentRepo(widget.repo.currentUserId);
     _loadBinders();
   }
 
@@ -219,6 +226,133 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         ],
       ),
     );
+  }
+
+  Future<void> _checkAndNavigateToScheduledPayment(Envelope envelope) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
+    // Get existing scheduled payments for this envelope
+    final existingPayments = await _scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id).first;
+
+    if (existingPayments.isEmpty) {
+      // No existing payments, navigate directly
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddScheduledPaymentScreen(
+            repo: widget.repo,
+            preselectedEnvelopeId: envelope.id,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Show warning dialog with existing payment details
+    if (!mounted) return;
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Existing Scheduled Payment${existingPayments.length > 1 ? 's' : ''}',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This envelope already has ${existingPayments.length} scheduled payment${existingPayments.length > 1 ? 's' : ''}:',
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              ...existingPayments.map((payment) => Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color(payment.colorValue).withAlpha(51),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Color(payment.colorValue).withAlpha(128),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      payment.name,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Amount: ${currency.format(payment.amount)}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    Text(
+                      'Next Due: ${DateFormat('MMM d, yyyy').format(payment.nextDueDate)}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    Text(
+                      'Frequency: ${payment.frequencyString}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 8),
+              Text(
+                'Do you want to add another scheduled payment?',
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancel',
+              style: fontProvider.getTextStyle(fontSize: 16),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Add Anyway',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldProceed == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddScheduledPaymentScreen(
+            repo: widget.repo,
+            preselectedEnvelopeId: envelope.id,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -508,6 +642,45 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     // TARGET DATE
                     InkWell(
                       onTap: () async {
+                        // Check if target amount is set before allowing date selection
+                        final targetAmount = _targetController.text.isEmpty
+                            ? null
+                            : double.tryParse(_targetController.text);
+
+                        if (targetAmount == null || targetAmount <= 0) {
+                          // Show warning dialog
+                          await showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(
+                                'Target Amount Required',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              content: const Text(
+                                'You must set a target amount before setting a target date.\n\nPlease enter a target amount first.',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                              actions: [
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text(
+                                    'OK',
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Target amount is valid, proceed with date selection
                         final date = await showDatePicker(
                           context: context,
                           initialDate: _selectedTargetDate ?? DateTime.now().add(const Duration(days: 30)),
@@ -767,15 +940,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AddScheduledPaymentScreen(
-                              repo: widget.repo,
-                              preselectedEnvelopeId: envelope.id,
-                            ),
-                          ),
-                        );
+                        _checkAndNavigateToScheduledPayment(envelope);
                       },
                     ),
 

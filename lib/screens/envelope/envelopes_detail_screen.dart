@@ -6,6 +6,7 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../../../models/envelope.dart';
 import '../../../models/envelope_group.dart';
 import '../../../models/transaction.dart';
+import '../../../models/account.dart';
 import '../../../services/envelope_repo.dart';
 import '../../../services/group_repo.dart';
 import '../../../services/account_repo.dart';
@@ -183,6 +184,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     Envelope envelope,
     List<Transaction> monthTransactions,
     ThemeData theme,
+    List<Account> accounts,
+    List<Envelope> allEnvelopes,
   ) {
     return SingleChildScrollView(
       key: const PageStorageKey<String>('envelope_detail_scroll'),
@@ -230,6 +233,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           EnvelopeTransactionList(
             key: _transactionListKey,
             transactions: monthTransactions,
+            accounts: accounts,
+            envelopes: allEnvelopes,
             onTransactionTap: (tx) {},
           ),
           const SizedBox(height: 140),
@@ -242,6 +247,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     Envelope envelope,
     List<Transaction> monthTransactions,
     ThemeData theme,
+    List<Account> accounts,
+    List<Envelope> allEnvelopes,
   ) {
     final responsive = context.responsive;
 
@@ -292,6 +299,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             EnvelopeTransactionList(
               key: _transactionListKey,
               transactions: monthTransactions,
+              accounts: accounts,
+              envelopes: allEnvelopes,
               onTransactionTap: (tx) {},
             ),
             const SizedBox(height: 100),
@@ -406,86 +415,95 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             final sortedEnvelopes = allEnvelopes.toList()
               ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-            return StreamBuilder<List<Transaction>>(
-              stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
-              builder: (context, txSnapshot) {
-                final realTransactions = txSnapshot.data ?? [];
+            return StreamBuilder<List<Account>>(
+              stream: _accountRepo.accountsStream(),
+              builder: (context, accountsSnapshot) {
+                final accounts = accountsSnapshot.data ?? [];
 
-                // If in Time Machine mode, add future transactions
-                final allTransactions = timeMachine.isActive
-                    ? [
-                        ...realTransactions,
-                        ...timeMachine.getFutureTransactions(widget.envelopeId),
-                      ]
-                    : realTransactions;
+                return StreamBuilder<List<Transaction>>(
+                  stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
+                  builder: (context, txSnapshot) {
+                    final realTransactions = txSnapshot.data ?? [];
 
-                // Filter transactions logic
-                final monthStart = DateTime(
-                  _viewingMonth.year,
-                  _viewingMonth.month,
-                  1,
-                );
-                final monthEnd = DateTime(
-                  _viewingMonth.year,
-                  _viewingMonth.month + 1,
-                  0,
-                  23,
-                  59,
-                  59,
-                );
-                final monthTransactions = allTransactions.where((tx) {
-                  return tx.date.isAfter(
-                        monthStart.subtract(const Duration(seconds: 1)),
-                      ) &&
-                      tx.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
-                }).toList();
+                    // If in Time Machine mode, add future transactions
+                    final allTransactions = timeMachine.isActive
+                        ? [
+                            ...realTransactions,
+                            ...timeMachine.getFutureTransactions(widget.envelopeId),
+                          ]
+                        : realTransactions;
 
-                return PopScope(
-                  canPop: true,
-                  child: TutorialWrapper(
-                    tutorialSequence: envelopeDetailTutorial,
-                    spotlightKeys: {
-                      'envelopeCard': _envelopeCardKey,
-                      'transactionList': _transactionListKey,
-                      'fab': _fabKey,
-                    },
-                    child: GestureDetector(
-                      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),
-                      child: Scaffold(
-                backgroundColor: theme.scaffoldBackgroundColor,
-                appBar: AppBar(
-                  backgroundColor: theme.scaffoldBackgroundColor,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                title: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    envelope.name,
-                    style: fontProvider.getTextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
+                    // Filter transactions logic
+                    final monthStart = DateTime(
+                      _viewingMonth.year,
+                      _viewingMonth.month,
+                      1,
+                    );
+                    final monthEnd = DateTime(
+                      _viewingMonth.year,
+                      _viewingMonth.month + 1,
+                      0,
+                      23,
+                      59,
+                      59,
+                    );
+                    final monthTransactions = allTransactions.where((tx) {
+                      return tx.date.isAfter(
+                            monthStart.subtract(const Duration(seconds: 1)),
+                          ) &&
+                          tx.date.isBefore(monthEnd.add(const Duration(seconds: 1)));
+                    }).toList();
+
+                    return PopScope(
+                      canPop: true,
+                      child: TutorialWrapper(
+                        tutorialSequence: envelopeDetailTutorial,
+                        spotlightKeys: {
+                          'envelopeCard': _envelopeCardKey,
+                          'transactionList': _transactionListKey,
+                          'fab': _fabKey,
+                        },
+                        child: GestureDetector(
+                          onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),
+                          child: Scaffold(
+                    backgroundColor: theme.scaffoldBackgroundColor,
+                    appBar: AppBar(
+                      backgroundColor: theme.scaffoldBackgroundColor,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    title: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        envelope.name,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              body: ResponsiveLayout(
-                portrait: _buildPortraitLayout(
-                  envelope,
-                  monthTransactions,
-                  theme,
-                ),
-                landscape: _buildLandscapeLayout(
-                  envelope,
-                  monthTransactions,
-                  theme,
-                ),
-              ),
+                  body: ResponsiveLayout(
+                    portrait: _buildPortraitLayout(
+                      envelope,
+                      monthTransactions,
+                      theme,
+                      accounts,
+                      allEnvelopes,
+                    ),
+                    landscape: _buildLandscapeLayout(
+                      envelope,
+                      monthTransactions,
+                      theme,
+                      accounts,
+                      allEnvelopes,
+                    ),
+                  ),
 
               bottomNavigationBar: BottomNavigationBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
@@ -531,9 +549,11 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             ),
           ),
         ),
-        );
-      },
-    );
+                    );
+                  },
+                );
+              },
+            );
           },
         );
       },

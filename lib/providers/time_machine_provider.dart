@@ -198,7 +198,9 @@ class TimeMachineProvider extends ChangeNotifier {
 
   /// Generate ALL projected transactions across all envelopes
   /// Includes pay days, auto-fills, scheduled payments, and optionally transfers
-  List<Transaction> getAllProjectedTransactions({bool includeTransfers = true}) {
+  List<Transaction> getAllProjectedTransactions({
+    bool includeTransfers = true,
+  }) {
     if (!_isActive || _projectionData == null) {
       debugPrint('[TimeMachine::Projection] getAllProjectedTransactions: inactive');
       return [];
@@ -227,30 +229,33 @@ class TimeMachineProvider extends ChangeNotifier {
             continue;
           }
           txType = TransactionType.transfer;
-          // Don't add suffix - badge shows "PROJECTED" already
         } else if (event.type == 'pay_day') {
           // Pay day is a deposit to the account
           txType = TransactionType.deposit;
-          description = 'Pay Day';
-          // Don't add suffix - badge shows "PROJECTED" already
+          description = event.description; // Already set to "PAY DAY!"
         } else if (event.type == 'scheduled_payment') {
           txType = TransactionType.scheduledPayment;
-          // Don't add suffix - badge shows "PROJECTED" already
+          description = event.description; // Use scheduled payment name
         } else if (event.type == 'auto_fill') {
           // Auto-fill is a DEPOSIT to envelope from account (pay day auto-fill)
           txType = TransactionType.deposit;
-          // Use the description from the event (already formatted as "Deposit from X - Pay Day")
-          // Don't add suffix - badge shows "PROJECTED" already
+          description = event.description; // Already formatted as "Auto-fill deposit from [Account Name]"
         } else if (event.type == 'account_auto_fill') {
-          // Account auto-fill is a TRANSFER between accounts
-          txType = TransactionType.transfer;
-          // Don't add suffix - badge shows "PROJECTED" already
+          // Account auto-fill is a DEPOSIT to target account from default account
+          txType = TransactionType.deposit;
+          description = event.description; // Already formatted as "Auto-fill deposit from [Default Account]"
+        } else if (event.type == 'envelope_auto_fill_withdrawal') {
+          // Withdrawal from account for envelope auto-fill
+          txType = TransactionType.withdrawal;
+          description = event.description; // Already formatted as "[Envelope Name] - Withdrawal auto-fill"
+        } else if (event.type == 'account_auto_fill_withdrawal') {
+          // Withdrawal from default account for account-to-account auto-fill
+          txType = TransactionType.withdrawal;
+          description = event.description; // Already formatted as "[Account Name] - Withdrawal auto-fill"
         } else if (event.isCredit) {
           txType = TransactionType.deposit;
-          // Don't add suffix - badge shows "PROJECTED" already
         } else {
           txType = TransactionType.withdrawal;
-          // Don't add suffix - badge shows "PROJECTED" already
         }
 
         // Create synthetic transaction
@@ -298,7 +303,9 @@ class TimeMachineProvider extends ChangeNotifier {
     debugPrint('[TimeMachine::Projection] Include transfers: $includeTransfers');
     debugPrint('[TimeMachine::Projection] ========================================');
 
-    final allProjected = getAllProjectedTransactions(includeTransfers: includeTransfers);
+    final allProjected = getAllProjectedTransactions(
+      includeTransfers: includeTransfers,
+    );
 
     final filtered = allProjected.where((tx) {
       return tx.date.isAfter(start.subtract(const Duration(milliseconds: 1))) &&

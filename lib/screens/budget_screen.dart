@@ -167,7 +167,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
                         if (!context.mounted) return;
 
-                        // Open Time Machine screen
+                        // Open Time Machine screen with auto-scroll to settings
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -176,6 +176,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
                               envelopeRepo: widget.repo,
                               groupRepo: groupRepo,
                               paySettings: paySettings ?? PayDaySettings(userId: userId),
+                              scrollToSettings: true, // Auto-scroll to settings section
                             ),
                             fullscreenDialog: true,
                           ),

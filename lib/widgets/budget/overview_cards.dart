@@ -452,6 +452,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
             builder: (_) => ScheduledPaymentsListScreen(
               paymentRepo: widget.paymentRepo,
               envelopeRepo: widget.envelopeRepo,
+              futureStart: start,
+              futureEnd: end,
             ),
           ),
         );
