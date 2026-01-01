@@ -15,11 +15,13 @@ class AutoFillListScreen extends StatelessWidget {
     required this.envelopeRepo,
     required this.groupRepo,
     required this.accountRepo,
+    this.groupId, // Optional: filter by specific binder/group
   });
 
   final EnvelopeRepo envelopeRepo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final String? groupId; // If provided, show only envelopes from this group
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +41,7 @@ class AutoFillListScreen extends StatelessWidget {
         ),
         title: FittedBox(
           child: Text(
-            'Auto-Fill Envelopes',
+            groupId != null ? 'Binder Auto-Fill' : 'Auto-Fill Envelopes',
             style: fontProvider.getTextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -56,7 +58,12 @@ class AutoFillListScreen extends StatelessWidget {
           }
 
           final allEnvelopes = snapshot.data ?? [];
-          final autoFillEnvelopes = allEnvelopes
+          // Filter by group if groupId is provided
+          final filteredEnvelopes = groupId != null
+              ? allEnvelopes.where((e) => e.groupId == groupId).toList()
+              : allEnvelopes;
+
+          final autoFillEnvelopes = filteredEnvelopes
               .where((e) => e.autoFillEnabled && (e.autoFillAmount ?? 0) > 0)
               .toList();
 

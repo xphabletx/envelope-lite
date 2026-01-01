@@ -24,6 +24,7 @@ import '../widgets/tutorial_wrapper.dart';
 import '../widgets/time_machine_indicator.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
+import '../widgets/budget/auto_fill_list_screen.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -531,6 +532,158 @@ class _BinderSpreadState extends State<_BinderSpread> {
     }
   }
 
+  Widget _buildInfoChips(BuildContext context, FontProvider fontProvider) {
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
+    // Calculate auto-fill stats
+    final autoFillEnvelopes = widget.envelopes.where((e) => e.autoFillEnabled && (e.autoFillAmount ?? 0) > 0).toList();
+    final autoFillTotal = autoFillEnvelopes.fold(0.0, (sum, e) => sum + (e.autoFillAmount ?? 0));
+
+    // Calculate target stats
+    final targetEnvelopes = widget.envelopes.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
+    final totalTargetAmount = targetEnvelopes.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
+    final totalCurrentAmount = targetEnvelopes.fold(0.0, (sum, e) => sum + e.currentAmount);
+    final targetProgress = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount * 100) : 0.0;
+
+    return Column(
+      children: [
+        // Auto-fill Chip
+        if (autoFillEnvelopes.isNotEmpty)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AutoFillListScreen(
+                    envelopeRepo: widget.repo,
+                    groupRepo: GroupRepo(widget.repo),
+                    accountRepo: AccountRepo(widget.repo),
+                    groupId: widget.group.id,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.binderColors.binderColor.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.binderColors.binderColor.withAlpha(77),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.autorenew,
+                        size: 12,
+                        color: widget.binderColors.binderColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${autoFillEnvelopes.length} Auto Fill',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: widget.binderColors.binderColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      currency.format(autoFillTotal),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: widget.binderColors.envelopeTextColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // Target Chip
+        if (targetEnvelopes.isNotEmpty)
+          GestureDetector(
+            onTap: () {
+              // TODO: Navigate to target screen with binder filter
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Target screen navigation coming soon')),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.binderColors.binderColor.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.binderColors.binderColor.withAlpha(77),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.track_changes,
+                        size: 12,
+                        color: widget.binderColors.binderColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Target',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: widget.binderColors.binderColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      currency.format(totalTargetAmount),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: widget.binderColors.envelopeTextColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${targetProgress.toStringAsFixed(1)}% (${currency.format(totalCurrentAmount)})',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: widget.binderColors.envelopeTextColor.withAlpha(179),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -758,6 +911,10 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           ],
                         ),
 
+                        // Auto-fill and Target Info Chips
+                        const SizedBox(height: 8),
+                        _buildInfoChips(context, fontProvider),
+
                         // Selected Envelope Details
                         if (selectedEnvelope != null) ...[
                           const SizedBox(height: 8),
@@ -935,11 +1092,87 @@ class _DynamicEnvelopeStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final theme = Theme.of(context);
+    final envelopeCount = envelopes.length;
 
+    // Use scrollable list when there are more than 8 envelopes
+    if (envelopeCount > 8) {
+      return ListView.builder(
+        itemCount: envelopeCount,
+        itemBuilder: (context, index) {
+          final envelope = envelopes[index];
+          final isSelected = selectedIndex == index;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: GestureDetector(
+              onTap: () => onTap(index),
+              child: Container(
+                height: 45.0,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: binderColors.paperColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isSelected
+                        ? binderColors.envelopeBorderColor
+                        : binderColors.envelopeBorderColor.withAlpha(77),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: binderColors.binderColor.withAlpha(
+                        isSelected ? 51 : 13,
+                      ),
+                      blurRadius: isSelected ? 4 : 2,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    // Envelope Icon
+                    envelope.getIconWidget(theme, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        envelope.name,
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: binderColors.envelopeTextColor.withAlpha(
+                            isSelected ? 255 : 204,
+                          ),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isSelected)
+                      Text(
+                        currency.format(envelope.currentAmount),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: binderColors.binderColor,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Original stacked layout for 8 or fewer envelopes
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableHeight = constraints.maxHeight;
-        final envelopeCount = envelopes.length;
 
         final envelopeHeight = 45.0; // Slightly smaller for dense look
         double spacing;
@@ -988,6 +1221,9 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
+                      // Envelope Icon
+                      envelope.getIconWidget(theme, size: 18),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           envelope.name,
