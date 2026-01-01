@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../services/envelope_repo.dart';
@@ -642,41 +641,608 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     FontProvider fontProvider,
     LocaleProvider locale,
   ) {
-    // This is a placeholder - will be completed in next iteration
+    final selectedEnvelopes = targetEnvelopes
+        .where((e) => _selectedEnvelopeIds.contains(e.id))
+        .toList();
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ExpansionTile(
+        initiallyExpanded: _showCalculator,
+        onExpansionChanged: (expanded) {
+          setState(() => _showCalculator = expanded);
+        },
+        leading: Icon(
+          Icons.calculate,
+          color: theme.colorScheme.primary,
+        ),
+        title: Text(
+          'Contribution Calculator',
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text('Plan contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Total Contribution Amount Input
+                TextField(
+                  controller: _totalContributionController,
+                  decoration: InputDecoration(
+                    labelText: 'Total Contribution Amount',
+                    labelStyle: fontProvider.getTextStyle(fontSize: 16),
+                    prefixText: '${locale.currencySymbol} ',
+                    hintText: '500.00',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.calculate, color: theme.colorScheme.primary),
+                      onPressed: () async {
+                        final result = await showDialog<String>(
+                          context: context,
+                          builder: (context) => _CalculatorDialog(),
+                        );
+                        if (result != null) {
+                          _totalContributionController.text = result;
+                          setState(() {});
+                        }
+                      },
+                      tooltip: 'Calculator',
+                    ),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onTap: () {
+                    _totalContributionController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _totalContributionController.text.length,
+                    );
+                  },
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 16),
+
+                // Default Frequency Selector
+                DropdownButtonFormField<String>(
+                  initialValue: _defaultFrequency,
+                  decoration: InputDecoration(
+                    labelText: 'Default Frequency',
+                    labelStyle: fontProvider.getTextStyle(fontSize: 16),
+                    prefixIcon: const Icon(Icons.calendar_today),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                    DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                    DropdownMenuItem(value: 'biweekly', child: Text('Every 2 weeks')),
+                    DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _defaultFrequency = value!;
+                      // Update all envelopes that don't have custom frequency
+                      for (var id in _selectedEnvelopeIds) {
+                        if (!_envelopeFrequencies.containsKey(id)) {
+                          _envelopeFrequencies[id] = value;
+                        }
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                // Per-Envelope Allocation
+                Text(
+                  'Contribution Allocation',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Adjust how the total contribution is split between envelopes',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.colorScheme.onSurface.withAlpha(179),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                ...selectedEnvelopes.map((envelope) {
+                  return _buildEnvelopeAllocationTile(
+                    envelope,
+                    theme,
+                    fontProvider,
+                    locale,
+                  );
+                }),
+
+                const SizedBox(height: 24),
+
+                // Projection Results
+                _buildProjectionResults(selectedEnvelopes, theme, fontProvider, locale),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnvelopeAllocationTile(
+    Envelope envelope,
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
+    final percentage = _contributionAllocations[envelope.id] ?? 0;
+    final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
+    final envelopeAmount = totalAmount * (percentage / 100);
+    final frequency = _envelopeFrequencies[envelope.id] ?? _defaultFrequency;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.calculate,
-                  color: theme.colorScheme.primary,
+                envelope.getIconWidget(theme, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    envelope.name,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 12),
                 Text(
-                  'Contribution Calculator',
+                  '${percentage.toStringAsFixed(1)}%',
                   style: fontProvider.getTextStyle(
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Advanced calculator with per-envelope allocation coming next...',
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withAlpha(179),
-              ),
+            const SizedBox(height: 8),
+
+            // Percentage Slider
+            Slider(
+              value: percentage,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              label: '${percentage.toStringAsFixed(1)}%',
+              onChanged: (value) {
+                _updateAllocation(envelope.id, value);
+              },
+            ),
+
+            // Amount Display and Input
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Amount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withAlpha(179),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => _showAmountInput(envelope, theme, fontProvider, locale),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer.withAlpha(77),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withAlpha(77),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                locale.formatCurrency(envelopeAmount),
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.edit_outlined,
+                                size: 14,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Frequency Override
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Frequency',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withAlpha(179),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      DropdownButtonFormField<String>(
+                        initialValue: frequency,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          isDense: true,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'daily', child: Text('Daily', style: TextStyle(fontSize: 14))),
+                          DropdownMenuItem(value: 'weekly', child: Text('Weekly', style: TextStyle(fontSize: 14))),
+                          DropdownMenuItem(value: 'biweekly', child: Text('Biweekly', style: TextStyle(fontSize: 14))),
+                          DropdownMenuItem(value: 'monthly', child: Text('Monthly', style: TextStyle(fontSize: 14))),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _envelopeFrequencies[envelope.id] = value!;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showAmountInput(Envelope envelope, ThemeData theme, FontProvider fontProvider, LocaleProvider locale) {
+    final controller = TextEditingController();
+    final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
+    final currentPercentage = _contributionAllocations[envelope.id] ?? 0;
+    final currentAmount = totalAmount * (currentPercentage / 100);
+    controller.text = currentAmount.toStringAsFixed(2);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          envelope.name,
+          style: fontProvider.getTextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter contribution amount', style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Amount',
+                prefixText: '${locale.currencySymbol} ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onSubmitted: (_) => _applyAmountChange(envelope.id, controller.text, totalAmount),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => _applyAmountChange(envelope.id, controller.text, totalAmount),
+            child: Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyAmountChange(String envelopeId, String amountText, double totalAmount) {
+    final amount = double.tryParse(amountText) ?? 0;
+    if (totalAmount > 0 && amount >= 0 && amount <= totalAmount) {
+      final newPercentage = (amount / totalAmount) * 100;
+      _updateAllocation(envelopeId, newPercentage);
+      Navigator.pop(context);
+    }
+  }
+
+  int _getDaysPerFrequency(String frequency) {
+    switch (frequency) {
+      case 'daily': return 1;
+      case 'weekly': return 7;
+      case 'biweekly': return 14;
+      case 'monthly': return 30;
+      default: return 30;
+    }
+  }
+
+  Widget _buildProjectionResults(
+    List<Envelope> selectedEnvelopes,
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
+    final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
+
+    if (totalContribution <= 0) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Enter a total contribution amount to see projections',
+          style: TextStyle(
+            color: theme.colorScheme.onSurface.withAlpha(179),
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withAlpha(77),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.insights, color: theme.colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Projection Summary',
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...selectedEnvelopes.map((envelope) {
+            final percentage = _contributionAllocations[envelope.id] ?? 0;
+            final envelopeAmount = totalContribution * (percentage / 100);
+            final frequency = _envelopeFrequencies[envelope.id] ?? _defaultFrequency;
+            final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
+
+            if (remaining <= 0) return const SizedBox.shrink();
+
+            final contributionsNeeded = envelopeAmount > 0 ? (remaining / envelopeAmount).ceil() : 0;
+            final daysPerContribution = _getDaysPerFrequency(frequency);
+            final daysToTarget = contributionsNeeded * daysPerContribution;
+            final targetDate = DateTime.now().add(Duration(days: daysToTarget));
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: theme.colorScheme.outline.withAlpha(77)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        envelope.getIconWidget(theme, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            envelope.name,
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildProjectionRow('Remaining', locale.formatCurrency(remaining), fontProvider),
+                    _buildProjectionRow('Per $frequency', locale.formatCurrency(envelopeAmount), fontProvider),
+                    _buildProjectionRow('Contributions needed', '$contributionsNeeded', fontProvider),
+                    _buildProjectionRow(
+                      'Target reached by',
+                      '${targetDate.day}/${targetDate.month}/${targetDate.year}',
+                      fontProvider,
+                      valueColor: theme.colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectionRow(String label, String value, FontProvider fontProvider, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: fontProvider.getTextStyle(fontSize: 12)),
+          Text(
+            value,
+            style: fontProvider.getTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Simple calculator dialog
+class _CalculatorDialog extends StatefulWidget {
+  @override
+  State<_CalculatorDialog> createState() => _CalculatorDialogState();
+}
+
+class _CalculatorDialogState extends State<_CalculatorDialog> {
+  String _display = '0';
+  String _operation = '';
+  double _firstOperand = 0;
+  bool _shouldResetDisplay = false;
+
+  void _onDigitPressed(String digit) {
+    setState(() {
+      if (_shouldResetDisplay || _display == '0') {
+        _display = digit;
+        _shouldResetDisplay = false;
+      } else {
+        _display += digit;
+      }
+    });
+  }
+
+  void _onOperationPressed(String op) {
+    setState(() {
+      _firstOperand = double.tryParse(_display) ?? 0;
+      _operation = op;
+      _shouldResetDisplay = true;
+    });
+  }
+
+  void _onEqualsPressed() {
+    final secondOperand = double.tryParse(_display) ?? 0;
+    double result = 0;
+
+    switch (_operation) {
+      case '+':
+        result = _firstOperand + secondOperand;
+        break;
+      case '-':
+        result = _firstOperand - secondOperand;
+        break;
+      case '×':
+        result = _firstOperand * secondOperand;
+        break;
+      case '÷':
+        result = secondOperand != 0 ? _firstOperand / secondOperand : 0;
+        break;
+    }
+
+    setState(() {
+      _display = result.toStringAsFixed(2);
+      _operation = '';
+      _shouldResetDisplay = true;
+    });
+  }
+
+  void _onClear() {
+    setState(() {
+      _display = '0';
+      _operation = '';
+      _firstOperand = 0;
+      _shouldResetDisplay = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Calculator'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            alignment: Alignment.centerRight,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _display,
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            shrinkWrap: true,
+            crossAxisCount: 4,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            children: [
+              ...'789÷456×123-0.=+'.split('').map((char) {
+                return ElevatedButton(
+                  onPressed: () {
+                    if ('0123456789.'.contains(char)) {
+                      _onDigitPressed(char);
+                    } else if ('+-×÷'.contains(char)) {
+                      _onOperationPressed(char);
+                    } else if (char == '=') {
+                      _onEqualsPressed();
+                    }
+                  },
+                  child: Text(char, style: const TextStyle(fontSize: 20)),
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: _onClear, child: const Text('Clear')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _display),
+          child: const Text('Use'),
+        ),
+      ],
     );
   }
 }
