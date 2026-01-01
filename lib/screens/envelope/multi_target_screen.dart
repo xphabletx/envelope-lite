@@ -11,6 +11,7 @@ import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/target_helper.dart';
+import '../../utils/calculator_helper.dart';
 
 enum TargetScreenMode {
   singleEnvelope,  // From envelope detail
@@ -682,19 +683,23 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.calculate, color: theme.colorScheme.primary),
-                      onPressed: () async {
-                        final result = await showDialog<String>(
-                          context: context,
-                          builder: (context) => _CalculatorDialog(),
-                        );
-                        if (result != null) {
-                          _totalContributionController.text = result;
-                          setState(() {});
-                        }
-                      },
-                      tooltip: 'Calculator',
+                    suffixIcon: Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.calculate, color: theme.colorScheme.onPrimary),
+                        onPressed: () async {
+                          final result = await CalculatorHelper.showCalculator(context);
+                          if (result != null) {
+                            _totalContributionController.text = result;
+                            setState(() {});
+                          }
+                        },
+                        tooltip: 'Calculator',
+                      ),
                     ),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1122,134 +1127,6 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-// Simple calculator dialog
-class _CalculatorDialog extends StatefulWidget {
-  @override
-  State<_CalculatorDialog> createState() => _CalculatorDialogState();
-}
-
-class _CalculatorDialogState extends State<_CalculatorDialog> {
-  String _display = '0';
-  String _operation = '';
-  double _firstOperand = 0;
-  bool _shouldResetDisplay = false;
-
-  void _onDigitPressed(String digit) {
-    setState(() {
-      if (_shouldResetDisplay || _display == '0') {
-        _display = digit;
-        _shouldResetDisplay = false;
-      } else {
-        _display += digit;
-      }
-    });
-  }
-
-  void _onOperationPressed(String op) {
-    setState(() {
-      _firstOperand = double.tryParse(_display) ?? 0;
-      _operation = op;
-      _shouldResetDisplay = true;
-    });
-  }
-
-  void _onEqualsPressed() {
-    final secondOperand = double.tryParse(_display) ?? 0;
-    double result = 0;
-
-    switch (_operation) {
-      case '+':
-        result = _firstOperand + secondOperand;
-        break;
-      case '-':
-        result = _firstOperand - secondOperand;
-        break;
-      case '×':
-        result = _firstOperand * secondOperand;
-        break;
-      case '÷':
-        result = secondOperand != 0 ? _firstOperand / secondOperand : 0;
-        break;
-    }
-
-    setState(() {
-      _display = result.toStringAsFixed(2);
-      _operation = '';
-      _shouldResetDisplay = true;
-    });
-  }
-
-  void _onClear() {
-    setState(() {
-      _display = '0';
-      _operation = '';
-      _firstOperand = 0;
-      _shouldResetDisplay = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Calculator'),
-      content: SizedBox(
-        width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              alignment: Alignment.centerRight,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _display,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 280,
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 4,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                children: [
-                  ...'789÷456×123-0.=+'.split('').map((char) {
-                    return ElevatedButton(
-                      onPressed: () {
-                        if ('0123456789.'.contains(char)) {
-                          _onDigitPressed(char);
-                        } else if ('+-×÷'.contains(char)) {
-                          _onOperationPressed(char);
-                        } else if (char == '=') {
-                          _onEqualsPressed();
-                        }
-                      },
-                      child: Text(char, style: const TextStyle(fontSize: 20)),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: _onClear, child: const Text('Clear')),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _display),
-          child: const Text('Use'),
-        ),
-      ],
     );
   }
 }
