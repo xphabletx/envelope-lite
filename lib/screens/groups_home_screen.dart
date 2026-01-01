@@ -10,7 +10,6 @@ import '../services/group_repo.dart';
 import '../services/workspace_helper.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_badge.dart';
-import 'group_detail_screen.dart';
 import 'envelope/envelopes_detail_screen.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
@@ -26,6 +25,7 @@ import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
 import '../widgets/budget/auto_fill_list_screen.dart';
 import 'envelope/multi_target_screen.dart';
+import 'stats_history_screen.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -47,9 +47,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   bool _mineOnly = false;
   String _sortBy = 'name';
 
-  // TUTORIAL KEYS
-  final GlobalKey _viewHistoryButtonKey = GlobalKey();
-
   Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs, TimeMachineProvider timeMachine) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -61,18 +58,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     debugPrint('[GroupsHome] Binder ${g.name} total: $totSaved (${inGroup.length} envelopes, TimeMachine: ${timeMachine.isActive})');
 
     return {'totalSaved': totSaved, 'envelopes': projectedEnvelopes};
-  }
-
-  void _openGroupDetail(EnvelopeGroup group) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GroupDetailScreen(
-          group: group,
-          groupRepo: widget.groupRepo,
-          envelopeRepo: widget.repo,
-        ),
-      ),
-    );
   }
 
   Future<void> _openGroupEditor(EnvelopeGroup? group) async {
@@ -170,9 +155,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             if (groups.isEmpty) {
               return TutorialWrapper(
                 tutorialSequence: bindersTutorial,
-                spotlightKeys: {
-                  'view_history_button': _viewHistoryButtonKey,
-                },
                 child: Scaffold(
                   backgroundColor: theme.scaffoldBackgroundColor,
                   appBar: AppBar(
@@ -281,9 +263,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
 
             return TutorialWrapper(
               tutorialSequence: bindersTutorial,
-              spotlightKeys: {
-                'view_history_button': _viewHistoryButtonKey,
-              },
               child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
@@ -421,11 +400,9 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             totalSaved: totalSaved,
                             currency: currency,
                             onEdit: () => _openGroupEditor(group),
-                            onViewDetails: () => _openGroupDetail(group),
                             theme: theme,
                             repo: widget.repo,
                             isPartner: isPartner && !_mineOnly,
-                            viewHistoryButtonKey: index == 0 ? _viewHistoryButtonKey : null,
                           ),
                         );
                       },
@@ -467,11 +444,9 @@ class _BinderSpread extends StatefulWidget {
   final double totalSaved;
   final NumberFormat currency;
   final VoidCallback onEdit;
-  final VoidCallback onViewDetails;
   final ThemeData theme;
   final EnvelopeRepo repo;
   final bool isPartner;
-  final GlobalKey? viewHistoryButtonKey;
 
   const _BinderSpread({
     required this.group,
@@ -480,11 +455,9 @@ class _BinderSpread extends StatefulWidget {
     required this.totalSaved,
     required this.currency,
     required this.onEdit,
-    required this.onViewDetails,
     required this.theme,
     required this.repo,
     required this.isPartner,
-    this.viewHistoryButtonKey,
   });
 
   @override
@@ -493,44 +466,128 @@ class _BinderSpread extends StatefulWidget {
 
 class _BinderSpreadState extends State<_BinderSpread> {
   int? _selectedIndex;
-  int _tapCount = 0;
+  final ScrollController _scrollController = ScrollController();
 
-  void _handleEnvelopeTap(int index) {
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleEnvelopeTap(int index) async {
     if (_selectedIndex == index) {
-      _tapCount++;
-      if (_tapCount == 2) {
-        final envelope = widget.envelopes[_selectedIndex!];
-        // Prevent access to partner's envelopes
-        if (envelope.userId != widget.repo.currentUserId) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("You cannot view details of your partner's envelopes"),
-            ),
-          );
-          setState(() {
-            _tapCount = 0;
-          });
-          return;
-        }
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EnvelopeDetailScreen(
-              envelopeId: widget.envelopes[_selectedIndex!].id,
-              repo: widget.repo,
-            ),
+      // Second tap - navigate to full envelope detail screen
+      final envelope = widget.envelopes[_selectedIndex!];
+      // Prevent access to partner's envelopes
+      if (envelope.userId != widget.repo.currentUserId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("You cannot view details of your partner's envelopes"),
           ),
         );
-        setState(() {
-          _tapCount = 0;
-        });
+        return;
       }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EnvelopeDetailScreen(
+            envelopeId: widget.envelopes[_selectedIndex!].id,
+            repo: widget.repo,
+          ),
+        ),
+      );
     } else {
+      // First tap - expand inline and scroll to top
       setState(() {
         _selectedIndex = index;
-        _tapCount = 1;
       });
+
+      // Scroll the tapped envelope to the top
+      final itemHeight = 53.0; // Envelope item height + spacing
+      final scrollPosition = index * itemHeight;
+
+      await _scrollController.animateTo(
+        scrollPosition,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
+  }
+
+  Widget _buildStandardChip({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String amount,
+    required VoidCallback onTap,
+    required FontProvider fontProvider,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: widget.binderColors.binderColor.withAlpha(26),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: widget.binderColors.binderColor.withAlpha(77),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: widget.binderColors.binderColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: widget.binderColors.binderColor,
+                      letterSpacing: 0.5,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                amount,
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: widget.binderColors.envelopeTextColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap for details',
+              style: TextStyle(
+                fontSize: 9,
+                color: widget.binderColors.envelopeTextColor.withAlpha(128),
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildInfoChips(BuildContext context, FontProvider fontProvider) {
@@ -544,152 +601,95 @@ class _BinderSpreadState extends State<_BinderSpread> {
     // Calculate target stats
     final targetEnvelopes = widget.envelopes.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
     final totalTargetAmount = targetEnvelopes.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
-    final totalCurrentAmount = targetEnvelopes.fold(0.0, (sum, e) => sum + e.currentAmount);
-    final targetProgress = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount * 100) : 0.0;
 
+    // Build list of chips to show
+    final chips = <Widget>[];
+
+    // Always show Binder Total
+    chips.add(
+      _buildStandardChip(
+        context: context,
+        icon: Icons.account_balance_wallet,
+        label: tr('group_binder_total'),
+        amount: currency.format(widget.totalSaved),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StatsHistoryScreen(
+                repo: widget.repo,
+                initialGroupIds: {widget.group.id},
+                title: '${widget.group.name} Stats',
+              ),
+            ),
+          );
+        },
+        fontProvider: fontProvider,
+      ),
+    );
+
+    // Auto-fill Chip
+    if (autoFillEnvelopes.isNotEmpty) {
+      chips.add(
+        _buildStandardChip(
+          context: context,
+          icon: Icons.autorenew,
+          label: 'Auto Fill',
+          amount: currency.format(autoFillTotal),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AutoFillListScreen(
+                  envelopeRepo: widget.repo,
+                  groupRepo: GroupRepo(widget.repo),
+                  accountRepo: AccountRepo(widget.repo),
+                  groupId: widget.group.id,
+                ),
+              ),
+            );
+          },
+          fontProvider: fontProvider,
+        ),
+      );
+    }
+
+    // Target Chip
+    if (targetEnvelopes.isNotEmpty) {
+      chips.add(
+        _buildStandardChip(
+          context: context,
+          icon: Icons.track_changes,
+          label: 'Target',
+          amount: currency.format(totalTargetAmount),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MultiTargetScreen(
+                  envelopeRepo: widget.repo,
+                  groupRepo: GroupRepo(widget.repo),
+                  accountRepo: AccountRepo(widget.repo),
+                  initialGroupId: widget.group.id,
+                  mode: TargetScreenMode.binderFiltered,
+                  title: '${widget.group.name} Targets',
+                ),
+              ),
+            );
+          },
+          fontProvider: fontProvider,
+        ),
+      );
+    }
+
+    // Space chips vertically to make use of available space
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Auto-fill Chip
-        if (autoFillEnvelopes.isNotEmpty)
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AutoFillListScreen(
-                    envelopeRepo: widget.repo,
-                    groupRepo: GroupRepo(widget.repo),
-                    accountRepo: AccountRepo(widget.repo),
-                    groupId: widget.group.id,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: widget.binderColors.binderColor.withAlpha(26),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: widget.binderColors.binderColor.withAlpha(77),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.autorenew,
-                        size: 12,
-                        color: widget.binderColors.binderColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${autoFillEnvelopes.length} Auto Fill',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: widget.binderColors.binderColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      currency.format(autoFillTotal),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: widget.binderColors.envelopeTextColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        // Target Chip
-        if (targetEnvelopes.isNotEmpty)
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MultiTargetScreen(
-                    envelopeRepo: widget.repo,
-                    groupRepo: GroupRepo(widget.repo),
-                    accountRepo: AccountRepo(widget.repo),
-                    initialGroupId: widget.group.id,
-                    mode: TargetScreenMode.binderFiltered,
-                    title: '${widget.group.name} Targets',
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: widget.binderColors.binderColor.withAlpha(26),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: widget.binderColors.binderColor.withAlpha(77),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.track_changes,
-                        size: 12,
-                        color: widget.binderColors.binderColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Target',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: widget.binderColors.binderColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      currency.format(totalTargetAmount),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: widget.binderColors.envelopeTextColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${targetProgress.toStringAsFixed(1)}% (${currency.format(totalCurrentAmount)})',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: widget.binderColors.envelopeTextColor.withAlpha(179),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        for (int i = 0; i < chips.length; i++) ...[
+          chips[i],
+          if (i < chips.length - 1) const SizedBox(height: 16),
+        ],
       ],
     );
   }
@@ -698,10 +698,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final responsive = context.responsive;
-    final selectedEnvelope =
-        _selectedIndex != null && _selectedIndex! < widget.envelopes.length
-            ? widget.envelopes[_selectedIndex!]
-            : null;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
@@ -800,12 +796,13 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                 ),
                                 const SizedBox(height: 12),
                                 Expanded(
-                                  child: _DynamicEnvelopeStack(
+                                  child: _InfiniteEnvelopeList(
                                     envelopes: widget.envelopes,
                                     selectedIndex: _selectedIndex,
                                     binderColors: widget.binderColors,
                                     currency: widget.currency,
                                     onTap: _handleEnvelopeTap,
+                                    scrollController: _scrollController,
                                   ),
                                 ),
                               ],
@@ -837,242 +834,105 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(12),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                        // Binder Header
-                        Column(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
+                    padding: const EdgeInsets.all(16),
+                    child: Stack(
+                      children: [
+                        // Settings Cog in top-right
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: widget.onEdit,
+                            child: Container(
+                              width: 32,
+                              height: 32,
                               decoration: BoxDecoration(
-                                color: widget.binderColors.paperColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: widget.binderColors.binderColor,
-                                  width: 3,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: widget.binderColors.binderColor
-                                        .withAlpha(51),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: widget.group.getIconWidget(theme, size: 22),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.group.name,
-                              style: fontProvider.getTextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: widget.binderColors.envelopeTextColor,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: widget.binderColors.binderColor
-                                    .withAlpha(26),
+                                color: widget.binderColors.binderColor.withAlpha(26),
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: widget.binderColors.binderColor.withAlpha(77),
+                                  width: 1,
+                                ),
                               ),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    tr('group_binder_total'),
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: widget.binderColors.binderColor,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      widget.currency.format(widget.totalSaved),
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: widget.binderColors.binderColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              child: Icon(
+                                Icons.settings,
+                                size: 18,
+                                color: widget.binderColors.binderColor,
                               ),
                             ),
-                          ],
-                        ),
-
-                        // Auto-fill and Target Info Chips
-                        const SizedBox(height: 8),
-                        _buildInfoChips(context, fontProvider),
-
-                        // Selected Envelope Details
-                        if (selectedEnvelope != null) ...[
-                          const SizedBox(height: 8),
-                          Column(
-                            children: [
-                              Divider(
-                                color: widget.binderColors.envelopeTextColor
-                                    .withAlpha(26),
-                                height: 8,
-                              ),
-                              const SizedBox(height: 4),
-                              Icon(
-                                Icons.mail,
-                                size: 16,
-                                color: widget.binderColors.binderColor
-                                    .withAlpha(179),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                selectedEnvelope.name,
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: widget.binderColors.envelopeTextColor,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  widget.currency.format(
-                                    selectedEnvelope.currentAmount,
-                                  ),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: widget.binderColors.binderColor,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                tr('tap_again_for_details'),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: widget.binderColors.envelopeTextColor
-                                      .withAlpha(128),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
                           ),
-                        ],
-
-                        // Action Buttons
-                        const SizedBox(height: 8),
+                        ),
+                        // Main content - use Column with spacers to distribute vertically
                         Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            if (widget.isPartner)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: FutureBuilder<String>(
-                                  future: WorkspaceHelper.getUserDisplayName(
-                                    widget.group.userId,
-                                    widget.repo.currentUserId,
-                                  ),
-                                  builder: (context, nameSnapshot) {
-                                    return PartnerBadge(
-                                      partnerName: nameSnapshot.data ?? 'Partner',
-                                      size: PartnerBadgeSize.small,
-                                    );
-                                  },
-                                ),
-                              ),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      widget.binderColors.binderColor,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
-                                  ),
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.edit, size: 14),
-                                label: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    tr('edit'),
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                onPressed: widget.onEdit,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                key: widget.viewHistoryButtonKey,
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(
-                                    color: widget.binderColors.binderColor
-                                        .withAlpha(128),
-                                    width: 1.5,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                icon: Icon(
-                                  Icons.analytics,
-                                  size: 14,
-                                  color: widget.binderColors.binderColor,
-                                ),
-                                label: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    tr('group_history'),
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
+                            // Binder Header
+                            Column(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: widget.binderColors.paperColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
                                       color: widget.binderColors.binderColor,
+                                      width: 3,
                                     ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: widget.binderColors.binderColor
+                                            .withAlpha(51),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: widget.group.getIconWidget(theme, size: 22),
                                   ),
                                 ),
-                                onPressed: widget.onViewDetails,
-                              ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  widget.group.name,
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: widget.binderColors.envelopeTextColor,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
+
+                            const Spacer(),
+
+                            // Info Chips (Binder Total, Auto-fill, Target) - spaced out
+                            _buildInfoChips(context, fontProvider),
+
+                            const Spacer(),
+
+                            // Partner Badge
+                            if (widget.isPartner)
+                              FutureBuilder<String>(
+                                future: WorkspaceHelper.getUserDisplayName(
+                                  widget.group.userId,
+                                  widget.repo.currentUserId,
+                                ),
+                                builder: (context, nameSnapshot) {
+                                  return PartnerBadge(
+                                    partnerName: nameSnapshot.data ?? 'Partner',
+                                    size: PartnerBadgeSize.small,
+                                  );
+                                },
+                              )
+                            else
+                              const SizedBox.shrink(),
                           ],
                         ),
                       ],
-                    ),
                     ),
                   ),
                 ),
@@ -1084,130 +944,47 @@ class _BinderSpreadState extends State<_BinderSpread> {
     );
   }
 }
-class _DynamicEnvelopeStack extends StatelessWidget {
+
+// Infinite scrollable envelope list with inline detail expansion
+class _InfiniteEnvelopeList extends StatelessWidget {
   final List<Envelope> envelopes;
   final int? selectedIndex;
   final BinderColorOption binderColors;
   final NumberFormat currency;
   final Function(int) onTap;
+  final ScrollController scrollController;
 
-  const _DynamicEnvelopeStack({
+  const _InfiniteEnvelopeList({
     required this.envelopes,
     required this.selectedIndex,
     required this.binderColors,
     required this.currency,
     required this.onTap,
+    required this.scrollController,
   });
 
   @override
   Widget build(BuildContext context) {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final theme = Theme.of(context);
-    final envelopeCount = envelopes.length;
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
 
-    // Use scrollable list when there are more than 8 envelopes
-    if (envelopeCount > 8) {
-      return ListView.builder(
-        itemCount: envelopeCount,
-        itemBuilder: (context, index) {
-          final envelope = envelopes[index];
-          final isSelected = selectedIndex == index;
+    return ListView.builder(
+      controller: scrollController,
+      itemCount: envelopes.length,
+      itemBuilder: (context, index) {
+        final envelope = envelopes[index];
+        final isSelected = selectedIndex == index;
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: GestureDetector(
-              onTap: () => onTap(index),
-              child: Container(
-                height: 45.0,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: binderColors.paperColor,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isSelected
-                        ? binderColors.envelopeBorderColor
-                        : binderColors.envelopeBorderColor.withAlpha(77),
-                    width: isSelected ? 2 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: binderColors.binderColor.withAlpha(
-                        isSelected ? 51 : 13,
-                      ),
-                      blurRadius: isSelected ? 4 : 2,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    // Envelope Icon
-                    envelope.getIconWidget(theme, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        envelope.name,
-                        style: fontProvider.getTextStyle(
-                          fontSize: 14,
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: binderColors.envelopeTextColor.withAlpha(
-                            isSelected ? 255 : 204,
-                          ),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isSelected)
-                      Text(
-                        currency.format(envelope.currentAmount),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: binderColors.binderColor,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    // Original stacked layout for 8 or fewer envelopes
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final availableHeight = constraints.maxHeight;
-
-        final envelopeHeight = 45.0; // Slightly smaller for dense look
-        double spacing;
-        if (envelopeCount <= 1) {
-          spacing = 0;
-        } else {
-          final remainingSpace = availableHeight - envelopeHeight;
-          spacing = remainingSpace / (envelopeCount - 1);
-          spacing = spacing.clamp(15.0, envelopeHeight + 6);
-        }
-
-        return Stack(
-          children: envelopes.asMap().entries.map((entry) {
-            final originalIndex = entry.key;
-            final envelope = entry.value;
-            final isSelected = selectedIndex == originalIndex;
-
-            return Positioned(
-              top: originalIndex * spacing,
-              left: 0,
-              right: 0,
+        return Column(
+          children: [
+            // Envelope Item
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
               child: GestureDetector(
-                onTap: () => onTap(originalIndex),
+                onTap: () => onTap(index),
                 child: Container(
-                  height: envelopeHeight,
+                  height: 45.0,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     color: binderColors.paperColor,
@@ -1231,7 +1008,6 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
-                      // Envelope Icon
                       envelope.getIconWidget(theme, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
@@ -1250,23 +1026,191 @@ class _DynamicEnvelopeStack extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isSelected)
-                        Text(
-                          currency.format(envelope.currentAmount),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: binderColors.binderColor,
-                          ),
-                        ),
+                      Icon(
+                        isSelected ? Icons.expand_less : Icons.expand_more,
+                        size: 16,
+                        color: binderColors.binderColor.withAlpha(128),
+                      ),
                     ],
                   ),
                 ),
               ),
-            );
-          }).toList(),
+            ),
+
+            // Inline Envelope Details (when selected)
+            if (isSelected)
+              _InlineEnvelopeDetail(
+                envelope: envelope,
+                binderColors: binderColors,
+                currency: currency,
+                fontProvider: fontProvider,
+                timeMachine: timeMachine,
+              ),
+          ],
         );
       },
+    );
+  }
+}
+
+// Inline envelope detail widget
+class _InlineEnvelopeDetail extends StatelessWidget {
+  final Envelope envelope;
+  final BinderColorOption binderColors;
+  final NumberFormat currency;
+  final FontProvider fontProvider;
+  final TimeMachineProvider timeMachine;
+
+  const _InlineEnvelopeDetail({
+    required this.envelope,
+    required this.binderColors,
+    required this.currency,
+    required this.fontProvider,
+    required this.timeMachine,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Apply time machine projection if active
+    final projectedEnvelope = timeMachine.getProjectedEnvelope(envelope);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: binderColors.binderColor.withAlpha(13),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: binderColors.binderColor.withAlpha(51),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Current Amount
+          Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet,
+                size: 14,
+                color: binderColors.binderColor,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    currency.format(projectedEnvelope.currentAmount),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: binderColors.envelopeTextColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Auto-fill Amount (if applicable)
+          if (envelope.autoFillEnabled && (envelope.autoFillAmount ?? 0) > 0) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  Icons.autorenew,
+                  size: 14,
+                  color: binderColors.binderColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      currency.format(envelope.autoFillAmount),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: binderColors.envelopeTextColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Target Amount (if applicable)
+          if (envelope.targetAmount != null && envelope.targetAmount! > 0) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  Icons.track_changes,
+                  size: 14,
+                  color: binderColors.binderColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      currency.format(envelope.targetAmount),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: binderColors.envelopeTextColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Target Date (if applicable)
+          if (envelope.targetDate != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 14,
+                  color: binderColors.binderColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      DateFormat('MMM d, yyyy').format(envelope.targetDate!),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: binderColors.envelopeTextColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Tap hint
+          const SizedBox(height: 10),
+          Center(
+            child: Text(
+              'Tap again for full details',
+              style: TextStyle(
+                fontSize: 9,
+                color: binderColors.envelopeTextColor.withAlpha(128),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
