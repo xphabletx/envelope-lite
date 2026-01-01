@@ -6,8 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'email_verification_screen.dart';
 import '../sign_in_screen.dart';
 import '../onboarding/onboarding_flow.dart';
+import 'stuffrite_paywall_screen.dart';
 import '../../services/user_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/cloud_migration_service.dart';
+import '../../services/subscription_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/workspace_provider.dart';
@@ -30,6 +33,15 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // CRITICAL: Check if we're logging out FIRST to prevent phantom builds
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context);
+    if (workspaceProvider.isLoggingOut) {
+      debugPrint('[AuthWrapper] 🚫 Logging out - showing loading screen to prevent phantom build');
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snapshot) {
@@ -40,17 +52,23 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // Not signed in
+        // Not signed in - Use ValueKey to force complete widget tree teardown
+        // When UID changes from logged-in → null, Flutter destroys entire tree
+        // This kills all Firestore listeners and prevents PERMISSION_DENIED errors
         if (!snapshot.hasData) {
-          return const SignInScreen();
+          return SignInScreen(key: const ValueKey('logged-out'));
         }
 
         final user = snapshot.data!;
 
         // Anonymous users - let them in (no verification needed)
+        // Use ValueKey with UID to force tree rebuild when user changes
         if (user.isAnonymous) {
           debugPrint('[AuthWrapper] Anonymous user - no verification needed');
-          return _buildUserProfileWrapper(user);
+          return Container(
+            key: ValueKey(user.uid),
+            child: _buildUserProfileWrapper(user),
+          );
         }
 
         // Get sign-in method
@@ -64,13 +82,19 @@ class AuthWrapper extends StatelessWidget {
 
         if (isGoogleOrApple) {
           debugPrint('[AuthWrapper] Google/Apple user - auto-verified');
-          return _buildUserProfileWrapper(user);
+          return Container(
+            key: ValueKey(user.uid),
+            child: _buildUserProfileWrapper(user),
+          );
         }
 
         // Email/password users need verification check
         if (user.emailVerified) {
           debugPrint('[AuthWrapper] Email verified ✅');
-          return _buildUserProfileWrapper(user);
+          return Container(
+            key: ValueKey(user.uid),
+            child: _buildUserProfileWrapper(user),
+          );
         }
 
         // Unverified email/password user
@@ -82,7 +106,10 @@ class AuthWrapper extends StatelessWidget {
           // Safety fallback - if we can't determine age, treat as old account
           debugPrint(
               '[AuthWrapper] Cannot determine account age - grandfathering in');
-          return _buildUserProfileWrapper(user);
+          return Container(
+            key: ValueKey(user.uid),
+            child: _buildUserProfileWrapper(user),
+          );
         }
 
         final now = DateTime.now();
@@ -92,7 +119,10 @@ class AuthWrapper extends StatelessWidget {
         // Let them in but show optional banner
         if (accountAge > 7) {
           debugPrint('[AuthWrapper] Old account ($accountAge days) - grandfathered in');
-          return _buildUserProfileWrapper(user);
+          return Container(
+            key: ValueKey(user.uid),
+            child: _buildUserProfileWrapper(user),
+          );
         }
 
         // New account (< 7 days old) - REQUIRE verification
@@ -120,7 +150,15 @@ class _UserProfileWrapper extends StatefulWidget {
 
 class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   final CloudMigrationService _migrationService = CloudMigrationService();
-  bool _migrationChecked = false;
+  bool _restorationComplete = false;
+  bool? _hasCompletedOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start restoration immediately
+    _performRestoration();
+  }
 
   @override
   void dispose() {
@@ -128,95 +166,166 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _hasCompletedOnboarding(widget.user.uid),
-      builder: (context, snapshot) {
-        // Show loading while checking onboarding status
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+  Future<void> _performRestoration() async {
+    // Initialize providers (local-only)
+    Provider.of<ThemeProvider>(
+      context,
+      listen: false,
+    ).initialize();
+    Provider.of<LocaleProvider>(
+      context,
+      listen: false,
+    ).initialize(widget.user.uid);
 
-        final hasCompletedOnboarding = snapshot.data ?? false;
+    // Check if user is brand new (first sign-in)
+    final creationTime = widget.user.metadata.creationTime;
+    final lastSignInTime = widget.user.metadata.lastSignInTime;
+    final isBrandNewUser = creationTime != null &&
+                           lastSignInTime != null &&
+                           lastSignInTime.difference(creationTime).inSeconds < 5;
 
-        // Initialize providers (local-only)
-        Provider.of<ThemeProvider>(
-          context,
-          listen: false,
-        ).initialize();
-        Provider.of<LocaleProvider>(
-          context,
-          listen: false,
-        ).initialize(widget.user.uid);
+    if (isBrandNewUser) {
+      // Brand new user - skip migration and go straight to onboarding
+      debugPrint('[AuthWrapper] 👶 Brand new user detected - skipping restoration check');
 
-        if (!hasCompletedOnboarding) {
-          final userService = UserService(FirebaseFirestore.instance, widget.user.uid);
-          return OnboardingFlow(userService: userService);
-        }
+      // CRITICAL: Clear any ghost data from previous accounts
+      debugPrint('[AuthWrapper] 🧹 Clearing local onboarding flags for brand new user');
+      await AuthService.clearLocalOnboardingFlags(widget.user.uid);
 
-        // User has completed onboarding - check for migration
-        if (!_migrationChecked) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _checkMigration(widget.user);
-          });
-        }
+      // CRITICAL: Clear Hive data if it belongs to a different user
+      debugPrint('[AuthWrapper] 🧹 Checking Hive data for user changes');
+      await AuthService.clearHiveIfDifferentUser(widget.user.uid);
 
-        // Show migration overlay if in progress
-        return StreamBuilder<MigrationProgress>(
-          stream: _migrationService.progressStream,
-          builder: (context, progressSnapshot) {
-            final progress = progressSnapshot.data;
+      // IMPORTANT: We DON'T call reset() here because OnboardingFlow.initState()
+      // will call initialize() which will load step 0 from the cleared SharedPreferences
+      // The AuthService.clearLocalOnboardingFlags() already cleared the step
 
-            // Migration in progress or not started
-            if (progress != null && !progress.isComplete) {
-              return RestorationOverlay(
-                progressStream: _migrationService.progressStream,
-                onCancel: () {
-                  // Allow user to continue offline
-                  setState(() => _migrationChecked = true);
-                },
-              );
-            }
+      final completed = await _checkOnboardingStatus(widget.user.uid);
 
-            // Migration complete or not needed
-            return const HomeScreenWrapper();
-          },
-        );
-      },
-    );
-  }
+      if (mounted) {
+        setState(() {
+          _hasCompletedOnboarding = completed;
+          _restorationComplete = true;
+        });
+      }
+      return;
+    }
 
-  Future<void> _checkMigration(User user) async {
-    setState(() => _migrationChecked = true);
+    // Returning user - perform restoration check
+    debugPrint('[AuthWrapper] 🔄 Returning user - starting restoration check');
 
     // Get workspace ID from provider
     final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
     final workspaceId = workspaceProvider.workspaceId;
 
-    // Trigger migration if in workspace mode
-    if (workspaceId != null && workspaceId.isNotEmpty) {
-      debugPrint('[AuthWrapper] 🔄 Starting cloud migration for workspace: $workspaceId');
-      await _migrationService.migrateIfNeeded(
-        userId: user.uid,
-        workspaceId: workspaceId,
-      );
-    } else {
-      debugPrint('[AuthWrapper] ⏭️ Solo mode: skipping cloud migration');
+    await _migrationService.migrateIfNeeded(
+      userId: widget.user.uid,
+      workspaceId: workspaceId,
+    );
+
+    // Check if user has completed onboarding (after restoration completes)
+    final completed = await _checkOnboardingStatus(widget.user.uid);
+
+    if (mounted) {
+      setState(() {
+        _hasCompletedOnboarding = completed;
+        _restorationComplete = true;
+      });
     }
   }
 
-  /// Check if user has completed onboarding (local-only via SharedPreferences)
-  Future<bool> _hasCompletedOnboarding(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
-  }
-}
+  @override
+  Widget build(BuildContext context) {
+    // RESTORATION GATE: Show restoration overlay until complete
+    if (!_restorationComplete) {
+      return RestorationOverlay(
+        progressStream: _migrationService.progressStream,
+        onCancel: () {
+          // Allow user to continue offline
+          if (mounted) {
+            setState(() => _restorationComplete = true);
+          }
+        },
+      );
+    }
 
-/// Original standalone function (kept for backwards compatibility)
-Future<bool> _hasCompletedOnboarding(String userId) async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
+    // Restoration complete - decide based on whether user has completed onboarding
+    final hasCompletedOnboarding = _hasCompletedOnboarding ?? false;
+
+    // TEMPORARY: Skip onboarding for debugging
+    const bool SKIP_ONBOARDING = true;
+
+    if (!hasCompletedOnboarding && !SKIP_ONBOARDING) {
+      // New user or hasn't completed onboarding - show onboarding flow
+      debugPrint('[AuthWrapper] 📝 No onboarding completion - showing OnboardingFlow');
+      final userService = UserService(FirebaseFirestore.instance, widget.user.uid);
+      return OnboardingFlow(userService: userService);
+    }
+
+    if (SKIP_ONBOARDING && !hasCompletedOnboarding) {
+      debugPrint('[AuthWrapper] ⏭️ SKIPPING onboarding (debug mode)');
+    }
+
+    // User has completed onboarding - check subscription
+    return FutureBuilder<bool>(
+      future: SubscriptionService().hasActiveSubscription(
+        userEmail: widget.user.email,
+      ),
+      builder: (context, subscriptionSnapshot) {
+        // Show loading while checking subscription
+        if (subscriptionSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // Check subscription status (includes VIP bypass logic)
+        final hasPremium = subscriptionSnapshot.data ?? false;
+
+        if (!hasPremium) {
+          // No premium subscription - show paywall
+          debugPrint('[AuthWrapper] ⛔ No premium subscription - showing paywall');
+          return const StuffritePaywallScreen();
+        }
+
+        // User has premium and completed onboarding - go to home
+        debugPrint('[AuthWrapper] ✅ Premium subscription active - showing HomeScreen');
+        // Use UniqueKey to force new widget instance and prevent state leakage
+        return HomeScreenWrapper(key: UniqueKey());
+      },
+    );
+  }
+
+  /// Check if user has completed onboarding
+  /// Checks Firebase user profile document for persistence across devices
+  /// Falls back to SharedPreferences for backwards compatibility
+  Future<bool> _checkOnboardingStatus(String userId) async {
+    try {
+      // Check Firebase first (cloud-persisted, survives logout/login)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        final hasCompleted = data?['hasCompletedOnboarding'] as bool?;
+        if (hasCompleted != null) {
+          // Cache to SharedPreferences for faster future checks
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('hasCompletedOnboarding_$userId', hasCompleted);
+          return hasCompleted;
+        }
+      }
+
+      // Fallback to SharedPreferences (for backwards compatibility)
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
+    } catch (e) {
+      debugPrint('[AuthWrapper] Error checking onboarding status: $e');
+      // Fallback to SharedPreferences on error
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
+    }
+  }
 }

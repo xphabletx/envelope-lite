@@ -6,10 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// This allows the app to rebuild the HomeScreen with a new EnvelopeRepo when the workspace changes.
 class WorkspaceProvider extends ChangeNotifier {
   String? _workspaceId;
+  bool _isLoggingOut = false;
 
   WorkspaceProvider({String? initialWorkspaceId}) : _workspaceId = initialWorkspaceId;
 
   String? get workspaceId => _workspaceId;
+  bool get isLoggingOut => _isLoggingOut;
 
   /// Updates the workspace ID and notifies all listeners.
   /// This should be called when the user joins, creates, or leaves a workspace.
@@ -28,6 +30,22 @@ class WorkspaceProvider extends ChangeNotifier {
       // Notify listeners to rebuild with new workspace
       notifyListeners();
     }
+  }
+
+  /// Set logging out state and notify listeners
+  /// This prevents phantom builds during logout by forcing UI to show loading
+  void setLoggingOut(bool value) {
+    if (_isLoggingOut != value) {
+      _isLoggingOut = value;
+      notifyListeners();
+    }
+  }
+
+  /// Reset logout state to allow AuthWrapper to show SignInScreen
+  /// Called in the finally block of signOut() to ensure guard is lifted
+  void resetLogoutState() {
+    _isLoggingOut = false;
+    notifyListeners();
   }
 
   /// Loads the workspace ID from SharedPreferences

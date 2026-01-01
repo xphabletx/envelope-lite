@@ -1,5 +1,4 @@
 // lib/main.dart
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,7 +7,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:purchases_flutter/purchases_flutter.dart';
 
 import 'firebase_options.dart';
 import 'providers/theme_provider.dart';
@@ -16,13 +14,20 @@ import 'providers/font_provider.dart';
 import 'providers/workspace_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/time_machine_provider.dart';
+import 'providers/onboarding_provider.dart';
 import 'services/envelope_repo.dart';
+import 'services/account_repo.dart';
 import 'services/scheduled_payment_repo.dart';
 import 'services/notification_repo.dart';
+import 'services/repository_manager.dart';
 import 'services/hive_service.dart';
+import 'services/subscription_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'widgets/app_lifecycle_observer.dart';
+
+// Global navigator key for forced navigation (e.g., logout)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,16 +55,17 @@ void main() async {
   try {
     // Configure Firestore settings BEFORE any usage
     FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: false,  // Disable offline cache
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,  // Valid cache size
+      persistenceEnabled: false, // Disable offline cache
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED, // Valid cache size
     );
 
     debugPrint('[Main] ⚠️ Firebase persistence DISABLED');
     debugPrint('[Main] ⚠️ Firebase cache size set to unlimited');
-
   } catch (e) {
     debugPrint('[Main] ⚠️ Could not configure Firebase settings: $e');
-    debugPrint('[Main] ⚠️ This is expected if settings were already configured');
+    debugPrint(
+      '[Main] ⚠️ This is expected if settings were already configured',
+    );
   }
 
   // NEW: Initialize Hive (local storage - our primary storage)
@@ -83,7 +89,7 @@ void main() async {
   }
 
   // NEW: Initialize RevenueCat
-  await _initRevenueCat();
+  await SubscriptionService().init();
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
@@ -97,36 +103,16 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (_) => FontProvider()),
         ChangeNotifierProvider(
-          create: (_) => WorkspaceProvider(initialWorkspaceId: savedWorkspaceId),
+          create: (_) =>
+              WorkspaceProvider(initialWorkspaceId: savedWorkspaceId),
         ),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => TimeMachineProvider()),
+        ChangeNotifierProvider(create: (_) => OnboardingProvider()),
       ],
       child: const MyApp(),
     ),
   );
-}
-
-Future<void> _initRevenueCat() async {
-  // TODO: Replace these with your actual RevenueCat API keys
-  // Get them from: https://app.revenuecat.com/projects
-  const appleApiKey = 'YOUR_APPLE_API_KEY'; // TODO: Replace with actual key
-  const googleApiKey = 'YOUR_GOOGLE_API_KEY'; // TODO: Replace with actual key
-
-  await Purchases.setLogLevel(LogLevel.debug); // Remove in production
-
-  PurchasesConfiguration? configuration;
-  if (Platform.isIOS || Platform.isMacOS) {
-    configuration = PurchasesConfiguration(appleApiKey);
-  } else if (Platform.isAndroid) {
-    configuration = PurchasesConfiguration(googleApiKey);
-  } else {
-    debugPrint('[RevenueCat] Platform not supported, skipping initialization');
-    return; // Web/Desktop not supported
-  }
-
-  await Purchases.configure(configuration);
-  debugPrint('[RevenueCat] ✅ Initialized');
 }
 
 class MyApp extends StatelessWidget {
@@ -139,9 +125,14 @@ class MyApp extends StatelessWidget {
         final baseTheme = themeProvider.currentTheme;
         final fontTheme = fontProvider.getTextTheme();
 
-        return MaterialApp(
-          title: 'Envelope Lite',
-          debugShowCheckedModeBanner: false,
+        // CRITICAL: KeyedSubtree inside Consumer ensures theme is evaluated
+        // BEFORE widget tree is rebuilt on user change
+        return KeyedSubtree(
+          key: ValueKey(FirebaseAuth.instance.currentUser?.uid ?? 'logged-out'),
+          child: MaterialApp(
+            navigatorKey: navigatorKey,
+            title: 'Stuffrite',
+            debugShowCheckedModeBanner: false,
           // Apply the dynamic font to the dynamic theme
           theme: baseTheme.copyWith(
             textTheme: fontTheme.apply(
@@ -172,7 +163,9 @@ class MyApp extends StatelessWidget {
             );
           },
           routes: {'/home': (context) => const HomeScreenWrapper()},
-          home: const AuthGate(), // Uses AuthWrapper internally for email verification
+          home:
+              const AuthGate(), // Uses AuthWrapper internally for email verification
+          ),
         );
       },
     );
@@ -224,7 +217,7 @@ class HomeScreenWrapper extends StatelessWidget {
     // Listen to workspace changes and rebuild with a new repo
     return Consumer<WorkspaceProvider>(
       builder: (context, workspaceProvider, _) {
-        final repo = EnvelopeRepo.firebase(
+        final envelopeRepo = EnvelopeRepo.firebase(
           db,
           userId: user.uid,
           workspaceId: workspaceProvider.workspaceId,
@@ -232,25 +225,34 @@ class HomeScreenWrapper extends StatelessWidget {
 
         // Clean up any orphaned scheduled payments from deleted envelopes
         // This is a one-time migration for existing users
-        repo.cleanupOrphanedScheduledPayments().then((count) {
+        envelopeRepo.cleanupOrphanedScheduledPayments().then((count) {
           if (count > 0) {
             debugPrint('[Main] Cleaned up $count orphaned scheduled payments');
           }
         });
 
-        // Initialize repos for scheduled payments and notifications
+        // Initialize all repos
+        final accountRepo = AccountRepo(envelopeRepo);
         final paymentRepo = ScheduledPaymentRepo(user.uid);
         final notificationRepo = NotificationRepo(userId: user.uid);
+
+        // Register repositories with the global manager for cleanup on logout
+        RepositoryManager().registerRepositories(
+          envelopeRepo: envelopeRepo,
+          accountRepo: accountRepo,
+          scheduledPaymentRepo: paymentRepo,
+          notificationRepo: notificationRepo,
+        );
 
         final args = ModalRoute.of(context)?.settings.arguments;
         final initialIndex = args is int ? args : 0;
 
         return AppLifecycleObserver(
-          envelopeRepo: repo,
+          envelopeRepo: envelopeRepo,
           paymentRepo: paymentRepo,
           notificationRepo: notificationRepo,
           child: HomeScreen(
-            repo: repo,
+            repo: envelopeRepo,
             initialIndex: initialIndex,
             notificationRepo: notificationRepo,
           ),
@@ -284,13 +286,17 @@ class _SplashScreenState extends State<SplashScreen>
     // Create fade in and fade out animation
     _fadeAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 50.0,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 50.0,
       ),
     ]).animate(_controller);

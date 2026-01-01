@@ -10,9 +10,8 @@ class PaywallService {
     try {
       final customerInfo = await Purchases.getCustomerInfo();
 
-      // Check if user has any active entitlement
-      // Replace 'premium' with your actual entitlement identifier from RevenueCat
-      final hasEntitlement = customerInfo.entitlements.active.containsKey('premium');
+      // Check for 'Stuffrite Premium' entitlement
+      final hasEntitlement = customerInfo.entitlements.active.containsKey('Stuffrite Premium');
 
       debugPrint('[Paywall] Has active subscription: $hasEntitlement');
       return hasEntitlement;
@@ -45,7 +44,7 @@ class PaywallService {
     try {
       final purchaseResult = await Purchases.purchase(PurchaseParams.package(package));
 
-      final hasEntitlement = purchaseResult.customerInfo.entitlements.active.containsKey('premium');
+      final hasEntitlement = purchaseResult.customerInfo.entitlements.active.containsKey('Stuffrite Premium');
 
       if (hasEntitlement) {
         if (context.mounted) {
@@ -97,7 +96,7 @@ class PaywallService {
     try {
       final customerInfo = await Purchases.restorePurchases();
 
-      final hasEntitlement = customerInfo.entitlements.active.containsKey('premium');
+      final hasEntitlement = customerInfo.entitlements.active.containsKey('Stuffrite Premium');
 
       if (hasEntitlement) {
         if (context.mounted) {
@@ -139,10 +138,17 @@ class PaywallService {
   }
 
   /// Log out user from RevenueCat
+  /// Prevents 'Called logOut but current user is anonymous' error
   Future<void> logOut() async {
     try {
-      await Purchases.logOut();
-      debugPrint('[Paywall] User logged out');
+      // Check if user is anonymous before logging out
+      final isAnonymous = await Purchases.isAnonymous;
+      if (!isAnonymous) {
+        await Purchases.logOut();
+        debugPrint('[Paywall] User logged out from RevenueCat');
+      } else {
+        debugPrint('[Paywall] User is anonymous, skipping RevenueCat logout');
+      }
     } catch (e) {
       debugPrint('[Paywall] Error logging out: $e');
     }

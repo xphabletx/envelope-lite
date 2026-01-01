@@ -92,16 +92,22 @@ class _SignInScreenState extends State<SignInScreen> {
       String msg;
       switch (e.code) {
         case 'user-not-found':
-          msg = 'No user found for that email.';
-          break;
         case 'wrong-password':
-          msg = 'Incorrect password.';
+        case 'invalid-credential':
+          // Unified message for security (don't reveal which part failed)
+          msg = 'Account not found or invalid credentials';
+          break;
+        case 'user-disabled':
+          msg = 'This account has been disabled';
           break;
         case 'invalid-email':
-          msg = 'Invalid email format.';
+          msg = 'Invalid email format';
+          break;
+        case 'too-many-requests':
+          msg = 'Too many failed attempts. Please try again later';
           break;
         default:
-          msg = e.message ?? 'Authentication error.';
+          msg = e.message ?? 'Authentication error';
       }
       setState(() => _error = msg);
       _showSnack(msg);

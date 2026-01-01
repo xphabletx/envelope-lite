@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/user_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
+import '../../providers/onboarding_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../providers/locale_provider.dart';
 import '../../services/envelope_repo.dart';
@@ -28,7 +29,6 @@ class OnboardingFlow extends StatefulWidget {
 }
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
-  int _currentStep = 0;
   String? _photoPath; // Changed from _photoURL to _photoPath (local path)
   String _displayName = '';
   String _selectedTheme = AppThemes.latteId;
@@ -44,6 +44,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     super.initState();
     // Ensure a basic profile exists so Storage Rules pass
     _ensureProfileExists();
+    // Initialize onboarding provider with saved step
+    _initializeOnboardingProvider();
+  }
+
+  Future<void> _initializeOnboardingProvider() async {
+    final onboardingProvider = Provider.of<OnboardingProvider>(context, listen: false);
+    await onboardingProvider.initialize(widget.userService.userId);
   }
 
   Future<void> _ensureProfileExists() async {
@@ -85,10 +92,25 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await prefs.setString('target_icon_value', _targetIconValue ?? '🎯');
     debugPrint('[Onboarding] ✅ Target icon saved locally: $_targetIconType $_targetIconValue');
 
-    // Mark onboarding as complete (local-only via SharedPreferences)
+    // Mark onboarding as complete in BOTH Firestore AND SharedPreferences
+    // Firestore = persists across devices/logins
+    // SharedPreferences = fast local cache
     if (userId != null) {
+      // Save to Firestore (cloud-persisted)
+      await widget.userService.updateUserProfile(
+        hasCompletedOnboarding: true,
+      );
+      debugPrint('[Onboarding] ✅ Onboarding marked complete in Firestore for user: $userId');
+
+      // Save to SharedPreferences (local cache)
       await prefs.setBool('hasCompletedOnboarding_$userId', true);
       debugPrint('[Onboarding] ✅ Onboarding marked complete locally for user: $userId');
+
+      // Clear onboarding step from provider
+      if (mounted) {
+        final onboardingProvider = Provider.of<OnboardingProvider>(context, listen: false);
+        await onboardingProvider.clearStep(userId);
+      }
     }
 
     if (!mounted) return;
@@ -107,118 +129,137 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   void _nextStep() {
-    if (_currentStep < 7) {
-      setState(() => _currentStep++);
+    final onboardingProvider = Provider.of<OnboardingProvider>(context, listen: false);
+    final currentStep = onboardingProvider.currentStep;
+
+    if (currentStep < 7) {
+      onboardingProvider.setStep(currentStep + 1, widget.userService.userId);
     } else {
       _completeOnboarding();
     }
   }
 
   void _previousStep() {
-    if (_currentStep > 0) {
-      setState(() => _currentStep--);
+    final onboardingProvider = Provider.of<OnboardingProvider>(context, listen: false);
+    final currentStep = onboardingProvider.currentStep;
+
+    if (currentStep > 0) {
+      onboardingProvider.setStep(currentStep - 1, widget.userService.userId);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final steps = [
-      // Step 0: Welcome Screen
-      WelcomeScreen(
-        onContinue: _nextStep,
-      ),
-      // Step 1: Display Name (moved before photo)
-      _DisplayNameStep(
-        onNameChanged: (name) => _displayName = name,
-        onNext: _nextStep,
-        onBack: _previousStep,
-        photoPath: _photoPath,
-      ),
-      // Step 2: Photo Upload (now skippable)
-      _PhotoUploadStep(
-        onPhotoSelected: (path) => _photoPath = path,
-        onNext: _nextStep,
-        onSkip: _nextStep,
-        onBack: _previousStep,
-        userService: widget.userService,
-      ),
-      // Step 3: Theme Picker
-      _ThemePickerStep(
-        selectedTheme: _selectedTheme,
-        onThemeSelected: (themeId) => setState(() => _selectedTheme = themeId),
-        onNext: _nextStep,
-        onBack: _previousStep,
-      ),
-      // Step 4: Font Picker
-      _FontPickerStep(
-        selectedFont: _selectedFont,
-        onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
-        onNext: _nextStep,
-        onBack: _previousStep,
-      ),
-      // Step 5: Currency Picker
-      _CurrencyPickerStep(
-        selectedCurrency: _selectedCurrency,
-        onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
-        onComplete: _nextStep,
-        onBack: _previousStep,
-      ),
-      // Step 6: Target Icon
-      OnboardingTargetIconStep(
-        initialIconType: _targetIconType,
-        initialIconValue: _targetIconValue,
-        onIconSelected: (type, value) {
-          _targetIconType = type;
-          _targetIconValue = value;
-        },
-        onNext: _nextStep,
-        onBack: _previousStep,
-      ),
-      // Step 7: Account Setup
-      OnboardingAccountSetup(
-        envelopeRepo: EnvelopeRepo.firebase(
-          FirebaseFirestore.instance,
-          workspaceId: null,
-          userId: widget.userService.userId,
-        ),
-        onBack: _previousStep,
-        onComplete: _completeOnboarding,
-      ),
-    ];
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) return;
-
-        // If on first step, confirm exit
-        if (_currentStep == 0) {
-          final shouldExit = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Exit Onboarding?'),
-              content: const Text('Your progress will be lost. Are you sure you want to exit?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Exit'),
-                ),
-              ],
-            ),
+    return Consumer<OnboardingProvider>(
+      builder: (context, onboardingProvider, child) {
+        // Wait for provider to initialize
+        if (!onboardingProvider.isInitialized) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
-          if (shouldExit == true && context.mounted) {
-            Navigator.of(context).pop();
-          }
-        } else {
-          // If not on first step, go back to previous step
-          _previousStep();
         }
+
+        final currentStep = onboardingProvider.currentStep;
+
+        final steps = [
+          // Step 0: Welcome Screen
+          WelcomeScreen(
+            onContinue: _nextStep,
+          ),
+          // Step 1: Display Name (moved before photo)
+          _DisplayNameStep(
+            onNameChanged: (name) => _displayName = name,
+            onNext: _nextStep,
+            onBack: _previousStep,
+            photoPath: _photoPath,
+          ),
+          // Step 2: Photo Upload (now skippable)
+          _PhotoUploadStep(
+            onPhotoSelected: (path) => _photoPath = path,
+            onNext: _nextStep,
+            onSkip: _nextStep,
+            onBack: _previousStep,
+            userService: widget.userService,
+          ),
+          // Step 3: Theme Picker
+          _ThemePickerStep(
+            selectedTheme: _selectedTheme,
+            onThemeSelected: (themeId) => setState(() => _selectedTheme = themeId),
+            onNext: _nextStep,
+            onBack: _previousStep,
+          ),
+          // Step 4: Font Picker
+          _FontPickerStep(
+            selectedFont: _selectedFont,
+            onFontSelected: (fontId) => setState(() => _selectedFont = fontId),
+            onNext: _nextStep,
+            onBack: _previousStep,
+          ),
+          // Step 5: Currency Picker
+          _CurrencyPickerStep(
+            selectedCurrency: _selectedCurrency,
+            onCurrencySelected: (curr) => setState(() => _selectedCurrency = curr),
+            onComplete: _nextStep,
+            onBack: _previousStep,
+          ),
+          // Step 6: Target Icon
+          OnboardingTargetIconStep(
+            initialIconType: _targetIconType,
+            initialIconValue: _targetIconValue,
+            onIconSelected: (type, value) {
+              _targetIconType = type;
+              _targetIconValue = value;
+            },
+            onNext: _nextStep,
+            onBack: _previousStep,
+          ),
+          // Step 7: Account Setup
+          OnboardingAccountSetup(
+            envelopeRepo: EnvelopeRepo.firebase(
+              FirebaseFirestore.instance,
+              workspaceId: null,
+              userId: widget.userService.userId,
+            ),
+            onBack: _previousStep,
+            onComplete: _completeOnboarding,
+          ),
+        ];
+
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (bool didPop, dynamic result) async {
+            if (didPop) return;
+
+            // If on first step, confirm exit
+            if (currentStep == 0) {
+              final shouldExit = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Exit Onboarding?'),
+                  content: const Text('Your progress will be lost. Are you sure you want to exit?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Exit'),
+                    ),
+                  ],
+                ),
+              );
+              if (shouldExit == true && context.mounted) {
+                Navigator.of(context).pop();
+              }
+            } else {
+              // If not on first step, go back to previous step
+              _previousStep();
+            }
+          },
+          child: Scaffold(body: SafeArea(child: steps[currentStep])),
+        );
       },
-      child: Scaffold(body: SafeArea(child: steps[_currentStep])),
     );
   }
 }

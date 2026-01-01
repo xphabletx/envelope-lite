@@ -1,5 +1,6 @@
 // lib/services/account_repo.dart
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
@@ -20,13 +21,35 @@ class AccountRepo {
 
   final EnvelopeRepo _envelopeRepo;
   late final Box<Account> _accountBox;
+  bool _disposed = false;
 
   String get _userId => _envelopeRepo.currentUserId;
+
+  /// Dispose the repository
+  ///
+  /// Since AccountRepo is always local-only (no Firestore streams),
+  /// this is a no-op but included for consistency
+  void dispose() {
+    if (_disposed) {
+      debugPrint('[AccountRepo] ⚠️ Already disposed, skipping');
+      return;
+    }
+
+    debugPrint('[AccountRepo] 🔄 Disposing (local-only repo, no active streams)');
+    _disposed = true;
+    debugPrint('[AccountRepo] ✅ Disposed');
+  }
 
   // ======================= STREAMS =======================
 
   /// Accounts stream (ALWAYS local only)
   Stream<List<Account>> accountsStream() {
+    // GUARD: Return empty stream if user is not authenticated (during logout)
+    if (FirebaseAuth.instance.currentUser == null) {
+      debugPrint('[AccountRepo] ⚠️ No authenticated user - returning empty stream');
+      return Stream.value([]);
+    }
+
     debugPrint('[AccountRepo] 📦 Streaming accounts from Hive (local only)');
     debugPrint('[AccountRepo] 🔑 Current userId: $_userId');
     debugPrint('[AccountRepo] 📊 Total accounts in box: ${_accountBox.length}');

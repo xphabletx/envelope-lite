@@ -1,4 +1,5 @@
 // lib/services/scheduled_payment_repo.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
@@ -18,9 +19,25 @@ class ScheduledPaymentRepo {
   final String _userId;
   late final Box<ScheduledPayment> _paymentBox;
   String? _workspaceId;
+  bool _disposed = false;
 
   // ignore: unused_element
   bool get _inWorkspace => _workspaceId != null && _workspaceId!.isNotEmpty;
+
+  /// Dispose the repository
+  ///
+  /// Since ScheduledPaymentRepo is always local-only (no Firestore streams),
+  /// this is a no-op but included for consistency
+  void dispose() {
+    if (_disposed) {
+      debugPrint('[ScheduledPaymentRepo] ⚠️ Already disposed, skipping');
+      return;
+    }
+
+    debugPrint('[ScheduledPaymentRepo] 🔄 Disposing (local-only repo, no active streams)');
+    _disposed = true;
+    debugPrint('[ScheduledPaymentRepo] ✅ Disposed');
+  }
 
   // ======================= GETTERS =======================
 
@@ -33,6 +50,12 @@ class ScheduledPaymentRepo {
 
   /// Stream all scheduled payments
   Stream<List<ScheduledPayment>> get scheduledPaymentsStream {
+    // GUARD: Return empty stream if user is not authenticated (during logout)
+    if (FirebaseAuth.instance.currentUser == null) {
+      debugPrint('[ScheduledPaymentRepo] ⚠️ No authenticated user - returning empty stream');
+      return Stream.value([]);
+    }
+
     debugPrint('[ScheduledPaymentRepo] 📦 Streaming from Hive (local only)');
 
     final initialPayments = _paymentBox.values

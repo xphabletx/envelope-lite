@@ -1,4 +1,5 @@
 // lib/services/notification_repo.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import '../models/app_notification.dart';
@@ -7,10 +8,32 @@ class NotificationRepo {
   NotificationRepo({required String userId}) : _userId = userId;
 
   final String _userId;
+  bool _disposed = false;
   Box<AppNotification> get _notificationBox => Hive.box<AppNotification>('notifications');
+
+  /// Dispose the repository
+  ///
+  /// Since NotificationRepo is always local-only (no Firestore streams),
+  /// this is a no-op but included for consistency
+  void dispose() {
+    if (_disposed) {
+      debugPrint('[NotificationRepo] ⚠️ Already disposed, skipping');
+      return;
+    }
+
+    debugPrint('[NotificationRepo] 🔄 Disposing (local-only repo, no active streams)');
+    _disposed = true;
+    debugPrint('[NotificationRepo] ✅ Disposed');
+  }
 
   // Stream of notifications (newest first)
   Stream<List<AppNotification>> get notificationsStream {
+    // GUARD: Return empty stream if user is not authenticated (during logout)
+    if (FirebaseAuth.instance.currentUser == null) {
+      debugPrint('[NotificationRepo] ⚠️ No authenticated user - returning empty stream');
+      return Stream.value([]);
+    }
+
     final initial = _notificationBox.values
         .where((n) => n.userId == _userId)
         .toList()

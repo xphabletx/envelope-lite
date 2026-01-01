@@ -5,9 +5,11 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/envelope.dart';
 import '../models/transaction.dart' as model;
+import 'subscription_service.dart';
 
 /// Internal class representing a sync operation
 class _SyncOperation {
@@ -81,58 +83,62 @@ class SyncManager {
     }
   }
 
-  /// Push an envelope to cloud (workspace mode only)
+  /// Push an envelope to cloud
+  /// Solo Mode: Syncs to private user collection (/users/{userId}/envelopes)
+  /// Workspace Mode: Syncs to workspace collection (/workspaces/{workspaceId}/envelopes)
   /// Returns immediately, sync happens in background
-  void pushEnvelope(Envelope envelope, String? workspaceId) {
-    if (workspaceId == null || workspaceId.isEmpty) return;
-    if (!envelope.isShared) return; // Solo envelopes don't sync
-
+  /// GATED: Only syncs for users with Stuffrite Premium entitlement
+  void pushEnvelope(Envelope envelope, String? workspaceId, String userId) {
     final syncKey = 'envelope_${envelope.id}';
     if (_pendingSyncs.contains(syncKey)) return; // Already syncing
 
     _pendingSyncs.add(syncKey);
 
-    // Add to queue instead of immediate execution
+    // Add to queue with entitlement check
     _syncQueue.add(_SyncOperation(
       key: syncKey,
-      execute: () => _syncEnvelopeToFirestore(envelope, workspaceId, syncKey),
+      execute: () => _syncEnvelopeToFirestore(envelope, workspaceId, userId, syncKey),
       onComplete: () => _pendingSyncs.remove(syncKey),
     ));
   }
 
-  /// Push a transaction to cloud (workspace mode only, partner transfers only)
+  /// Push a transaction to cloud
+  /// Solo Mode: Syncs ALL transactions to private user collection (/users/{userId}/transactions)
+  /// Workspace Mode: Syncs ONLY partner transfers to workspace collection (/workspaces/{workspaceId}/transfers)
   /// CRITICAL: Filters out isFuture transactions to prevent syncing projections
+  /// GATED: Only syncs for users with Stuffrite Premium entitlement
   void pushTransaction(
     model.Transaction transaction,
     String? workspaceId,
+    String userId,
     bool isPartnerTransfer,
   ) {
-    if (workspaceId == null || workspaceId.isEmpty) return;
-    if (!isPartnerTransfer) return; // Only partner transfers sync
-
     // CRITICAL: Never sync projected/future transactions from TimeMachine
     if (transaction.isFuture) {
       debugPrint('[SyncManager] ⚠️ Skipping future transaction ${transaction.id} (projection)');
       return;
     }
 
+    // In workspace mode, only sync partner transfers
+    // In solo mode, sync ALL transactions to private collection
+    final shouldSync = (workspaceId == null || workspaceId.isEmpty) || isPartnerTransfer;
+    if (!shouldSync) return;
+
     final syncKey = 'transaction_${transaction.id}';
     if (_pendingSyncs.contains(syncKey)) return;
 
     _pendingSyncs.add(syncKey);
 
-    // Add to queue
+    // Add to queue with entitlement check
     _syncQueue.add(_SyncOperation(
       key: syncKey,
-      execute: () => _syncTransactionToFirestore(transaction, workspaceId, syncKey),
+      execute: () => _syncTransactionToFirestore(transaction, workspaceId, userId, isPartnerTransfer, syncKey),
       onComplete: () => _pendingSyncs.remove(syncKey),
     ));
   }
 
   /// Delete envelope from cloud
-  void deleteEnvelope(String envelopeId, String? workspaceId) {
-    if (workspaceId == null || workspaceId.isEmpty) return;
-
+  void deleteEnvelope(String envelopeId, String? workspaceId, String userId) {
     final syncKey = 'delete_envelope_$envelopeId';
     if (_pendingSyncs.contains(syncKey)) return;
 
@@ -140,15 +146,17 @@ class SyncManager {
 
     _syncQueue.add(_SyncOperation(
       key: syncKey,
-      execute: () => _deleteEnvelopeFromFirestore(envelopeId, workspaceId, syncKey),
+      execute: () => _deleteEnvelopeFromFirestore(envelopeId, workspaceId, userId, syncKey),
       onComplete: () => _pendingSyncs.remove(syncKey),
     ));
   }
 
   /// Delete transaction from cloud
-  void deleteTransaction(String transactionId, String? workspaceId, bool isPartnerTransfer) {
-    if (workspaceId == null || workspaceId.isEmpty) return;
-    if (!isPartnerTransfer) return;
+  void deleteTransaction(String transactionId, String? workspaceId, String userId, bool isPartnerTransfer) {
+    // In workspace mode, only delete partner transfers
+    // In solo mode, delete ALL transactions from private collection
+    final shouldSync = (workspaceId == null || workspaceId.isEmpty) || isPartnerTransfer;
+    if (!shouldSync) return;
 
     final syncKey = 'delete_transaction_$transactionId';
     if (_pendingSyncs.contains(syncKey)) return;
@@ -157,7 +165,7 @@ class SyncManager {
 
     _syncQueue.add(_SyncOperation(
       key: syncKey,
-      execute: () => _deleteTransactionFromFirestore(transactionId, workspaceId, syncKey),
+      execute: () => _deleteTransactionFromFirestore(transactionId, workspaceId, userId, syncKey),
       onComplete: () => _pendingSyncs.remove(syncKey),
     ));
   }
@@ -168,18 +176,46 @@ class SyncManager {
 
   Future<void> _syncEnvelopeToFirestore(
     Envelope envelope,
-    String workspaceId,
+    String? workspaceId,
+    String userId,
     String syncKey,
   ) async {
     try {
-      await _firestore
-          .collection('workspaces')
-          .doc(workspaceId)
-          .collection('envelopes')
-          .doc(envelope.id)
-          .set(envelope.toMap(), SetOptions(merge: true));
+      // AUTHORIZATION CHECK: Use centralized subscription service
+      // This checks both VIP status and RevenueCat entitlement
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
-      debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name}');
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping envelope sync');
+        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
+        return;
+      }
+
+      // Log successful authorization with details
+      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
+
+      // SOLO MODE: Sync to private user collection
+      if (workspaceId == null || workspaceId.isEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('envelopes')
+            .doc(envelope.id)
+            .set(envelope.toMap(), SetOptions(merge: true));
+
+        debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name} to private collection');
+      } else {
+        // WORKSPACE MODE: Sync to workspace collection
+        await _firestore
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('envelopes')
+            .doc(envelope.id)
+            .set(envelope.toMap(), SetOptions(merge: true));
+
+        debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name} to workspace');
+      }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to sync envelope ${envelope.id}: $e');
       // Could implement retry logic here
@@ -188,18 +224,47 @@ class SyncManager {
 
   Future<void> _syncTransactionToFirestore(
     model.Transaction transaction,
-    String workspaceId,
+    String? workspaceId,
+    String userId,
+    bool isPartnerTransfer,
     String syncKey,
   ) async {
     try {
-      await _firestore
-          .collection('workspaces')
-          .doc(workspaceId)
-          .collection('transfers')
-          .doc(transaction.id)
-          .set(transaction.toMap(), SetOptions(merge: true));
+      // AUTHORIZATION CHECK: Use centralized subscription service
+      // This checks both VIP status and RevenueCat entitlement
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
-      debugPrint('[SyncManager] ✓ Synced transaction ${transaction.id}');
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping transaction sync');
+        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
+        return;
+      }
+
+      // Log successful authorization with details
+      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
+
+      // SOLO MODE: Sync to private user collection
+      if (workspaceId == null || workspaceId.isEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('transactions')
+            .doc(transaction.id)
+            .set(transaction.toMap(), SetOptions(merge: true));
+
+        debugPrint('[SyncManager] ✓ Synced transaction ${transaction.id} to private collection');
+      } else {
+        // WORKSPACE MODE: Sync to workspace transfers collection (partner transfers only)
+        await _firestore
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('transfers')
+            .doc(transaction.id)
+            .set(transaction.toMap(), SetOptions(merge: true));
+
+        debugPrint('[SyncManager] ✓ Synced partner transfer ${transaction.id} to workspace');
+      }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to sync transaction ${transaction.id}: $e');
     }
@@ -207,18 +272,46 @@ class SyncManager {
 
   Future<void> _deleteEnvelopeFromFirestore(
     String envelopeId,
-    String workspaceId,
+    String? workspaceId,
+    String userId,
     String syncKey,
   ) async {
     try {
-      await _firestore
-          .collection('workspaces')
-          .doc(workspaceId)
-          .collection('envelopes')
-          .doc(envelopeId)
-          .delete();
+      // AUTHORIZATION CHECK: Use centralized subscription service
+      // This checks both VIP status and RevenueCat entitlement
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
-      debugPrint('[SyncManager] ✓ Deleted envelope $envelopeId from cloud');
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping envelope deletion');
+        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
+        return;
+      }
+
+      // Log successful authorization with details
+      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
+
+      // SOLO MODE: Delete from private user collection
+      if (workspaceId == null || workspaceId.isEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('envelopes')
+            .doc(envelopeId)
+            .delete();
+
+        debugPrint('[SyncManager] ✓ Deleted envelope $envelopeId from private collection');
+      } else {
+        // WORKSPACE MODE: Delete from workspace collection
+        await _firestore
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('envelopes')
+            .doc(envelopeId)
+            .delete();
+
+        debugPrint('[SyncManager] ✓ Deleted envelope $envelopeId from workspace');
+      }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to delete envelope $envelopeId: $e');
     }
@@ -226,18 +319,46 @@ class SyncManager {
 
   Future<void> _deleteTransactionFromFirestore(
     String transactionId,
-    String workspaceId,
+    String? workspaceId,
+    String userId,
     String syncKey,
   ) async {
     try {
-      await _firestore
-          .collection('workspaces')
-          .doc(workspaceId)
-          .collection('transfers')
-          .doc(transactionId)
-          .delete();
+      // AUTHORIZATION CHECK: Use centralized subscription service
+      // This checks both VIP status and RevenueCat entitlement
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
-      debugPrint('[SyncManager] ✓ Deleted transaction $transactionId from cloud');
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping transaction deletion');
+        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
+        return;
+      }
+
+      // Log successful authorization with details
+      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
+
+      // SOLO MODE: Delete from private user collection
+      if (workspaceId == null || workspaceId.isEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('transactions')
+            .doc(transactionId)
+            .delete();
+
+        debugPrint('[SyncManager] ✓ Deleted transaction $transactionId from private collection');
+      } else {
+        // WORKSPACE MODE: Delete from workspace transfers collection
+        await _firestore
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('transfers')
+            .doc(transactionId)
+            .delete();
+
+        debugPrint('[SyncManager] ✓ Deleted transaction $transactionId from workspace');
+      }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to delete transaction $transactionId: $e');
     }

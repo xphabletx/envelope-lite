@@ -4,12 +4,14 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/envelope.dart';
 import '../models/account.dart';
 import '../models/transaction.dart' as model;
 import '../widgets/migration_overlay.dart';
+import 'subscription_service.dart';
 
 /// Handles one-time migration of data from Firebase to Hive
 ///
@@ -43,6 +45,26 @@ class CloudMigrationService {
     String? workspaceId,
   }) async {
     try {
+      _progressController.add(MigrationProgress.step(
+        progress: 0.05,
+        step: 'Checking subscription...',
+      ));
+
+      // AUTHORIZATION CHECK: Use centralized subscription service
+      // This checks both VIP status and RevenueCat entitlement
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[CloudMigration] ⛔ No premium subscription - skipping cloud migration');
+        debugPrint('[CloudMigration]    Reason: ${authResult.reason}');
+        _progressController.add(MigrationProgress.complete());
+        return false;
+      }
+
+      // Log successful authorization with details
+      debugPrint('[CloudMigration] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
+
       _progressController.add(MigrationProgress.step(
         progress: 0.1,
         step: 'Checking if migration needed...',

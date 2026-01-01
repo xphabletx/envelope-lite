@@ -66,7 +66,7 @@ class TimeMachineProvider extends ChangeNotifier {
   /// Get projected balance for an envelope
   double? getProjectedEnvelopeBalance(String envelopeId) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine] getProjectedEnvelopeBalance($envelopeId): inactive');
+      // Silent when inactive (this is expected during normal operation)
       return null;
     }
 
@@ -74,15 +74,13 @@ class TimeMachineProvider extends ChangeNotifier {
     for (final accountProj in _projectionData!.accountProjections.values) {
       for (final envProj in accountProj.envelopeProjections) {
         if (envProj.envelopeId == envelopeId) {
-          debugPrint('[TimeMachine] ✅ Found projection for envelope $envelopeId:');
-          debugPrint('[TimeMachine]   Current: ${envProj.currentAmount}');
-          debugPrint('[TimeMachine]   Projected: ${envProj.projectedAmount}');
-          debugPrint('[TimeMachine]   Change: ${envProj.changeAmount}');
+          // Success case - silenced to reduce log noise
           return envProj.projectedAmount;
         }
       }
     }
 
+    // Only log if we're active but can't find the projection (this might indicate an error)
     debugPrint('[TimeMachine] ⚠️ No projection found for envelope $envelopeId');
     return null;
   }
@@ -90,19 +88,17 @@ class TimeMachineProvider extends ChangeNotifier {
   /// Get projected balance for an account
   double? getProjectedAccountBalance(String accountId) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine] getProjectedAccountBalance($accountId): inactive');
+      // Silent when inactive (this is expected during normal operation)
       return null;
     }
 
     final projection = _projectionData!.accountProjections[accountId];
     if (projection != null) {
-      debugPrint('[TimeMachine] ✅ Found projection for account $accountId:');
-      debugPrint('[TimeMachine]   Projected Balance: ${projection.projectedBalance}');
-      debugPrint('[TimeMachine]   Assigned: ${projection.assignedAmount}');
-      debugPrint('[TimeMachine]   Available: ${projection.availableAmount}');
+      // Success case - silenced to reduce log noise
       return projection.projectedBalance;
     }
 
+    // Only log if we're active but can't find the projection (this might indicate an error)
     debugPrint('[TimeMachine] ⚠️ No projection found for account $accountId');
     return null;
   }
@@ -110,11 +106,9 @@ class TimeMachineProvider extends ChangeNotifier {
   /// Get "future transactions" for an envelope (scheduled payments that will execute)
   List<Transaction> getFutureTransactions(String envelopeId) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine::EnvelopeDetail] getFutureTransactions($envelopeId): inactive');
+      // Silent when inactive (this is expected during normal operation)
       return [];
     }
-
-    debugPrint('[TimeMachine::EnvelopeDetail] Getting future transactions for envelope $envelopeId');
 
     // Use the comprehensive getAllProjectedTransactions method, then filter by envelope
     final allProjected = getAllProjectedTransactions(includeTransfers: true);
@@ -122,24 +116,24 @@ class TimeMachineProvider extends ChangeNotifier {
     // Filter to this specific envelope
     final envelopeTransactions = allProjected.where((tx) => tx.envelopeId == envelopeId).toList();
 
-    debugPrint('[TimeMachine::EnvelopeDetail] Returning ${envelopeTransactions.length} future transactions for envelope $envelopeId');
+    // Success case - silenced to reduce log noise
     return envelopeTransactions;
   }
 
   /// Build a modified envelope with projected balance
   Envelope getProjectedEnvelope(Envelope realEnvelope) {
     if (!_isActive) {
-      debugPrint('[TimeMachine] getProjectedEnvelope(${realEnvelope.name}): inactive, returning real envelope');
+      // Silent when inactive (this is expected during normal operation)
       return realEnvelope;
     }
 
     final projectedBalance = getProjectedEnvelopeBalance(realEnvelope.id);
     if (projectedBalance == null) {
-      debugPrint('[TimeMachine] getProjectedEnvelope(${realEnvelope.name}): no projection, returning real envelope');
+      // Silent when no projection exists (this is expected during normal operation)
       return realEnvelope;
     }
 
-    debugPrint('[TimeMachine] ✅ Projecting envelope ${realEnvelope.name}: ${realEnvelope.currentAmount} → $projectedBalance');
+    // Success case - silenced to reduce log noise
 
     return Envelope(
       id: realEnvelope.id,

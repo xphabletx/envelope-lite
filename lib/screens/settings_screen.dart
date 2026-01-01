@@ -9,6 +9,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:provider/provider.dart';
+
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
@@ -17,6 +19,7 @@ import '../services/account_security_service.dart';
 import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../providers/workspace_provider.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
@@ -30,7 +33,6 @@ import '../widgets/tutorial_wrapper.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
 import '../providers/locale_provider.dart';
-import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.repo});
@@ -435,6 +437,10 @@ class SettingsScreen extends StatelessWidget {
                       );
 
                       if (confirm == true && context.mounted) {
+                        // CRITICAL: Set logging out flag FIRST to prevent phantom builds
+                        final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+                        workspaceProvider.setLoggingOut(true);
+
                         // Show loading indicator
                         showDialog(
                           context: context,
@@ -451,6 +457,8 @@ class SettingsScreen extends StatelessWidget {
                             Navigator.of(context).popUntil((route) => route.isFirst);
                           }
                         } catch (e) {
+                          // Reset logging out flag on error
+                          workspaceProvider.setLoggingOut(false);
                           if (context.mounted) {
                             Navigator.pop(context); // Dismiss loading
                             ScaffoldMessenger.of(context).showSnackBar(
