@@ -16,6 +16,7 @@ import '../../providers/time_machine_provider.dart';
 import '../../screens/stats_history_screen.dart';
 import 'scheduled_payments_list_screen.dart';
 import 'auto_fill_list_screen.dart';
+import '../../screens/envelope/multi_target_screen.dart';
 
 class BudgetOverviewCards extends StatefulWidget {
   const BudgetOverviewCards({
@@ -210,6 +211,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                               return PageView(
                                 controller: _pageController,
                                 children: [
+                                  _buildTargetCard(envelopes),
                                   _buildAccountsCard(accounts),
                                   _buildIncomeCard(txInRange, historyStart, historyEnd),
                                   _buildSpendingCard(txInRange, historyStart, historyEnd),
@@ -265,6 +267,37 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
       return format.format(start);
     }
     return '${format.format(start)} - ${format.format(end)}';
+  }
+
+  // 0. Target Data Card -> Links to MultiTargetScreen
+  Widget _buildTargetCard(List<Envelope> envelopes) {
+    final theme = Theme.of(context);
+
+    final targetEnvelopes = envelopes.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
+    final targetCount = targetEnvelopes.length;
+
+    return _OverviewCard(
+      icon: Icons.track_changes,
+      title: 'Total Target Data',
+      value: targetCount.toString(),
+      subtitle: targetCount == 1 ? 'Target' : 'Targets',
+      color: theme.colorScheme.tertiary,
+      onTap: targetCount > 0
+          ? () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MultiTargetScreen(
+                    envelopeRepo: widget.envelopeRepo,
+                    groupRepo: GroupRepo(widget.envelopeRepo),
+                    accountRepo: widget.accountRepo,
+                    mode: TargetScreenMode.multiEnvelope,
+                  ),
+                ),
+              );
+            }
+          : null,
+    );
   }
 
   // 1. Total Balance -> Links to StatsHistoryScreen showing account-level transactions

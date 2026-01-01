@@ -25,6 +25,7 @@ import '../widgets/time_machine_indicator.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
 import '../widgets/budget/auto_fill_list_screen.dart';
+import 'envelope/multi_target_screen.dart';
 
 class GroupsHomeScreen extends StatefulWidget {
   const GroupsHomeScreen({
@@ -617,9 +618,18 @@ class _BinderSpreadState extends State<_BinderSpread> {
         if (targetEnvelopes.isNotEmpty)
           GestureDetector(
             onTap: () {
-              // TODO: Navigate to target screen with binder filter
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Target screen navigation coming soon')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MultiTargetScreen(
+                    envelopeRepo: widget.repo,
+                    groupRepo: GroupRepo(widget.repo),
+                    accountRepo: AccountRepo(widget.repo),
+                    initialGroupId: widget.group.id,
+                    mode: TargetScreenMode.binderFiltered,
+                    title: '${widget.group.name} Targets',
+                  ),
+                ),
               );
             },
             child: Container(
