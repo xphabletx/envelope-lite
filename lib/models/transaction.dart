@@ -82,6 +82,13 @@ class Transaction {
   @HiveField(17)
   final String? targetOwnerDisplayName; // Display name of target owner
 
+  // NEW: Sync tracking fields (nullable for backward compatibility)
+  @HiveField(18)
+  final bool? isSynced;
+
+  @HiveField(19)
+  final DateTime? lastUpdated;
+
   Transaction({
     required this.id,
     required this.envelopeId,
@@ -101,6 +108,8 @@ class Transaction {
     this.sourceOwnerDisplayName,
     this.targetOwnerDisplayName,
     this.isFuture = false,
+    this.isSynced,
+    this.lastUpdated,
   });
 
   Map<String, dynamic> toMap() {
@@ -121,6 +130,8 @@ class Transaction {
       'targetEnvelopeName': targetEnvelopeName,
       'sourceOwnerDisplayName': sourceOwnerDisplayName,
       'targetOwnerDisplayName': targetOwnerDisplayName,
+      'isSynced': isSynced ?? true, // Default to synced for Firebase data
+      'lastUpdated': Timestamp.fromDate(lastUpdated ?? DateTime.now()),
       // Note: isFuture is not saved to Firestore (used only for UI projections)
     };
   }
@@ -148,6 +159,8 @@ class Transaction {
       sourceOwnerDisplayName: data['sourceOwnerDisplayName'] as String?,
       targetOwnerDisplayName: data['targetOwnerDisplayName'] as String?,
       isFuture: false, // Real transactions from Firestore are never future
+      isSynced: (data['isSynced'] as bool?) ?? true, // Firestore data is already synced
+      lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 

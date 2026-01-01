@@ -2,7 +2,7 @@
 
 ## Current State
 
-The Envelope Lite app has **partial localization infrastructure** in place but is **NOT fully internationalized**.
+The Stuffrite app has **partial localization infrastructure** in place but is **NOT fully internationalized**.
 
 ### What's Implemented
 

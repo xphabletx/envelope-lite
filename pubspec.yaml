@@ -1,4 +1,4 @@
-name: envelope_lite
+name: stuffrite
 description: "A clean, modern digital cash stuffing app."
 publish_to: "none"
 
@@ -24,6 +24,7 @@ dependencies:
   firebase_core: ^4.2.1
   firebase_auth: ^6.1.2
   cloud_firestore: ^6.1.0
+  firebase_app_check: ^0.4.1+3
   rxdart: ^0.28.0
   google_sign_in: ^6.2.1
   sign_in_with_apple: ^6.1.2

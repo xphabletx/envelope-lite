@@ -383,11 +383,13 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
           Expanded(
             child: StreamBuilder<List<Envelope>>(
+              initialData: widget.repo.getEnvelopesSync(), // ✅ Instant data!
               stream: widget.repo.envelopesStream(),
               builder: (_, sEnv) {
                 final envelopes = sEnv.data ?? const <Envelope>[];
 
                 return StreamBuilder<List<EnvelopeGroup>>(
+            initialData: widget.repo.getGroupsSync(), // ✅ Instant data!
             stream: widget.repo.groupsStream,
             builder: (_, sGrp) {
               final groups = sGrp.data ?? const <EnvelopeGroup>[];
@@ -396,6 +398,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
               final accountRepo = AccountRepo(widget.repo);
 
               return StreamBuilder<List<Account>>(
+                initialData: accountRepo.getAccountsSync(), // ✅ Instant data!
                 stream: accountRepo.accountsStream(),
                 builder: (_, sAcc) {
                   final accounts = sAcc.data ?? const <Account>[];
@@ -403,6 +406,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                   return Consumer<TimeMachineProvider>(
                     builder: (context, timeMachine, _) {
                       return StreamBuilder<List<Transaction>>(
+                        initialData: widget.repo.getTransactionsSync(), // ✅ Instant data!
                         stream: widget.repo.transactionsStream,
                         builder: (_, sTx) {
                           var txs = sTx.data ?? const <Transaction>[];
@@ -498,7 +502,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                   final chosenIds = chosen.map((e) => e.id).toSet();
 
                   // Filter transactions based on active filters
-                  final shownTxs = txs.where((t) {
+                  var shownTxs = txs.where((t) {
                     bool inChosen = false;
 
                     // Check if transaction should be included based on active filters
@@ -527,7 +531,23 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                         widget.filterTransactionTypes == null ||
                         widget.filterTransactionTypes!.contains(t.type);
                     return inChosen && inRange && typeMatch;
-                  }).toList()..sort((a, b) => b.date.compareTo(a.date));
+                  }).toList();
+
+                  // Deduplicate transfer transactions by transferLinkId
+                  // For transfers, we only want to show ONE transaction per transfer pair
+                  final seenTransferLinks = <String>{};
+                  shownTxs = shownTxs.where((t) {
+                    if (t.type == TransactionType.transfer && t.transferLinkId != null) {
+                      if (seenTransferLinks.contains(t.transferLinkId)) {
+                        return false; // Skip duplicate
+                      }
+                      seenTransferLinks.add(t.transferLinkId!);
+                    }
+                    return true;
+                  }).toList();
+
+                  // Sort by date descending
+                  shownTxs.sort((a, b) => b.date.compareTo(a.date));
 
                   // Calculate stats - use projected data if time machine is active
                   double totalTarget;
@@ -586,31 +606,6 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                       widget.filterTransactionTypes!.contains(
                         TransactionType.transfer,
                       );
-
-                  final double totDep = showDeposits
-                      ? shownTxs
-                            .where((t) => t.type == TransactionType.deposit)
-                            .fold(0.0, (s, t) => s + t.amount)
-                      : 0.0;
-                  final double totWdr = showWithdrawals
-                      ? shownTxs
-                            .where((t) => t.type == TransactionType.withdrawal)
-                            .fold(0.0, (s, t) => s + t.amount)
-                      : 0.0;
-                  final double totSchPay = showScheduledPayments
-                      ? shownTxs
-                            .where((t) => t.type == TransactionType.scheduledPayment)
-                            .fold(0.0, (s, t) => s + t.amount)
-                      : 0.0;
-                  final double totTrnOut = showTransfers
-                      ? shownTxs
-                            .where(
-                              (t) =>
-                                  t.type == TransactionType.transfer &&
-                                  t.transferDirection == TransferDirection.out_,
-                            )
-                            .fold(0.0, (s, t) => s + t.amount)
-                      : 0.0;
 
                   final envSelectedCount = filteredEnvelopes
                       .where((e) => selectedIds.contains(e.id))
@@ -833,10 +828,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                           child: _TransactionStatsCard(
                             start: start,
                             end: end,
-                            deposited: totDep,
-                            withdrawn: totWdr,
-                            scheduledPayments: totSchPay,
-                            transferred: totTrnOut,
+                            transactions: shownTxs,
+                            showDeposits: showDeposits,
+                            showWithdrawals: showWithdrawals,
+                            showScheduledPayments: showScheduledPayments,
+                            showTransfers: showTransfers,
                           ),
                         ),
                       ),
@@ -1272,15 +1268,18 @@ class _SummaryCard extends StatelessWidget {
                 size: 20,
               ),
               const SizedBox(width: 8),
-              Text(
-                _title,
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.secondary,
+              Flexible(
+                child: Text(
+                  _title,
+                  style: fontProvider.getTextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.secondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -1320,22 +1319,33 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _TransactionStatsCard extends StatelessWidget {
+enum TransactionPerspective { account, envelope }
+
+class _TransactionStatsCard extends StatefulWidget {
   const _TransactionStatsCard({
     required this.start,
     required this.end,
-    required this.deposited,
-    required this.withdrawn,
-    required this.transferred,
-    this.scheduledPayments = 0.0,
+    required this.transactions,
+    required this.showDeposits,
+    required this.showWithdrawals,
+    required this.showScheduledPayments,
+    required this.showTransfers,
   });
 
   final DateTime start;
   final DateTime end;
-  final double deposited;
-  final double withdrawn;
-  final double transferred;
-  final double scheduledPayments;
+  final List<Transaction> transactions;
+  final bool showDeposits;
+  final bool showWithdrawals;
+  final bool showScheduledPayments;
+  final bool showTransfers;
+
+  @override
+  State<_TransactionStatsCard> createState() => _TransactionStatsCardState();
+}
+
+class _TransactionStatsCardState extends State<_TransactionStatsCard> {
+  TransactionPerspective _perspective = TransactionPerspective.account;
 
   @override
   Widget build(BuildContext context) {
@@ -1343,6 +1353,80 @@ class _TransactionStatsCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
+    // Calculate totals based on perspective
+    double deposited;
+    double withdrawn;
+    double scheduledPayments;
+    double transferred;
+
+    String depositLabel;
+    String withdrawalLabel;
+
+    if (_perspective == TransactionPerspective.account) {
+      // Account perspective: Pay day deposits and auto-fill withdrawals
+      depositLabel = 'Deposited (Pay Day)';
+      withdrawalLabel = 'Withdrawn (Auto-fill)';
+
+      // Account deposits: Pay day (deposits with empty envelopeId and "PAY DAY!" description)
+      deposited = widget.showDeposits
+          ? widget.transactions
+                .where((t) =>
+                    t.type == TransactionType.deposit &&
+                    t.envelopeId.isEmpty &&
+                    t.description == 'PAY DAY!')
+                .fold(0.0, (s, t) => s + t.amount)
+          : 0.0;
+
+      // Account withdrawals: Auto-fill (withdrawals with empty envelopeId containing "auto-fill")
+      withdrawn = widget.showWithdrawals
+          ? widget.transactions
+                .where((t) =>
+                    t.type == TransactionType.withdrawal &&
+                    t.envelopeId.isEmpty &&
+                    t.description.toLowerCase().contains('auto-fill'))
+                .fold(0.0, (s, t) => s + t.amount)
+          : 0.0;
+    } else {
+      // Envelope perspective: Auto-fill deposits and scheduled payment withdrawals
+      depositLabel = 'Deposited (Auto-fill)';
+      withdrawalLabel = 'Withdrawn (Scheduled)';
+
+      // Envelope deposits: Auto-fill (deposits with envelopeId containing "Auto-fill deposit from")
+      deposited = widget.showDeposits
+          ? widget.transactions
+                .where((t) =>
+                    t.type == TransactionType.deposit &&
+                    t.envelopeId.isNotEmpty &&
+                    t.description.contains('Auto-fill deposit from'))
+                .fold(0.0, (s, t) => s + t.amount)
+          : 0.0;
+
+      // Envelope withdrawals: Scheduled payments and regular withdrawals from envelopes
+      withdrawn = widget.showWithdrawals
+          ? widget.transactions
+                .where((t) =>
+                    t.type == TransactionType.withdrawal &&
+                    t.envelopeId.isNotEmpty)
+                .fold(0.0, (s, t) => s + t.amount)
+          : 0.0;
+    }
+
+    // Scheduled payments (same for both perspectives)
+    scheduledPayments = widget.showScheduledPayments
+        ? widget.transactions
+              .where((t) => t.type == TransactionType.scheduledPayment)
+              .fold(0.0, (s, t) => s + t.amount)
+        : 0.0;
+
+    // Transfers out (same for both perspectives)
+    transferred = widget.showTransfers
+        ? widget.transactions
+              .where((t) =>
+                  t.type == TransactionType.transfer &&
+                  t.transferDirection == TransferDirection.out_)
+              .fold(0.0, (s, t) => s + t.amount)
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1372,23 +1456,57 @@ class _TransactionStatsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d').format(end)}',
-            style: fontProvider.getTextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+          // Perspective Toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${DateFormat('MMM d').format(widget.start)} - ${DateFormat('MMM d').format(widget.end)}',
+                style: fontProvider.getTextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PerspectiveToggleButton(
+                      label: 'Account',
+                      icon: Icons.account_balance_wallet,
+                      isActive: _perspective == TransactionPerspective.account,
+                      onTap: () => setState(() => _perspective = TransactionPerspective.account),
+                    ),
+                    const SizedBox(width: 4),
+                    _PerspectiveToggleButton(
+                      label: 'Envelope',
+                      icon: Icons.mail_outline,
+                      isActive: _perspective == TransactionPerspective.envelope,
+                      onTap: () => setState(() => _perspective = TransactionPerspective.envelope),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _StatRow(
-            label: 'Deposited',
+            label: depositLabel,
             value: currency.format(deposited),
             bold: true,
             color: Colors.green.shade700,
             icon: Icons.arrow_downward,
           ),
           _StatRow(
-            label: 'Withdrawn',
+            label: withdrawalLabel,
             value: currency.format(withdrawn),
             color: Colors.red.shade700,
             icon: Icons.arrow_upward,
@@ -1406,6 +1524,62 @@ class _TransactionStatsCard extends StatelessWidget {
             icon: Icons.swap_horiz,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PerspectiveToggleButton extends StatelessWidget {
+  const _PerspectiveToggleButton({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive
+              ? theme.colorScheme.primary
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive
+                  ? Colors.white
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: fontProvider.getTextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isActive
+                    ? Colors.white
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1675,7 +1849,7 @@ class _TransactionTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                DateFormat('MMM dd').format(t.date),
+                DateFormat('MMM dd, h:mm a').format(t.date),
                 style: fontProvider.getTextStyle(
                   fontSize: 11,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.4),

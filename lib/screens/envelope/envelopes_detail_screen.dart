@@ -361,6 +361,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     final timeMachine = Provider.of<TimeMachineProvider>(context);
 
     return StreamBuilder<Envelope>(
+      initialData: widget.repo.getEnvelopeSync(widget.envelopeId), // ✅ Instant data!
       stream: widget.repo.envelopeStream(widget.envelopeId),
       builder: (context, envelopeSnapshot) {
         if (envelopeSnapshot.hasError) {
@@ -408,8 +409,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             : realEnvelope;
 
         return StreamBuilder<List<Envelope>>(
+          initialData: widget.repo.getEnvelopesSync(), // ✅ Instant data!
           stream: widget.repo.envelopesStream(),
-          initialData: const [], // Provide initial data
           builder: (context, envelopesSnapshot) {
             final allEnvelopes = envelopesSnapshot.data ?? [];
             // Sort by name (same as home screen default)
@@ -417,14 +418,14 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
               ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
             return StreamBuilder<List<Account>>(
+              initialData: _accountRepo.getAccountsSync(), // ✅ Instant data!
               stream: _accountRepo.accountsStream(),
-              initialData: const [], // Provide initial data
               builder: (context, accountsSnapshot) {
                 final accounts = accountsSnapshot.data ?? [];
 
                 return StreamBuilder<List<Transaction>>(
+                  initialData: widget.repo.getTransactionsForEnvelopeSync(widget.envelopeId), // ✅ Instant data!
                   stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
-                  initialData: const [], // Provide initial data
                   builder: (context, txSnapshot) {
                     final realTransactions = txSnapshot.data ?? [];
 

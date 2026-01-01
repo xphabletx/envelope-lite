@@ -1,4 +1,4 @@
-# Envelope Lite - Comprehensive Master Context Documentation
+# Stuffrite - Comprehensive Master Context Documentation
 
 **Last Updated:** 2025-12-31
 **Version:** 2.2 (Enhanced with Detailed Function Documentation and Data Flow)
@@ -25,7 +25,7 @@
 
 ## Project Overview
 
-**Envelope Lite** is a Flutter-based budgeting application implementing the envelope budgeting methodology with modern offline-first architecture.
+**Stuffrite** is a Flutter-based budgeting application implementing the envelope budgeting methodology with modern offline-first architecture.
 
 **Architecture Evolution:**
 - **V1 (Original):** Firebase-first with cloud storage
@@ -2182,7 +2182,7 @@ Based on comprehensive analysis of all **122 Dart files** (~15,000+ lines of cod
 
 #### Flutter Analyzer Status: EXCELLENT
 ```
-Analyzing envelope_lite...
+Analyzing stuffrite...
 No issues found! (ran in 3.4s)
 ```
 
@@ -2499,7 +2499,7 @@ Constructor-based DI, no singletons (except Firestore, Hive).
 
 ## Final Summary
 
-This comprehensive MASTER_CONTEXT.md documents the complete Envelope Lite codebase as of **December 29, 2025**.
+This comprehensive MASTER_CONTEXT.md documents the complete Stuffrite codebase as of **December 29, 2025**.
 
 ### What's Documented
 
@@ -2724,7 +2724,7 @@ Display: Available = Current Balance - Assigned
 
 ---
 
-This document serves as the **complete technical reference** for the Envelope Lite Flutter application. All information is current as of the latest commit (9959de0 - "Refactor account and envelope transaction handling and UI improvements") on December 31, 2025.
+This document serves as the **complete technical reference** for the Stuffrite Flutter application. All information is current as of the latest commit (9959de0 - "Refactor account and envelope transaction handling and UI improvements") on December 31, 2025.
 
 **Documentation Completeness:**
 - ✅ All 18 models documented with properties and methods

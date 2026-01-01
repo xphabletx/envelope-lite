@@ -1,7 +1,7 @@
 # Codebase Cleanup Changelog
 
 **Generated:** 2025-12-24
-**App:** Envelope Lite (Stuffrite)
+**App:** Stuffrite (Stuffrite)
 **Purpose:** Pre-production App Store release cleanup
 
 ---

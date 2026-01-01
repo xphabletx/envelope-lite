@@ -352,9 +352,11 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
             ),
             const SizedBox(height: 12),
             StreamBuilder<List<Envelope>>(
+              initialData: widget.repo.getEnvelopesSync(),
               stream: widget.repo.envelopesStream(),
               builder: (context, envSnapshot) {
                 return StreamBuilder<List<EnvelopeGroup>>(
+                  initialData: widget.repo.getGroupsSync(),
                   stream: widget.repo.groupsStream,
                   builder: (context, groupSnapshot) {
                     final envelopes = envSnapshot.data ?? [];

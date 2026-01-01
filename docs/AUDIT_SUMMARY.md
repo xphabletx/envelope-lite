@@ -1,7 +1,7 @@
 # Codebase Audit Summary
 
 **Generated:** 2025-12-24
-**App:** Envelope Lite (soon to be Stuffrite)
+**App:** Stuffrite (soon to be Stuffrite)
 **Purpose:** Pre-production App Store release audit
 
 ## Statistics

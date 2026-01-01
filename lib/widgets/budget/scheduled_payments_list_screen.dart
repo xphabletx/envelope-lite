@@ -135,6 +135,7 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
         },
       ),
       body: StreamBuilder<List<ScheduledPayment>>(
+        initialData: const [],
         stream: paymentRepo.scheduledPaymentsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

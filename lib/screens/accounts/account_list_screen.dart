@@ -91,6 +91,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
 
           Expanded(
             child: StreamBuilder<List<Account>>(
+              initialData: _accountRepo.getAccountsSync(),
               stream: _accountRepo.accountsStream(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {

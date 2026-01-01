@@ -1,6 +1,6 @@
 // lib/models/account.dart
 import 'package:flutter/material.dart';
-import 'package:envelope_lite/data/material_icons_database.dart';
+import 'package:stuffrite/data/material_icons_database.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:hive/hive.dart';
 
@@ -73,6 +73,10 @@ class Account {
   @HiveField(17)
   final double? payDayAutoFillAmount;
 
+  // NEW: Sync tracking field (nullable for backward compatibility)
+  @HiveField(18)
+  final bool? isSynced;
+
   // Getter with default for backward compatibility
   bool get payDayAutoFillEnabled => _payDayAutoFillEnabled ?? false;
 
@@ -95,6 +99,7 @@ class Account {
     this.creditLimit,
     bool payDayAutoFillEnabled = false,
     this.payDayAutoFillAmount,
+    this.isSynced,
   }) : _payDayAutoFillEnabled = payDayAutoFillEnabled;
 
   /// Get icon widget for display
@@ -206,6 +211,7 @@ class Account {
     double? creditLimit,
     bool? payDayAutoFillEnabled,
     double? payDayAutoFillAmount,
+    bool? isSynced,
   }) {
     return Account(
       id: id,
@@ -226,6 +232,7 @@ class Account {
       creditLimit: creditLimit ?? this.creditLimit,
       payDayAutoFillEnabled: payDayAutoFillEnabled ?? this.payDayAutoFillEnabled,
       payDayAutoFillAmount: payDayAutoFillAmount ?? this.payDayAutoFillAmount,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 

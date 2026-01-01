@@ -35,13 +35,15 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       sourceOwnerDisplayName: fields[16] as String?,
       targetOwnerDisplayName: fields[17] as String?,
       isFuture: fields[7] as bool,
+      isSynced: fields[18] as bool?,
+      lastUpdated: fields[19] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Transaction obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -77,7 +79,11 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       ..writeByte(16)
       ..write(obj.sourceOwnerDisplayName)
       ..writeByte(17)
-      ..write(obj.targetOwnerDisplayName);
+      ..write(obj.targetOwnerDisplayName)
+      ..writeByte(18)
+      ..write(obj.isSynced)
+      ..writeByte(19)
+      ..write(obj.lastUpdated);
   }
 
   @override

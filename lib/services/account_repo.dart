@@ -83,6 +83,29 @@ class AccountRepo {
     ]);
   }
 
+  // ==================== SYNCHRONOUS DATA ACCESS ====================
+  // These methods provide instant access to Hive data without streams
+  // Used as initialData for StreamBuilders to eliminate UI lag
+
+  /// Get all accounts synchronously from Hive
+  List<Account> getAccountsSync() {
+    return _accountBox.values
+        .where((account) => account.userId == _userId)
+        .toList();
+  }
+
+  /// Get single account synchronously from Hive
+  Account? getAccountSync(String accountId) {
+    return _accountBox.get(accountId);
+  }
+
+  /// Get default account synchronously
+  Account? getDefaultAccountSync() {
+    return _accountBox.values
+        .where((account) => account.userId == _userId && account.isDefault)
+        .firstOrNull;
+  }
+
   // ======================= CRUD OPERATIONS =======================
 
   /// Create account

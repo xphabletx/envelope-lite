@@ -122,6 +122,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                     const SizedBox(height: 16),
                     // Action chips
                     StreamBuilder<List<Envelope>>(
+                      initialData: widget.envelopeRepo.getEnvelopesSync(), // ✅ Instant data!
                       stream: widget.envelopeRepo.envelopesStream(),
                       builder: (context, envSnapshot) {
                         final envelopes = envSnapshot.data ?? [];
@@ -255,12 +256,10 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                     const Divider(),
                     const SizedBox(height: 16),
                     StreamBuilder<List<Envelope>>(
+                      initialData: widget.envelopeRepo.getEnvelopesSync(), // ✅ Instant data!
                       stream: widget.envelopeRepo.envelopesStream(),
                       builder: (context, envelopeSnapshot) {
-                        if (!envelopeSnapshot.hasData) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        final allEnvelopes = envelopeSnapshot.data!;
+                        final allEnvelopes = envelopeSnapshot.data ?? [];
                         final linkedEnvelopes = allEnvelopes
                             .where((e) => e.linkedAccountId == widget.account.id)
                             .toList();
@@ -416,12 +415,10 @@ class _LinkEnvelopesDialogState extends State<_LinkEnvelopesDialog> {
     return AlertDialog(
       title: Text('Link Envelopes to ${widget.account.name}'),
       content: StreamBuilder<List<Envelope>>(
+        initialData: widget.envelopeRepo.getEnvelopesSync().where((e) => e.linkedAccountId == null).toList(), // ✅ Instant data!
         stream: widget.envelopeRepo.unlinkedEnvelopesStream(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final unlinkedEnvelopes = snapshot.data!;
+          final unlinkedEnvelopes = snapshot.data ?? [];
 
           if (unlinkedEnvelopes.isEmpty) {
             return const Text('No unlinked envelopes available.');

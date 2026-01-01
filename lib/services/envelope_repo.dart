@@ -1,7 +1,6 @@
 // lib/services/envelope_repo.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
@@ -10,6 +9,7 @@ import '../models/envelope_group.dart';
 import '../models/transaction.dart' as models;
 import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
+import 'sync_manager.dart';
 
 /// Envelope repository - Hive-first architecture
 ///
@@ -33,6 +33,7 @@ class EnvelopeRepo {
   final Box<EnvelopeGroup> _groupBox;
   final Box<models.Transaction> _transactionBox;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SyncManager _syncManager = SyncManager();
 
   EnvelopeRepo.firebase(
     FirebaseFirestore db, {
@@ -203,6 +204,53 @@ class EnvelopeRepo {
     );
   }
 
+  // ==================== SYNCHRONOUS DATA ACCESS ====================
+  // These methods provide instant access to Hive data without streams
+  // Used as initialData for StreamBuilders to eliminate UI lag
+
+  /// Get all envelopes synchronously from Hive
+  /// Returns filtered list based on userId and optionally workspaceId
+  List<Envelope> getEnvelopesSync({bool showPartnerEnvelopes = true}) {
+    final envelopes = _envelopeBox.values
+        .where((env) {
+          // Filter by userId in solo mode
+          if (!_inWorkspace) {
+            return env.userId == _userId;
+          }
+          // In workspace mode, filter based on showPartnerEnvelopes flag
+          return showPartnerEnvelopes || env.userId == _userId;
+        })
+        .toList();
+
+    return envelopes;
+  }
+
+  /// Get single envelope synchronously from Hive
+  Envelope? getEnvelopeSync(String id) {
+    return _envelopeBox.get(id);
+  }
+
+  /// Get all transactions synchronously from Hive
+  List<models.Transaction> getTransactionsSync() {
+    return _transactionBox.values
+        .where((tx) => tx.userId == _userId)
+        .toList();
+  }
+
+  /// Get transactions for specific envelope synchronously
+  List<models.Transaction> getTransactionsForEnvelopeSync(String envelopeId) {
+    return _transactionBox.values
+        .where((tx) => tx.envelopeId == envelopeId && tx.userId == _userId)
+        .toList();
+  }
+
+  /// Get all groups synchronously from Hive
+  List<EnvelopeGroup> getGroupsSync() {
+    return _groupBox.values
+        .where((group) => group.userId == _userId)
+        .toList();
+  }
+
   // ==================== CREATE ====================
 
   /// Create envelope
@@ -224,6 +272,7 @@ class EnvelopeRepo {
     debugPrint('[EnvelopeRepo] Creating envelope: $name');
 
     final id = _firestore.collection('_temp').doc().id;
+    final now = DateTime.now();
 
     final envelope = Envelope(
       id: id,
@@ -242,52 +291,18 @@ class EnvelopeRepo {
       autoFillAmount: autoFillAmount,
       linkedAccountId: linkedAccountId,
       isShared: _inWorkspace,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
     // ALWAYS write to Hive first (primary storage)
     await _envelopeBox.put(id, envelope);
     debugPrint('[EnvelopeRepo] ✅ Saved to Hive');
 
-    // Only sync to Firebase if in workspace mode
+    // Background sync (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        final ownerDisplayName = user?.displayName ?? (user?.email ?? 'Me');
-
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(id)
-            .set({
-          'id': id,
-          'name': name,
-          'userId': _userId,
-          'ownerId': _userId,
-          'ownerDisplayName': ownerDisplayName,
-          'currentAmount': startingAmount,
-          'targetAmount': targetAmount,
-          'targetDate': targetDate != null ? Timestamp.fromDate(targetDate) : null,
-          'groupId': groupId,
-          'subtitle': subtitle,
-          'emoji': emoji,
-          'iconType': iconType,
-          'iconValue': iconValue,
-          'iconColor': iconColor,
-          'autoFillEnabled': autoFillEnabled,
-          'autoFillAmount': autoFillAmount,
-          'linkedAccountId': linkedAccountId,
-          'isShared': true,
-          'workspaceId': _workspaceId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        debugPrint('[EnvelopeRepo] ✅ Synced to Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Firebase sync failed: $e');
-        // Don't throw - Hive save succeeded, Firebase is just sync
-      }
+      _syncManager.pushEnvelope(envelope, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for $name');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -300,9 +315,11 @@ class EnvelopeRepo {
         envelopeId: id,
         type: models.TransactionType.deposit,
         amount: startingAmount,
-        date: DateTime.now(),
+        date: now,
         description: 'Initial balance',
         userId: _userId,
+        isSynced: false,
+        lastUpdated: now,
       );
 
       await _transactionBox.put(txId, transaction);
@@ -345,8 +362,9 @@ class EnvelopeRepo {
       throw Exception('Envelope not found: $envelopeId');
     }
 
-    // Create updated envelope
+    // Create updated envelope with sync metadata
     // Use the explicit flags to allow setting fields to null
+    final now = DateTime.now();
     final updatedEnvelope = Envelope(
       id: envelope.id,
       name: name ?? envelope.name,
@@ -369,51 +387,17 @@ class EnvelopeRepo {
       termStartDate: envelope.termStartDate,
       termMonths: envelope.termMonths,
       monthlyPayment: envelope.monthlyPayment,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
     debugPrint('[EnvelopeRepo] ✅ Updated in Hive');
 
-    // Only sync to Firebase if in workspace mode
+    // Background sync (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        final updateData = <String, dynamic>{
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-        if (name != null) updateData['name'] = name;
-        if (groupId != null) updateData['groupId'] = groupId;
-        if (emoji != null) updateData['emoji'] = emoji;
-        if (iconType != null) updateData['iconType'] = iconType;
-        if (iconValue != null) updateData['iconValue'] = iconValue;
-        if (iconColor != null) updateData['iconColor'] = iconColor;
-        if (subtitle != null) updateData['subtitle'] = subtitle;
-        if (autoFillEnabled != null) updateData['autoFillEnabled'] = autoFillEnabled;
-        if (autoFillAmount != null) updateData['autoFillAmount'] = autoFillAmount;
-        if (isShared != null) updateData['isShared'] = isShared;
-
-        // Handle fields that can be explicitly set to null
-        if (updateTargetAmount) {
-          updateData['targetAmount'] = targetAmount; // Can be null
-        }
-        if (updateTargetDate) {
-          updateData['targetDate'] = targetDate != null ? Timestamp.fromDate(targetDate) : null; // Can be null
-        }
-        if (updateLinkedAccountId) {
-          updateData['linkedAccountId'] = linkedAccountId; // Can be null
-        }
-
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(envelopeId)
-            .update(updateData);
-
-        debugPrint('[EnvelopeRepo] ✅ Synced update to Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Firebase sync failed: $e');
-        // Don't throw - Hive update succeeded
-      }
+      _syncManager.pushEnvelope(updatedEnvelope, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for update');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -452,21 +436,10 @@ class EnvelopeRepo {
     await _envelopeBox.delete(id);
     debugPrint('[EnvelopeRepo] ✅ Deleted envelope from Hive');
 
-    // Only sync to Firebase if in workspace mode
+    // Background sync deletion (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(id)
-            .delete();
-
-        debugPrint('[EnvelopeRepo] ✅ Deleted from Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Firebase delete failed: $e');
-        // Don't throw - Hive delete succeeded
-      }
+      _syncManager.deleteEnvelope(id, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope deletion sync');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -520,6 +493,12 @@ class EnvelopeRepo {
   // ==================== TRANSACTIONS ====================
 
   Future<void> _createTransaction(models.Transaction transaction) async {
+    // CRITICAL: Never persist future/projected transactions from TimeMachine
+    if (transaction.isFuture) {
+      debugPrint('[EnvelopeRepo] ⚠️ Blocked attempt to persist future transaction ${transaction.id}');
+      return; // TimeMachine projections must never be saved
+    }
+
     // ALWAYS save to Hive (local paper trail)
     await _transactionBox.put(transaction.id, transaction);
     debugPrint('[EnvelopeRepo] ✅ Transaction saved to Hive');
@@ -574,6 +553,8 @@ class EnvelopeRepo {
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) throw Exception('Envelope not found');
 
+    // 1. Update Hive IMMEDIATELY (instant UI update)
+    final now = DateTime.now();
     final updatedEnvelope = Envelope(
       id: envelope.id,
       name: envelope.name,
@@ -596,37 +577,30 @@ class EnvelopeRepo {
       termStartDate: envelope.termStartDate,
       termMonths: envelope.termMonths,
       monthlyPayment: envelope.monthlyPayment,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
+    // 2. Create transaction in Hive
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: envelopeId,
       userId: _userId,
       type: models.TransactionType.deposit,
       amount: amount,
-      date: date ?? DateTime.now(),
+      date: date ?? now,
       description: description,
+      isSynced: false,
+      lastUpdated: now,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
     await _createTransaction(transaction);
 
-    // Sync envelope amount to Firebase if in workspace
+    // 3. Background sync (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(envelopeId)
-            .update({
-          'currentAmount': updatedEnvelope.currentAmount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        debugPrint('[EnvelopeRepo] ✅ Synced amount to Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Failed to sync amount: $e');
-      }
+      _syncManager.pushEnvelope(updatedEnvelope, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for ${envelope.name}');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -649,6 +623,8 @@ class EnvelopeRepo {
       throw Exception('Insufficient funds');
     }
 
+    // 1. Update Hive IMMEDIATELY (instant UI update)
+    final now = DateTime.now();
     final updatedEnvelope = Envelope(
       id: envelope.id,
       name: envelope.name,
@@ -671,8 +647,11 @@ class EnvelopeRepo {
       termStartDate: envelope.termStartDate,
       termMonths: envelope.termMonths,
       monthlyPayment: envelope.monthlyPayment,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
+    // 2. Create transaction in Hive
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: envelopeId,
@@ -681,29 +660,19 @@ class EnvelopeRepo {
           ? models.TransactionType.scheduledPayment
           : models.TransactionType.withdrawal,
       amount: amount,
-      date: date ?? DateTime.now(),
+      date: date ?? now,
       description: description,
+      isSynced: false,
+      lastUpdated: now,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
     await _createTransaction(transaction);
 
-    // Sync envelope amount to Firebase if in workspace
+    // 3. Background sync (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(envelopeId)
-            .update({
-          'currentAmount': updatedEnvelope.currentAmount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        debugPrint('[EnvelopeRepo] ✅ Synced amount to Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Failed to sync amount: $e');
-      }
+      _syncManager.pushEnvelope(updatedEnvelope, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for ${envelope.name}');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -730,7 +699,8 @@ class EnvelopeRepo {
       throw Exception('Insufficient funds');
     }
 
-    // Update envelopes
+    // 1. Update envelopes in Hive IMMEDIATELY (instant UI update)
+    final now = DateTime.now();
     final updatedSource = Envelope(
       id: sourceEnv.id,
       name: sourceEnv.name,
@@ -753,6 +723,8 @@ class EnvelopeRepo {
       termStartDate: sourceEnv.termStartDate,
       termMonths: sourceEnv.termMonths,
       monthlyPayment: sourceEnv.monthlyPayment,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
     final updatedTarget = Envelope(
@@ -777,12 +749,14 @@ class EnvelopeRepo {
       termStartDate: targetEnv.termStartDate,
       termMonths: targetEnv.termMonths,
       monthlyPayment: targetEnv.monthlyPayment,
+      isSynced: false, // Mark as pending sync
+      lastUpdated: now,
     );
 
     await _envelopeBox.put(fromEnvelopeId, updatedSource);
     await _envelopeBox.put(toEnvelopeId, updatedTarget);
 
-    // Create linked transactions
+    // 2. Create linked transactions in Hive
     final transferLinkId = _firestore.collection('_temp').doc().id;
 
     final outTransaction = models.Transaction(
@@ -791,7 +765,7 @@ class EnvelopeRepo {
       userId: _userId,
       type: models.TransactionType.transfer,
       amount: amount,
-      date: date ?? DateTime.now(),
+      date: date ?? now,
       description: description,
       transferDirection: models.TransferDirection.out_,
       transferPeerEnvelopeId: toEnvelopeId,
@@ -800,6 +774,8 @@ class EnvelopeRepo {
       targetOwnerId: targetEnv.userId,
       sourceEnvelopeName: sourceEnv.name,
       targetEnvelopeName: targetEnv.name,
+      isSynced: false,
+      lastUpdated: now,
     );
 
     final inTransaction = models.Transaction(
@@ -808,7 +784,7 @@ class EnvelopeRepo {
       userId: _userId,
       type: models.TransactionType.transfer,
       amount: amount,
-      date: date ?? DateTime.now(),
+      date: date ?? now,
       description: description,
       transferDirection: models.TransferDirection.in_,
       transferPeerEnvelopeId: fromEnvelopeId,
@@ -817,37 +793,18 @@ class EnvelopeRepo {
       targetOwnerId: targetEnv.userId,
       sourceEnvelopeName: sourceEnv.name,
       targetEnvelopeName: targetEnv.name,
+      isSynced: false,
+      lastUpdated: now,
     );
 
     await _createTransaction(outTransaction);
     await _createTransaction(inTransaction);
 
-    // Sync envelope amounts to Firebase if in workspace
+    // 3. Background sync (fire-and-forget, non-blocking)
     if (_inWorkspace && _workspaceId != null) {
-      try {
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(fromEnvelopeId)
-            .update({
-          'currentAmount': updatedSource.currentAmount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('envelopes')
-            .doc(toEnvelopeId)
-            .update({
-          'currentAmount': updatedTarget.currentAmount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        debugPrint('[EnvelopeRepo] ✅ Synced amounts to Firebase workspace');
-      } catch (e) {
-        debugPrint('[EnvelopeRepo] ⚠️ Failed to sync amounts: $e');
-      }
+      _syncManager.pushEnvelope(updatedSource, _workspaceId);
+      _syncManager.pushEnvelope(updatedTarget, _workspaceId);
+      debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for both transfer envelopes');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }
@@ -960,6 +917,8 @@ class EnvelopeRepo {
 
   Future<void> linkEnvelopesToAccount(
       List<String> envelopeIds, String accountId) async {
+    final now = DateTime.now();
+
     for (final envelopeId in envelopeIds) {
       final envelope = _envelopeBox.get(envelopeId);
       if (envelope != null) {
@@ -985,30 +944,21 @@ class EnvelopeRepo {
           termStartDate: envelope.termStartDate,
           termMonths: envelope.termMonths,
           monthlyPayment: envelope.monthlyPayment,
+          isSynced: false, // Mark as pending sync
+          lastUpdated: now,
         );
         await _envelopeBox.put(envelopeId, updated);
+
+        // Background sync (fire-and-forget, non-blocking)
+        if (_inWorkspace && _workspaceId != null) {
+          _syncManager.pushEnvelope(updated, _workspaceId);
+        }
       }
     }
     debugPrint('[EnvelopeRepo] ✅ Linked ${envelopeIds.length} envelopes to account');
 
-    // Sync to Firebase if in workspace
     if (_inWorkspace && _workspaceId != null) {
-      for (final envelopeId in envelopeIds) {
-        try {
-          await _firestore
-              .collection('workspaces')
-              .doc(_workspaceId)
-              .collection('envelopes')
-              .doc(envelopeId)
-              .update({
-            'linkedAccountId': accountId,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        } catch (e) {
-          debugPrint('[EnvelopeRepo] ⚠️ Failed to sync link: $e');
-        }
-      }
-      debugPrint('[EnvelopeRepo] ✅ Synced links to Firebase workspace');
+      debugPrint('[EnvelopeRepo] 🔄 Queued ${envelopeIds.length} envelope syncs for account linking');
     } else {
       debugPrint('[EnvelopeRepo] ⏭️ Solo mode: skipping Firebase sync');
     }

@@ -1,9 +1,9 @@
-# Privacy Policy for Envelope Lite
+# Privacy Policy for Stuffrite
 
 **Last Updated**: December 5, 2025
 
 ## Introduction
-Envelope Lite ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use our mobile application.
+Stuffrite ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use our mobile application.
 
 ## Information We Collect
 

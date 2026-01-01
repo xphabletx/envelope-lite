@@ -38,13 +38,15 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       termStartDate: fields[22] as DateTime?,
       termMonths: fields[23] as int?,
       monthlyPayment: fields[24] as double?,
+      isSynced: fields[25] as bool?,
+      lastUpdated: fields[26] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Envelope obj) {
     writer
-      ..writeByte(21)
+      ..writeByte(23)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -86,7 +88,11 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       ..writeByte(23)
       ..write(obj.termMonths)
       ..writeByte(24)
-      ..write(obj.monthlyPayment);
+      ..write(obj.monthlyPayment)
+      ..writeByte(25)
+      ..write(obj.isSynced)
+      ..writeByte(26)
+      ..write(obj.lastUpdated);
   }
 
   @override

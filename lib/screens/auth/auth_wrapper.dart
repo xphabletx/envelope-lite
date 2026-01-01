@@ -7,8 +7,11 @@ import 'email_verification_screen.dart';
 import '../sign_in_screen.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../../services/user_service.dart';
+import '../../services/cloud_migration_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/workspace_provider.dart';
+import '../../widgets/migration_overlay.dart';
 import '../../main.dart';
 
 /// Auth Wrapper
@@ -99,10 +102,36 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 
-  /// Build the user profile wrapper (same logic as before)
+  /// Build the user profile wrapper with migration support
   Widget _buildUserProfileWrapper(User user) {
+    return _UserProfileWrapper(user: user);
+  }
+}
+
+/// Stateful wrapper to handle cloud migration
+class _UserProfileWrapper extends StatefulWidget {
+  final User user;
+
+  const _UserProfileWrapper({required this.user});
+
+  @override
+  State<_UserProfileWrapper> createState() => _UserProfileWrapperState();
+}
+
+class _UserProfileWrapperState extends State<_UserProfileWrapper> {
+  final CloudMigrationService _migrationService = CloudMigrationService();
+  bool _migrationChecked = false;
+
+  @override
+  void dispose() {
+    _migrationService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<bool>(
-      future: _hasCompletedOnboarding(user.uid),
+      future: _hasCompletedOnboarding(widget.user.uid),
       builder: (context, snapshot) {
         // Show loading while checking onboarding status
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -121,16 +150,62 @@ class AuthWrapper extends StatelessWidget {
         Provider.of<LocaleProvider>(
           context,
           listen: false,
-        ).initialize(user.uid);
+        ).initialize(widget.user.uid);
 
         if (!hasCompletedOnboarding) {
-          final userService = UserService(FirebaseFirestore.instance, user.uid);
+          final userService = UserService(FirebaseFirestore.instance, widget.user.uid);
           return OnboardingFlow(userService: userService);
         }
 
-        return const HomeScreenWrapper();
+        // User has completed onboarding - check for migration
+        if (!_migrationChecked) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkMigration(widget.user);
+          });
+        }
+
+        // Show migration overlay if in progress
+        return StreamBuilder<MigrationProgress>(
+          stream: _migrationService.progressStream,
+          builder: (context, progressSnapshot) {
+            final progress = progressSnapshot.data;
+
+            // Migration in progress or not started
+            if (progress != null && !progress.isComplete) {
+              return RestorationOverlay(
+                progressStream: _migrationService.progressStream,
+                onCancel: () {
+                  // Allow user to continue offline
+                  setState(() => _migrationChecked = true);
+                },
+              );
+            }
+
+            // Migration complete or not needed
+            return const HomeScreenWrapper();
+          },
+        );
       },
     );
+  }
+
+  Future<void> _checkMigration(User user) async {
+    setState(() => _migrationChecked = true);
+
+    // Get workspace ID from provider
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+    final workspaceId = workspaceProvider.workspaceId;
+
+    // Trigger migration if in workspace mode
+    if (workspaceId != null && workspaceId.isNotEmpty) {
+      debugPrint('[AuthWrapper] 🔄 Starting cloud migration for workspace: $workspaceId');
+      await _migrationService.migrateIfNeeded(
+        userId: user.uid,
+        workspaceId: workspaceId,
+      );
+    } else {
+      debugPrint('[AuthWrapper] ⏭️ Solo mode: skipping cloud migration');
+    }
   }
 
   /// Check if user has completed onboarding (local-only via SharedPreferences)
@@ -138,4 +213,10 @@ class AuthWrapper extends StatelessWidget {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
   }
+}
+
+/// Original standalone function (kept for backwards compatibility)
+Future<bool> _hasCompletedOnboarding(String userId) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
 }

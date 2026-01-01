@@ -2,7 +2,7 @@
 
 ## ✅ **COMPLETED: Phase 1 - Foundation**
 
-This document summarizes the offline-first (Hive) and RevenueCat subscription integration completed for Envelope Lite.
+This document summarizes the offline-first (Hive) and RevenueCat subscription integration completed for Stuffrite.
 
 ---
 

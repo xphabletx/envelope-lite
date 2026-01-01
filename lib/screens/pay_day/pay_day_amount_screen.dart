@@ -249,6 +249,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
               ),
               const SizedBox(height: 12),
               StreamBuilder<List<Account>>(
+                initialData: widget.accountRepo.getAccountsSync(),
                 stream: _accountsStream,
                 builder: (context, snapshot) {
                   // FIX: Handle waiting state to prevent the "red flash"

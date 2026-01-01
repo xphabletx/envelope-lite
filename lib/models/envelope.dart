@@ -78,6 +78,13 @@ class Envelope {
   @HiveField(24)
   final double? monthlyPayment;
 
+  // NEW: Sync tracking fields (nullable for backward compatibility)
+  @HiveField(25)
+  final bool? isSynced;
+
+  @HiveField(26)
+  final DateTime? lastUpdated;
+
   Envelope({
     required this.id,
     required this.name,
@@ -100,6 +107,8 @@ class Envelope {
     this.termStartDate,
     this.termMonths,
     this.monthlyPayment,
+    this.isSynced,
+    this.lastUpdated,
   });
 
   /// Get icon widget for display
@@ -290,6 +299,8 @@ class Envelope {
     DateTime? termStartDate,
     int? termMonths,
     double? monthlyPayment,
+    bool? isSynced,
+    DateTime? lastUpdated,
   }) {
     return Envelope(
       id: id ?? this.id,
@@ -313,6 +324,8 @@ class Envelope {
       termStartDate: termStartDate ?? this.termStartDate,
       termMonths: termMonths ?? this.termMonths,
       monthlyPayment: monthlyPayment ?? this.monthlyPayment,
+      isSynced: isSynced ?? this.isSynced,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
 
@@ -339,6 +352,8 @@ class Envelope {
           termStartDate != null ? Timestamp.fromDate(termStartDate!) : null,
       'termMonths': termMonths,
       'monthlyPayment': monthlyPayment,
+      'isSynced': isSynced ?? true, // Default to synced for Firebase data
+      'lastUpdated': Timestamp.fromDate(lastUpdated ?? DateTime.now()),
     };
   }
 
@@ -385,6 +400,8 @@ class Envelope {
       monthlyPayment: (data['monthlyPayment'] == null)
           ? null
           : toDouble(data['monthlyPayment']),
+      isSynced: (data['isSynced'] as bool?) ?? true, // Firestore data is already synced
+      lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 }

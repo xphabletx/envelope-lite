@@ -860,6 +860,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
         }
       },
       child: StreamBuilder<List<Envelope>>(
+      initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: showPartnerEnvelopes), // ✅ Instant data!
       stream: widget.repo.envelopesStream(
         showPartnerEnvelopes: showPartnerEnvelopes,
       ),
@@ -872,9 +873,11 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
             : realEnvs;
 
         return StreamBuilder<List<EnvelopeGroup>>(
+          initialData: widget.repo.getGroupsSync(), // ✅ Instant data!
           stream: widget.repo.groupsStream,
           builder: (c2, s2) {
             return StreamBuilder<List<Transaction>>(
+              initialData: widget.repo.getTransactionsSync(), // ✅ Instant data!
               stream: widget.repo.transactionsStream,
               builder: (c3, s3) {
                 final sortedEnvs = _sortEnvelopes(displayEnvs);

@@ -1,11 +1,11 @@
 {
-    "name": "envelope_lite",
-    "short_name": "envelope_lite",
+    "name": "Stuffrite",
+    "short_name": "Stuffrite",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A clean, modern digital cash stuffing app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

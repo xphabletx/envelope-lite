@@ -1,9 +1,11 @@
 // lib/main.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -28,6 +30,21 @@ void main() async {
   // Initialize Firebase (still needed for auth and workspace sync)
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('[Main] 🔥 Firebase initialized');
+
+  // Initialize Firebase App Check (only in Release mode to avoid debug token errors)
+  if (kReleaseMode) {
+    try {
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: AndroidPlayIntegrityProvider(),
+        providerApple: AppleDeviceCheckProvider(),
+      );
+      debugPrint('[Main] ✅ Firebase App Check activated (Release mode)');
+    } catch (e) {
+      debugPrint('[Main] ⚠️ Firebase App Check activation failed: $e');
+    }
+  } else {
+    debugPrint('[Main] ⚠️ Firebase App Check skipped (Debug mode)');
+  }
 
   // 🔥 NUCLEAR OPTION: Completely disable Firebase offline features
   try {

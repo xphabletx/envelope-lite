@@ -458,11 +458,13 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return StreamBuilder<PayDaySettings?>(
+      initialData: null,
       stream: _payDayService.payDaySettingsStream,
       builder: (context, payDaySnapshot) {
         final paySettings = payDaySnapshot.data;
 
         return StreamBuilder<List<ScheduledPayment>>(
+          initialData: const [],
           stream: _paymentRepo.scheduledPaymentsStream,
           builder: (context, paymentsSnapshot) {
             debugPrint('[Calendar] ========================================');
@@ -471,6 +473,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
             debugPrint('[Calendar] All payments count: ${paymentsSnapshot.data?.length ?? 0}');
 
             return StreamBuilder<List<dynamic>>(
+              initialData: widget.repo.getEnvelopesSync(),
               stream: widget.repo.envelopesStream(),
               builder: (context, envelopesSnapshot) {
                 final allPayments = paymentsSnapshot.data ?? [];

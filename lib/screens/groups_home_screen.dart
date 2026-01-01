@@ -131,12 +131,14 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final isWorkspace = widget.repo.inWorkspace;
 
     return StreamBuilder<List<Envelope>>(
+      initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: !_mineOnly),
       stream: widget.repo.envelopesStream(
         showPartnerEnvelopes: !_mineOnly,
       ),
       builder: (_, s1) {
         final envs = s1.data ?? [];
         return StreamBuilder<List<EnvelopeGroup>>(
+          initialData: widget.repo.getGroupsSync(),
           stream: widget.repo.groupsStream,
           builder: (_, s2) {
             // Don't show anything until we have data from the stream
@@ -484,9 +486,11 @@ class _BinderSpreadState extends State<_BinderSpread> {
   }
 
   void _handleEnvelopeTap(int index) async {
+    // Tapping envelope - either expand or navigate to details
     if (_selectedIndex == index) {
-      // Second tap - navigate to full envelope detail screen
-      final envelope = widget.envelopes[_selectedIndex!];
+      // Already expanded - navigate to full details
+      final envelope = widget.envelopes[index];
+
       // Prevent access to partner's envelopes
       if (envelope.userId != widget.repo.currentUserId) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -496,17 +500,18 @@ class _BinderSpreadState extends State<_BinderSpread> {
         );
         return;
       }
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => EnvelopeDetailScreen(
-            envelopeId: widget.envelopes[_selectedIndex!].id,
+            envelopeId: envelope.id,
             repo: widget.repo,
           ),
         ),
       );
     } else {
-      // First tap - expand inline and scroll to top
+      // Not expanded - expand it
       setState(() {
         _selectedIndex = index;
       });
@@ -521,6 +526,18 @@ class _BinderSpreadState extends State<_BinderSpread> {
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  void _toggleExpand(int index) {
+    setState(() {
+      if (_selectedIndex == index) {
+        // Already expanded - collapse
+        _selectedIndex = null;
+      } else {
+        // Not expanded - expand
+        _selectedIndex = index;
+      }
+    });
   }
 
   Widget _buildStandardChip({
@@ -810,7 +827,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     selectedIndex: _selectedIndex,
                                     binderColors: widget.binderColors,
                                     currency: widget.currency,
-                                    onTap: _handleEnvelopeTap,
+                                    onEnvelopeTap: _handleEnvelopeTap,
+                                    onToggleExpand: _toggleExpand,
                                     scrollController: _scrollController,
                                   ),
                                 ),
@@ -962,7 +980,8 @@ class _InfiniteEnvelopeList extends StatelessWidget {
   final int? selectedIndex;
   final BinderColorOption binderColors;
   final NumberFormat currency;
-  final Function(int) onTap;
+  final Function(int) onEnvelopeTap;
+  final Function(int) onToggleExpand;
   final ScrollController scrollController;
 
   const _InfiniteEnvelopeList({
@@ -970,7 +989,8 @@ class _InfiniteEnvelopeList extends StatelessWidget {
     required this.selectedIndex,
     required this.binderColors,
     required this.currency,
-    required this.onTap,
+    required this.onEnvelopeTap,
+    required this.onToggleExpand,
     required this.scrollController,
   });
 
@@ -993,7 +1013,7 @@ class _InfiniteEnvelopeList extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: GestureDetector(
-                onTap: () => onTap(index),
+                onTap: () => onEnvelopeTap(index),
                 child: Container(
                   height: 45.0,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1037,10 +1057,16 @@ class _InfiniteEnvelopeList extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Icon(
-                        isSelected ? Icons.expand_less : Icons.expand_more,
-                        size: 16,
-                        color: binderColors.binderColor.withAlpha(128),
+                      GestureDetector(
+                        onTap: () => onToggleExpand(index),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Icon(
+                            isSelected ? Icons.expand_less : Icons.expand_more,
+                            size: 16,
+                            color: binderColors.binderColor.withAlpha(128),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1050,15 +1076,13 @@ class _InfiniteEnvelopeList extends StatelessWidget {
 
             // Inline Envelope Details (when selected)
             if (isSelected)
-              GestureDetector(
-                onTap: () => onTap(index),
-                child: _InlineEnvelopeDetail(
-                  envelope: envelope,
-                  binderColors: binderColors,
-                  currency: currency,
-                  fontProvider: fontProvider,
-                  timeMachine: timeMachine,
-                ),
+              _InlineEnvelopeDetail(
+                envelope: envelope,
+                binderColors: binderColors,
+                currency: currency,
+                fontProvider: fontProvider,
+                timeMachine: timeMachine,
+                onTap: () => onEnvelopeTap(index),
               ),
           ],
         );
@@ -1074,6 +1098,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
   final NumberFormat currency;
   final FontProvider fontProvider;
   final TimeMachineProvider timeMachine;
+  final VoidCallback onTap;
 
   const _InlineEnvelopeDetail({
     required this.envelope,
@@ -1081,6 +1106,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
     required this.currency,
     required this.fontProvider,
     required this.timeMachine,
+    required this.onTap,
   });
 
   @override
@@ -1088,20 +1114,22 @@ class _InlineEnvelopeDetail extends StatelessWidget {
     // Apply time machine projection if active
     final projectedEnvelope = timeMachine.getProjectedEnvelope(envelope);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: binderColors.binderColor.withAlpha(13),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: binderColors.binderColor.withAlpha(51),
-          width: 1,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: binderColors.binderColor.withAlpha(13),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: binderColors.binderColor.withAlpha(51),
+            width: 1,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Current Amount
           Row(
             children: [
@@ -1224,6 +1252,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
