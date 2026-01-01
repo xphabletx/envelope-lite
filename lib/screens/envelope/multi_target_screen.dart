@@ -1196,45 +1196,52 @@ class _CalculatorDialogState extends State<_CalculatorDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Calculator'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            alignment: Alignment.centerRight,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              alignment: Alignment.centerRight,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _display,
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+              ),
             ),
-            child: Text(
-              _display,
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 280,
+              child: GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 4,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                children: [
+                  ...'789÷456×123-0.=+'.split('').map((char) {
+                    return ElevatedButton(
+                      onPressed: () {
+                        if ('0123456789.'.contains(char)) {
+                          _onDigitPressed(char);
+                        } else if ('+-×÷'.contains(char)) {
+                          _onOperationPressed(char);
+                        } else if (char == '=') {
+                          _onEqualsPressed();
+                        }
+                      },
+                      child: Text(char, style: const TextStyle(fontSize: 20)),
+                    );
+                  }),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            crossAxisCount: 4,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            children: [
-              ...'789÷456×123-0.=+'.split('').map((char) {
-                return ElevatedButton(
-                  onPressed: () {
-                    if ('0123456789.'.contains(char)) {
-                      _onDigitPressed(char);
-                    } else if ('+-×÷'.contains(char)) {
-                      _onOperationPressed(char);
-                    } else if (char == '=') {
-                      _onEqualsPressed();
-                    }
-                  },
-                  child: Text(char, style: const TextStyle(fontSize: 20)),
-                );
-              }),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: _onClear, child: const Text('Clear')),
