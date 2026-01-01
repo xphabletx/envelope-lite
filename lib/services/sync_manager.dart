@@ -8,6 +8,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/envelope.dart';
+import '../models/envelope_group.dart';
+import '../models/account.dart';
+import '../models/scheduled_payment.dart';
+import '../models/pay_day_settings.dart';
 import '../models/transaction.dart' as model;
 import 'subscription_service.dart';
 
@@ -166,6 +170,112 @@ class SyncManager {
     _syncQueue.add(_SyncOperation(
       key: syncKey,
       execute: () => _deleteTransactionFromFirestore(transactionId, workspaceId, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Push a group (Binder) to cloud
+  /// Solo Mode: Syncs to private user collection (/users/{userId}/groups)
+  /// CRITICAL: Groups MUST sync to prevent data loss on logout
+  void pushGroup(EnvelopeGroup group, String userId) {
+    final syncKey = 'group_${group.id}';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _syncGroupToFirestore(group, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Delete group from cloud
+  void deleteGroup(String groupId, String userId) {
+    final syncKey = 'delete_group_$groupId';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _deleteGroupFromFirestore(groupId, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Push an account to cloud
+  /// Solo Mode: Syncs to private user collection (/users/{userId}/accounts)
+  /// CRITICAL: Accounts MUST sync to prevent data loss on logout
+  void pushAccount(Account account, String userId) {
+    final syncKey = 'account_${account.id}';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _syncAccountToFirestore(account, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Delete account from cloud
+  void deleteAccount(String accountId, String userId) {
+    final syncKey = 'delete_account_$accountId';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _deleteAccountFromFirestore(accountId, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Push a scheduled payment to cloud
+  /// Solo Mode: Syncs to private user collection (/users/{userId}/scheduledPayments)
+  /// CRITICAL: Scheduled payments MUST sync to prevent data loss on logout
+  void pushScheduledPayment(ScheduledPayment payment, String userId) {
+    final syncKey = 'scheduled_payment_${payment.id}';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _syncScheduledPaymentToFirestore(payment, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Delete scheduled payment from cloud
+  void deleteScheduledPayment(String paymentId, String userId) {
+    final syncKey = 'delete_scheduled_payment_$paymentId';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _deleteScheduledPaymentFromFirestore(paymentId, userId, syncKey),
+      onComplete: () => _pendingSyncs.remove(syncKey),
+    ));
+  }
+
+  /// Push pay day settings to cloud
+  /// Solo Mode: Syncs to user document (/users/{userId})
+  /// CRITICAL: PayDay settings MUST sync to prevent data loss on logout
+  void pushPayDaySettings(PayDaySettings settings, String userId) {
+    final syncKey = 'payday_settings_$userId';
+    if (_pendingSyncs.contains(syncKey)) return;
+
+    _pendingSyncs.add(syncKey);
+
+    _syncQueue.add(_SyncOperation(
+      key: syncKey,
+      execute: () => _syncPayDaySettingsToFirestore(settings, userId, syncKey),
       onComplete: () => _pendingSyncs.remove(syncKey),
     ));
   }
@@ -361,6 +471,212 @@ class SyncManager {
       }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to delete transaction $transactionId: $e');
+    }
+  }
+
+  // =========================================================================
+  // GROUP (BINDER) SYNC
+  // =========================================================================
+
+  Future<void> _syncGroupToFirestore(
+    EnvelopeGroup group,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping group sync');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .doc(group.id)
+          .set(group.toMap(), SetOptions(merge: true));
+
+      debugPrint('[SyncManager] ✓ Synced group ${group.name} to private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to sync group ${group.id}: $e');
+    }
+  }
+
+  Future<void> _deleteGroupFromFirestore(
+    String groupId,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping group deletion');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .doc(groupId)
+          .delete();
+
+      debugPrint('[SyncManager] ✓ Deleted group $groupId from private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to delete group $groupId: $e');
+    }
+  }
+
+  // =========================================================================
+  // ACCOUNT SYNC
+  // =========================================================================
+
+  Future<void> _syncAccountToFirestore(
+    Account account,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping account sync');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('accounts')
+          .doc(account.id)
+          .set(account.toMap(), SetOptions(merge: true));
+
+      debugPrint('[SyncManager] ✓ Synced account ${account.name} to private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to sync account ${account.id}: $e');
+    }
+  }
+
+  Future<void> _deleteAccountFromFirestore(
+    String accountId,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping account deletion');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('accounts')
+          .doc(accountId)
+          .delete();
+
+      debugPrint('[SyncManager] ✓ Deleted account $accountId from private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to delete account $accountId: $e');
+    }
+  }
+
+  // =========================================================================
+  // SCHEDULED PAYMENT SYNC
+  // =========================================================================
+
+  Future<void> _syncScheduledPaymentToFirestore(
+    ScheduledPayment payment,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping scheduled payment sync');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('scheduledPayments')
+          .doc(payment.id)
+          .set(payment.toMap(), SetOptions(merge: true));
+
+      debugPrint('[SyncManager] ✓ Synced scheduled payment ${payment.name} to private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to sync scheduled payment ${payment.id}: $e');
+    }
+  }
+
+  Future<void> _deleteScheduledPaymentFromFirestore(
+    String paymentId,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping scheduled payment deletion');
+        return;
+      }
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('scheduledPayments')
+          .doc(paymentId)
+          .delete();
+
+      debugPrint('[SyncManager] ✓ Deleted scheduled payment $paymentId from private collection');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to delete scheduled payment $paymentId: $e');
+    }
+  }
+
+  // =========================================================================
+  // PAY DAY SETTINGS SYNC
+  // =========================================================================
+
+  Future<void> _syncPayDaySettingsToFirestore(
+    PayDaySettings settings,
+    String userId,
+    String syncKey,
+  ) async {
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final authResult = await SubscriptionService().canSync(userEmail: userEmail);
+
+      if (!authResult.authorized) {
+        debugPrint('[SyncManager] ⛔ No premium subscription - skipping pay day settings sync');
+        return;
+      }
+
+      // Store pay day settings in the user document itself (not a subcollection)
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .set({
+            'payDaySettings': settings.toFirestore(),
+          }, SetOptions(merge: true));
+
+      debugPrint('[SyncManager] ✓ Synced pay day settings to user document');
+    } catch (e) {
+      debugPrint('[SyncManager] ✗ Failed to sync pay day settings: $e');
     }
   }
 

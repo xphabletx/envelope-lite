@@ -196,6 +196,60 @@ class Account {
     return (currentBalance.abs() / creditLimit!).clamp(0.0, 1.0);
   }
 
+  /// Convert to Firestore map
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'currentBalance': currentBalance,
+      'userId': userId,
+      'emoji': emoji,
+      'colorName': colorName,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'lastUpdated': lastUpdated.millisecondsSinceEpoch,
+      'isDefault': isDefault,
+      'isShared': isShared,
+      'workspaceId': workspaceId,
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
+      'accountType': accountType.name,
+      'creditLimit': creditLimit,
+      'payDayAutoFillEnabled': payDayAutoFillEnabled,
+      'payDayAutoFillAmount': payDayAutoFillAmount,
+      'isSynced': isSynced,
+    };
+  }
+
+  /// Create from Firestore map
+  factory Account.fromMap(Map<String, dynamic> map) {
+    return Account(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      currentBalance: (map['currentBalance'] as num).toDouble(),
+      userId: map['userId'] as String,
+      emoji: map['emoji'] as String?,
+      colorName: map['colorName'] as String?,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+      lastUpdated: DateTime.fromMillisecondsSinceEpoch(map['lastUpdated'] as int),
+      isDefault: map['isDefault'] as bool? ?? false,
+      isShared: map['isShared'] as bool? ?? false,
+      workspaceId: map['workspaceId'] as String?,
+      iconType: map['iconType'] as String?,
+      iconValue: map['iconValue'] as String?,
+      iconColor: map['iconColor'] as int?,
+      accountType: map['accountType'] != null
+          ? AccountType.values.firstWhere((e) => e.name == map['accountType'])
+          : AccountType.bankAccount,
+      creditLimit: map['creditLimit'] != null ? (map['creditLimit'] as num).toDouble() : null,
+      payDayAutoFillEnabled: map['payDayAutoFillEnabled'] as bool? ?? false,
+      payDayAutoFillAmount: map['payDayAutoFillAmount'] != null
+          ? (map['payDayAutoFillAmount'] as num).toDouble()
+          : null,
+      isSynced: map['isSynced'] as bool?,
+    );
+  }
+
   Account copyWith({
     String? name,
     double? currentBalance,

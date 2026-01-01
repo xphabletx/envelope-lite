@@ -8,7 +8,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/envelope.dart';
+import '../models/envelope_group.dart';
 import '../models/account.dart';
+import '../models/scheduled_payment.dart';
+import '../models/pay_day_settings.dart';
 import '../models/transaction.dart' as model;
 import '../widgets/migration_overlay.dart';
 import 'subscription_service.dart';
@@ -86,10 +89,24 @@ class CloudMigrationService {
 
       int totalItemsProcessed = 0;
 
-      // Perform migration in steps
+      // CRITICAL ORDER: Restore in dependency order to prevent foreign-key issues
+      // 1. Groups (Binders) FIRST - envelopes reference groups
+      // 2. Accounts - envelopes reference accounts
+      // 3. Envelopes - transactions reference envelopes
+      // 4. Transactions
+      // 5. Scheduled Payments - reference envelopes/groups
+      // 6. PayDay Settings - references accounts
+
+      _progressController.add(MigrationProgress.step(
+        progress: 0.1,
+        step: 'Restoring groups (Binders)...',
+      ));
+      totalItemsProcessed += await _migrateGroups(userId);
+
       _progressController.add(MigrationProgress.step(
         progress: 0.2,
         step: 'Restoring accounts...',
+        itemsProcessed: totalItemsProcessed,
       ));
       totalItemsProcessed += await _migrateAccounts(userId);
 
@@ -101,18 +118,25 @@ class CloudMigrationService {
       totalItemsProcessed += await _migrateEnvelopes(userId, workspaceId);
 
       _progressController.add(MigrationProgress.step(
-        progress: 0.7,
+        progress: 0.6,
         step: 'Restoring transactions...',
         itemsProcessed: totalItemsProcessed,
       ));
       totalItemsProcessed += await _migrateTransactions(userId, workspaceId);
 
       _progressController.add(MigrationProgress.step(
-        progress: 0.9,
+        progress: 0.8,
         step: 'Restoring scheduled payments...',
         itemsProcessed: totalItemsProcessed,
       ));
       totalItemsProcessed += await _migrateScheduledPayments(userId);
+
+      _progressController.add(MigrationProgress.step(
+        progress: 0.95,
+        step: 'Restoring pay day settings...',
+        itemsProcessed: totalItemsProcessed,
+      ));
+      await _migratePayDaySettings(userId);
 
       _progressController.add(MigrationProgress.complete(
         itemsProcessed: totalItemsProcessed,
@@ -154,13 +178,19 @@ class CloudMigrationService {
   Future<void> _clearAllData() async {
     try {
       final envelopeBox = await Hive.openBox<Envelope>('envelopes');
+      final groupBox = await Hive.openBox<EnvelopeGroup>('groups');
       final accountBox = await Hive.openBox<Account>('accounts');
       final transactionBox = await Hive.openBox<model.Transaction>('transactions');
+      final scheduledPaymentBox = await Hive.openBox<ScheduledPayment>('scheduledPayments');
+      final payDaySettingsBox = await Hive.openBox<PayDaySettings>('payDaySettings');
 
       await Future.wait([
         envelopeBox.clear(),
+        groupBox.clear(),
         accountBox.clear(),
         transactionBox.clear(),
+        scheduledPaymentBox.clear(),
+        payDaySettingsBox.clear(),
       ]);
 
       debugPrint('[CloudMigration] ✓ All Hive data cleared');
@@ -187,13 +217,77 @@ class CloudMigrationService {
     return userEnvelopes.isEmpty && userTransactions.isEmpty;
   }
 
+  /// Migrate groups (Binders) from Firebase to Hive
+  /// CRITICAL: Groups MUST be restored BEFORE envelopes to prevent foreign-key errors
+  Future<int> _migrateGroups(String userId) async {
+    final groupBox = await Hive.openBox<EnvelopeGroup>('groups');
+    final Map<String, EnvelopeGroup> bulkData = {};
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .get();
+
+      debugPrint('[CloudMigration] Found ${snapshot.docs.length} groups');
+
+      for (final doc in snapshot.docs) {
+        try {
+          final group = EnvelopeGroup.fromMap(doc.data());
+          bulkData[group.id] = group;
+        } catch (e) {
+          debugPrint('[CloudMigration] Failed to parse group ${doc.id}: $e');
+        }
+      }
+
+      // Bulk insert using putAll for performance
+      if (bulkData.isNotEmpty) {
+        await groupBox.putAll(bulkData);
+        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} groups');
+      }
+
+      return bulkData.length;
+    } catch (e) {
+      debugPrint('[CloudMigration] ✗ Failed to migrate groups: $e');
+      return 0;
+    }
+  }
+
   /// Migrate accounts from Firebase to Hive
-  /// Note: Accounts don't sync to Firebase by design, but may exist locally
-  /// This is a placeholder for future expansion
   Future<int> _migrateAccounts(String userId) async {
-    // Accounts are local-only, nothing to migrate from cloud
-    debugPrint('[CloudMigration] Accounts are local-only, skipping...');
-    return 0;
+    final accountBox = await Hive.openBox<Account>('accounts');
+    final Map<String, Account> bulkData = {};
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('accounts')
+          .get();
+
+      debugPrint('[CloudMigration] Found ${snapshot.docs.length} accounts');
+
+      for (final doc in snapshot.docs) {
+        try {
+          final account = Account.fromMap(doc.data());
+          bulkData[account.id] = account;
+        } catch (e) {
+          debugPrint('[CloudMigration] Failed to parse account ${doc.id}: $e');
+        }
+      }
+
+      // Bulk insert using putAll for performance
+      if (bulkData.isNotEmpty) {
+        await accountBox.putAll(bulkData);
+        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} accounts');
+      }
+
+      return bulkData.length;
+    } catch (e) {
+      debugPrint('[CloudMigration] ✗ Failed to migrate accounts: $e');
+      return 0;
+    }
   }
 
   /// Migrate envelopes from Firebase to Hive using bulk operations
@@ -308,12 +402,71 @@ class CloudMigrationService {
   }
 
   /// Migrate scheduled payments from Firebase to Hive
-  /// Note: Scheduled payments may not sync to Firebase in current implementation
-  /// This is a placeholder for future expansion
   Future<int> _migrateScheduledPayments(String userId) async {
-    // Scheduled payments are local-only in current implementation
-    debugPrint('[CloudMigration] Scheduled payments are local-only, skipping...');
-    return 0;
+    final paymentBox = await Hive.openBox<ScheduledPayment>('scheduledPayments');
+    final Map<String, ScheduledPayment> bulkData = {};
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('scheduledPayments')
+          .get();
+
+      debugPrint('[CloudMigration] Found ${snapshot.docs.length} scheduled payments');
+
+      for (final doc in snapshot.docs) {
+        try {
+          final payment = ScheduledPayment.fromMap(doc.data());
+          bulkData[payment.id] = payment;
+        } catch (e) {
+          debugPrint('[CloudMigration] Failed to parse scheduled payment ${doc.id}: $e');
+        }
+      }
+
+      // Bulk insert using putAll for performance
+      if (bulkData.isNotEmpty) {
+        await paymentBox.putAll(bulkData);
+        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} scheduled payments');
+      }
+
+      return bulkData.length;
+    } catch (e) {
+      debugPrint('[CloudMigration] ✗ Failed to migrate scheduled payments: $e');
+      return 0;
+    }
+  }
+
+  /// Migrate PayDay settings from Firebase to Hive
+  /// Settings are stored in the user document itself
+  Future<void> _migratePayDaySettings(String userId) async {
+    final settingsBox = await Hive.openBox<PayDaySettings>('payDaySettings');
+
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (!userDoc.exists) {
+        debugPrint('[CloudMigration] No user document found, skipping pay day settings');
+        return;
+      }
+
+      final data = userDoc.data();
+      if (data == null || data['payDaySettings'] == null) {
+        debugPrint('[CloudMigration] No pay day settings in user document');
+        return;
+      }
+
+      final settingsData = data['payDaySettings'] as Map<String, dynamic>;
+      final settings = PayDaySettings.fromFirestore(settingsData);
+
+      await settingsBox.put(userId, settings);
+      debugPrint('[CloudMigration] ✓ Restored pay day settings');
+    } catch (e) {
+      debugPrint('[CloudMigration] ✗ Failed to migrate pay day settings: $e');
+    }
   }
 
   /// Force a full re-sync from cloud (for debugging/recovery)

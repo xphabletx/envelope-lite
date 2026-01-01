@@ -9,11 +9,12 @@ import '../models/envelope.dart';
 import '../models/pay_day_settings.dart';
 import 'envelope_repo.dart';
 import 'hive_service.dart';
+import 'sync_manager.dart';
 
-/// Account repository - PURE HIVE (No Firebase sync)
+/// Account repository - Syncs to Firebase for cloud backup
 ///
-/// Accounts are ALWAYS local-only, even in workspace mode.
-/// They are never synced to Firebase or shared with workspace partners.
+/// CRITICAL: Accounts MUST sync to prevent data loss on logout/login
+/// Syncs to: /users/{userId}/accounts
 class AccountRepo {
   AccountRepo(this._envelopeRepo) {
     _accountBox = HiveService.getBox<Account>('accounts');
@@ -21,6 +22,7 @@ class AccountRepo {
 
   final EnvelopeRepo _envelopeRepo;
   late final Box<Account> _accountBox;
+  final SyncManager _syncManager = SyncManager();
   bool _disposed = false;
 
   String get _userId => _envelopeRepo.currentUserId;
@@ -175,6 +177,9 @@ class AccountRepo {
     await _accountBox.put(id, account);
     debugPrint('[AccountRepo] ✅ Account created in Hive: $name');
 
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushAccount(account, _userId);
+
     return id;
   }
 
@@ -251,6 +256,9 @@ class AccountRepo {
     debugPrint('[AccountRepo] ✅ Account updated in Hive: $accountId');
     debugPrint('[AccountRepo]    payDayAutoFillEnabled: $finalPayDayAutoFillEnabled');
     debugPrint('[AccountRepo]    payDayAutoFillAmount: $finalPayDayAutoFillAmount');
+
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushAccount(updatedAccount, _userId);
   }
 
   /// Delete account
@@ -287,6 +295,9 @@ class AccountRepo {
 
     await _accountBox.delete(accountId);
     debugPrint('[AccountRepo] ✅ Account deleted from Hive: $accountId');
+
+    // CRITICAL: Sync deletion to Firebase to prevent data loss
+    _syncManager.deleteAccount(accountId, _userId);
   }
 
   /// Adjust balance by a delta amount
@@ -319,6 +330,9 @@ class AccountRepo {
 
     await _accountBox.put(accountId, updatedAccount);
     debugPrint('[AccountRepo] ✅ Balance adjusted in Hive: ${amount > 0 ? '+' : ''}\$$amount');
+
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushAccount(updatedAccount, _userId);
   }
 
   /// Set balance to a specific amount
@@ -351,6 +365,9 @@ class AccountRepo {
 
     await _accountBox.put(accountId, updatedAccount);
     debugPrint('[AccountRepo] ✅ Balance set in Hive: \$$newBalance');
+
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushAccount(updatedAccount, _userId);
   }
 
   // ======================= HELPER METHODS =======================

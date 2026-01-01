@@ -140,6 +140,60 @@ class ScheduledPayment {
   bool get isEnvelopePayment => envelopeId != null;
   bool get isGroupPayment => groupId != null;
 
+  /// Convert to Firestore map
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'userId': userId,
+      'envelopeId': envelopeId,
+      'groupId': groupId,
+      'name': name,
+      'description': description,
+      'amount': amount,
+      'startDate': startDate.millisecondsSinceEpoch,
+      'frequencyValue': frequencyValue,
+      'frequencyUnit': frequencyUnit.name,
+      'colorName': colorName,
+      'colorValue': colorValue,
+      'isAutomatic': isAutomatic,
+      'lastExecuted': lastExecuted?.millisecondsSinceEpoch,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+      'paymentType': paymentType.name,
+      'paymentEnvelopeId': paymentEnvelopeId,
+    };
+  }
+
+  /// Create from Firestore map
+  factory ScheduledPayment.fromMap(Map<String, dynamic> map) {
+    return ScheduledPayment(
+      id: map['id'] as String,
+      userId: map['userId'] as String,
+      envelopeId: map['envelopeId'] as String?,
+      groupId: map['groupId'] as String?,
+      name: map['name'] as String,
+      description: map['description'] as String?,
+      amount: (map['amount'] as num).toDouble(),
+      startDate: DateTime.fromMillisecondsSinceEpoch(map['startDate'] as int),
+      frequencyValue: map['frequencyValue'] as int,
+      frequencyUnit: PaymentFrequencyUnit.values.firstWhere(
+        (e) => e.name == map['frequencyUnit'],
+      ),
+      colorName: map['colorName'] as String,
+      colorValue: map['colorValue'] as int,
+      isAutomatic: map['isAutomatic'] as bool? ?? false,
+      lastExecuted: map['lastExecuted'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['lastExecuted'] as int)
+          : null,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+      paymentType: map['paymentType'] != null
+          ? ScheduledPaymentType.values.firstWhere(
+              (e) => e.name == map['paymentType'],
+            )
+          : ScheduledPaymentType.fixedAmount,
+      paymentEnvelopeId: map['paymentEnvelopeId'] as String?,
+    );
+  }
+
   ScheduledPayment copyWith({
     String? id,
     String? userId,

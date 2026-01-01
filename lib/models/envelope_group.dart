@@ -91,6 +91,46 @@ class EnvelopeGroup {
     );
   }
 
+  /// Convert to Firestore map
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'userId': userId,
+      'emoji': emoji,
+      'iconType': iconType,
+      'iconValue': iconValue,
+      'iconColor': iconColor,
+      'colorIndex': colorIndex,
+      'payDayEnabled': payDayEnabled,
+      'isShared': isShared,
+      'createdAt': createdAt?.millisecondsSinceEpoch,
+      'updatedAt': updatedAt?.millisecondsSinceEpoch,
+    };
+  }
+
+  /// Create from Firestore map
+  factory EnvelopeGroup.fromMap(Map<String, dynamic> map) {
+    return EnvelopeGroup(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      userId: map['userId'] as String,
+      emoji: map['emoji'] as String?,
+      iconType: map['iconType'] as String?,
+      iconValue: map['iconValue'] as String?,
+      iconColor: map['iconColor'] as int?,
+      colorIndex: map['colorIndex'] as int? ?? 0,
+      payDayEnabled: map['payDayEnabled'] as bool? ?? false,
+      isShared: map['isShared'] as bool? ?? true,
+      createdAt: map['createdAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int)
+          : null,
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['updatedAt'] as int)
+          : null,
+    );
+  }
+
   /// Get icon widget for display
   Widget getIconWidget(ThemeData theme, {double size = 40}) {
     final effectiveIconColor = iconColor != null

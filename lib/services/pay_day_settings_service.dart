@@ -2,11 +2,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/pay_day_settings.dart';
+import 'sync_manager.dart';
 
+/// PayDay Settings Service - Syncs to Firebase for cloud backup
+///
+/// CRITICAL: PayDay settings MUST sync to prevent data loss on logout/login
+/// Syncs to: /users/{userId} document (payDaySettings field)
 class PayDaySettingsService {
   PayDaySettingsService(dynamic db, this.userId);
 
   final String userId;
+  final SyncManager _syncManager = SyncManager();
 
   /// Get reference to pay day settings box
   Box<PayDaySettings> get _settingsBox => Hive.box<PayDaySettings>('payDaySettings');
@@ -37,6 +43,9 @@ class PayDaySettingsService {
       // Use userId as the key in Hive
       await _settingsBox.put(settings.userId, settings);
       debugPrint('[PayDaySettingsService] ✅ Settings updated in Hive: ${settings.userId}');
+
+      // CRITICAL: Sync to Firebase to prevent data loss
+      _syncManager.pushPayDaySettings(settings, userId);
     } catch (e) {
       debugPrint('[PayDaySettingsService] ❌ Error updating settings: $e');
       rethrow;

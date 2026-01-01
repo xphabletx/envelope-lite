@@ -5,11 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
+import 'sync_manager.dart';
 
-/// Scheduled Payment repository - PURE HIVE (No Firebase sync)
+/// Scheduled Payment repository - Syncs to Firebase for cloud backup
 ///
-/// Scheduled payments are ALWAYS local-only, even in workspace mode.
-/// They are never synced to Firebase or shared with workspace partners.
+/// CRITICAL: Scheduled payments MUST sync to prevent data loss on logout/login
+/// Syncs to: /users/{userId}/scheduledPayments
 class ScheduledPaymentRepo {
   ScheduledPaymentRepo(this._userId, {String? workspaceId}) {
     _paymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
@@ -18,6 +19,7 @@ class ScheduledPaymentRepo {
 
   final String _userId;
   late final Box<ScheduledPayment> _paymentBox;
+  final SyncManager _syncManager = SyncManager();
   String? _workspaceId;
   bool _disposed = false;
 
@@ -131,6 +133,9 @@ class ScheduledPaymentRepo {
     await _paymentBox.put(id, payment);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment created in Hive: $name');
 
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushScheduledPayment(payment, _userId);
+
     return id;
   }
 
@@ -176,6 +181,9 @@ class ScheduledPaymentRepo {
 
     await _paymentBox.put(id, updatedPayment);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment updated in Hive: $id');
+
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushScheduledPayment(updatedPayment, _userId);
   }
 
   // ======================= DELETE =======================
@@ -184,6 +192,9 @@ class ScheduledPaymentRepo {
   Future<void> deleteScheduledPayment(String id) async {
     await _paymentBox.delete(id);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment deleted from Hive: $id');
+
+    // CRITICAL: Sync deletion to Firebase to prevent data loss
+    _syncManager.deleteScheduledPayment(id, _userId);
   }
 
   // ======================= MARK EXECUTED =======================
@@ -215,6 +226,9 @@ class ScheduledPaymentRepo {
 
     await _paymentBox.put(id, updatedPayment);
     debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment marked as executed: $id');
+
+    // CRITICAL: Sync to Firebase to prevent data loss
+    _syncManager.pushScheduledPayment(updatedPayment, _userId);
   }
 
   // ======================= QUERIES =======================
