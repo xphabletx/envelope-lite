@@ -409,6 +409,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
 
         return StreamBuilder<List<Envelope>>(
           stream: widget.repo.envelopesStream(),
+          initialData: const [], // Provide initial data
           builder: (context, envelopesSnapshot) {
             final allEnvelopes = envelopesSnapshot.data ?? [];
             // Sort by name (same as home screen default)
@@ -417,11 +418,13 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
 
             return StreamBuilder<List<Account>>(
               stream: _accountRepo.accountsStream(),
+              initialData: const [], // Provide initial data
               builder: (context, accountsSnapshot) {
                 final accounts = accountsSnapshot.data ?? [];
 
                 return StreamBuilder<List<Transaction>>(
                   stream: widget.repo.transactionsForEnvelope(widget.envelopeId),
+                  initialData: const [], // Provide initial data
                   builder: (context, txSnapshot) {
                     final realTransactions = txSnapshot.data ?? [];
 
@@ -825,11 +828,13 @@ class _BinderInfoRow extends StatefulWidget {
 
 class _BinderInfoRowState extends State<_BinderInfoRow> {
   late final GroupRepo _groupRepo;
+  late final Future<EnvelopeGroup?> _binderFuture;
 
   @override
   void initState() {
     super.initState();
     _groupRepo = GroupRepo(widget.repo);
+    _binderFuture = _getBinder(_groupRepo); // Cache the future
   }
 
   @override
@@ -839,7 +844,7 @@ class _BinderInfoRowState extends State<_BinderInfoRow> {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return FutureBuilder<EnvelopeGroup?>(
-      future: _getBinder(_groupRepo),
+      future: _binderFuture, // Use cached future
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
 

@@ -139,6 +139,15 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
         return StreamBuilder<List<EnvelopeGroup>>(
           stream: widget.repo.groupsStream,
           builder: (_, s2) {
+            // Don't show anything until we have data from the stream
+            if (!s2.hasData) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
             final allGroups = s2.data ?? [];
             final filteredGroups = allGroups.where((g) {
               if (g.userId == widget.repo.currentUserId) return true;
@@ -526,10 +535,10 @@ class _BinderSpreadState extends State<_BinderSpread> {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: widget.binderColors.binderColor.withAlpha(26),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: widget.binderColors.binderColor.withAlpha(77),
             width: 1,
@@ -543,18 +552,18 @@ class _BinderSpreadState extends State<_BinderSpread> {
               children: [
                 Icon(
                   icon,
-                  size: 16,
+                  size: 14,
                   color: widget.binderColors.binderColor,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Flexible(
                   child: Text(
                     label,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                       color: widget.binderColors.binderColor,
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.3,
                     ),
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
@@ -562,13 +571,13 @@ class _BinderSpreadState extends State<_BinderSpread> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 amount,
                 style: fontProvider.getTextStyle(
-                  fontSize: 20,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: widget.binderColors.envelopeTextColor,
                 ),
@@ -688,7 +697,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
       children: [
         for (int i = 0; i < chips.length; i++) ...[
           chips[i],
-          if (i < chips.length - 1) const SizedBox(height: 16),
+          if (i < chips.length - 1) const SizedBox(height: 8),
         ],
       ],
     );
@@ -863,9 +872,10 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           ),
                         ),
                         // Main content - use Column with spacers to distribute vertically
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
+                        Positioned.fill(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
                             // Binder Header
                             Column(
                               children: [
@@ -892,7 +902,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     child: widget.group.getIconWidget(theme, size: 22),
                                   ),
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
                                 Text(
                                   widget.group.name,
                                   style: fontProvider.getTextStyle(
@@ -931,6 +941,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             else
                               const SizedBox.shrink(),
                           ],
+                        ),
                         ),
                       ],
                     ),
@@ -1039,12 +1050,15 @@ class _InfiniteEnvelopeList extends StatelessWidget {
 
             // Inline Envelope Details (when selected)
             if (isSelected)
-              _InlineEnvelopeDetail(
-                envelope: envelope,
-                binderColors: binderColors,
-                currency: currency,
-                fontProvider: fontProvider,
-                timeMachine: timeMachine,
+              GestureDetector(
+                onTap: () => onTap(index),
+                child: _InlineEnvelopeDetail(
+                  envelope: envelope,
+                  binderColors: binderColors,
+                  currency: currency,
+                  fontProvider: fontProvider,
+                  timeMachine: timeMachine,
+                ),
               ),
           ],
         );

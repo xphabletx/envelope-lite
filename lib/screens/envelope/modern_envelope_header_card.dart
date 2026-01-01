@@ -383,6 +383,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: StreamBuilder<List<ScheduledPayment>>(
             stream: scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id),
+            initialData: const [], // Provide initial data to prevent delay
             builder: (context, snapshot) {
               final payments = snapshot.data ?? [];
               final hasPayments = payments.isNotEmpty;
@@ -762,7 +763,7 @@ class _LargeTargetTile extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: amountProgress,
                     backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.secondary),
                     minHeight: 8,
                   ),
                 ),

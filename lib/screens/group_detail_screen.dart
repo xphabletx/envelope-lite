@@ -301,11 +301,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                   binderColors.binderColor,
                                 );
                                 final HSLColor lighterColor = hslColor
-                                    .withLightness(
-                                      (hslColor.lightness + 0.4).clamp(
-                                        0.0,
-                                        1.0,
-                                      ),
+                                    .withLightness(0.85)
+                                    .withSaturation(
+                                      (hslColor.saturation * 0.3).clamp(0.0, 1.0),
                                     );
                                 final Color lightGroupColor = lighterColor
                                     .toColor();
