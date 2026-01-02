@@ -32,10 +32,12 @@ class GroupsHomeScreen extends StatefulWidget {
     super.key,
     required this.repo,
     required this.groupRepo,
+    this.initialBinderId,
   });
 
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
+  final String? initialBinderId; // Optional: scroll to this binder on load
 
   @override
   State<GroupsHomeScreen> createState() => _GroupsHomeScreenState();
@@ -46,6 +48,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   int _currentPage = 0;
   bool _mineOnly = false;
   String _sortBy = 'name';
+  bool _hasScrolledToInitialBinder = false;
 
   Map<String, dynamic> _statsFor(EnvelopeGroup g, List<Envelope> envs, TimeMachineProvider timeMachine) {
     final inGroup = envs.where((e) => e.groupId == g.id).toList()
@@ -158,6 +161,21 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             }).toList();
 
             final groups = _sortGroups(filteredGroups, envs, timeMachine);
+
+            // Scroll to initial binder if specified (only once)
+            if (!_hasScrolledToInitialBinder && widget.initialBinderId != null && groups.isNotEmpty) {
+              final initialIndex = groups.indexWhere((g) => g.id == widget.initialBinderId);
+              if (initialIndex != -1) {
+                _currentPage = initialIndex;
+                // Use post-frame callback to ensure PageView is built before jumping
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (_pageController.hasClients) {
+                    _pageController.jumpToPage(initialIndex);
+                  }
+                });
+              }
+              _hasScrolledToInitialBinder = true;
+            }
 
             if (_currentPage >= groups.length && groups.isNotEmpty) {
               _currentPage = groups.length - 1;

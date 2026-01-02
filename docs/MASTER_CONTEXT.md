@@ -1,7 +1,7 @@
 # Stuffrite - Comprehensive Master Context Documentation
 
-**Last Updated:** 2025-12-31
-**Version:** 2.2 (Enhanced with Detailed Function Documentation and Data Flow)
+**Last Updated:** 2026-01-02
+**Version:** 2.3 (Updated with RevenueCat Integration & New Features)
 **Purpose:** Complete reference for all functions, features, code architecture, and inter-dependencies
 
 ---
@@ -78,18 +78,25 @@ User Action → UI (Screens/Widgets)
 lib/
 ├── main.dart                    # App entry point (302 lines)
 ├── firebase_options.dart        # Firebase config
+├── config/                      # Configuration files (1 file) [NEW]
 ├── models/                      # Data models (18 files, 6 generated)
-├── services/                    # Business logic (20 files)
-├── providers/                   # State management (6 files)
-├── screens/                     # Full-page UI (40 files)
+├── services/                    # Business logic (26 files) [UPDATED]
+├── providers/                   # State management (7 files) [UPDATED]
+├── screens/                     # Full-page UI (43 files) [UPDATED]
 ├── widgets/                     # Reusable components (29 files)
 ├── data/                        # Static databases (6 files)
 ├── theme/                       # Theme definitions (1 file)
 └── utils/                       # Helper functions (3 files)
 ```
 
-**Total Dart Files:** 122
-**Total Lines of Code:** ~15,000+
+**Total Dart Files:** 130 [UPDATED from 122]
+**Total Lines of Code:** ~16,500+ [UPDATED]
+
+**Recent Additions (Jan 2026):**
+- RevenueCat subscription integration (5 new files)
+- OnboardingProvider for improved state management
+- Custom branded paywall screen
+- Customer Center service for subscription management
 
 ---
 
@@ -336,9 +343,15 @@ DateTime? getNextPayDateAdjusted() {
 
 ## Services (Business Logic Layer)
 
-Location: `lib/services/`
+Location: `lib/services/` and `lib/config/`
 
-**20 service files** providing all business logic and data operations.
+**26 service files** providing all business logic and data operations. [UPDATED from 20]
+
+**New Services (Jan 2026):**
+- ✨ CustomerCenterService - RevenueCat subscription management UI
+- ✨ PaywallService - Premium subscription offering management (enhanced)
+- ✨ SubscriptionService - Premium entitlement validation (enhanced)
+- ✨ RevenueCatConfig - Centralized subscription configuration
 
 ### Core Repositories
 
@@ -814,11 +827,183 @@ static Future<List<String>> getCompletedTutorials()
 
 ---
 
+### RevenueCat & Subscription Services [NEW SECTION]
+
+#### 21. RevenueCatConfig [NEW]
+**File:** `lib/config/revenue_cat_config.dart` (58 lines)
+
+**Purpose:** Centralized configuration for RevenueCat subscription system.
+
+**Configuration:**
+```dart
+// API Keys
+static const String testApiKey = 'REDACTED_TEST_KEY';
+static const String iosApiKey = 'REDACTED_IOS_KEY';
+static const String androidApiKey = 'REDACTED_ANDROID_KEY';
+
+// Entitlement
+static const String premiumEntitlementId = 'Stuffrite Unlocked';
+
+// VIP Bypass (Developer Testing)
+static const List<String> vipEmails = ['psul7an@gmail.com'];
+```
+
+**Key Methods:**
+```dart
+static bool isVipUser(String? email)
+  // Check if email is in VIP bypass list
+
+static bool hasPremiumEntitlement(Map<String, dynamic> activeEntitlements)
+  // Validate if user has active "Stuffrite Unlocked" entitlement
+  // Includes comprehensive debug logging
+```
+
+**Security Note:** Production API keys stored here. Consider moving to environment variables.
+
+---
+
+#### 22. SubscriptionService [ENHANCED]
+**File:** `lib/services/subscription_service.dart` (~250 lines)
+
+**Purpose:** Core RevenueCat subscription status and entitlement management.
+
+**Key Features:**
+- RevenueCat SDK initialization
+- Premium entitlement validation
+- Subscription status checking
+- Customer properties management
+- VIP user bypass logic
+
+**Primary Methods:**
+```dart
+Future<void> initialize()
+  // Initialize RevenueCat SDK with platform-specific API keys
+  // Configure user identification
+  // Set up customer attributes
+
+Future<bool> checkSubscriptionStatus()
+  // Fetch current customer info from RevenueCat
+  // Check for active "Stuffrite Unlocked" entitlement
+  // Apply VIP bypass if applicable
+  // Returns true if user has premium access
+
+Future<CustomerInfo> getCustomerInfo()
+  // Retrieve full customer info from RevenueCat
+
+bool isPremiumUser(CustomerInfo customerInfo)
+  // Validate premium entitlement status
+  // Checks RevenueCatConfig.hasPremiumEntitlement()
+```
+
+**Integration Points:**
+- Used by: AuthService, PaywallScreen, SettingsScreen
+- Initialized in: main.dart during app startup
+- Premium gate: Controls access to cloud sync, unlimited binders, shared workspaces
+
+---
+
+#### 23. PaywallService [ENHANCED]
+**File:** `lib/services/paywall_service.dart` (~170 lines)
+
+**Purpose:** Manage subscription offerings and purchase flow.
+
+**Key Features:**
+- Fetch available offerings from RevenueCat
+- Display subscription packages (monthly/annual)
+- Handle purchase initiation
+- Restore purchases
+- Product pricing display
+
+**Primary Methods:**
+```dart
+Future<Offerings?> getOfferings()
+  // Fetch current offerings from RevenueCat
+  // Returns available subscription packages
+
+Future<PurchaseResult> purchasePackage(Package package)
+  // Initiate purchase flow for selected package
+  // Returns purchase result with customer info
+
+Future<CustomerInfo> restorePurchases()
+  // Restore previous purchases
+  // Returns updated customer info
+```
+
+**Integration Points:**
+- Used by: StuffritePaywallScreen
+- Manages: Monthly and annual subscription offerings
+- Handles: Purchase errors, cancellations, success states
+
+---
+
+#### 24. CustomerCenterService [NEW]
+**File:** `lib/services/customer_center_service.dart` (53 lines)
+
+**Purpose:** Present native RevenueCat Customer Center UI for subscription management.
+
+**Key Features:**
+- Display native subscription management interface
+- Handle subscription updates, cancellations, billing
+- Error handling with user feedback
+
+**Primary Method:**
+```dart
+static Future<bool> presentCustomerCenter(BuildContext context) async
+  // Presents native RevenueCat Customer Center modal
+  // Returns true on success, false on failure
+  // Shows SnackBar on error
+```
+
+**User Flow:**
+```
+Settings Screen → "Manage Subscription" button → CustomerCenterService.presentCustomerCenter()
+  → Native RevenueCat UI (subscription details, cancel, change plan)
+```
+
+**Integration Points:**
+- Used by: SettingsScreen
+- Requires: `purchases_ui_flutter` package
+- Platform: iOS and Android native UI
+
+---
+
+### Premium Feature Gating Architecture
+
+**Flow Diagram:**
+```
+App Launch
+  ↓
+SubscriptionService.initialize()
+  ↓
+AuthWrapper checks subscription status
+  ↓
+  ├─ Premium User → HomeScreen
+  └─ Free User → StuffritePaywallScreen
+       ↓
+       ├─ Purchase → SubscriptionService.checkStatus() → HomeScreen
+       ├─ Restore → SubscriptionService.checkStatus() → HomeScreen
+       └─ Cancel → Stay on Paywall
+```
+
+**Premium-Gated Features:**
+- ✅ Cloud sync (Firebase)
+- ✅ Unlimited binders
+- ✅ Shared workspaces
+- ✅ Advanced analytics
+
+**Free Features:**
+- ✅ Local offline budgeting
+- ✅ Up to 3 binders
+- ✅ Solo mode only
+- ✅ Basic analytics
+
+---
+
 ## Providers (State Management)
 
 Location: `lib/providers/`
 
-6 ChangeNotifier providers managing global application state.
+7 ChangeNotifier providers managing global application state. [UPDATED from 6]
 
 ### 1. ThemeProvider
 
@@ -1118,11 +1303,86 @@ String getCurrencySymbol()
 
 ---
 
+### 7. OnboardingProvider [NEW]
+
+**File:** `lib/providers/onboarding_provider.dart` (~80 lines)
+
+**Purpose:** Manage multi-step onboarding flow state with persistence.
+
+**State:**
+```dart
+int _currentStep              // Current onboarding step (0-7)
+bool _isInitialized          // Whether state is loaded from SharedPreferences
+bool _hasAttemptedInit       // Prevent multiple initialization attempts
+```
+
+**Key Methods:**
+```dart
+Future<void> initialize(String userId) async
+  // Load onboarding state from SharedPreferences
+  // Check if user has completed onboarding
+  // Validate step range (0-7)
+  // Set initialization flags
+
+Future<void> setCurrentStep(int step) async
+  // Save current step to SharedPreferences
+  // Update _currentStep state
+  // Notify listeners
+
+Future<void> completeOnboarding(String userId) async
+  // Mark onboarding as complete in SharedPreferences
+  // Clear saved step
+  // Set _currentStep to final value
+
+bool get isInitialized => _isInitialized
+int get currentStep => _currentStep
+```
+
+**Onboarding Steps:**
+```
+Step 0: Welcome screen
+Step 1: Photo upload
+Step 2: Display name
+Step 3: Theme selection
+Step 4: Font selection
+Step 5: Target icon selection
+Step 6: Account setup
+Step 7: Complete (navigate to HomeScreen)
+```
+
+**Integration Points:**
+- Used by: OnboardingFlow, AuthWrapper
+- Persistence: SharedPreferences (key: `onboarding_step_$userId`)
+- State management: ChangeNotifier pattern
+
+**Lifecycle:**
+```
+App Launch (new user)
+  ↓
+AuthWrapper → OnboardingProvider.initialize()
+  ↓
+  ├─ If completed → HomeScreen
+  └─ If not completed → OnboardingFlow(step: currentStep)
+       ↓
+       User completes steps → OnboardingProvider.setCurrentStep()
+       ↓
+       Final step → OnboardingProvider.completeOnboarding()
+       ↓
+       HomeScreen
+```
+
+---
+
 ## Screens (UI Pages)
 
-Location: `lib/screens/`
+Location: `lib/screens/` and `lib/screens/auth/` and `lib/screens/onboarding/`
 
-35+ full-page UI components organized by category.
+43+ full-page UI components organized by category. [UPDATED from 35+]
+
+**New Screens (Jan 2026):**
+- ✨ SignInScreen - Refactored authentication entry point
+- ✨ StuffritePaywallScreen - Custom branded paywall for premium subscriptions
+- ✨ OnboardingFlow - Refactored multi-step onboarding (was OnboardingScreen)
 
 ### Main Navigation Screens
 
@@ -1171,8 +1431,8 @@ Location: `lib/screens/`
 - "Mine Only" workspace toggle
 
 **Navigation:**
-- Tap binder → GroupDetailScreen
-- Double-tap envelope → EnvelopeDetailScreen
+- Tap binder → Settings chip & Total amount chip (stats/history)
+- Double-tap envelope → EnvelopeDetailScreen (with binder info card → GroupsHomeScreen)
 - Pay Day button → PayDayPreviewScreen
 - Edit button → GroupEditor modal
 
@@ -1245,7 +1505,7 @@ Location: `lib/screens/`
 - Bottom nav to jump between tabs
 
 **Navigation:**
-- Binder link → GroupDetailScreen
+- Binder link → GroupsHomeScreen (context-aware, scrolled to binder)
 - Speed dial → DepositModal, WithdrawModal, TransferModal
 
 ---
@@ -1469,10 +1729,154 @@ payDayBox.put(settingsKey, updatedSettings.copyWith(
 
 ### Onboarding & Auth Screens
 
-**OnboardingFlow:** 7 steps (photo, name, theme, font, currency, target icon, account)  
-**SignInScreen:** Email/password + Google sign-in  
-**AuthWrapper:** Routes based on auth state and profile completion  
-**EmailVerificationScreen:** Blocks new unverified accounts  
+#### SignInScreen [REFACTORED]
+**File:** `lib/screens/sign_in_screen.dart` (~100 lines)
+
+**Purpose:** Primary authentication entry point for Stuffrite.
+
+**Features:**
+- Email/password authentication
+- Google Sign-In integration
+- Apple Sign-In (iOS only)
+- Password visibility toggle
+- Loading states during authentication
+- Error handling with SnackBar feedback
+- Clean Latte Love themed UI
+
+**User Flow:**
+```
+App Launch (not authenticated)
+  ↓
+SignInScreen
+  ├─ Email/Password → Firebase Auth
+  ├─ Google Sign-In → Firebase Auth + Google
+  └─ Apple Sign-In → Firebase Auth + Apple
+      ↓
+  AuthWrapper → Check profile completion & subscription
+```
+
+---
+
+#### StuffritePaywallScreen [NEW]
+**File:** `lib/screens/auth/stuffrite_paywall_screen.dart` (~250 lines)
+
+**Purpose:** Custom branded paywall for premium subscription gate.
+
+**Features:**
+- **Fully branded** with Latte Love theme colors:
+  - Cream background: `#F5F0E8`
+  - Brown primary: `#8B6F47`
+  - Dark brown: `#5C4033`
+  - Gold accent: `#D4AF37`
+- Stuffrite logo and branding
+- Feature showcase with icons:
+  - Cloud Sync across devices
+  - Unlimited Binders
+  - Shared Workspaces
+- Subscription options display (Monthly/Annual)
+- Savings calculation ("Save 20%")
+- Manual purchase flow
+- Restore purchases button
+- Sign out option
+- Error handling with user feedback
+- Loading states during purchase
+
+**User Flow:**
+```
+AuthWrapper → Check subscription status
+  ↓
+  ├─ Premium User → Skip paywall → HomeScreen
+  └─ Free User → StuffritePaywallScreen
+       ↓
+       ├─ Subscribe Now → Purchase flow → Check subscription → HomeScreen
+       ├─ Restore Purchases → Restore flow → Check subscription → HomeScreen
+       └─ Sign Out → SignInScreen
+```
+
+**Integration:**
+- Uses: `PaywallService` to fetch offerings
+- Uses: `SubscriptionService` to validate subscription
+- Uses: `RevenueCatConfig` for entitlement checking
+- Returns to: AuthWrapper after successful purchase/restore
+
+**Premium Features Displayed:**
+1. **Cloud Sync** - Access binders across all devices
+2. **Unlimited Binders** - Create as many binders as needed
+3. **Shared Workspaces** - Collaborate with family and teams
+
+---
+
+#### OnboardingFlow [REFACTORED]
+**File:** `lib/screens/onboarding/onboarding_flow.dart` (~200 lines)
+
+**Purpose:** Multi-step profile setup flow for new users.
+
+**7 Steps:**
+```
+Step 0: Welcome screen
+Step 1: Photo upload (local file storage)
+Step 2: Display name
+Step 3: Theme selection
+Step 4: Font selection
+Step 5: Target icon selection
+Step 6: Account setup
+Step 7: Complete → Navigate to HomeScreen
+```
+
+**State Management:**
+- Uses `OnboardingProvider` for step tracking
+- Persists current step to SharedPreferences
+- Resumes from last completed step on app restart
+
+**Key Changes from Previous Version:**
+- Changed from `_photoURL` (Firebase) to `_photoPath` (local file)
+- Integrated with OnboardingProvider instead of local state
+- Step progression saved to prevent data loss
+
+**User Flow:**
+```
+AuthWrapper → Check profile completion
+  ↓
+  ├─ Profile Complete → HomeScreen
+  └─ Profile Incomplete → OnboardingFlow(step: provider.currentStep)
+       ↓
+       User completes each step → OnboardingProvider.setCurrentStep()
+       ↓
+       Step 7 → OnboardingProvider.completeOnboarding()
+       ↓
+       Navigate to HomeScreen
+```
+
+---
+
+#### AuthWrapper
+**File:** `lib/screens/auth_wrapper.dart`
+
+**Purpose:** Routes based on auth state, subscription status, and profile completion.
+
+**Routing Logic:**
+```
+App Launch
+  ↓
+AuthWrapper checks:
+  1. Firebase Auth state
+  2. Subscription status (via SubscriptionService)
+  3. Profile completion (via UserService)
+  4. Onboarding status (via OnboardingProvider)
+
+Routes to:
+  ├─ Not authenticated → SignInScreen
+  ├─ No subscription → StuffritePaywallScreen
+  ├─ Profile incomplete → OnboardingFlow
+  └─ All checks pass → HomeScreen
+```
+
+---
+
+#### EmailVerificationScreen
+**Purpose:** Blocks new unverified email accounts.
+
+**Note:** Existing users grandfathered in without verification requirement.
 
 ---
 
@@ -2095,7 +2499,7 @@ static int getDaysRemaining(Envelope envelope)
 **UI Integration:**
 - EnvelopeDetailScreen (Target Status Card)
 - EnvelopeTile (optional subtitle)
-- GroupDetailScreen (group target progress)
+- GroupsHomeScreen (group target progress via stats/history)
 
 ---
 

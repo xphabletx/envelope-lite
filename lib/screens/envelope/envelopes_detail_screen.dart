@@ -13,7 +13,7 @@ import '../../../services/account_repo.dart';
 import '../../../services/scheduled_payment_repo.dart'; // NEW IMPORT
 import '../../../utils/target_helper.dart';
 import 'envelope_transaction_list.dart';
-import '../group_detail_screen.dart';
+import '../groups_home_screen.dart';
 import 'modals/deposit_modal.dart';
 import 'modals/withdraw_modal.dart';
 import 'modals/transfer_modal.dart';
@@ -872,13 +872,14 @@ class _BinderInfoRowState extends State<_BinderInfoRow> {
           onTap: () async {
             final binderData = await _getBinder(_groupRepo);
             if (binderData != null && context.mounted) {
+              // Navigate to Groups Home Screen, scrolled to this binder
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => GroupDetailScreen(
-                    group: binderData,
+                  builder: (context) => GroupsHomeScreen(
+                    repo: widget.repo,
                     groupRepo: _groupRepo,
-                    envelopeRepo: widget.repo,
+                    initialBinderId: binderData.id,
                   ),
                 ),
               );
