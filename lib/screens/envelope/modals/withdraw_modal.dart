@@ -214,12 +214,16 @@ class _WithdrawModalState extends State<WithdrawModal> {
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Available: ${NumberFormat.currency(symbol: locale.currencySymbol).format(widget.currentAmount)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.primary,
+                      Flexible(
+                        child: Text(
+                          'Available: ${NumberFormat.currency(symbol: locale.currencySymbol).format(widget.currentAmount)}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.primary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                     ],

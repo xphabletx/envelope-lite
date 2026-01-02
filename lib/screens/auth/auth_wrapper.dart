@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'email_verification_screen.dart';
 import '../sign_in_screen.dart';
-import '../onboarding/onboarding_flow.dart';
+import '../onboarding/consolidated_onboarding_flow.dart';
 import 'stuffrite_paywall_screen.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
@@ -196,10 +196,6 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
       debugPrint('[AuthWrapper] 🧹 Checking Hive data for user changes');
       await AuthService.clearHiveIfDifferentUser(widget.user.uid);
 
-      // IMPORTANT: We DON'T call reset() here because OnboardingFlow.initState()
-      // will call initialize() which will load step 0 from the cleared SharedPreferences
-      // The AuthService.clearLocalOnboardingFlags() already cleared the step
-
       final completed = await _checkOnboardingStatus(widget.user.uid);
 
       if (mounted) {
@@ -253,13 +249,12 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     final hasCompletedOnboarding = _hasCompletedOnboarding ?? false;
 
     // TEMPORARY: Skip onboarding for debugging
-    const bool SKIP_ONBOARDING = true;
+    const bool SKIP_ONBOARDING = false;
 
     if (!hasCompletedOnboarding && !SKIP_ONBOARDING) {
       // New user or hasn't completed onboarding - show onboarding flow
-      debugPrint('[AuthWrapper] 📝 No onboarding completion - showing OnboardingFlow');
-      final userService = UserService(FirebaseFirestore.instance, widget.user.uid);
-      return OnboardingFlow(userService: userService);
+      debugPrint('[AuthWrapper] 📝 No onboarding completion - showing ConsolidatedOnboardingFlow');
+      return ConsolidatedOnboardingFlow(userId: widget.user.uid);
     }
 
     if (SKIP_ONBOARDING && !hasCompletedOnboarding) {

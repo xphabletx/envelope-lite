@@ -220,12 +220,17 @@ class FutureTransactionTile extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            _getAmountPrefix() + currency.format(transaction.amount),
-            style: fontProvider.getTextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+          Flexible(
+            child: Text(
+              _getAmountPrefix() + currency.format(transaction.amount),
+              style: fontProvider.getTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.right,
             ),
           ),
         ],

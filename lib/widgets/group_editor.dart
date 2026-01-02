@@ -17,6 +17,8 @@ import '../data/material_icons_database.dart';
 import '../data/binder_templates.dart';
 import 'binder_template_selector.dart';
 import 'envelope_creator.dart';
+import 'binder/binder_template_quick_setup.dart';
+import 'binder/template_envelope_selector.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -174,13 +176,35 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => saving = true);
 
+    final name = _nameCtrl.text.trim();
+
+    // Check for duplicate binder names (only when creating or if name changed)
+    final allBinders = await widget.groupRepo.getAllGroupsAsync();
+    final duplicateName = allBinders.any((g) =>
+      g.name.trim().toLowerCase() == name.toLowerCase() &&
+      g.id != editingGroupId // Exclude current binder when editing
+    );
+
+    if (duplicateName) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('A binder named "$name" already exists. Please choose a different name.'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     String? currentGroupId = editingGroupId;
 
     try {
       if (isEdit) {
         await widget.groupRepo.updateGroup(
           groupId: editingGroupId!,
-          name: _nameCtrl.text.trim(),
+          name: name,
           emoji: selectedEmoji,
           iconType: selectedIconType,
           iconValue: selectedIconValue,
@@ -190,7 +214,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         );
       } else {
         currentGroupId = await widget.groupRepo.createGroup(
-          name: _nameCtrl.text.trim(),
+          name: name,
           emoji: selectedEmoji,
           iconType: selectedIconType,
           iconValue: selectedIconValue,
@@ -543,6 +567,107 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           }
         });
       }
+    }
+  }
+
+  Future<void> _launchQuickSetup() async {
+    if (_selectedTemplate == null) return;
+
+    // Launch quick setup for the selected template
+    // This will create the binder AND the envelopes with full details
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BinderTemplateQuickSetup(
+          template: _selectedTemplate!,
+          userId: widget.envelopeRepo.currentUserId,
+          onComplete: (count) {
+            // Quick setup creates its own binder, so we can close this editor
+            if (mounted) {
+              Navigator.of(context).pop(); // Close the group editor
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Created ${_selectedTemplate!.name} binder with $count envelopes!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addTemplateEnvelopes() async {
+    // Show template envelope selector
+    final selectedEnvelopes = await Navigator.push<Map<String, Set<String>>>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => TemplateEnvelopeSelector(
+          userId: widget.envelopeRepo.currentUserId,
+          existingBinderId: editingGroupId,
+        ),
+      ),
+    );
+
+    if (selectedEnvelopes == null || selectedEnvelopes.isEmpty || !mounted) {
+      return;
+    }
+
+    // For each template with selected envelopes, launch quick setup
+    for (final entry in selectedEnvelopes.entries) {
+      final templateId = entry.key;
+      final selectedEnvelopeIds = entry.value;
+
+      // Find the template
+      final template = binderTemplates.firstWhere((t) => t.id == templateId);
+
+      // Filter only selected envelopes from this template
+      final filteredTemplate = BinderTemplate(
+        id: template.id,
+        name: template.name,
+        emoji: template.emoji,
+        description: template.description,
+        envelopes: template.envelopes.where((e) => selectedEnvelopeIds.contains(e.id)).toList(),
+      );
+
+      if (!mounted) return;
+
+      // Launch quick setup for this template's envelopes
+      final createdIds = await Navigator.push<List<String>>(
+        context,
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => BinderTemplateQuickSetup(
+            template: filteredTemplate,
+            userId: widget.envelopeRepo.currentUserId,
+            existingBinderId: editingGroupId,
+            returnEnvelopeIds: true,
+          ),
+        ),
+      );
+
+      if (createdIds != null && createdIds.isNotEmpty && mounted) {
+        setState(() {
+          this.selectedEnvelopeIds.addAll(createdIds);
+          newlyCreatedEnvelopeIds.addAll(createdIds);
+        });
+      }
+    }
+
+    // Scroll to bottom to show the new envelopes
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
     }
   }
 
@@ -962,6 +1087,136 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
+
+                                // "Quick Setup Template" button (only show when creating with template)
+                                if (!isEdit && _selectedTemplate != null)
+                                  InkWell(
+                                    onTap: _launchQuickSetup,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: theme.colorScheme.tertiary,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.tertiary,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.auto_awesome,
+                                              color: Colors.white,
+                                              size: 24,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Quick Setup Template',
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: theme.colorScheme.onTertiaryContainer,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Add amounts and details to template envelopes',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: theme.colorScheme.onTertiaryContainer.withAlpha(179),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 16,
+                                            color: theme.colorScheme.onTertiaryContainer,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (!isEdit && _selectedTemplate != null) const SizedBox(height: 12),
+
+                                // "Add Templates" button (only show when editing existing binder)
+                                if (isEdit)
+                                  InkWell(
+                                    onTap: _addTemplateEnvelopes,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: theme.colorScheme.secondary,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.secondary,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.library_add,
+                                              color: Colors.white,
+                                              size: 24,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Add Templates',
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: theme.colorScheme.onSecondaryContainer,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Import envelopes from templates with quick setup',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: theme.colorScheme.onSecondaryContainer.withAlpha(179),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 16,
+                                            color: theme.colorScheme.onSecondaryContainer,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (isEdit) const SizedBox(height: 12),
                               ],
                             ),
                           ),

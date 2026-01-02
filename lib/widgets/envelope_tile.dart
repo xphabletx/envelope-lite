@@ -231,19 +231,27 @@ class _EnvelopeTileState extends State<EnvelopeTile>
               padding: const EdgeInsets.only(left: 56),
               child: Row(
                 children: [
-                  Text(
-                    currencyFormat.format(widget.envelope.currentAmount),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                  Flexible(
+                    child: Text(
+                      currencyFormat.format(widget.envelope.currentAmount),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                   if (widget.envelope.targetAmount != null) ...[
-                    Text(
-                      ' / ${currencyFormat.format(widget.envelope.targetAmount)}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.colorScheme.onSurface.withAlpha(179),
+                    Flexible(
+                      child: Text(
+                        ' / ${currencyFormat.format(widget.envelope.targetAmount)}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: theme.colorScheme.onSurface.withAlpha(179),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                   ],

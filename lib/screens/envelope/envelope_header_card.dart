@@ -54,25 +54,33 @@ class EnvelopeHeaderCard extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Current Amount (large)
-            Text(
-              currencyFormatter.format(envelope.currentAmount),
-              style: fontProvider.getTextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
+            // Current Amount (large) - with overflow handling
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                currencyFormatter.format(envelope.currentAmount),
+                style: fontProvider.getTextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+                maxLines: 1,
               ),
             ),
 
-            // Target info (if set)
+            // Target info (if set) - with overflow handling
             if (envelope.targetAmount != null) ...[
               const SizedBox(height: 4),
-              Text(
-                'of ${currencyFormatter.format(envelope.targetAmount!)}',
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  // FIX: withOpacity -> withValues
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'of ${currencyFormatter.format(envelope.targetAmount!)}',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 24,
+                    // FIX: withOpacity -> withValues
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                  maxLines: 1,
                 ),
               ),
               const SizedBox(height: 4),
@@ -113,13 +121,15 @@ class EnvelopeHeaderCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                // Auto-fill status chip
+                // Auto-fill status chip - with text overflow handling
                 if (envelope.autoFillEnabled && envelope.autoFillAmount != null)
-                  _InfoChip(
-                    icon: Icons.autorenew,
-                    label:
-                        'Auto-fill: ${currencyFormatter.format(envelope.autoFillAmount!)}',
-                    color: theme.colorScheme.secondary,
+                  Flexible(
+                    child: _InfoChip(
+                      icon: Icons.autorenew,
+                      label:
+                          'Auto-fill: ${currencyFormatter.format(envelope.autoFillAmount!)}',
+                      color: theme.colorScheme.secondary,
+                    ),
                   ),
 
                 // Pay days until target chip
@@ -169,12 +179,16 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
         ],

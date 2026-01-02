@@ -9,8 +9,10 @@ import 'package:provider/provider.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../services/error_handler_service.dart';
 import '../models/envelope_group.dart';
 import '../models/account.dart';
+import '../models/app_error.dart';
 import '../screens/add_scheduled_payment_screen.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../services/localization_service.dart';
@@ -235,12 +237,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(timeMachine.getBlockedActionMessage()),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
+      ErrorHandler.showWarning(
+        context,
+        timeMachine.getBlockedActionMessage(),
       );
       return;
     }
@@ -254,6 +253,26 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     final name = _nameCtrl.text.trim();
     final subtitle = _subtitleCtrl.text.trim();
 
+    // Check for duplicate envelope names
+    final existingEnvelopes = await widget.repo.envelopesStream().first;
+    final duplicateName = existingEnvelopes.any((e) =>
+      e.name.trim().toLowerCase() == name.toLowerCase()
+    );
+
+    if (duplicateName) {
+      if (!mounted) return;
+      await ErrorHandler.handle(
+        context,
+        AppError.business(
+          code: 'DUPLICATE_ENVELOPE_NAME',
+          userMessage: 'An envelope named "$name" already exists. Please choose a different name.',
+          severity: ErrorSeverity.medium,
+        ),
+      );
+      setState(() => _saving = false);
+      return;
+    }
+
     // starting amount
     double start = 0.0;
     final rawStart = _amtCtrl.text.trim();
@@ -261,8 +280,13 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       final parsed = double.tryParse(rawStart);
       if (parsed == null || parsed < 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('error_invalid_starting_amount'))),
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'INVALID_STARTING_AMOUNT',
+            userMessage: tr('error_invalid_starting_amount'),
+            category: ErrorCategory.validation,
+          ),
         );
         return;
       }
@@ -276,9 +300,14 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       final parsed = double.tryParse(rawTarget);
       if (parsed == null || parsed < 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
+        await ErrorHandler.handle(
           context,
-        ).showSnackBar(SnackBar(content: Text(tr('error_invalid_target'))));
+          AppError.medium(
+            code: 'INVALID_TARGET',
+            userMessage: tr('error_invalid_target'),
+            category: ErrorCategory.validation,
+          ),
+        );
         return;
       }
       target = parsed;
@@ -287,10 +316,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     // Validate: target date requires target amount
     if (_targetDate != null && (target == null || target <= 0)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Target date requires a target amount. Please enter a target amount to set a deadline.'),
-          duration: Duration(seconds: 4),
+      await ErrorHandler.handle(
+        context,
+        AppError.medium(
+          code: 'TARGET_DATE_REQUIRES_AMOUNT',
+          userMessage: 'Target date requires a target amount. Please enter a target amount to set a deadline.',
+          category: ErrorCategory.validation,
         ),
       );
       return;
@@ -302,17 +333,27 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       final rawAutoFill = _autoFillAmountCtrl.text.trim();
       if (rawAutoFill.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('error_autofill_amount_required'))),
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'AUTOFILL_AMOUNT_REQUIRED',
+            userMessage: tr('error_autofill_amount_required'),
+            category: ErrorCategory.validation,
+          ),
         );
         return;
       }
       final parsed = double.tryParse(rawAutoFill);
       if (parsed == null || parsed <= 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
+        await ErrorHandler.handle(
           context,
-        ).showSnackBar(SnackBar(content: Text(tr('error_invalid_autofill'))));
+          AppError.medium(
+            code: 'INVALID_AUTOFILL',
+            userMessage: tr('error_invalid_autofill'),
+            category: ErrorCategory.validation,
+          ),
+        );
         return;
       }
       autoFillAmount = parsed;
@@ -350,16 +391,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
           ),
         );
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(tr('success_envelope_created'))));
+        ErrorHandler.showSuccess(context, tr('success_envelope_created'));
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${tr('error_creating_envelope')}: $e')),
-      );
+      await ErrorHandler.handle(context, e);
     }
   }
 
@@ -427,7 +464,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Name field
-                        TextField(
+                        TextFormField(
                           controller: _nameCtrl,
                           focusNode: _nameFocus,
                           textCapitalization: TextCapitalization.words,
@@ -449,6 +486,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               vertical: 20,
                             ),
                           ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return tr('error_enter_name');
+                            }
+                            return null;
+                          },
                           onEditingComplete: _handleNameSubmit,
                           onTap: () => _nameCtrl.selection = TextSelection(
                             baseOffset: 0,
@@ -497,7 +540,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Subtitle field
-                        TextField(
+                        TextFormField(
                           controller: _subtitleCtrl,
                           focusNode: _subtitleFocus,
                           textCapitalization: TextCapitalization.words,
@@ -533,7 +576,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Starting amount field
-                        TextField(
+                        TextFormField(
                           controller: _amtCtrl,
                           focusNode: _amountFocus,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -597,7 +640,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Target field
-                        TextField(
+                        TextFormField(
                           controller: _targetCtrl,
                           focusNode: _targetFocus,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -935,7 +978,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         if (_autoFillEnabled) ...[
                           const SizedBox(height: 16),
-                          TextField(
+                          TextFormField(
                             controller: _autoFillAmountCtrl,
                             focusNode: _autoFillAmountFocus,
                             keyboardType: const TextInputType.numberWithOptions(

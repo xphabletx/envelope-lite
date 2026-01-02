@@ -111,12 +111,17 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                         color: theme.colorScheme.onSurface.withAlpha(153),
                       ),
                     ),
-                    Text(
-                      currency.format(displayAccount.currentBalance),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        currency.format(displayAccount.currentBalance),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                        maxLines: 1,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -215,12 +220,17 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                       color: theme.colorScheme.onSurface.withAlpha(153),
                                     ),
                                   ),
-                                  Text(
-                                    currency.format(assigned),
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.onSurface,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      currency.format(assigned),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                      maxLines: 1,
                                     ),
                                   ),
                                 ],
@@ -237,12 +247,17 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                       color: theme.colorScheme.onSurface.withAlpha(153),
                                     ),
                                   ),
-                                  Text(
-                                    currency.format(available),
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.secondary,
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      currency.format(available),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.secondary,
+                                      ),
+                                      maxLines: 1,
                                     ),
                                   ),
                                 ],
@@ -310,10 +325,14 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                             fontSize: 12,
                                             color: theme.colorScheme.primary,
                                           ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
                                         )
                                       : null,
                                   trailing: Text(
                                     currency.format(displayEnvelope.currentAmount),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                   onTap: () {
                                     Navigator.push(

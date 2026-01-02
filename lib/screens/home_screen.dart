@@ -1,6 +1,6 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, SystemNavigator;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
@@ -275,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         } else {
           // Exit app
-          Navigator.of(context).pop();
+          SystemNavigator.pop();
         }
       },
       child: TutorialWrapper(

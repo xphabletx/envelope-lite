@@ -1,13 +1,16 @@
 // lib/data/binder_templates.dart
 
 class EnvelopeTemplate {
+  final String id;
   final String name;
   final String emoji;
+  final double? defaultAmount;
 
   const EnvelopeTemplate({
     required this.name,
     required this.emoji,
-  });
+    this.defaultAmount,
+  }) : id = name; // Use name as ID for simplicity
 }
 
 class BinderTemplate {

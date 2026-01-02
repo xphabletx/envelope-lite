@@ -158,6 +158,25 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       return;
     }
 
+    // Check for duplicate account names (only when creating or if name changed)
+    final allAccounts = await widget.accountRepo.accountsStream().first;
+    final duplicateName = allAccounts.any((a) =>
+      a.name.trim().toLowerCase() == name.toLowerCase() &&
+      a.id != widget.account?.id // Exclude current account when editing
+    );
+
+    if (duplicateName) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An account named "$name" already exists. Please choose a different name.'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -421,6 +440,10 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                               ? Colors.red
                               : null,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 20,
+                        ),
                       ),
                       onTap: () {
                         _balanceController.selection = TextSelection(
@@ -454,6 +477,10 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                           prefixStyle: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 20,
                           ),
                         ),
                         onChanged: (value) {
@@ -559,6 +586,10 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                             prefixStyle: fontProvider.getTextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 20,
                             ),
                           ),
                           onChanged: (value) {

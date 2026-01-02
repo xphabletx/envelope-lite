@@ -642,10 +642,16 @@ class EnvelopeRepo {
     bool isScheduledPayment = false,
   }) async {
     final envelope = _envelopeBox.get(envelopeId);
-    if (envelope == null) throw Exception('Envelope not found');
+    if (envelope == null) {
+      throw Exception('Envelope not found');
+    }
 
     if (envelope.currentAmount < amount) {
-      throw Exception('Insufficient funds');
+      throw Exception(
+        'Insufficient funds in ${envelope.name}. '
+        'Available: £${envelope.currentAmount.toStringAsFixed(2)}, '
+        'Required: £${amount.toStringAsFixed(2)}',
+      );
     }
 
     // 1. Update Hive IMMEDIATELY (instant UI update)
@@ -717,7 +723,11 @@ class EnvelopeRepo {
     }
 
     if (sourceEnv.currentAmount < amount) {
-      throw Exception('Insufficient funds');
+      throw Exception(
+        'Insufficient funds in ${sourceEnv.name}. '
+        'Available: £${sourceEnv.currentAmount.toStringAsFixed(2)}, '
+        'Required: £${amount.toStringAsFixed(2)}',
+      );
     }
 
     // 1. Update envelopes in Hive IMMEDIATELY (instant UI update)

@@ -330,4 +330,34 @@ class ScheduledPaymentRepo {
       return !dueDate.isBefore(start) && !dueDate.isAfter(end);
     }).toList();
   }
+
+  /// Get all payments due on a specific date (for day-before warnings)
+  Future<List<ScheduledPayment>> getPaymentsDueOnDate(DateTime targetDate) async {
+    final startOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final endOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59);
+
+    final allPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId)
+        .toList();
+
+    return allPayments.where((payment) {
+      final dueDate = payment.nextDueDate;
+      return !dueDate.isBefore(startOfDay) && !dueDate.isAfter(endOfDay);
+    }).toList();
+  }
+
+  /// Get all payments between two dates (for weekly projections)
+  Future<List<ScheduledPayment>> getPaymentsBetweenDates(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final allPayments = _paymentBox.values
+        .where((payment) => payment.userId == _userId)
+        .toList();
+
+    return allPayments.where((payment) {
+      final dueDate = payment.nextDueDate;
+      return !dueDate.isBefore(start) && dueDate.isBefore(end);
+    }).toList();
+  }
 }

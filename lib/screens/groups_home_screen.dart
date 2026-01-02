@@ -565,12 +565,22 @@ class _BinderSpreadState extends State<_BinderSpread> {
     required String amount,
     required VoidCallback onTap,
     required FontProvider fontProvider,
+    required bool isLandscape,
   }) {
+    final iconSize = isLandscape ? 12.0 : 14.0;
+    final labelFontSize = isLandscape ? 9.0 : 10.0;
+    final amountFontSize = isLandscape ? 13.0 : 16.0;
+    final hintFontSize = isLandscape ? 8.0 : 9.0;
+    final horizontalPadding = isLandscape ? 10.0 : 12.0;
+    final verticalPadding = isLandscape ? 8.0 : 10.0;
+    final spacingBetween = isLandscape ? 4.0 : 6.0;
+    final hintSpacing = isLandscape ? 3.0 : 4.0;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
         decoration: BoxDecoration(
           color: widget.binderColors.binderColor.withAlpha(26),
           borderRadius: BorderRadius.circular(6),
@@ -587,7 +597,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
               children: [
                 Icon(
                   icon,
-                  size: 14,
+                  size: iconSize,
                   color: widget.binderColors.binderColor,
                 ),
                 const SizedBox(width: 4),
@@ -595,7 +605,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   child: Text(
                     label,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: labelFontSize,
                       fontWeight: FontWeight.bold,
                       color: widget.binderColors.binderColor,
                       letterSpacing: 0.3,
@@ -606,23 +616,23 @@ class _BinderSpreadState extends State<_BinderSpread> {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: spacingBetween),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 amount,
                 style: fontProvider.getTextStyle(
-                  fontSize: 16,
+                  fontSize: amountFontSize,
                   fontWeight: FontWeight.bold,
                   color: widget.binderColors.envelopeTextColor,
                 ),
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: hintSpacing),
             Text(
               'Tap for details',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: hintFontSize,
                 color: widget.binderColors.envelopeTextColor.withAlpha(128),
                 fontStyle: FontStyle.italic,
               ),
@@ -634,7 +644,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
     );
   }
 
-  Widget _buildInfoChips(BuildContext context, FontProvider fontProvider) {
+  Widget _buildInfoChips(BuildContext context, FontProvider fontProvider, bool isLandscape) {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
@@ -669,6 +679,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
           );
         },
         fontProvider: fontProvider,
+        isLandscape: isLandscape,
       ),
     );
 
@@ -694,6 +705,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
             );
           },
           fontProvider: fontProvider,
+          isLandscape: isLandscape,
         ),
       );
     }
@@ -722,17 +734,19 @@ class _BinderSpreadState extends State<_BinderSpread> {
             );
           },
           fontProvider: fontProvider,
+          isLandscape: isLandscape,
         ),
       );
     }
 
     // Space chips vertically to make use of available space
+    final chipSpacing = isLandscape ? 6.0 : 8.0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (int i = 0; i < chips.length; i++) ...[
           chips[i],
-          if (i < chips.length - 1) const SizedBox(height: 8),
+          if (i < chips.length - 1) SizedBox(height: chipSpacing),
         ],
       ],
     );
@@ -743,6 +757,16 @@ class _BinderSpreadState extends State<_BinderSpread> {
     final theme = Theme.of(context);
     final responsive = context.responsive;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    // Landscape-specific sizing
+    final horizontalPadding = responsive.isLandscape ? 8.0 : 16.0;
+    final verticalPadding = responsive.isLandscape ? 8.0 : 16.0;
+    final spineGap = responsive.isLandscape ? 16.0 : 24.0;
+    final pagePadding = responsive.isLandscape ? 10.0 : 16.0;
+    final iconSize = responsive.isLandscape ? 36.0 : 48.0;
+    final headerFontSize = responsive.isLandscape ? 14.0 : 18.0;
+    final settingsButtonSize = responsive.isLandscape ? 28.0 : 32.0;
+    final settingsIconSize = responsive.isLandscape ? 16.0 : 18.0;
 
     return Container(
       decoration: BoxDecoration(
@@ -760,15 +784,18 @@ class _BinderSpreadState extends State<_BinderSpread> {
           // LAYER 1: The "Leather" Binder Cover (Custom Paint)
           Positioned.fill(
             child: CustomPaint(
-              painter: _OpenBinderPainter(color: widget.binderColors.binderColor),
+              painter: _OpenBinderPainter(
+                color: widget.binderColors.binderColor,
+                spineWidth: responsive.isLandscape ? 40.0 : 60.0,
+              ),
             ),
           ),
 
           // LAYER 2: The "Paper" Pages
           Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: responsive.isLandscape ? 12 : 16,
-              vertical: responsive.isLandscape ? 12 : 16,
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
             ),
             child: Row(
               children: [
@@ -799,14 +826,14 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               children: [
                                 Icon(
                                   Icons.mail_outline,
-                                  size: 48,
+                                  size: responsive.isLandscape ? 32 : 48,
                                   color: Colors.grey.shade400,
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: responsive.isLandscape ? 8 : 12),
                                 Text(
                                   tr('home_no_envelopes'),
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 16,
+                                    fontSize: responsive.isLandscape ? 12 : 16,
                                     color: Colors.grey.shade500,
                                   ),
                                   textAlign: TextAlign.center,
@@ -815,7 +842,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             ),
                           )
                         : Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(pagePadding),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -823,14 +850,14 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                   children: [
                                     Icon(
                                       Icons.mail,
-                                      size: 16,
+                                      size: responsive.isLandscape ? 14 : 16,
                                       color: widget.binderColors.binderColor,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       tr('home_envelopes_tab'),
                                       style: fontProvider.getTextStyle(
-                                        fontSize: 14,
+                                        fontSize: responsive.isLandscape ? 12 : 14,
                                         fontWeight: FontWeight.bold,
                                         color: widget.binderColors.envelopeTextColor
                                             .withAlpha(179),
@@ -838,7 +865,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: responsive.isLandscape ? 8 : 12),
                                 Expanded(
                                   child: _InfiniteEnvelopeList(
                                     envelopes: widget.envelopes,
@@ -848,6 +875,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     onEnvelopeTap: _handleEnvelopeTap,
                                     onToggleExpand: _toggleExpand,
                                     scrollController: _scrollController,
+                                    isLandscape: responsive.isLandscape,
                                   ),
                                 ),
                               ],
@@ -857,7 +885,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                 ),
 
                 // === SPINE GAP ===
-                const SizedBox(width: 24),
+                SizedBox(width: spineGap),
 
                 // === RIGHT PAGE (INFO) ===
                 Expanded(
@@ -879,7 +907,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(pagePadding),
                     child: Stack(
                       children: [
                         // Settings Cog in top-right
@@ -889,8 +917,8 @@ class _BinderSpreadState extends State<_BinderSpread> {
                           child: GestureDetector(
                             onTap: widget.onEdit,
                             child: Container(
-                              width: 32,
-                              height: 32,
+                              width: settingsButtonSize,
+                              height: settingsButtonSize,
                               decoration: BoxDecoration(
                                 color: widget.binderColors.binderColor.withAlpha(26),
                                 borderRadius: BorderRadius.circular(8),
@@ -901,7 +929,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                               ),
                               child: Icon(
                                 Icons.settings,
-                                size: 18,
+                                size: settingsIconSize,
                                 color: widget.binderColors.binderColor,
                               ),
                             ),
@@ -916,33 +944,36 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             Column(
                               children: [
                                 Container(
-                                  width: 48,
-                                  height: 48,
+                                  width: iconSize,
+                                  height: iconSize,
                                   decoration: BoxDecoration(
                                     color: widget.binderColors.paperColor,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: widget.binderColors.binderColor,
-                                      width: 3,
+                                      width: responsive.isLandscape ? 2 : 3,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: widget.binderColors.binderColor
                                             .withAlpha(51),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
+                                        blurRadius: responsive.isLandscape ? 4 : 8,
+                                        offset: Offset(0, responsive.isLandscape ? 2 : 4),
                                       ),
                                     ],
                                   ),
                                   child: Center(
-                                    child: widget.group.getIconWidget(theme, size: 22),
+                                    child: widget.group.getIconWidget(
+                                      theme,
+                                      size: responsive.isLandscape ? 18 : 22,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                SizedBox(height: responsive.isLandscape ? 2 : 4),
                                 Text(
                                   widget.group.name,
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
+                                    fontSize: headerFontSize,
                                     fontWeight: FontWeight.bold,
                                     color: widget.binderColors.envelopeTextColor,
                                   ),
@@ -956,7 +987,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             const Spacer(),
 
                             // Info Chips (Binder Total, Auto-fill, Target) - spaced out
-                            _buildInfoChips(context, fontProvider),
+                            _buildInfoChips(context, fontProvider, responsive.isLandscape),
 
                             const Spacer(),
 
@@ -1001,6 +1032,7 @@ class _InfiniteEnvelopeList extends StatelessWidget {
   final Function(int) onEnvelopeTap;
   final Function(int) onToggleExpand;
   final ScrollController scrollController;
+  final bool isLandscape;
 
   const _InfiniteEnvelopeList({
     required this.envelopes,
@@ -1010,6 +1042,7 @@ class _InfiniteEnvelopeList extends StatelessWidget {
     required this.onEnvelopeTap,
     required this.onToggleExpand,
     required this.scrollController,
+    required this.isLandscape,
   });
 
   @override
@@ -1017,6 +1050,14 @@ class _InfiniteEnvelopeList extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final theme = Theme.of(context);
     final timeMachine = Provider.of<TimeMachineProvider>(context);
+
+    // Landscape-specific sizing
+    final itemHeight = isLandscape ? 38.0 : 45.0;
+    final horizontalPadding = isLandscape ? 8.0 : 10.0;
+    final iconSize = isLandscape ? 16.0 : 18.0;
+    final fontSize = isLandscape ? 12.0 : 14.0;
+    final expandIconSize = isLandscape ? 14.0 : 16.0;
+    final bottomPadding = isLandscape ? 6.0 : 8.0;
 
     return ListView.builder(
       controller: scrollController,
@@ -1029,12 +1070,12 @@ class _InfiniteEnvelopeList extends StatelessWidget {
           children: [
             // Envelope Item
             Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+              padding: EdgeInsets.only(bottom: bottomPadding),
               child: GestureDetector(
                 onTap: () => onEnvelopeTap(index),
                 child: Container(
-                  height: 45.0,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  height: itemHeight,
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                   decoration: BoxDecoration(
                     color: binderColors.paperColor,
                     borderRadius: BorderRadius.circular(8),
@@ -1057,13 +1098,13 @@ class _InfiniteEnvelopeList extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
-                      envelope.getIconWidget(theme, size: 18),
+                      envelope.getIconWidget(theme, size: iconSize),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           envelope.name,
                           style: fontProvider.getTextStyle(
-                            fontSize: 14,
+                            fontSize: fontSize,
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
@@ -1078,10 +1119,10 @@ class _InfiniteEnvelopeList extends StatelessWidget {
                       GestureDetector(
                         onTap: () => onToggleExpand(index),
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding: EdgeInsets.all(isLandscape ? 6.0 : 8.0),
                           child: Icon(
                             isSelected ? Icons.expand_less : Icons.expand_more,
-                            size: 16,
+                            size: expandIconSize,
                             color: binderColors.binderColor.withAlpha(128),
                           ),
                         ),
@@ -1101,6 +1142,7 @@ class _InfiniteEnvelopeList extends StatelessWidget {
                 fontProvider: fontProvider,
                 timeMachine: timeMachine,
                 onTap: () => onEnvelopeTap(index),
+                isLandscape: isLandscape,
               ),
           ],
         );
@@ -1117,6 +1159,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
   final FontProvider fontProvider;
   final TimeMachineProvider timeMachine;
   final VoidCallback onTap;
+  final bool isLandscape;
 
   const _InlineEnvelopeDetail({
     required this.envelope,
@@ -1125,6 +1168,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
     required this.fontProvider,
     required this.timeMachine,
     required this.onTap,
+    required this.isLandscape,
   });
 
   @override
@@ -1132,11 +1176,21 @@ class _InlineEnvelopeDetail extends StatelessWidget {
     // Apply time machine projection if active
     final projectedEnvelope = timeMachine.getProjectedEnvelope(envelope);
 
+    // Landscape-specific sizing
+    final iconSize = isLandscape ? 12.0 : 14.0;
+    final mainFontSize = isLandscape ? 12.0 : 14.0;
+    final detailFontSize = isLandscape ? 10.0 : 12.0;
+    final hintFontSize = isLandscape ? 8.0 : 9.0;
+    final padding = isLandscape ? 10.0 : 12.0;
+    final bottomMargin = isLandscape ? 6.0 : 8.0;
+    final itemSpacing = isLandscape ? 8.0 : 10.0;
+    final hintSpacing = isLandscape ? 8.0 : 10.0;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
-        padding: const EdgeInsets.all(12),
+        margin: EdgeInsets.only(bottom: bottomMargin, left: 8, right: 8),
+        padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
           color: binderColors.binderColor.withAlpha(13),
           borderRadius: BorderRadius.circular(8),
@@ -1153,7 +1207,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
             children: [
               Icon(
                 Icons.account_balance_wallet,
-                size: 14,
+                size: iconSize,
                 color: binderColors.binderColor,
               ),
               const SizedBox(width: 6),
@@ -1163,7 +1217,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
                   child: Text(
                     currency.format(projectedEnvelope.currentAmount),
                     style: fontProvider.getTextStyle(
-                      fontSize: 14,
+                      fontSize: mainFontSize,
                       fontWeight: FontWeight.bold,
                       color: binderColors.envelopeTextColor,
                     ),
@@ -1175,12 +1229,12 @@ class _InlineEnvelopeDetail extends StatelessWidget {
 
           // Auto-fill Amount (if applicable)
           if (envelope.autoFillEnabled && (envelope.autoFillAmount ?? 0) > 0) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: itemSpacing),
             Row(
               children: [
                 Icon(
                   Icons.autorenew,
-                  size: 14,
+                  size: iconSize,
                   color: binderColors.binderColor,
                 ),
                 const SizedBox(width: 6),
@@ -1190,7 +1244,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
                     child: Text(
                       currency.format(envelope.autoFillAmount),
                       style: fontProvider.getTextStyle(
-                        fontSize: 12,
+                        fontSize: detailFontSize,
                         fontWeight: FontWeight.bold,
                         color: binderColors.envelopeTextColor,
                       ),
@@ -1203,12 +1257,12 @@ class _InlineEnvelopeDetail extends StatelessWidget {
 
           // Target Amount (if applicable)
           if (envelope.targetAmount != null && envelope.targetAmount! > 0) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: itemSpacing),
             Row(
               children: [
                 Icon(
                   Icons.track_changes,
-                  size: 14,
+                  size: iconSize,
                   color: binderColors.binderColor,
                 ),
                 const SizedBox(width: 6),
@@ -1218,7 +1272,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
                     child: Text(
                       currency.format(envelope.targetAmount),
                       style: fontProvider.getTextStyle(
-                        fontSize: 12,
+                        fontSize: detailFontSize,
                         fontWeight: FontWeight.bold,
                         color: binderColors.envelopeTextColor,
                       ),
@@ -1231,12 +1285,12 @@ class _InlineEnvelopeDetail extends StatelessWidget {
 
           // Target Date (if applicable)
           if (envelope.targetDate != null) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: itemSpacing),
             Row(
               children: [
                 Icon(
                   Icons.calendar_today,
-                  size: 14,
+                  size: iconSize,
                   color: binderColors.binderColor,
                 ),
                 const SizedBox(width: 6),
@@ -1246,7 +1300,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
                     child: Text(
                       DateFormat('MMM d, yyyy').format(envelope.targetDate!),
                       style: fontProvider.getTextStyle(
-                        fontSize: 12,
+                        fontSize: detailFontSize,
                         fontWeight: FontWeight.bold,
                         color: binderColors.envelopeTextColor,
                       ),
@@ -1258,12 +1312,12 @@ class _InlineEnvelopeDetail extends StatelessWidget {
           ],
 
           // Tap hint
-          const SizedBox(height: 10),
+          SizedBox(height: hintSpacing),
           Center(
             child: Text(
               'Tap again for full details',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: hintFontSize,
                 color: binderColors.envelopeTextColor.withAlpha(128),
                 fontStyle: FontStyle.italic,
               ),
@@ -1279,8 +1333,12 @@ class _InlineEnvelopeDetail extends StatelessWidget {
 // --- PAINTER: OPEN BINDER LOOK ---
 class _OpenBinderPainter extends CustomPainter {
   final Color color;
+  final double spineWidth;
 
-  _OpenBinderPainter({required this.color});
+  _OpenBinderPainter({
+    required this.color,
+    this.spineWidth = 60.0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1301,7 +1359,6 @@ class _OpenBinderPainter extends CustomPainter {
     canvas.drawRRect(rrect, bodyPaint);
 
     // 2. Draw Spine (3D Cylinder Effect)
-    final spineWidth = 60.0;
     final spineRect = Rect.fromCenter(
       center: Offset(size.width / 2, size.height / 2),
       width: spineWidth,
@@ -1325,14 +1382,15 @@ class _OpenBinderPainter extends CustomPainter {
       ..color = Colors.black.withAlpha(26)
       ..strokeWidth = 1;
 
+    final ridgeOffset = spineWidth / 3;
     canvas.drawLine(
-      Offset(size.width / 2 - 20, 0),
-      Offset(size.width / 2 - 20, size.height),
+      Offset(size.width / 2 - ridgeOffset, 0),
+      Offset(size.width / 2 - ridgeOffset, size.height),
       linePaint,
     );
     canvas.drawLine(
-      Offset(size.width / 2 + 20, 0),
-      Offset(size.width / 2 + 20, size.height),
+      Offset(size.width / 2 + ridgeOffset, 0),
+      Offset(size.width / 2 + ridgeOffset, size.height),
       linePaint,
     );
 

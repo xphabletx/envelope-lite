@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../models/envelope.dart';
 import '../../../models/account.dart';
+import '../../../models/app_error.dart';
 import '../../../services/envelope_repo.dart';
 import '../../../services/account_repo.dart';
+import '../../../services/error_handler_service.dart';
 import '../../../services/workspace_helper.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
@@ -152,34 +154,53 @@ class _TransferModalState extends State<TransferModal> {
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(timeMachine.getBlockedActionMessage()),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
+      ErrorHandler.showWarning(
+        context,
+        timeMachine.getBlockedActionMessage(),
+      );
+      return;
+    }
+
+    // Validation: Destination selected
+    if (_selectedTargetId == null) {
+      await ErrorHandler.handle(
+        context,
+        AppError.medium(
+          code: 'NO_DESTINATION',
+          userMessage: 'Please select a destination',
+          category: ErrorCategory.validation,
         ),
       );
       return;
     }
 
-    if (_selectedTargetId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a destination')),
-      );
-      return;
-    }
-
+    // Validation: Valid amount
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
+      await ErrorHandler.handle(
+        context,
+        AppError.medium(
+          code: 'INVALID_AMOUNT',
+          userMessage: 'Please enter a valid amount',
+          category: ErrorCategory.validation,
+        ),
       );
       return;
     }
 
+    // Validation: Sufficient funds
     if (amount > widget.currentAmount) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Insufficient funds')),
+      await ErrorHandler.handle(
+        context,
+        AppError.business(
+          code: 'INSUFFICIENT_FUNDS',
+          userMessage: 'Insufficient funds in ${widget.sourceEnvelopeName}',
+          severity: ErrorSeverity.medium,
+          metadata: {
+            'availableBalance': widget.currentAmount,
+            'requestedAmount': amount,
+          },
+        ),
       );
       return;
     }
@@ -224,16 +245,12 @@ class _TransferModalState extends State<TransferModal> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Transfer successful')),
-        );
+        ErrorHandler.showSuccess(context, 'Transfer successful');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        await ErrorHandler.handle(context, e);
       }
     }
   }

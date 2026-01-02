@@ -28,13 +28,14 @@ class UserService {
     required String displayName,
     String? photoURL,
     String selectedTheme = 'latte_love',
+    bool hasCompletedOnboarding = false, // Default to false - will be set to true when onboarding completes
   }) async {
     final profile = UserProfile(
       uid: userId,
       displayName: displayName,
       photoURL: photoURL,
       selectedTheme: selectedTheme,
-      hasCompletedOnboarding: true,
+      hasCompletedOnboarding: hasCompletedOnboarding,
       showTutorial: true,
       createdAt: DateTime.now(),
     );
