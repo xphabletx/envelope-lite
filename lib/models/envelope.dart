@@ -9,6 +9,18 @@ import '../data/material_icons_database.dart';
 
 part 'envelope.g.dart';
 
+@HiveType(typeId: 7)
+enum TargetStartDateType {
+  @HiveField(0)
+  fromToday,
+
+  @HiveField(1)
+  fromEnvelopeCreation,
+
+  @HiveField(2)
+  customDate,
+}
+
 @HiveType(typeId: 0)
 class Envelope {
   @HiveField(0)
@@ -85,6 +97,17 @@ class Envelope {
   @HiveField(26)
   final DateTime? lastUpdated;
 
+  // NEW: Envelope creation timestamp (for accurate target date progress tracking)
+  @HiveField(27)
+  final DateTime? createdAt;
+
+  // NEW: Target start date configuration (for granular progress tracking)
+  @HiveField(28)
+  final TargetStartDateType? targetStartDateType;
+
+  @HiveField(29)
+  final DateTime? customTargetStartDate;
+
   Envelope({
     required this.id,
     required this.name,
@@ -109,6 +132,9 @@ class Envelope {
     this.monthlyPayment,
     this.isSynced,
     this.lastUpdated,
+    this.createdAt,
+    this.targetStartDateType,
+    this.customTargetStartDate,
   });
 
   /// Get icon widget for display
@@ -301,6 +327,9 @@ class Envelope {
     double? monthlyPayment,
     bool? isSynced,
     DateTime? lastUpdated,
+    DateTime? createdAt,
+    TargetStartDateType? targetStartDateType,
+    DateTime? customTargetStartDate,
   }) {
     return Envelope(
       id: id ?? this.id,
@@ -326,6 +355,9 @@ class Envelope {
       monthlyPayment: monthlyPayment ?? this.monthlyPayment,
       isSynced: isSynced ?? this.isSynced,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      createdAt: createdAt ?? this.createdAt,
+      targetStartDateType: targetStartDateType ?? this.targetStartDateType,
+      customTargetStartDate: customTargetStartDate ?? this.customTargetStartDate,
     );
   }
 
@@ -354,6 +386,9 @@ class Envelope {
       'monthlyPayment': monthlyPayment,
       'isSynced': isSynced ?? true, // Default to synced for Firebase data
       'lastUpdated': Timestamp.fromDate(lastUpdated ?? DateTime.now()),
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
+      'targetStartDateType': targetStartDateType?.name,
+      'customTargetStartDate': customTargetStartDate != null ? Timestamp.fromDate(customTargetStartDate!) : null,
     };
   }
 
@@ -368,6 +403,18 @@ class Envelope {
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v) ?? fallback;
       return fallback;
+    }
+
+    // Parse targetStartDateType enum
+    TargetStartDateType? parseTargetStartDateType(dynamic value) {
+      if (value == null) return null;
+      if (value is String) {
+        return TargetStartDateType.values.firstWhere(
+          (e) => e.name == value,
+          orElse: () => TargetStartDateType.fromToday,
+        );
+      }
+      return null;
     }
 
     return Envelope(
@@ -402,6 +449,9 @@ class Envelope {
           : toDouble(data['monthlyPayment']),
       isSynced: (data['isSynced'] as bool?) ?? true, // Firestore data is already synced
       lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      targetStartDateType: parseTargetStartDateType(data['targetStartDateType']),
+      customTargetStartDate: (data['customTargetStartDate'] as Timestamp?)?.toDate(),
     );
   }
 }

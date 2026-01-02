@@ -67,6 +67,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   String? _selectedBinderId;
   String? _selectedAccountId; // NEW
   DateTime? _selectedTargetDate;
+  TargetStartDateType? _targetStartDateType;
+  DateTime? _customTargetStartDate;
   bool _autoFillEnabled = false;
   bool _isLoading = false;
   bool _initialized = false;
@@ -397,6 +399,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           _iconValue = envelope.iconValue;
           _selectedAccountId = envelope.linkedAccountId; // NEW
           _selectedTargetDate = envelope.targetDate;
+          _targetStartDateType = envelope.targetStartDateType ?? TargetStartDateType.fromToday;
+          _customTargetStartDate = envelope.customTargetStartDate;
 
           if (envelope.groupId != null &&
               _binders.any((b) => b.id == envelope.groupId)) {
@@ -729,6 +733,112 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ),
                     ),
+
+                    // TARGET START DATE TYPE (only show when target date is set)
+                    if (_selectedTargetDate != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Start Date for Progress Tracking',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Column(
+                        children: [
+                          RadioListTile<TargetStartDateType>(
+                            title: Text(
+                              'From Today',
+                              style: fontProvider.getTextStyle(fontSize: 16),
+                            ),
+                            subtitle: Text(
+                              'Progress starts from now (${DateFormat('MMM dd, yyyy').format(DateTime.now())})',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                            value: TargetStartDateType.fromToday,
+                            groupValue: _targetStartDateType,
+                            onChanged: (value) {
+                              setState(() {
+                                _targetStartDateType = value;
+                              });
+                            },
+                          ),
+                          StreamBuilder<List<Envelope>>(
+                            stream: widget.repo.envelopesStream(),
+                            builder: (context, snapshot) {
+                              final envelope = snapshot.data?.firstWhere(
+                                (e) => e.id == widget.envelopeId,
+                                orElse: () => throw Exception('Envelope not found'),
+                              );
+                              final createdAt = envelope?.createdAt;
+
+                              return RadioListTile<TargetStartDateType>(
+                                title: Text(
+                                  'From Envelope Creation',
+                                  style: fontProvider.getTextStyle(fontSize: 16),
+                                ),
+                                subtitle: Text(
+                                  createdAt != null
+                                      ? 'Progress from when envelope was created (${DateFormat('MMM dd, yyyy').format(createdAt)})'
+                                      : 'Progress from envelope creation (date unavailable for old envelopes)',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 14,
+                                    color: theme.hintColor,
+                                  ),
+                                ),
+                                value: TargetStartDateType.fromEnvelopeCreation,
+                                groupValue: _targetStartDateType,
+                                onChanged: createdAt != null
+                                    ? (value) {
+                                        setState(() {
+                                          _targetStartDateType = value;
+                                        });
+                                      }
+                                    : null, // Disable if no createdAt
+                              );
+                            },
+                          ),
+                          RadioListTile<TargetStartDateType>(
+                            title: Text(
+                              'Custom Date',
+                              style: fontProvider.getTextStyle(fontSize: 16),
+                            ),
+                            subtitle: Text(
+                              _customTargetStartDate != null
+                                  ? 'Progress from ${DateFormat('MMM dd, yyyy').format(_customTargetStartDate!)}'
+                                  : 'Choose a specific start date',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                            value: TargetStartDateType.customDate,
+                            groupValue: _targetStartDateType,
+                            onChanged: (value) async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: _customTargetStartDate ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: _selectedTargetDate ?? DateTime.now(),
+                                helpText: 'Select Start Date',
+                              );
+
+                              if (date != null) {
+                                setState(() {
+                                  _targetStartDateType = value;
+                                  _customTargetStartDate = date;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+
                     const SizedBox(height: 24),
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
@@ -1188,6 +1298,10 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         autoFillAmount: (_autoFillEnabled && autoFillAmount != null)
             ? autoFillAmount
             : null,
+        targetStartDateType: _selectedTargetDate != null ? _targetStartDateType : null,
+        customTargetStartDate: _targetStartDateType == TargetStartDateType.customDate ? _customTargetStartDate : null,
+        updateTargetStartDateType: true, // Always update (allows clearing when target date is removed)
+        updateCustomTargetStartDate: true, // Always update (allows clearing)
       );
 
       await Future.delayed(const Duration(milliseconds: 300));

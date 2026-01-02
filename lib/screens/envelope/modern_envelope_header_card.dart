@@ -151,8 +151,68 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     int daysRemaining = 0;
     DateTime? startDate;
     if (envelope.targetDate != null) {
-      // Estimate start date as 30 days ago with current time (since we don't track envelope creation date)
-      startDate = referenceDate.subtract(const Duration(days: 30));
+      // Determine start date based on user's selected type
+      final targetStartDateType = envelope.targetStartDateType ?? TargetStartDateType.fromToday;
+
+      switch (targetStartDateType) {
+        case TargetStartDateType.fromToday:
+          // Start from beginning of today (00:00:01)
+          startDate = DateTime(
+            referenceDate.year,
+            referenceDate.month,
+            referenceDate.day,
+            0, 0, 1,
+          );
+          break;
+
+        case TargetStartDateType.fromEnvelopeCreation:
+          // Use envelope creation date, or fallback to lastUpdated, or today
+          if (envelope.createdAt != null) {
+            startDate = DateTime(
+              envelope.createdAt!.year,
+              envelope.createdAt!.month,
+              envelope.createdAt!.day,
+              0, 0, 1,
+            );
+          } else if (envelope.lastUpdated != null) {
+            // Fallback for legacy envelopes without createdAt
+            startDate = DateTime(
+              envelope.lastUpdated!.year,
+              envelope.lastUpdated!.month,
+              envelope.lastUpdated!.day,
+              0, 0, 1,
+            );
+          } else {
+            // Ultimate fallback - use today
+            startDate = DateTime(
+              referenceDate.year,
+              referenceDate.month,
+              referenceDate.day,
+              0, 0, 1,
+            );
+          }
+          break;
+
+        case TargetStartDateType.customDate:
+          // Use custom date if provided, otherwise fallback to today
+          if (envelope.customTargetStartDate != null) {
+            startDate = DateTime(
+              envelope.customTargetStartDate!.year,
+              envelope.customTargetStartDate!.month,
+              envelope.customTargetStartDate!.day,
+              0, 0, 1,
+            );
+          } else {
+            // Fallback if custom date not set
+            startDate = DateTime(
+              referenceDate.year,
+              referenceDate.month,
+              referenceDate.day,
+              0, 0, 1,
+            );
+          }
+          break;
+      }
 
       // Target date at midnight + 1 second (00:00:01)
       final targetWithTime = DateTime(
@@ -162,11 +222,12 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
         0, 0, 1, // 00:00:01
       );
 
-      // Calculate using full timestamps for granular progress
+      // Calculate using full timestamps for granular progress (microseconds for 2 decimal precision)
       final totalDuration = targetWithTime.difference(startDate);
       final elapsedDuration = referenceDate.difference(startDate);
 
       // Progress based on actual time elapsed (not just days)
+      // Using microseconds gives us sub-second precision for accurate percentage
       timeProgress = totalDuration.inMicroseconds > 0
           ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
           : 0.0;
@@ -183,22 +244,22 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
       progress = amountProgress;
       if (daysRemaining < 0) {
         final daysOverdue = daysRemaining.abs();
-        progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysOverdue days overdue';
+        progressText = '${(amountProgress * 100).toStringAsFixed(2)}% • $daysOverdue days overdue';
       } else {
-        progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysRemaining days left';
+        progressText = '${(amountProgress * 100).toStringAsFixed(2)}% • $daysRemaining days left';
       }
     } else if (envelope.targetAmount != null) {
       // Amount target only
       progress = amountProgress;
-      progressText = '${(amountProgress * 100).toStringAsFixed(1)}% of ${currency.format(envelope.targetAmount)}';
+      progressText = '${(amountProgress * 100).toStringAsFixed(2)}% of ${currency.format(envelope.targetAmount)}';
     } else if (envelope.targetDate != null) {
       // Time target only
       progress = timeProgress;
       if (daysRemaining < 0) {
         final daysOverdue = daysRemaining.abs();
-        progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysOverdue days overdue';
+        progressText = '${(timeProgress * 100).toStringAsFixed(2)}% • $daysOverdue days overdue';
       } else {
-        progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysRemaining days to ${DateFormat('MMM d').format(envelope.targetDate!)}';
+        progressText = '${(timeProgress * 100).toStringAsFixed(2)}% • $daysRemaining days to ${DateFormat('MMM d').format(envelope.targetDate!)}';
       }
     }
 
@@ -235,25 +296,30 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
               // LAYER 2: The Amount on the Flap
               Positioned(
                 top: 45,
+                left: 40,
+                right: 40,
                 child: Column(
                   children: [
-                    Text(
-                      currency.format(envelope.currentAmount),
-                      style: fontProvider
-                          .getTextStyle(
-                            fontSize: 42,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          )
-                          .copyWith(
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        currency.format(envelope.currentAmount),
+                        style: fontProvider
+                            .getTextStyle(
+                              fontSize: 42,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            )
+                            .copyWith(
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                      ),
                     ),
                   ],
                 ),

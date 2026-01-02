@@ -350,6 +350,7 @@ class EnvelopeRepo {
       isShared: _inWorkspace,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: now, // Capture creation timestamp for accurate target date progress
     );
 
     // ALWAYS write to Hive first (primary storage)
@@ -410,6 +411,10 @@ class EnvelopeRepo {
     bool updateLinkedAccountId = false, // Flag to explicitly update linkedAccountId (including to null)
     bool updateTargetAmount = false, // Flag to explicitly update targetAmount (including to null)
     bool updateTargetDate = false, // Flag to explicitly update targetDate (including to null)
+    TargetStartDateType? targetStartDateType,
+    DateTime? customTargetStartDate,
+    bool updateTargetStartDateType = false, // Flag to explicitly update targetStartDateType (including to null)
+    bool updateCustomTargetStartDate = false, // Flag to explicitly update customTargetStartDate (including to null)
   }) async {
     debugPrint('[EnvelopeRepo] Updating envelope: $envelopeId');
 
@@ -445,6 +450,9 @@ class EnvelopeRepo {
       monthlyPayment: envelope.monthlyPayment,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: envelope.createdAt, // Preserve creation timestamp
+      targetStartDateType: updateTargetStartDateType ? targetStartDateType : envelope.targetStartDateType,
+      customTargetStartDate: updateCustomTargetStartDate ? customTargetStartDate : envelope.customTargetStartDate,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
@@ -608,6 +616,9 @@ class EnvelopeRepo {
       monthlyPayment: envelope.monthlyPayment,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: envelope.createdAt,
+      targetStartDateType: envelope.targetStartDateType,
+      customTargetStartDate: envelope.customTargetStartDate,
     );
 
     // 2. Create transaction in Hive
@@ -680,6 +691,9 @@ class EnvelopeRepo {
       monthlyPayment: envelope.monthlyPayment,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: envelope.createdAt,
+      targetStartDateType: envelope.targetStartDateType,
+      customTargetStartDate: envelope.customTargetStartDate,
     );
 
     // 2. Create transaction in Hive
@@ -756,6 +770,9 @@ class EnvelopeRepo {
       monthlyPayment: sourceEnv.monthlyPayment,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: sourceEnv.createdAt,
+      targetStartDateType: sourceEnv.targetStartDateType,
+      customTargetStartDate: sourceEnv.customTargetStartDate,
     );
 
     final updatedTarget = Envelope(
@@ -782,6 +799,9 @@ class EnvelopeRepo {
       monthlyPayment: targetEnv.monthlyPayment,
       isSynced: false, // Mark as pending sync
       lastUpdated: now,
+      createdAt: targetEnv.createdAt,
+      targetStartDateType: targetEnv.targetStartDateType,
+      customTargetStartDate: targetEnv.customTargetStartDate,
     );
 
     await _envelopeBox.put(fromEnvelopeId, updatedSource);
@@ -882,6 +902,9 @@ class EnvelopeRepo {
           termStartDate: envelope.termStartDate,
           termMonths: envelope.termMonths,
           monthlyPayment: envelope.monthlyPayment,
+          createdAt: envelope.createdAt,
+          targetStartDateType: envelope.targetStartDateType,
+          customTargetStartDate: envelope.customTargetStartDate,
         );
         await _envelopeBox.put(id, updated);
       }
@@ -912,6 +935,9 @@ class EnvelopeRepo {
           termStartDate: envelope.termStartDate,
           termMonths: envelope.termMonths,
           monthlyPayment: envelope.monthlyPayment,
+          createdAt: envelope.createdAt,
+          targetStartDateType: envelope.targetStartDateType,
+          customTargetStartDate: envelope.customTargetStartDate,
         );
         await _envelopeBox.put(id, updated);
       }
@@ -973,6 +999,9 @@ class EnvelopeRepo {
           monthlyPayment: envelope.monthlyPayment,
           isSynced: false, // Mark as pending sync
           lastUpdated: now,
+          createdAt: envelope.createdAt,
+          targetStartDateType: envelope.targetStartDateType,
+          customTargetStartDate: envelope.customTargetStartDate,
         );
         await _envelopeBox.put(envelopeId, updated);
 

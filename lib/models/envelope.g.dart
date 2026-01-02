@@ -40,13 +40,16 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       monthlyPayment: fields[24] as double?,
       isSynced: fields[25] as bool?,
       lastUpdated: fields[26] as DateTime?,
+      createdAt: fields[27] as DateTime?,
+      targetStartDateType: fields[28] as TargetStartDateType?,
+      customTargetStartDate: fields[29] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Envelope obj) {
     writer
-      ..writeByte(23)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -92,7 +95,13 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       ..writeByte(25)
       ..write(obj.isSynced)
       ..writeByte(26)
-      ..write(obj.lastUpdated);
+      ..write(obj.lastUpdated)
+      ..writeByte(27)
+      ..write(obj.createdAt)
+      ..writeByte(28)
+      ..write(obj.targetStartDateType)
+      ..writeByte(29)
+      ..write(obj.customTargetStartDate);
   }
 
   @override
@@ -102,6 +111,50 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is EnvelopeAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class TargetStartDateTypeAdapter extends TypeAdapter<TargetStartDateType> {
+  @override
+  final int typeId = 7;
+
+  @override
+  TargetStartDateType read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return TargetStartDateType.fromToday;
+      case 1:
+        return TargetStartDateType.fromEnvelopeCreation;
+      case 2:
+        return TargetStartDateType.customDate;
+      default:
+        return TargetStartDateType.fromToday;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, TargetStartDateType obj) {
+    switch (obj) {
+      case TargetStartDateType.fromToday:
+        writer.writeByte(0);
+        break;
+      case TargetStartDateType.fromEnvelopeCreation:
+        writer.writeByte(1);
+        break;
+      case TargetStartDateType.customDate:
+        writer.writeByte(2);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TargetStartDateTypeAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
