@@ -13,7 +13,6 @@ import '../../../services/account_repo.dart';
 import '../../../services/scheduled_payment_repo.dart'; // NEW IMPORT
 import '../../../utils/target_helper.dart';
 import 'envelope_transaction_list.dart';
-import '../groups_home_screen.dart';
 import 'modals/deposit_modal.dart';
 import 'modals/withdraw_modal.dart';
 import 'modals/transfer_modal.dart';
@@ -872,15 +871,14 @@ class _BinderInfoRowState extends State<_BinderInfoRow> {
           onTap: () async {
             final binderData = await _getBinder(_groupRepo);
             if (binderData != null && context.mounted) {
-              // Navigate to Groups Home Screen, scrolled to this binder
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GroupsHomeScreen(
-                    repo: widget.repo,
-                    groupRepo: _groupRepo,
-                    initialBinderId: binderData.id,
-                  ),
+              // Pop back to main screen - user can then tap Groups tab to see this binder
+              Navigator.of(context).pop();
+
+              // Show a snackbar to guide the user
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Tap the Binders tab to view "${binderData.name}"'),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             }
