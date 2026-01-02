@@ -18,6 +18,8 @@ import '../providers/time_machine_provider.dart';
 import '../services/account_repo.dart';
 import '../widgets/time_machine_indicator.dart';
 import '../widgets/verification_banner.dart';
+import '../widgets/responsive_navigation.dart';
+import '../utils/responsive_helper.dart';
 
 import '../widgets/envelope_tile.dart';
 import '../widgets/envelope_creator.dart';
@@ -97,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late int _selectedIndex;
   String? _workspaceName;
   DateTime? _lastBackPress;
+  String? _initialBinderId; // For navigating to a specific binder
 
   // TUTORIAL KEYS
   final GlobalKey _fabKey = GlobalKey();
@@ -134,6 +137,14 @@ class _HomeScreenState extends State<HomeScreen> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is int) {
         setState(() => _selectedIndex = args);
+      } else if (args is Map<String, dynamic>) {
+        // Handle map arguments with tabIndex and optional initialBinderId
+        final tabIndex = args['tabIndex'] as int?;
+        final binderId = args['initialBinderId'] as String?;
+        setState(() {
+          if (tabIndex != null) _selectedIndex = tabIndex;
+          if (binderId != null) _initialBinderId = binderId;
+        });
       }
     });
 
@@ -231,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
 
     final pages = <Widget>[
       _AllEnvelopes(
@@ -243,7 +255,11 @@ class _HomeScreenState extends State<HomeScreen> {
         mineOnlyToggleKey: _mineOnlyToggleKey,
         isMultiSelectNotifier: _isMultiSelect,
       ),
-      GroupsHomeScreen(repo: widget.repo, groupRepo: _groupRepo),
+      GroupsHomeScreen(
+        repo: widget.repo,
+        groupRepo: _groupRepo,
+        initialBinderId: _initialBinderId,
+      ),
       BudgetScreen(
         repo: widget.repo,
         initialProjectionDate: widget.projectionDate,
@@ -253,6 +269,118 @@ class _HomeScreenState extends State<HomeScreen> {
         notificationRepo: widget.notificationRepo,
       ),
     ];
+
+    // Navigation destinations for responsive navigation
+    final destinations = [
+      ResponsiveNavigationDestination(
+        icon: const Icon(Icons.mail_outline),
+        selectedIcon: const Icon(Icons.mail),
+        label: tr('home_envelopes_tab'),
+      ),
+      ResponsiveNavigationDestination(
+        icon: const Icon(Icons.menu_book_outlined),
+        selectedIcon: const Icon(Icons.menu_book),
+        label: tr('home_binders_tab'),
+      ),
+      ResponsiveNavigationDestination(
+        icon: Icon(Icons.account_balance_wallet_outlined, key: _budgetTabKey),
+        selectedIcon: const Icon(Icons.account_balance_wallet),
+        label: tr('home_budget_tab'),
+      ),
+      ResponsiveNavigationDestination(
+        icon: Icon(Icons.calendar_today_outlined, key: _calendarTabKey),
+        selectedIcon: const Icon(Icons.calendar_today),
+        label: tr('home_calendar_tab'),
+      ),
+    ];
+
+    // Build app bar with responsive sizing
+    final appBar = AppBar(
+      scrolledUnderElevation: 0,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      elevation: 0,
+      toolbarHeight: responsive.isLandscape ? 48 : kToolbarHeight,
+      title: StreamBuilder<UserProfile?>(
+        stream: UserService(
+          widget.repo.db,
+          widget.repo.currentUserId,
+        ).userProfileStream,
+        builder: (context, snapshot) {
+          final profile = snapshot.data;
+          final displayName = profile?.displayName ?? tr('your_envelopes');
+          final photoURL = profile?.photoURL;
+
+          return Row(
+            children: [
+              if (photoURL != null && photoURL.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12.0),
+                  child: CircleAvatar(
+                    backgroundImage: NetworkImage(photoURL),
+                    radius: responsive.isLandscape ? 16 : 20,
+                  ),
+                ),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    displayName,
+                    style: fontProvider.getTextStyle(
+                      fontSize: responsive.isLandscape ? 20 : 32,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      actions: [
+        IconButton(
+          icon: Icon(
+            Icons.account_balance_wallet,
+            size: responsive.isLandscape ? 20 : 28,
+          ),
+          tooltip: 'Manage Accounts',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AccountListScreen(envelopeRepo: widget.repo),
+              ),
+            );
+          },
+          color: theme.colorScheme.primary,
+        ),
+        IconButton(
+          key: _statsTabKey,
+          icon: Icon(
+            Icons.bar_chart_sharp,
+            size: responsive.isLandscape ? 20 : 28,
+          ),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => StatsHistoryScreen(repo: widget.repo),
+              ),
+            );
+          },
+          color: theme.colorScheme.primary,
+        ),
+        IconButton(
+          tooltip: tr('settings'),
+          icon: Icon(
+            Icons.settings,
+            color: theme.colorScheme.primary,
+            size: responsive.isLandscape ? 20 : 28,
+          ),
+          onPressed: _openSettings,
+        ),
+      ],
+    );
 
     return PopScope(
       canPop: false,
@@ -285,142 +413,32 @@ class _HomeScreenState extends State<HomeScreen> {
           'sort_button': _sortButtonKey,
           'mine_only_toggle': _mineOnlyToggleKey,
         },
-        child: Scaffold(
-        appBar: AppBar(
-          scrolledUnderElevation: 0,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          elevation: 0,
-          title: StreamBuilder<UserProfile?>(
-            stream: UserService(
-              widget.repo.db,
-              widget.repo.currentUserId,
-            ).userProfileStream,
-            builder: (context, snapshot) {
-              final profile = snapshot.data;
-              final displayName = profile?.displayName ?? tr('your_envelopes');
-              final photoURL = profile?.photoURL;
-
-              return Row(
-                children: [
-                  if (photoURL != null && photoURL.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12.0),
-                      child: CircleAvatar(
-                        backgroundImage: NetworkImage(photoURL),
-                        radius: 20,
-                      ),
-                    ),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        displayName,
-                        style: fontProvider.getTextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          actions: [
-            // NEW: Moved Account List (Wallet) icon here
-            IconButton(
-              icon: const Icon(Icons.account_balance_wallet, size: 28),
-              tooltip: 'Manage Accounts',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AccountListScreen(envelopeRepo: widget.repo),
-                  ),
-                );
-              },
-              color: theme.colorScheme.primary,
-            ),
-            IconButton(
-              key: _statsTabKey,
-              icon: const Icon(Icons.bar_chart_sharp, size: 28),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StatsHistoryScreen(repo: widget.repo),
-                  ),
-                );
-              },
-              color: theme.colorScheme.primary,
-            ),
-            IconButton(
-              tooltip: tr('settings'),
-              icon: Icon(
-                Icons.settings,
-                color: theme.colorScheme.primary,
-              ),
-              onPressed: _openSettings,
-            ),
-          ],
-        ),
-        body: _buildBodyWithVerificationBanner(pages[_selectedIndex]),
-        bottomNavigationBar: BottomNavigationBar(
+        child: ResponsiveScaffold(
+          currentIndex: _selectedIndex,
+          onNavigationChanged: (i) => setState(() => _selectedIndex = i),
+          destinations: destinations,
+          appBar: appBar,
+          body: _buildBodyWithVerificationBanner(pages[_selectedIndex]),
           backgroundColor: theme.scaffoldBackgroundColor,
           selectedItemColor: theme.colorScheme.primary,
           unselectedItemColor: Colors.grey.shade600,
-          elevation: 8,
-          type: BottomNavigationBarType.fixed,
           selectedLabelStyle: fontProvider.getTextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
           unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
-          items: [
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.mail_outline),
-              activeIcon: const Icon(Icons.mail),
-              label: tr('home_envelopes_tab'),
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.menu_book_outlined),
-              activeIcon: const Icon(Icons.menu_book),
-              label: tr('home_binders_tab'),
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                Icons.account_balance_wallet_outlined,
-                key: _budgetTabKey,
-              ),
-              activeIcon: const Icon(Icons.account_balance_wallet),
-              label: tr('home_budget_tab'),
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                Icons.calendar_today_outlined,
-                key: _calendarTabKey,
-              ),
-              activeIcon: const Icon(Icons.calendar_today),
-              label: tr('home_calendar_tab'),
-            ),
-          ],
-          currentIndex: _selectedIndex,
-          onTap: (i) => setState(() => _selectedIndex = i),
-        ),
-        floatingActionButton: _selectedIndex == 0
-            ? _AllEnvelopesFAB(
-                repo: widget.repo,
-                groupRepo: _groupRepo,
-                fabKey: _fabKey,
-                createEnvelopeKey: _createEnvelopeKey,
-                createBinderKey: _createBinderKey,
-                isSpeedDialOpen: _isSpeedDialOpen,
-                allEnvelopesKey: _allEnvelopesKey,
-                isMultiSelectNotifier: _isMultiSelect,
-              )
-            : null,
+          floatingActionButton: _selectedIndex == 0
+              ? _AllEnvelopesFAB(
+                  repo: widget.repo,
+                  groupRepo: _groupRepo,
+                  fabKey: _fabKey,
+                  createEnvelopeKey: _createEnvelopeKey,
+                  createBinderKey: _createBinderKey,
+                  isSpeedDialOpen: _isSpeedDialOpen,
+                  allEnvelopesKey: _allEnvelopesKey,
+                  isMultiSelectNotifier: _isMultiSelect,
+                )
+              : null,
         ),
       ),
     );
@@ -1078,67 +1096,118 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                                         ],
                                       ),
                                     )
-                                  : ListView(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        16,
-                                        16,
-                                        96,
-                                      ),
-                                      children: sortedEnvs.asMap().entries.map((
-                                        entry,
-                                      ) {
-                                        final index = entry.key;
-                                        final e = entry.value;
-                                        final isSel = selected.contains(e.id);
-                                        final isPartner = isPartnerEnvelope(
-                                          e.userId,
-                                          widget.repo.currentUserId,
-                                        );
+                                  : LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final responsive = context.responsive;
+                                        final isLandscape = responsive.isLandscape;
+                                        final isTablet = responsive.isTablet;
 
-                                        return Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 12.0,
-                                          ),
-                                          child: Stack(
-                                            children: [
-                                              EnvelopeTile(
-                                                key: index == 0
-                                                    ? widget.firstEnvelopeKey
-                                                    : null,
-                                                envelope: e,
-                                                allEnvelopes: displayEnvs,
-                                                repo: widget.repo,
-                                                isSelected: isSel,
-                                                isMultiSelectMode: isMulti,
-                                                // REMOVED: onLongPress (use FAB to enter selection mode)
-                                                onTap: isMulti
-                                                    ? () => _toggle(e.id)
-                                                    : () => _openDetails(e),
-                                              ),
-                                              if (isPartner && !_mineOnly)
-                                                Positioned(
-                                                  bottom: 24,
-                                                  right: 16,
-                                                  child: FutureBuilder<String>(
-                                                    future:
-                                                        WorkspaceHelper.getUserDisplayName(
+                                        // Determine grid columns based on screen size and orientation
+                                        final crossAxisCount = (isTablet && isLandscape) ? 3
+                                            : (isLandscape || isTablet) ? 2
+                                            : 1;
+
+                                        // Use GridView for landscape/tablet, ListView for portrait phone
+                                        if (crossAxisCount > 1) {
+                                          return GridView.builder(
+                                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: crossAxisCount,
+                                              childAspectRatio: 2.5,
+                                              crossAxisSpacing: 12,
+                                              mainAxisSpacing: 12,
+                                            ),
+                                            itemCount: sortedEnvs.length,
+                                            itemBuilder: (context, index) {
+                                              final e = sortedEnvs[index];
+                                              final isSel = selected.contains(e.id);
+                                              final isPartner = isPartnerEnvelope(
+                                                e.userId,
+                                                widget.repo.currentUserId,
+                                              );
+
+                                              return Stack(
+                                                children: [
+                                                  EnvelopeTile(
+                                                    key: index == 0 ? widget.firstEnvelopeKey : null,
+                                                    envelope: e,
+                                                    allEnvelopes: displayEnvs,
+                                                    repo: widget.repo,
+                                                    isSelected: isSel,
+                                                    isMultiSelectMode: isMulti,
+                                                    onTap: isMulti ? () => _toggle(e.id) : () => _openDetails(e),
+                                                  ),
+                                                  if (isPartner && !_mineOnly)
+                                                    Positioned(
+                                                      bottom: 24,
+                                                      right: 16,
+                                                      child: FutureBuilder<String>(
+                                                        future: WorkspaceHelper.getUserDisplayName(
                                                           e.userId,
                                                           widget.repo.currentUserId,
                                                         ),
-                                                    builder: (context, snapshot) {
-                                                      return PartnerBadge(
-                                                        partnerName:
-                                                            snapshot.data ?? 'Partner',
-                                                        size: PartnerBadgeSize.normal,
-                                                      );
-                                                    },
+                                                        builder: (context, snapshot) {
+                                                          return PartnerBadge(
+                                                            partnerName: snapshot.data ?? 'Partner',
+                                                            size: PartnerBadgeSize.normal,
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        }
+
+                                        // Portrait phone: use traditional ListView
+                                        return ListView(
+                                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                                          children: sortedEnvs.asMap().entries.map((entry) {
+                                            final index = entry.key;
+                                            final e = entry.value;
+                                            final isSel = selected.contains(e.id);
+                                            final isPartner = isPartnerEnvelope(
+                                              e.userId,
+                                              widget.repo.currentUserId,
+                                            );
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(bottom: 12.0),
+                                              child: Stack(
+                                                children: [
+                                                  EnvelopeTile(
+                                                    key: index == 0 ? widget.firstEnvelopeKey : null,
+                                                    envelope: e,
+                                                    allEnvelopes: displayEnvs,
+                                                    repo: widget.repo,
+                                                    isSelected: isSel,
+                                                    isMultiSelectMode: isMulti,
+                                                    onTap: isMulti ? () => _toggle(e.id) : () => _openDetails(e),
                                                   ),
-                                                ),
-                                            ],
-                                          ),
+                                                  if (isPartner && !_mineOnly)
+                                                    Positioned(
+                                                      bottom: 24,
+                                                      right: 16,
+                                                      child: FutureBuilder<String>(
+                                                        future: WorkspaceHelper.getUserDisplayName(
+                                                          e.userId,
+                                                          widget.repo.currentUserId,
+                                                        ),
+                                                        builder: (context, snapshot) {
+                                                          return PartnerBadge(
+                                                            partnerName: snapshot.data ?? 'Partner',
+                                                            size: PartnerBadgeSize.normal,
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
                                         );
-                                      }).toList(),
+                                      },
                                     ),
                             ),
                           ],

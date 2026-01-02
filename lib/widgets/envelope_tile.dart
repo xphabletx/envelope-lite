@@ -13,6 +13,7 @@ import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../services/workspace_helper.dart';
+import '../utils/responsive_helper.dart';
 
 class EnvelopeTile extends StatefulWidget {
   const EnvelopeTile({
@@ -108,6 +109,8 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     final currencyFormat = NumberFormat.currency(symbol: locale.currencySymbol);
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     final isMyEnvelope = widget.envelope.userId == widget.repo.currentUserId;
 
@@ -120,6 +123,13 @@ class _EnvelopeTileState extends State<EnvelopeTile>
             1.0,
           );
     }
+
+    // Responsive sizing
+    final tilePadding = isLandscape ? 12.0 : 16.0;
+    final emojiSize = isLandscape ? 32.0 : 40.0;
+    final titleFontSize = isLandscape ? 18.0 : 22.0;
+    final amountFontSize = isLandscape ? 20.0 : 28.0;
+    final subtitleFontSize = isLandscape ? 12.0 : 14.0;
 
     final tileContent = Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -137,7 +147,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(tilePadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -155,9 +165,9 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                   const SizedBox(width: 8),
                 ],
                 SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: widget.envelope.getIconWidget(theme, size: 44),
+                  width: emojiSize,
+                  height: emojiSize,
+                  child: widget.envelope.getIconWidget(theme, size: emojiSize),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -182,7 +192,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                                   ownerName,
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.primary,
-                                    fontSize: 11,
+                                    fontSize: isLandscape ? 10 : 11,
                                   ),
                                 );
                               },
@@ -192,7 +202,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                       Text(
                         widget.envelope.name,
                         style: fontProvider.getTextStyle(
-                          fontSize: 22,
+                          fontSize: titleFontSize,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,
                         ),
@@ -204,7 +214,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ),
                 if (percentage != null) ...[
                   const SizedBox(width: 12),
-                  EmojiPieChart(percentage: percentage, size: 60),
+                  EmojiPieChart(percentage: percentage, size: isLandscape ? 48 : 60),
                 ],
               ],
             ),
@@ -212,11 +222,11 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 widget.envelope.subtitle!.isNotEmpty) ...[
               const SizedBox(height: 4),
               Padding(
-                padding: const EdgeInsets.only(left: 56),
+                padding: EdgeInsets.only(left: isLandscape ? 44 : 56),
                 child: Text(
                   '"${widget.envelope.subtitle}"',
                   style: fontProvider
-                      .getTextStyle(fontSize: 16)
+                      .getTextStyle(fontSize: subtitleFontSize)
                       .copyWith(
                         fontStyle: FontStyle.italic,
                         color: theme.colorScheme.onSurface.withAlpha(179),
@@ -226,17 +236,17 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            SizedBox(height: isLandscape ? 8 : 12),
             Padding(
-              padding: const EdgeInsets.only(left: 56),
+              padding: EdgeInsets.only(left: isLandscape ? 44 : 56),
               child: Row(
                 children: [
                   Flexible(
                     child: Text(
                       currencyFormat.format(widget.envelope.currentAmount),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 18,
+                        fontSize: amountFontSize,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -247,7 +257,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                       child: Text(
                         ' / ${currencyFormat.format(widget.envelope.targetAmount)}',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: subtitleFontSize,
                           color: theme.colorScheme.onSurface.withAlpha(179),
                         ),
                         overflow: TextOverflow.ellipsis,

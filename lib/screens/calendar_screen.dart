@@ -506,19 +506,23 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
 
                 final sortedDates = groupedOccurrences.keys.toList()..sort();
 
+                final responsive = context.responsive;
+                final isLandscape = responsive.isLandscape;
+
                 return Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
                 scrolledUnderElevation: 0,
+                toolbarHeight: isLandscape ? 48 : kToolbarHeight,
                 title: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     tr('calendar_title'),
                     style: fontProvider.getTextStyle(
-                      fontSize: 32,
+                      fontSize: isLandscape ? 20 : 32,
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary,
                     ),
@@ -606,7 +610,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                       child: Text(
                         tr('calendar_today'),
                         style: fontProvider.getTextStyle(
-                          fontSize: 20,
+                          fontSize: isLandscape ? 14 : 20,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.secondary,
                         ),
@@ -620,38 +624,49 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                   ),
                 ],
               ),
-              body: Column(
-                children: [
-                  // Time Machine Indicator at the top
-                  const TimeMachineIndicator(),
+              body: LayoutBuilder(
+                builder: (context, constraints) {
+                  final responsive = context.responsive;
+                  final isLandscape = responsive.isLandscape;
 
-                  Container(
-                    margin: EdgeInsets.symmetric(
-                      horizontal: context.responsive.isLandscape ? 40 : 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: TableCalendar(
-                      firstDay: DateTime(2020),
-                      lastDay: DateTime(2030),
-                      focusedDay: _focusedDay,
-                      selectedDayPredicate: (day) =>
-                          isSameDay(_selectedDay, day),
-                      calendarFormat: _compactCalendar
-                          ? CalendarFormat.week
-                          : CalendarFormat.month,
-                      startingDayOfWeek: StartingDayOfWeek.monday,
-                      daysOfWeekHeight: 40.0,
-                      headerStyle: HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                        titleTextStyle: fontProvider.getTextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+                  // Responsive font sizes
+                  final titleFontSize = isLandscape ? 18.0 : 24.0;
+                  final dayFontSize = isLandscape ? 14.0 : 18.0;
+                  final weekdayFontSize = isLandscape ? 12.0 : 16.0;
+                  final daysOfWeekHeight = isLandscape ? 30.0 : 40.0;
+
+                  return Column(
+                    children: [
+                      // Time Machine Indicator at the top
+                      const TimeMachineIndicator(),
+
+                      Container(
+                        margin: EdgeInsets.symmetric(
+                          horizontal: isLandscape ? 40 : 8,
                         ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: TableCalendar(
+                          firstDay: DateTime(2020),
+                          lastDay: DateTime(2030),
+                          focusedDay: _focusedDay,
+                          selectedDayPredicate: (day) =>
+                              isSameDay(_selectedDay, day),
+                          calendarFormat: _compactCalendar
+                              ? CalendarFormat.week
+                              : CalendarFormat.month,
+                          startingDayOfWeek: StartingDayOfWeek.monday,
+                          daysOfWeekHeight: daysOfWeekHeight,
+                          headerStyle: HeaderStyle(
+                            formatButtonVisible: false,
+                            titleCentered: true,
+                            titleTextStyle: fontProvider.getTextStyle(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
                         leftChevronIcon: Icon(
                           Icons.chevron_left,
                           color: theme.colorScheme.primary,
@@ -676,32 +691,32 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                         todayTextStyle: fontProvider.getTextStyle(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: dayFontSize,
                         ),
                         selectedTextStyle: fontProvider.getTextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: dayFontSize,
                         ),
                         defaultTextStyle: fontProvider.getTextStyle(
                           color: theme.colorScheme.onSurface,
-                          fontSize: 18,
+                          fontSize: dayFontSize,
                         ),
                         weekendTextStyle: fontProvider.getTextStyle(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.7,
                           ),
-                          fontSize: 18,
+                          fontSize: dayFontSize,
                         ),
                       ),
                       daysOfWeekStyle: DaysOfWeekStyle(
                         weekdayStyle: fontProvider.getTextStyle(
-                          fontSize: 16,
+                          fontSize: weekdayFontSize,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
                         weekendStyle: fontProvider.getTextStyle(
-                          fontSize: 16,
+                          fontSize: weekdayFontSize,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
@@ -751,10 +766,10 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: isLandscape ? 8 : 16),
 
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    margin: EdgeInsets.symmetric(horizontal: isLandscape ? 40 : 16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
@@ -768,7 +783,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                               left: Radius.circular(12),
                             ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: EdgeInsets.symmetric(vertical: isLandscape ? 8 : 12),
                               decoration: BoxDecoration(
                                 color: !_showWeekView
                                     ? theme.colorScheme.primary
@@ -781,7 +796,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                 tr('calendar_month_view'),
                                 textAlign: TextAlign.center,
                                 style: fontProvider.getTextStyle(
-                                  fontSize: 18,
+                                  fontSize: isLandscape ? 14 : 18,
                                   fontWeight: FontWeight.bold,
                                   color: !_showWeekView
                                       ? Colors.white
@@ -798,7 +813,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                               right: Radius.circular(12),
                             ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: EdgeInsets.symmetric(vertical: isLandscape ? 8 : 12),
                               decoration: BoxDecoration(
                                 color: _showWeekView
                                     ? theme.colorScheme.primary
@@ -811,7 +826,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                 tr('calendar_week_view'),
                                 textAlign: TextAlign.center,
                                 style: fontProvider.getTextStyle(
-                                  fontSize: 18,
+                                  fontSize: isLandscape ? 14 : 18,
                                   fontWeight: FontWeight.bold,
                                   color: _showWeekView
                                       ? Colors.white
@@ -825,7 +840,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: isLandscape ? 8 : 16),
 
                   Expanded(
                     child: sortedDates.isEmpty
@@ -969,16 +984,16 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                               );
                             },
                           ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
-            );
-          },
-        );
-      },
-    );
-      },
-    );
+            ); // Scaffold
+          }, // StreamBuilder (envelopes)
+        ); // StreamBuilder (payments)
+      }, // StreamBuilder (payDay)
+    ); // Main return
   }
 
   void _showProjectionOption(DateTime date) {

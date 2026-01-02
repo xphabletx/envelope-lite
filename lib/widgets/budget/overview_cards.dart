@@ -17,6 +17,7 @@ import '../../screens/stats_history_screen.dart';
 import 'scheduled_payments_list_screen.dart';
 import 'auto_fill_list_screen.dart';
 import '../../screens/envelope/multi_target_screen.dart';
+import '../../utils/responsive_helper.dart';
 
 class BudgetOverviewCards extends StatefulWidget {
   const BudgetOverviewCards({
@@ -39,18 +40,49 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   DateTime? _userSelectedStart;
   DateTime? _userSelectedEnd;
 
-  final PageController _pageController = PageController(viewportFraction: 0.85);
+  late PageController _pageController;
   int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(viewportFraction: 0.85);
     _pageController.addListener(() {
       final page = _pageController.page?.round() ?? 0;
       if (page != _currentPage) {
         setState(() => _currentPage = page);
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Update viewport fraction based on screen size
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+    final isTablet = responsive.isTablet;
+
+    // Calculate optimal viewport fraction
+    final newViewportFraction = (isTablet && isLandscape) ? 0.4
+        : (isLandscape || isTablet) ? 0.6
+        : 0.85;
+
+    // Recreate controller if viewport fraction changed significantly
+    if ((_pageController.viewportFraction - newViewportFraction).abs() > 0.1) {
+      final currentPage = _pageController.hasClients ? (_pageController.page ?? 0) : 0;
+      _pageController.dispose();
+      _pageController = PageController(
+        viewportFraction: newViewportFraction,
+        initialPage: currentPage.round(),
+      );
+      _pageController.addListener(() {
+        final page = _pageController.page?.round() ?? 0;
+        if (page != _currentPage) {
+          setState(() => _currentPage = page);
+        }
+      });
+    }
   }
 
   // Calculate history range based on time machine state
@@ -645,6 +677,7 @@ class _OverviewCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 36, color: color),
               const SizedBox(height: 12),
@@ -654,25 +687,38 @@ class _OverviewCard extends StatelessWidget {
                   fontSize: 16,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: fontProvider.getTextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: color,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  Flexible(
+                    child: Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (onTap != null) ...[

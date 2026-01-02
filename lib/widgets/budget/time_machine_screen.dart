@@ -18,6 +18,7 @@ import '../../providers/time_machine_provider.dart';
 import 'time_machine_transition.dart';
 import '../tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
+import '../../utils/responsive_helper.dart';
 
 class TimeMachineScreen extends StatefulWidget {
   const TimeMachineScreen({
@@ -463,6 +464,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     final envelopesByBinder = <String, List<Envelope>>{};
     final individualEnvelopes = <Envelope>[];
@@ -481,19 +484,20 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
+        toolbarHeight: isLandscape ? 48 : kToolbarHeight,
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: Icon(Icons.close, size: isLandscape ? 20 : 24),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.access_time, size: 28),
+            Icon(Icons.access_time, size: isLandscape ? 20 : 28),
             const SizedBox(width: 8),
             Text(
               'Time Machine',
               style: fontProvider.getTextStyle(
-                fontSize: 24,
+                fontSize: isLandscape ? 18 : 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -502,7 +506,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
       ),
       body: SingleChildScrollView(
         controller: _scrollController,
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+          horizontal: isLandscape ? 60 : 16,
+          vertical: isLandscape ? 12 : 16,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1468,25 +1475,34 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
     required String currency,
     required FontProvider fontProvider,
   }) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '$currency${value.toStringAsFixed(2)}',
-          style: fontProvider.getTextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$currency${value.toStringAsFixed(2)}',
+              style: fontProvider.getTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
