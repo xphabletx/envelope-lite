@@ -19,6 +19,7 @@ import '../../providers/font_provider.dart';
 import 'notifications_screen.dart';
 import '../screens/home_screen.dart';
 import '../../utils/responsive_helper.dart';
+import 'envelope/envelopes_detail_screen.dart';
 
 class _PayDayOccurrence {
   final double amount;
@@ -877,61 +878,89 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                     ),
                                   ),
                                   ...occurrences.map((event) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 8,
-                                        left: 8,
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                              color: Color(event.colorValue),
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              event.name,
-                                              style: fontProvider.getTextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.w500,
+                                    return InkWell(
+                                      onTap: () {
+                                        // Navigate to envelope detail screen if this is a scheduled payment
+                                        if (!event.isPayDay && event.payment != null) {
+                                          final envelopeId = event.payment!.envelopeId;
+                                          if (envelopeId != null && envelopeId.isNotEmpty) {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => EnvelopeDetailScreen(
+                                                  envelopeId: envelopeId,
+                                                  repo: widget.repo,
+                                                ),
                                               ),
-                                              overflow: TextOverflow.ellipsis,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                          left: 8,
+                                          top: 8,
+                                          right: 8,
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: Color(event.colorValue),
+                                                shape: BoxShape.circle,
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            currencyFormatter.format(
-                                              event.amount.abs(),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                event.name,
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          SizedBox(
-                                            width: 80,
-                                            child: Text(
-                                              event.frequencyString,
-                                              style: fontProvider.getTextStyle(
+                                            Text(
+                                              currencyFormatter.format(
+                                                event.amount.abs(),
+                                              ),
+                                              style: TextStyle(
                                                 fontSize: 16,
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.6),
+                                                fontWeight: FontWeight.bold,
+                                                color:
+                                                    theme.colorScheme.onSurface,
                                               ),
-                                              textAlign: TextAlign.end,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 12),
+                                            SizedBox(
+                                              width: 80,
+                                              child: Text(
+                                                event.frequencyString,
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 16,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.6),
+                                                ),
+                                                textAlign: TextAlign.end,
+                                              ),
+                                            ),
+                                            if (!event.isPayDay)
+                                              Icon(
+                                                Icons.chevron_right,
+                                                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                                                size: 20,
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     );
                                   }),

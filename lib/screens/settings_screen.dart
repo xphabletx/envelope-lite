@@ -19,6 +19,7 @@ import '../services/account_security_service.dart';
 import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../services/customer_center_service.dart';
 import '../providers/workspace_provider.dart';
 
 import '../screens/appearance_settings_screen.dart';
@@ -355,6 +356,15 @@ class SettingsScreen extends StatelessWidget {
                       }
                     },
                     trailing: const Icon(Icons.chevron_right),
+                  ),
+                  _SettingsTile(
+                    title: 'Manage Subscription',
+                    subtitle: 'View and manage your Stuffrite Premium subscription',
+                    leading: const Icon(Icons.card_membership_outlined),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await CustomerCenterService.presentCustomerCenter(context);
+                    },
                   ),
                   _SettingsTile(
                     title: 'Help & FAQ',

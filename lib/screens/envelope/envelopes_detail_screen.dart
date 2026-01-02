@@ -773,8 +773,22 @@ class _TargetStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final suggestion = TargetHelper.getSuggestionText(envelope, locale.currencySymbol);
-    final daysLeft = TargetHelper.getDaysRemaining(envelope);
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
+
+    // Use time machine projected values if active
+    final projectedAmount = timeMachine.isActive ? envelope.currentAmount : null;
+    final projectedDate = timeMachine.futureDate;
+
+    final suggestion = TargetHelper.getSuggestionText(
+      envelope,
+      locale.currencySymbol,
+      projectedAmount: projectedAmount,
+      projectedDate: projectedDate,
+    );
+    final daysLeft = TargetHelper.getDaysRemaining(
+      envelope,
+      projectedDate: projectedDate,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

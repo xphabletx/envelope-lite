@@ -132,6 +132,10 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+    final timeMachine = Provider.of<TimeMachineProvider>(context);
+
+    // Use time machine reference date if active, otherwise current time
+    final referenceDate = timeMachine.futureDate ?? DateTime.now();
 
     // Logic: Progress (Amount-based)
     double amountProgress = 0;
@@ -147,9 +151,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     int daysRemaining = 0;
     DateTime? startDate;
     if (envelope.targetDate != null) {
-      final now = DateTime.now();
       // Estimate start date as 30 days ago with current time (since we don't track envelope creation date)
-      startDate = now.subtract(const Duration(days: 30));
+      startDate = referenceDate.subtract(const Duration(days: 30));
 
       // Target date at midnight + 1 second (00:00:01)
       final targetWithTime = DateTime(
@@ -161,14 +164,14 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
 
       // Calculate using full timestamps for granular progress
       final totalDuration = targetWithTime.difference(startDate);
-      final elapsedDuration = now.difference(startDate);
+      final elapsedDuration = referenceDate.difference(startDate);
 
       // Progress based on actual time elapsed (not just days)
       timeProgress = totalDuration.inMicroseconds > 0
           ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
           : 0.0;
 
-      daysRemaining = targetWithTime.difference(now).inDays;
+      daysRemaining = targetWithTime.difference(referenceDate).inDays;
     }
 
     // Determine which progress to show
@@ -178,7 +181,12 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     if (envelope.targetAmount != null && envelope.targetDate != null) {
       // Both amount and time targets - show amount progress with time info
       progress = amountProgress;
-      progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysRemaining days left';
+      if (daysRemaining < 0) {
+        final daysOverdue = daysRemaining.abs();
+        progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysOverdue days overdue';
+      } else {
+        progressText = '${(amountProgress * 100).toStringAsFixed(1)}% • $daysRemaining days left';
+      }
     } else if (envelope.targetAmount != null) {
       // Amount target only
       progress = amountProgress;
@@ -186,7 +194,12 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     } else if (envelope.targetDate != null) {
       // Time target only
       progress = timeProgress;
-      progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysRemaining days to ${DateFormat('MMM d').format(envelope.targetDate!)}';
+      if (daysRemaining < 0) {
+        final daysOverdue = daysRemaining.abs();
+        progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysOverdue days overdue';
+      } else {
+        progressText = '${(timeProgress * 100).toStringAsFixed(1)}% • $daysRemaining days to ${DateFormat('MMM d').format(envelope.targetDate!)}';
+      }
     }
 
 

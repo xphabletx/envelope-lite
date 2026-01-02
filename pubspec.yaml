@@ -45,7 +45,7 @@ dependencies:
 
   # Subscription management
   purchases_flutter: ^9.10.1
-  purchases_ui_flutter: ^9.10.1
+  purchases_ui_flutter: ^9.10.3
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../config/revenue_cat_config.dart';
 
 /// Service to manage subscriptions via RevenueCat
 class PaywallService {
@@ -10,8 +11,13 @@ class PaywallService {
     try {
       final customerInfo = await Purchases.getCustomerInfo();
 
-      // Check for 'Stuffrite Premium' entitlement
-      final hasEntitlement = customerInfo.entitlements.active.containsKey('Stuffrite Premium');
+      // Debug: Print all active entitlement keys
+      debugPrint('[Paywall] 🔍 Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
+
+      // Check for premium entitlement (checks BOTH IDs)
+      final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
+        customerInfo.entitlements.active,
+      );
 
       debugPrint('[Paywall] Has active subscription: $hasEntitlement');
       return hasEntitlement;
@@ -44,7 +50,13 @@ class PaywallService {
     try {
       final purchaseResult = await Purchases.purchase(PurchaseParams.package(package));
 
-      final hasEntitlement = purchaseResult.customerInfo.entitlements.active.containsKey('Stuffrite Premium');
+      // Debug: Print all active entitlement keys
+      debugPrint('[Paywall] 🔍 Active entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.active.keys.toList()}');
+
+      // Check for premium entitlement (checks BOTH IDs)
+      final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
+        purchaseResult.customerInfo.entitlements.active,
+      );
 
       if (hasEntitlement) {
         if (context.mounted) {
@@ -96,7 +108,13 @@ class PaywallService {
     try {
       final customerInfo = await Purchases.restorePurchases();
 
-      final hasEntitlement = customerInfo.entitlements.active.containsKey('Stuffrite Premium');
+      // Debug: Print all active entitlement keys
+      debugPrint('[Paywall] 🔍 Active entitlement keys after restore: ${customerInfo.entitlements.active.keys.toList()}');
+
+      // Check for premium entitlement (checks BOTH IDs)
+      final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
+        customerInfo.entitlements.active,
+      );
 
       if (hasEntitlement) {
         if (context.mounted) {

@@ -10,8 +10,10 @@ import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../providers/time_machine_provider.dart';
 import '../../utils/target_helper.dart';
 import '../../utils/calculator_helper.dart';
+import '../../widgets/time_machine_indicator.dart';
 
 enum TargetScreenMode {
   singleEnvelope,  // From envelope detail
@@ -151,44 +153,64 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     final fontProvider = Provider.of<FontProvider>(context);
     final locale = Provider.of<LocaleProvider>(context);
 
-    return StreamBuilder<List<Envelope>>(
-      stream: widget.envelopeRepo.envelopesStream(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+    return Consumer<TimeMachineProvider>(
+      builder: (context, timeMachine, child) {
+        return StreamBuilder<List<Envelope>>(
+          stream: widget.envelopeRepo.envelopesStream(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-        final allEnvelopes = snapshot.data!;
-        final targetEnvelopes = _getFilteredEnvelopes(allEnvelopes);
+            final allEnvelopes = snapshot.data!;
 
-        // Auto-select all if in single mode and no selection
-        if (widget.mode == TargetScreenMode.singleEnvelope &&
-            _selectedEnvelopeIds.isEmpty &&
-            targetEnvelopes.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() {
-              _selectedEnvelopeIds.add(targetEnvelopes.first.id);
-            });
-          });
-        }
+            // Apply time machine projections to envelopes
+            final projectedEnvelopes = allEnvelopes.map((envelope) {
+              return timeMachine.getProjectedEnvelope(envelope);
+            }).toList();
 
-        _initializeAllocations(targetEnvelopes);
+            final targetEnvelopes = _getFilteredEnvelopes(projectedEnvelopes);
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(
-              _getScreenTitle(allEnvelopes),
-              style: fontProvider.getTextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            // Auto-select all if in single mode and no selection
+            if (widget.mode == TargetScreenMode.singleEnvelope &&
+                _selectedEnvelopeIds.isEmpty &&
+                targetEnvelopes.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                setState(() {
+                  _selectedEnvelopeIds.add(targetEnvelopes.first.id);
+                });
+              });
+            }
+
+            _initializeAllocations(targetEnvelopes);
+
+            return Scaffold(
+              appBar: AppBar(
+                title: Text(
+                  _getScreenTitle(projectedEnvelopes),
+                  style: fontProvider.getTextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
-          ),
-          body: targetEnvelopes.isEmpty
-              ? _buildEmptyState(theme, fontProvider)
-              : _buildContent(targetEnvelopes, theme, fontProvider, locale),
+              body: Column(
+                children: [
+                  // Time Machine Indicator
+                  const TimeMachineIndicator(),
+
+                  // Main content
+                  Expanded(
+                    child: targetEnvelopes.isEmpty
+                        ? _buildEmptyState(theme, fontProvider)
+                        : _buildContent(targetEnvelopes, theme, fontProvider, locale, timeMachine),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -231,6 +253,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    TimeMachineProvider timeMachine,
   ) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -240,11 +263,11 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           _buildHintText(theme, fontProvider),
 
         // Overall Progress Summary
-        _buildProgressSummary(targetEnvelopes, theme, fontProvider, locale),
+        _buildProgressSummary(targetEnvelopes, theme, fontProvider, locale, timeMachine),
         const SizedBox(height: 24),
 
         // Envelope List with Selection
-        _buildEnvelopeList(targetEnvelopes, theme, fontProvider, locale),
+        _buildEnvelopeList(targetEnvelopes, theme, fontProvider, locale, timeMachine),
         const SizedBox(height: 24),
 
         // Contribution Calculator
@@ -294,6 +317,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    TimeMachineProvider timeMachine,
   ) {
     final selectedEnvelopes = targetEnvelopes
         .where((e) => _selectedEnvelopeIds.contains(e.id))
@@ -307,6 +331,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     final totalCurrent = envelopesToShow.fold(0.0, (sum, e) => sum + e.currentAmount);
     final progress = totalTarget > 0 ? (totalCurrent / totalTarget).clamp(0.0, 1.0) : 0.0;
     final remaining = totalTarget - totalCurrent;
+
+    // Calculate if exceeded in time machine mode
+    final exceeded = remaining < 0 ? remaining.abs() : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -381,13 +408,22 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               color: theme.colorScheme.onPrimaryContainer,
             ),
           ),
-          Text(
-            '${locale.formatCurrency(remaining)} remaining',
-            style: TextStyle(
-              fontSize: 14,
-              color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+          if (exceeded > 0)
+            Text(
+              'Exceeded by ${locale.formatCurrency(exceeded)} 🎉',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+              ),
+            )
+          else
+            Text(
+              '${locale.formatCurrency(remaining)} remaining',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -398,6 +434,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    TimeMachineProvider timeMachine,
   ) {
     return StreamBuilder<List<EnvelopeGroup>>(
       stream: widget.envelopeRepo.groupsStream,
@@ -439,6 +476,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 theme,
                 fontProvider,
                 locale,
+                timeMachine,
               );
             }),
           ],
@@ -453,6 +491,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    TimeMachineProvider timeMachine,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,6 +518,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           theme,
           fontProvider,
           locale,
+          timeMachine,
         )),
         const SizedBox(height: 12),
       ],
@@ -490,10 +530,14 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    TimeMachineProvider timeMachine,
   ) {
     final isSelected = _selectedEnvelopeIds.contains(envelope.id);
+
+    // Use time machine projected amount if available
+    final displayAmount = envelope.currentAmount; // Already projected via getProjectedEnvelope
     final progress = envelope.targetAmount! > 0
-        ? (envelope.currentAmount / envelope.targetAmount!).clamp(0.0, 1.0)
+        ? (displayAmount / envelope.targetAmount!).clamp(0.0, 1.0)
         : 0.0;
 
     return Card(
@@ -555,7 +599,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          TargetHelper.getSuggestionText(envelope, locale.currencySymbol),
+                          TargetHelper.getSuggestionText(
+                            envelope,
+                            locale.currencySymbol,
+                            projectedAmount: timeMachine.isActive ? envelope.currentAmount : null,
+                            projectedDate: timeMachine.futureDate,
+                          ),
                           style: TextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.onSurface.withAlpha(179),

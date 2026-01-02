@@ -23,7 +23,7 @@ class EnvelopeHeaderCard extends StatelessWidget {
     final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
-    // Calculate progress percentage
+    // Calculate progress percentage (envelope.currentAmount is already projected if in time machine mode)
     final progress = envelope.targetAmount != null && envelope.targetAmount! > 0
         ? (envelope.currentAmount / envelope.targetAmount!).clamp(0.0, 1.0)
         : 0.0;

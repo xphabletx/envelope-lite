@@ -108,8 +108,16 @@ class SubscriptionService {
 
       // Check RevenueCat entitlement
       final customerInfo = await Purchases.getCustomerInfo();
-      final hasPremium = customerInfo.entitlements.active
-          .containsKey(RevenueCatConfig.premiumEntitlementId);
+
+      // Debug: Print all active and ALL entitlement keys
+      debugPrint('[SubscriptionService] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
+      debugPrint('[SubscriptionService] 🔍 Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
+      debugPrint('[SubscriptionService] 🔍 ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}');
+
+      // Check for premium entitlement
+      final hasPremium = RevenueCatConfig.hasPremiumEntitlement(
+        customerInfo.entitlements.active,
+      );
 
       debugPrint('[SubscriptionService] Has active subscription: $hasPremium');
       return hasPremium;
@@ -146,8 +154,16 @@ class SubscriptionService {
 
       // Check RevenueCat entitlement
       final customerInfo = await Purchases.getCustomerInfo();
-      final hasPremium = customerInfo.entitlements.active
-          .containsKey(RevenueCatConfig.premiumEntitlementId);
+
+      // Debug: Print all active and ALL entitlement keys
+      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
+      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
+      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}');
+
+      // Check for premium entitlement
+      final hasPremium = RevenueCatConfig.hasPremiumEntitlement(
+        customerInfo.entitlements.active,
+      );
 
       if (hasPremium) {
         debugPrint('[SubscriptionService] ✅ Authorization granted for $userEmail (Premium)');
