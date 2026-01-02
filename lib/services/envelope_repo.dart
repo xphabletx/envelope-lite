@@ -9,8 +9,10 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart' as models;
 import '../models/scheduled_payment.dart';
+import '../models/pay_day_settings.dart';
 import 'hive_service.dart';
 import 'sync_manager.dart';
+import 'pay_day_settings_service.dart';
 
 /// Envelope repository - Hive-first architecture
 ///
@@ -978,6 +980,80 @@ class EnvelopeRepo {
 
   Future<List<models.Transaction>> getTransactions(String envelopeId) {
     return transactionsForEnvelope(envelopeId).first;
+  }
+
+  // ==================== ACCOUNT LINKING METHODS ====================
+
+  /// Get envelopes linked to a specific account
+  Stream<List<Envelope>> getEnvelopesLinkedToAccount(String accountId) {
+    return envelopesStream().map((envelopes) =>
+        envelopes.where((e) => e.linkedAccountId == accountId).toList());
+  }
+
+  /// Get all envelopes with auto-fill but NO account link (Budget Mode leftovers)
+  Future<List<Envelope>> getUnlinkedAutoFillEnvelopes() async {
+    final envelopes = await getAllEnvelopes();
+    return envelopes
+        .where((e) => e.autoFillEnabled && e.linkedAccountId == null)
+        .toList();
+  }
+
+  /// Get all auto-fill envelopes (for Budget Mode)
+  Future<List<Envelope>> getAutoFillEnvelopes() async {
+    final envelopes = await getAllEnvelopes();
+    return envelopes.where((e) => e.autoFillEnabled).toList();
+  }
+
+  /// Bulk link envelopes to an account
+  Future<void> bulkLinkToAccount(List<String> envelopeIds, String accountId) async {
+    await linkEnvelopesToAccount(envelopeIds, accountId);
+  }
+
+  /// Unlink all envelopes from an account (when account deleted)
+  Future<void> unlinkFromAccount(String accountId) async {
+    final envelopes = await getAllEnvelopes();
+    final linkedEnvelopes =
+        envelopes.where((e) => e.linkedAccountId == accountId);
+
+    for (final envelope in linkedEnvelopes) {
+      await updateEnvelope(
+        envelopeId: envelope.id,
+        linkedAccountId: null,
+        updateLinkedAccountId: true,
+        autoFillEnabled: false, // Disable auto-fill when unlinking
+      );
+    }
+  }
+
+  /// Add money to envelope (used by pay day processor)
+  Future<void> addMoney(
+    String envelopeId,
+    double amount, {
+    String? description,
+  }) async {
+    await deposit(
+      envelopeId: envelopeId,
+      amount: amount,
+      description: description ?? 'Auto-fill',
+    );
+  }
+
+  /// Validate envelope before saving
+  /// Returns error message if invalid, null if valid
+  Future<String?> validateEnvelope(Envelope envelope) async {
+    // Check if we're in Account Mirror Mode
+    final payDayService = PayDaySettingsService(_firestore, _userId);
+    final settings = await payDayService.getSettings();
+    final isAccountMirrorMode = settings?.defaultAccountId != null;
+
+    // If auto-fill enabled in Account Mirror Mode, MUST have linked account
+    if (envelope.autoFillEnabled &&
+        isAccountMirrorMode &&
+        envelope.linkedAccountId == null) {
+      return 'Please link this envelope to an account for auto-fill';
+    }
+
+    return null; // Valid
   }
 
   /// Get display name or nickname for a user

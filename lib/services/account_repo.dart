@@ -525,6 +525,151 @@ class AccountRepo {
   // Note: Account transactions are now tracked at the account level only.
   // We removed the virtual envelope system that was creating phantom envelopes.
 
+  /// Get accounts with account-level auto-fill enabled
+  Future<List<Account>> getAccountsWithAutoFill() async {
+    final accounts = await getAllAccounts();
+    return accounts.where((a) => a.payDayAutoFillEnabled).toList();
+  }
+
+  /// Set an account as default (unset others)
+  Future<void> setDefaultAccount(String accountId) async {
+    await _unsetOtherDefaults(excludeAccountId: accountId);
+
+    final account = _accountBox.get(accountId);
+    if (account == null) {
+      throw Exception('Account not found: $accountId');
+    }
+
+    final updatedAccount = account.copyWith(isDefault: true);
+    await _accountBox.put(accountId, updatedAccount);
+
+    debugPrint('[AccountRepo] ✅ Set account as default: ${account.name}');
+
+    // CRITICAL: Sync to Firebase
+    _syncManager.pushAccount(updatedAccount, _userId);
+  }
+
+  /// Deposit into account
+  Future<void> deposit(String accountId, double amount, {String? description}) async {
+    final account = await getAccount(accountId);
+    if (account == null) return;
+
+    final updatedAccount = account.copyWith(
+      currentBalance: account.currentBalance + amount,
+      lastUpdated: DateTime.now(),
+    );
+
+    await _accountBox.put(accountId, updatedAccount);
+
+    debugPrint('[AccountRepo] Deposit: £$amount to ${account.name}');
+
+    // CRITICAL: Sync to Firebase
+    _syncManager.pushAccount(updatedAccount, _userId);
+  }
+
+  /// Withdraw from account
+  Future<void> withdraw(String accountId, double amount, {String? description}) async {
+    final account = await getAccount(accountId);
+    if (account == null) return;
+
+    final updatedAccount = account.copyWith(
+      currentBalance: account.currentBalance - amount,
+      lastUpdated: DateTime.now(),
+    );
+
+    await _accountBox.put(accountId, updatedAccount);
+
+    debugPrint('[AccountRepo] Withdraw: £$amount from ${account.name}');
+
+    // CRITICAL: Sync to Firebase
+    _syncManager.pushAccount(updatedAccount, _userId);
+  }
+
+  /// Transfer between accounts
+  Future<void> transfer(String fromId, String toId, double amount, {String? description}) async {
+    await withdraw(fromId, amount, description: description ?? 'Transfer out');
+    await deposit(toId, amount, description: description ?? 'Transfer in');
+
+    debugPrint('[AccountRepo] Transfer: £$amount from $fromId to $toId');
+  }
+
+  /// Handle first account creation (auto-set as default)
+  Future<Account> createFirstAccount({
+    required String name,
+    required AccountType type,
+    required double currentBalance,
+    double? creditLimit,
+    String? iconType,
+    String? iconValue,
+    int? iconColor,
+  }) async {
+    // Check if any accounts exist
+    final existingAccounts = await getAllAccounts();
+    final isFirstAccount = existingAccounts.isEmpty;
+
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final now = DateTime.now();
+
+    final account = Account(
+      id: id,
+      name: name,
+      currentBalance: currentBalance,
+      userId: _userId,
+      createdAt: now,
+      lastUpdated: now,
+      isDefault: isFirstAccount, // Auto-set as default if first
+      accountType: type,
+      creditLimit: creditLimit,
+      iconType: iconType,
+      iconValue: iconValue,
+      iconColor: iconColor,
+    );
+
+    await _accountBox.put(id, account);
+    debugPrint('[AccountRepo] ✅ First account created: $name (isDefault: $isFirstAccount)');
+
+    // CRITICAL: Sync to Firebase
+    _syncManager.pushAccount(account, _userId);
+
+    // If this is the first account, trigger transition to Account Mirror Mode
+    if (isFirstAccount) {
+      await _handleTransitionToAccountMode(account);
+    }
+
+    return account;
+  }
+
+  /// Transition from Budget Mode to Account Mirror Mode
+  Future<void> _handleTransitionToAccountMode(Account defaultAccount) async {
+    debugPrint('[AccountRepo] Transitioning to Account Mirror Mode');
+
+    // 1. Update PayDaySettings with default account
+    final payDaySettingsBox = Hive.box<PayDaySettings>('payDaySettings');
+    final settings = payDaySettingsBox.get(_userId);
+
+    if (settings != null) {
+      final updatedSettings = settings.copyWith(
+        defaultAccountId: defaultAccount.id,
+      );
+      await payDaySettingsBox.put(_userId, updatedSettings);
+
+      // CRITICAL: Sync to Firebase
+      _syncManager.pushPayDaySettings(updatedSettings, _userId);
+
+      debugPrint('[AccountRepo] ✅ Updated PayDaySettings with default account');
+    }
+
+    // 2. Auto-link all envelopes with auto-fill enabled
+    final unlinkedEnvelopes = await _envelopeRepo.getUnlinkedAutoFillEnvelopes();
+
+    if (unlinkedEnvelopes.isNotEmpty) {
+      final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();
+      await _envelopeRepo.bulkLinkToAccount(envelopeIds, defaultAccount.id);
+
+      debugPrint('[AccountRepo] Auto-linked ${envelopeIds.length} envelopes to ${defaultAccount.name}');
+    }
+  }
+
   // ======================= PRIVATE HELPERS =======================
 
   Future<void> _unsetOtherDefaults({String? excludeAccountId}) async {

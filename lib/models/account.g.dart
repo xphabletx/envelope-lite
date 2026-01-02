@@ -35,13 +35,14 @@ class AccountAdapter extends TypeAdapter<Account> {
       creditLimit: fields[15] as double?,
       payDayAutoFillAmount: fields[17] as double?,
       isSynced: fields[18] as bool?,
+      sourceAccountId: fields[19] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Account obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -79,7 +80,9 @@ class AccountAdapter extends TypeAdapter<Account> {
       ..writeByte(17)
       ..write(obj.payDayAutoFillAmount)
       ..writeByte(18)
-      ..write(obj.isSynced);
+      ..write(obj.isSynced)
+      ..writeByte(19)
+      ..write(obj.sourceAccountId);
   }
 
   @override

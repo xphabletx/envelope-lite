@@ -71,4 +71,33 @@ class PayDaySettingsService {
            settings.expectedPayAmount != null &&
            settings.nextPayDate != null;
   }
+
+  /// Get current settings (convenience method)
+  Future<PayDaySettings?> getSettings() async {
+    return await getPayDaySettings();
+  }
+
+  /// Update settings (convenience method)
+  Future<void> updateSettings(PayDaySettings settings) async {
+    return await updatePayDaySettings(settings);
+  }
+
+  /// Update next pay date after processing pay day
+  Future<void> updateNextPayDate() async {
+    final settings = await getPayDaySettings();
+    if (settings == null) return;
+
+    final currentNextDate = settings.nextPayDate ?? DateTime.now();
+    final newNextDate = PayDaySettings.calculateNextPayDate(
+      currentNextDate,
+      settings.payFrequency,
+    );
+
+    await updatePayDaySettings(settings.copyWith(
+      lastPayDate: currentNextDate,
+      nextPayDate: newNextDate,
+    ));
+
+    debugPrint('[PayDaySettingsService] Updated next pay date to: $newNextDate');
+  }
 }

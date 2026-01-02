@@ -77,6 +77,10 @@ class Account {
   @HiveField(18)
   final bool? isSynced;
 
+  // NEW: Account-to-account auto-fill source
+  @HiveField(19)
+  final String? sourceAccountId; // Which account funds this account's auto-fill
+
   // Getter with default for backward compatibility
   bool get payDayAutoFillEnabled => _payDayAutoFillEnabled ?? false;
 
@@ -100,6 +104,7 @@ class Account {
     bool payDayAutoFillEnabled = false,
     this.payDayAutoFillAmount,
     this.isSynced,
+    this.sourceAccountId,
   }) : _payDayAutoFillEnabled = payDayAutoFillEnabled;
 
   /// Get icon widget for display
@@ -218,6 +223,7 @@ class Account {
       'payDayAutoFillEnabled': payDayAutoFillEnabled,
       'payDayAutoFillAmount': payDayAutoFillAmount,
       'isSynced': isSynced,
+      'sourceAccountId': sourceAccountId,
     };
   }
 
@@ -247,6 +253,7 @@ class Account {
           ? (map['payDayAutoFillAmount'] as num).toDouble()
           : null,
       isSynced: map['isSynced'] as bool?,
+      sourceAccountId: map['sourceAccountId'] as String?,
     );
   }
 
@@ -266,6 +273,7 @@ class Account {
     bool? payDayAutoFillEnabled,
     double? payDayAutoFillAmount,
     bool? isSynced,
+    String? sourceAccountId,
   }) {
     return Account(
       id: id,
@@ -287,6 +295,7 @@ class Account {
       payDayAutoFillEnabled: payDayAutoFillEnabled ?? this.payDayAutoFillEnabled,
       payDayAutoFillAmount: payDayAutoFillAmount ?? this.payDayAutoFillAmount,
       isSynced: isSynced ?? this.isSynced,
+      sourceAccountId: sourceAccountId ?? this.sourceAccountId,
     );
   }
 
