@@ -139,32 +139,48 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                         return Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
+                              child: _AccountActionChip(
+                                icon: Icons.link,
+                                label: 'Link',
+                                subLabel: linkedEnvelopeIds.isEmpty
+                                    ? 'No envelopes'
+                                    : '${linkedEnvelopeIds.length} linked',
+                                color: theme.colorScheme.primaryContainer,
+                                textColor: theme.colorScheme.onPrimaryContainer,
+                                onTap: () => _showLinkEnvelopesDialog(context),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _AccountActionChip(
+                                icon: Icons.bar_chart,
+                                label: 'Stats',
+                                subLabel: 'View history',
+                                color: theme.colorScheme.secondaryContainer,
+                                textColor: theme.colorScheme.onSecondaryContainer,
+                                onTap: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => StatsHistoryScreen(
                                         repo: widget.envelopeRepo,
                                         title: '${displayAccount.name} - History',
-                                        // Filter transactions for envelopes linked to this account
                                         initialEnvelopeIds: linkedEnvelopeIds,
                                       ),
                                     ),
                                   );
                                 },
-                                icon: const Icon(Icons.bar_chart, size: 20),
-                                label: const Text('Stats & History'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  // Check if time machine is active
+                              child: _AccountActionChip(
+                                icon: Icons.settings,
+                                label: 'Settings',
+                                subLabel: 'Configure',
+                                color: theme.colorScheme.tertiaryContainer,
+                                textColor: theme.colorScheme.onTertiaryContainer,
+                                onTap: () {
                                   if (timeMachine.shouldBlockModifications()) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -185,11 +201,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                     ),
                                   );
                                 },
-                                icon: const Icon(Icons.settings, size: 20),
-                                label: const Text('Settings'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
                               ),
                             ),
                           ],
@@ -477,6 +488,67 @@ class _LinkEnvelopesDialogState extends State<_LinkEnvelopesDialog> {
               : const Text('Link Selected'),
         ),
       ],
+    );
+  }
+}
+
+/// Compact action chip matching the design from ModernEnvelopeHeaderCard
+class _AccountActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subLabel;
+  final Color color;
+  final Color textColor;
+  final VoidCallback onTap;
+
+  const _AccountActionChip({
+    required this.icon,
+    required this.label,
+    required this.subLabel,
+    required this.color,
+    required this.textColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: textColor, size: 20),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                subLabel,
+                style: TextStyle(
+                  color: textColor.withValues(alpha: 0.7),
+                  fontSize: 10,
+                  height: 1.2,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
