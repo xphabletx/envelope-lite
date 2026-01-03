@@ -46,8 +46,8 @@ class ResponsiveHelper {
     final viewPadding = MediaQuery.of(context).viewPadding;
     if (isLandscape) {
       return EdgeInsets.only(
-        left: viewPadding.left + 16,
-        right: viewPadding.right + 16,
+        left: viewPadding.left + 40,
+        right: viewPadding.right + 40,
         top: viewPadding.top + 8,
         bottom: viewPadding.bottom + 8,
       );

@@ -29,7 +29,8 @@ class RevenueCatConfig {
   /// REMINDER: Remove or gate this before production release!
   static const List<String> vipEmails = [
     'psul7an@gmail.com', // Developer Bypass
-    // 'telmccall@gmail.com', // Owner - COMMENTED OUT to test RevenueCat allowlist
+    'telmccall@gmail.com', // Owner
+    'lizzi_fish@yahoo.com', // Tester
   ];
 
   /// Check if an email is a VIP user

@@ -63,157 +63,174 @@ class RestorationOverlay extends StatelessWidget {
   Widget _buildProgressView(BuildContext context, MigrationProgress progress) {
     final percentage = (progress.progress * 100).toInt();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Animated progress indicator
-        SizedBox(
-          width: 80,
-          height: 80,
-          child: CircularProgressIndicator(
-            value: progress.progress,
-            strokeWidth: 6,
-            backgroundColor: Colors.grey.withValues(alpha: 0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Main title
-        Text(
-          'Restoring your budget...',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-
-        // Subtitle
-        Text(
-          'This only happens once.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-
-        // Percentage and current step
-        Text(
-          '$percentage%',
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Current step description
-        if (progress.currentStep.isNotEmpty)
-          Text(
-            progress.currentStep,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-        // Item count if available
-        if (progress.itemsProcessed > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              '${progress.itemsProcessed} items restored',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Animated progress indicator
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: CircularProgressIndicator(
+              value: progress.progress,
+              strokeWidth: 5,
+              backgroundColor: Colors.grey.withValues(alpha: 0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
+          const SizedBox(height: 12),
 
-        // Cancel button (optional)
-        if (onCancel != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: TextButton(
-              onPressed: onCancel,
-              child: const Text('Cancel and use offline'),
+          // Main title
+          Text(
+            'Restoring your budget...',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+
+          // Subtitle
+          Text(
+            'This only happens once.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+
+          // Percentage and current step
+          Text(
+            '$percentage%',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
             ),
           ),
-      ],
+          const SizedBox(height: 6),
+
+          // Current step description
+          if (progress.currentStep.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                progress.currentStep,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+          // Item count if available
+          if (progress.itemsProcessed > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '${progress.itemsProcessed} items restored',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+
+          // Cancel button (optional)
+          if (onCancel != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: TextButton(
+                onPressed: onCancel,
+                child: const Text('Cancel and use offline'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildCompleteView(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.check_circle,
-          size: 80,
-          color: Colors.green,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Restoration complete!',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle,
+            size: 60,
+            color: Colors.green,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Loading your budget...',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+          const SizedBox(height: 16),
+          Text(
+            'Restoration complete!',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'Loading your budget...',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildErrorView(BuildContext context, MigrationProgress progress) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.error_outline,
-          size: 80,
-          color: Theme.of(context).colorScheme.error,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Restoration failed',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 60,
             color: Theme.of(context).colorScheme.error,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          progress.errorMessage ?? 'An unknown error occurred',
-          style: Theme.of(context).textTheme.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextButton(
-              onPressed: onCancel,
-              child: const Text('Continue offline'),
+          const SizedBox(height: 16),
+          Text(
+            'Restoration failed',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.error,
             ),
-            const SizedBox(width: 16),
-            ElevatedButton(
-              onPressed: () {
-                // Trigger retry - implementation depends on your setup
-              },
-              child: const Text('Retry'),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              progress.errorMessage ?? 'An unknown error occurred',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              TextButton(
+                onPressed: onCancel,
+                child: const Text('Continue offline'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Trigger retry - implementation depends on your setup
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

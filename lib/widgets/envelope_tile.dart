@@ -128,7 +128,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     final tilePadding = isLandscape ? 12.0 : 16.0;
     final emojiSize = isLandscape ? 32.0 : 40.0;
     final titleFontSize = isLandscape ? 18.0 : 22.0;
-    final amountFontSize = isLandscape ? 20.0 : 28.0;
+    final amountFontSize = isLandscape ? 14.0 : 18.0;
     final subtitleFontSize = isLandscape ? 12.0 : 14.0;
 
     final tileContent = Container(
@@ -149,6 +149,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
       child: Padding(
         padding: EdgeInsets.all(tilePadding),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -214,7 +215,17 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ),
                 if (percentage != null) ...[
                   const SizedBox(width: 12),
-                  EmojiPieChart(percentage: percentage, size: isLandscape ? 48 : 60),
+                  if (isLandscape)
+                    Text(
+                      '${(percentage * 100).toInt()}%',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  else
+                    EmojiPieChart(percentage: percentage, size: 60),
                 ],
               ],
             ),
@@ -236,7 +247,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ),
               ),
             ],
-            SizedBox(height: isLandscape ? 8 : 12),
+            SizedBox(height: isLandscape ? 4 : 12),
             Padding(
               padding: EdgeInsets.only(left: isLandscape ? 44 : 56),
               child: Row(

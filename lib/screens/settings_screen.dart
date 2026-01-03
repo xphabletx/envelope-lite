@@ -534,6 +534,9 @@ class SettingsScreen extends StatelessWidget {
     LocaleProvider localeProvider,
   ) async {
     final theme = Theme.of(context);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
     final selectedCurrency = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -542,13 +545,13 @@ class SettingsScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
+        initialChildSize: isLandscape ? 0.85 : 0.7,
+        minChildSize: isLandscape ? 0.6 : 0.5,
         maxChildSize: 0.9,
         expand: false,
         builder: (context, scrollController) => Column(
           children: [
-            const SizedBox(height: 16),
+            SizedBox(height: isLandscape ? 12 : 16),
             Container(
               width: 40,
               height: 4,
@@ -557,17 +560,18 @@ class SettingsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isLandscape ? 12 : 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.symmetric(horizontal: isLandscape ? 20 : 24),
               child: Text(
                 'Select Currency',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
+                  fontSize: isLandscape ? 18 : null,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isLandscape ? 12 : 16),
             Expanded(
               child: ListView.builder(
                 controller: scrollController,
@@ -580,13 +584,13 @@ class SettingsScreen extends StatelessWidget {
                   final isSelected = localeProvider.currencyCode == code;
 
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 8,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: isLandscape ? 20 : 24,
+                      vertical: isLandscape ? 4 : 8,
                     ),
                     leading: Container(
-                      width: 48,
-                      height: 48,
+                      width: isLandscape ? 40 : 48,
+                      height: isLandscape ? 40 : 48,
                       decoration: BoxDecoration(
                         color: isSelected
                             ? theme.colorScheme.primary.withAlpha(26)
@@ -597,7 +601,7 @@ class SettingsScreen extends StatelessWidget {
                         child: Text(
                           symbol,
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: isLandscape ? 16 : 20,
                             fontWeight: FontWeight.bold,
                             color: isSelected
                                 ? theme.colorScheme.primary
@@ -611,13 +615,18 @@ class SettingsScreen extends StatelessWidget {
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight:
                             isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: isLandscape ? 14 : null,
                       ),
                     ),
-                    subtitle: Text(code),
+                    subtitle: Text(
+                      code,
+                      style: TextStyle(fontSize: isLandscape ? 12 : null),
+                    ),
                     trailing: isSelected
                         ? Icon(
                             Icons.check_circle,
                             color: theme.colorScheme.primary,
+                            size: isLandscape ? 20 : 24,
                           )
                         : null,
                     selected: isSelected,

@@ -134,10 +134,18 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final currencySymbol = localeProvider.currencySymbol;
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pay Day Settings'),
+        title: Text(
+          'Pay Day Settings',
+          style: fontProvider.getTextStyle(
+            fontSize: isLandscape ? 20 : 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: theme.scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
@@ -147,18 +155,19 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
           children: [
             // Enable/Disable Switch
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isLandscape ? 12 : 16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(isLandscape ? 8 : 12),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.calendar_today,
                     color: theme.colorScheme.primary,
+                    size: isLandscape ? 20 : 24,
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: isLandscape ? 12 : 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,15 +175,15 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                         Text(
                           'Track Pay Day',
                           style: fontProvider.getTextStyle(
-                            fontSize: 16,
+                            fontSize: isLandscape ? 14 : 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: isLandscape ? 2 : 4),
                         Text(
                           'Add recurring pay to calendar & projections',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: isLandscape ? 11 : 12,
                             color: theme.colorScheme.onPrimaryContainer
                                 .withValues(alpha: 0.7),
                           ),
@@ -193,7 +202,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
             ),
 
             if (_isEnabled) ...[
-              const SizedBox(height: 32),
+              SizedBox(height: isLandscape ? 20 : 32),
 
               // Pay Amount
               TextField(
@@ -202,20 +211,22 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                   decimal: true,
                 ),
                 style: fontProvider.getTextStyle(
-                  fontSize: 20,
+                  fontSize: isLandscape ? 16 : 20,
                   fontWeight: FontWeight.bold,
                 ),
                 decoration: InputDecoration(
                   labelText: 'Take-home pay amount',
+                  labelStyle: TextStyle(fontSize: isLandscape ? 12 : 14),
                   hintText: '0.00',
                   helperText: 'Your regular pay after taxes',
+                  helperStyle: TextStyle(fontSize: isLandscape ? 11 : 12),
                   prefixText: '$currencySymbol ',
                   prefixStyle: fontProvider.getTextStyle(
-                    fontSize: 20,
+                    fontSize: isLandscape ? 16 : 20,
                     fontWeight: FontWeight.bold,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(isLandscape ? 8 : 12),
                   ),
                 ),
                 onTap: () {
@@ -226,15 +237,16 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                 },
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: isLandscape ? 16 : 24),
 
               // Pay Frequency
               DropdownButtonFormField<String>(
                 initialValue: _frequency,
                 decoration: InputDecoration(
                   labelText: 'Pay frequency',
+                  labelStyle: TextStyle(fontSize: isLandscape ? 12 : 14),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(isLandscape ? 8 : 12),
                   ),
                 ),
                 items: [
@@ -242,28 +254,28 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                     value: 'weekly',
                     child: Text(
                       'Weekly (every 7 days)',
-                      style: fontProvider.getTextStyle(fontSize: 16),
+                      style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
                     ),
                   ),
                   DropdownMenuItem(
                     value: 'biweekly',
                     child: Text(
                       'Bi-weekly (every 14 days)',
-                      style: fontProvider.getTextStyle(fontSize: 16),
+                      style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
                     ),
                   ),
                   DropdownMenuItem(
                     value: 'fourweekly',
                     child: Text(
                       'Four-weekly (every 28 days)',
-                      style: fontProvider.getTextStyle(fontSize: 16),
+                      style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
                     ),
                   ),
                   DropdownMenuItem(
                     value: 'monthly',
                     child: Text(
                       'Monthly',
-                      style: fontProvider.getTextStyle(fontSize: 16),
+                      style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
                     ),
                   ),
                 ],
@@ -274,7 +286,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                 },
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: isLandscape ? 16 : 24),
 
               // Next Pay Date
               OutlinedButton.icon(
@@ -290,40 +302,44 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                     setState(() => _nextPayDate = pickedDate);
                   }
                 },
-                icon: const Icon(Icons.calendar_today),
+                icon: Icon(Icons.calendar_today, size: isLandscape ? 18 : 24),
                 label: Text(
                   _nextPayDate == null
                       ? 'Select next pay date'
                       : 'Next pay: ${DateFormat.yMMMd().format(_nextPayDate!)}',
-                  style: fontProvider.getTextStyle(fontSize: 16),
+                  style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
                 ),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  minimumSize: const Size(double.infinity, 56),
+                  padding: EdgeInsets.all(isLandscape ? 12 : 16),
+                  minimumSize: Size(double.infinity, isLandscape ? 44 : 56),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: isLandscape ? 16 : 24),
 
               // Weekend Adjustment Toggle
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(isLandscape ? 12 : 16),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(isLandscape ? 8 : 12),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.weekend, color: theme.colorScheme.primary),
-                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.weekend,
+                          color: theme.colorScheme.primary,
+                          size: isLandscape ? 20 : 24,
+                        ),
+                        SizedBox(width: isLandscape ? 8 : 12),
                         Expanded(
                           child: Text(
                             'Adjust for Weekends',
                             style: fontProvider.getTextStyle(
-                              fontSize: 16,
+                              fontSize: isLandscape ? 14 : 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -336,18 +352,18 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: isLandscape ? 6 : 8),
                     Text(
                       'If your pay day falls on a weekend, move it to Friday',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: isLandscape ? 12 : 14,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
 
                     // Show preview if weekend adjustment would apply
                     if (_adjustForWeekends && _nextPayDate != null) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: isLandscape ? 8 : 12),
                       Builder(
                         builder: (context) {
                           final tempSettings = PayDaySettings(
@@ -358,21 +374,25 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
 
                           if (adjustedDate != _nextPayDate) {
                             return Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: EdgeInsets.all(isLandscape ? 8 : 12),
                               decoration: BoxDecoration(
                                 color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(isLandscape ? 6 : 8),
                                 border: Border.all(color: Colors.blue.shade200),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: Colors.blue.shade700,
+                                    size: isLandscape ? 16 : 20,
+                                  ),
+                                  SizedBox(width: isLandscape ? 6 : 8),
                                   Expanded(
                                     child: Text(
                                       'Next pay day would be ${DateFormat('EEEE, MMM d').format(adjustedDate)} (moved from ${DateFormat('EEEE').format(_nextPayDate!)})',
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: isLandscape ? 11 : 13,
                                         color: Colors.blue.shade900,
                                       ),
                                     ),
@@ -390,12 +410,12 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
               ),
 
               if (_nextPayDate != null) ...[
-                const SizedBox(height: 16),
+                SizedBox(height: isLandscape ? 12 : 16),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(isLandscape ? 8 : 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(isLandscape ? 6 : 8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,27 +424,27 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                         children: [
                           Icon(
                             Icons.info_outline,
-                            size: 16,
+                            size: isLandscape ? 14 : 16,
                             color: theme.colorScheme.secondary,
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: isLandscape ? 6 : 8),
                           Text(
                             'Pay Schedule Preview',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isLandscape ? 11 : 12,
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.onSecondaryContainer,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: isLandscape ? 6 : 8),
                       ..._generateUpcomingPayDates().map((date) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        padding: EdgeInsets.symmetric(vertical: isLandscape ? 1 : 2),
                         child: Text(
                           '• ${DateFormat.yMMMd().format(date)}',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: isLandscape ? 11 : 12,
                             color: theme.colorScheme.onSecondaryContainer,
                           ),
                         ),
@@ -435,14 +455,14 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
               ],
             ],
 
-            const SizedBox(height: 32),
+            SizedBox(height: isLandscape ? 20 : 32),
 
             // Info Card
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isLandscape ? 12 : 16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(isLandscape ? 8 : 12),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,27 +471,27 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                     children: [
                       Icon(
                         Icons.lightbulb_outline,
-                        size: 20,
+                        size: isLandscape ? 16 : 20,
                         color: theme.colorScheme.primary,
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: isLandscape ? 6 : 8),
                       Text(
                         'How it works',
                         style: fontProvider.getTextStyle(
-                          fontSize: 14,
+                          fontSize: isLandscape ? 12 : 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: isLandscape ? 8 : 12),
                   Text(
                     '• Your pay day appears as a recurring event in the calendar\n'
                     '• Used for budget projections in Time Machine\n'
                     '• Update anytime if your pay schedule changes\n'
                     '• Tap calendar events to mark when you receive pay',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: isLandscape ? 11 : 13,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       height: 1.5,
                     ),
@@ -484,18 +504,18 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isLandscape ? 12 : 16),
           child: FilledButton(
             onPressed: _saving ? null : _saveSettings,
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              minimumSize: const Size(double.infinity, 56),
+              padding: EdgeInsets.symmetric(vertical: isLandscape ? 12 : 16),
+              minimumSize: Size(double.infinity, isLandscape ? 44 : 56),
             ),
             child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
+                ? SizedBox(
+                    width: isLandscape ? 16 : 20,
+                    height: isLandscape ? 16 : 20,
+                    child: const CircularProgressIndicator(
                       color: Colors.white,
                       strokeWidth: 2,
                     ),
@@ -503,7 +523,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
                 : Text(
                     'Save Settings',
                     style: fontProvider.getTextStyle(
-                      fontSize: 18,
+                      fontSize: isLandscape ? 16 : 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),

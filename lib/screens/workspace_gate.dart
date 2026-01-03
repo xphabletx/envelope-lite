@@ -14,6 +14,7 @@ import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'workspace_management_screen.dart';
+import '../utils/responsive_helper.dart';
 
 class WorkspaceGate extends StatefulWidget {
   const WorkspaceGate({
@@ -115,17 +116,30 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
     if (widget.workspaceId != null) {
       return const Center(child: Text("Manage Mode Placeholder"));
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: FittedBox(child: Text(tr('workspace_start_or_join'))),
-        elevation: 0),
+        title: FittedBox(
+          child: Text(
+            tr('workspace_start_or_join'),
+            style: fontProvider.getTextStyle(
+              fontSize: isLandscape ? 20 : 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        elevation: 0,
+      ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isLandscape ? 16 : 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -133,36 +147,50 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _initiateCreate,
-                  icon: const Icon(Icons.add_business),
+                  icon: Icon(Icons.add_business, size: isLandscape ? 20 : 24),
                   label: Text(
                     tr('workspace_create_new'),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: fontProvider.getTextStyle(
+                      fontSize: isLandscape ? 14 : 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      vertical: isLandscape ? 12 : 16,
+                      horizontal: isLandscape ? 16 : 20,
+                    ),
                   ),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30.0),
-                child: Divider(color: Colors.black26),
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: isLandscape ? 20 : 30),
+                child: const Divider(color: Colors.black26),
               ),
               Text(
                 tr('workspace_join_existing'),
-                style: const TextStyle(
-                  fontSize: 18,
+                style: fontProvider.getTextStyle(
+                  fontSize: isLandscape ? 14 : 18,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: isLandscape ? 12 : 16),
               TextField(
                 controller: _joinCtrl,
                 textAlign: TextAlign.center,
                 maxLength: 6,
                 textCapitalization: TextCapitalization.characters,
+                style: fontProvider.getTextStyle(
+                  fontSize: isLandscape ? 16 : 20,
+                  fontWeight: FontWeight.bold,
+                ),
                 inputFormatters: [
                   // UPPERCASE FIX: Force all input to uppercase
                   UpperCaseTextFormatter(),
                 ],
                 decoration: InputDecoration(
                   labelText: tr('workspace_enter_code'),
+                  labelStyle: TextStyle(fontSize: isLandscape ? 12 : 14),
                   hintText: 'ABC123',
                   counterText: '',
                 ),
@@ -171,15 +199,24 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
                   extentOffset: _joinCtrl.text.length,
                 ),
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: isLandscape ? 12 : 18),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _initiateJoin,
-                  icon: const Icon(Icons.login),
+                  icon: Icon(Icons.login, size: isLandscape ? 20 : 24),
                   label: Text(
                     tr('workspace_join_button'),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: fontProvider.getTextStyle(
+                      fontSize: isLandscape ? 14 : 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      vertical: isLandscape ? 12 : 16,
+                      horizontal: isLandscape ? 16 : 20,
+                    ),
                   ),
                 ),
               ),
@@ -379,6 +416,8 @@ class _WorkspaceSharingSelectionScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -386,17 +425,25 @@ class _WorkspaceSharingSelectionScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: FittedBox(child: Text(tr('workspace_sharing_setup'))),
+        title: FittedBox(
+          child: Text(
+            tr('workspace_sharing_setup'),
+            style: fontProvider.getTextStyle(
+              fontSize: isLandscape ? 20 : 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
         scrolledUnderElevation: 0,
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(isLandscape ? 12 : 16),
             child: Text(
               tr('workspace_select_to_hide'),
               style: fontProvider.getTextStyle(
-                fontSize: 18,
+                fontSize: isLandscape ? 14 : 18,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
@@ -407,6 +454,7 @@ class _WorkspaceSharingSelectionScreenState
           SwitchListTile(
             title: Text(
               tr('workspace_hide_future'),
+              style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
             ),
             value: _hideFutureEnvelopes,
             onChanged: (val) => setState(() => _hideFutureEnvelopes = val),
@@ -419,17 +467,21 @@ class _WorkspaceSharingSelectionScreenState
                 ? Center(
                     child: Text(
                       "No items to share",
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: isLandscape ? 12 : 14,
+                      ),
                     ),
                   )
                 : ListView(
                     children: [
                       if (_myGroups.isNotEmpty) ...[
                         Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(isLandscape ? 12 : 16),
                           child: Text(
                             tr('binders'),
-                            style: TextStyle(
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 14 : 16,
                               color: theme.primaryColor,
                               fontWeight: FontWeight.bold,
                             ),
@@ -439,11 +491,20 @@ class _WorkspaceSharingSelectionScreenState
                           final isHidden = _hiddenGroupIds.contains(group.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(group.name ?? 'Unnamed'),
-                            secondary: Text(group.emoji ?? '📁'),
+                            title: Text(
+                              group.name ?? 'Unnamed',
+                              style: fontProvider.getTextStyle(
+                                fontSize: isLandscape ? 14 : 16,
+                              ),
+                            ),
+                            secondary: Text(
+                              group.emoji ?? '📁',
+                              style: TextStyle(fontSize: isLandscape ? 16 : 20),
+                            ),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
                               style: TextStyle(
+                                fontSize: isLandscape ? 11 : 12,
                                 color: isHidden ? Colors.red : Colors.green,
                               ),
                             ),
@@ -461,10 +522,11 @@ class _WorkspaceSharingSelectionScreenState
                       ],
                       if (_myEnvelopes.isNotEmpty) ...[
                         Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(isLandscape ? 12 : 16),
                           child: Text(
                             tr('envelopes'),
-                            style: TextStyle(
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 14 : 16,
                               color: theme.primaryColor,
                               fontWeight: FontWeight.bold,
                             ),
@@ -474,11 +536,20 @@ class _WorkspaceSharingSelectionScreenState
                           final isHidden = _hiddenEnvelopeIds.contains(envelope.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(envelope.name ?? 'Unnamed'),
-                            secondary: const Icon(Icons.mail_outline),
+                            title: Text(
+                              envelope.name ?? 'Unnamed',
+                              style: fontProvider.getTextStyle(
+                                fontSize: isLandscape ? 14 : 16,
+                              ),
+                            ),
+                            secondary: Icon(
+                              Icons.mail_outline,
+                              size: isLandscape ? 20 : 24,
+                            ),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
                               style: TextStyle(
+                                fontSize: isLandscape ? 11 : 12,
                                 color: isHidden ? Colors.red : Colors.green,
                               ),
                             ),
@@ -496,10 +567,11 @@ class _WorkspaceSharingSelectionScreenState
                       ],
                       if (_myAccounts.isNotEmpty) ...[
                         Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(isLandscape ? 12 : 16),
                           child: Text(
                             'Accounts',
-                            style: TextStyle(
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 14 : 16,
                               color: theme.primaryColor,
                               fontWeight: FontWeight.bold,
                             ),
@@ -509,11 +581,20 @@ class _WorkspaceSharingSelectionScreenState
                           final isHidden = _hiddenAccountIds.contains(account.id);
                           return CheckboxListTile(
                             value: isHidden,
-                            title: Text(account.name ?? 'Unnamed Account'),
-                            secondary: const Icon(Icons.account_balance_wallet),
+                            title: Text(
+                              account.name ?? 'Unnamed Account',
+                              style: fontProvider.getTextStyle(
+                                fontSize: isLandscape ? 14 : 16,
+                              ),
+                            ),
+                            secondary: Icon(
+                              Icons.account_balance_wallet,
+                              size: isLandscape ? 20 : 24,
+                            ),
                             subtitle: Text(
                               isHidden ? "Private" : "Shared",
                               style: TextStyle(
+                                fontSize: isLandscape ? 11 : 12,
                                 color: isHidden ? Colors.red : Colors.green,
                               ),
                             ),
@@ -533,10 +614,10 @@ class _WorkspaceSharingSelectionScreenState
                   ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(isLandscape ? 16 : 24),
             child: SizedBox(
               width: double.infinity,
-              height: 50,
+              height: isLandscape ? 44 : 50,
               child: ElevatedButton(
                 onPressed: _processing ? null : _finish,
                 style: ElevatedButton.styleFrom(
@@ -544,13 +625,20 @@ class _WorkspaceSharingSelectionScreenState
                   foregroundColor: Colors.white,
                 ),
                 child: _processing
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? SizedBox(
+                        width: isLandscape ? 16 : 20,
+                        height: isLandscape ? 16 : 20,
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : Text(
                         widget.mode == WorkspaceSharingMode.create
                             ? tr('workspace_create_confirm')
                             : tr('workspace_join_confirm'),
-                        style: const TextStyle(
-                          fontSize: 18,
+                        style: fontProvider.getTextStyle(
+                          fontSize: isLandscape ? 14 : 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

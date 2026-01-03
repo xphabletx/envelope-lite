@@ -29,6 +29,7 @@ import '../../widgets/tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
 import '../../widgets/responsive_layout.dart';
+import '../../widgets/responsive_navigation.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({
@@ -255,7 +256,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
       leftFlex: 2,
       rightFlex: 3,
       left: SingleChildScrollView(
-        padding: responsive.safePadding,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
         child: Column(
           children: [
             // Time Machine Indicator
@@ -358,6 +359,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final timeMachine = Provider.of<TimeMachineProvider>(context);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return StreamBuilder<Envelope>(
       initialData: widget.repo.getEnvelopeSync(widget.envelopeId), // ✅ Instant data!
@@ -484,66 +487,119 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                       child: Text(
                         envelope.name,
                         style: fontProvider.getTextStyle(
-                          fontSize: 28,
+                          fontSize: isLandscape ? 20 : 28,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
                       ),
                     ),
                   ),
-                  body: ResponsiveLayout(
-                    portrait: _buildPortraitLayout(
-                      envelope,
-                      monthTransactions,
-                      theme,
-                      accounts,
-                      allEnvelopes,
-                    ),
-                    landscape: _buildLandscapeLayout(
-                      envelope,
-                      monthTransactions,
-                      theme,
-                      accounts,
-                      allEnvelopes,
-                    ),
-                  ),
+                  body: isLandscape
+                      ? Row(
+                          children: [
+                            NavigationRail(
+                              backgroundColor: theme.scaffoldBackgroundColor,
+                              selectedIndex: 0,
+                              onDestinationSelected: _onBottomNavTap,
+                              labelType: NavigationRailLabelType.selected,
+                              selectedIconTheme: IconThemeData(
+                                color: theme.colorScheme.primary,
+                                size: 24,
+                              ),
+                              unselectedIconTheme: IconThemeData(
+                                color: Colors.grey.shade600,
+                                size: 24,
+                              ),
+                              destinations: [
+                                NavigationRailDestination(
+                                  icon: const Icon(Icons.mail_outline),
+                                  selectedIcon: const Icon(Icons.mail),
+                                  label: Text(tr('home_envelopes_tab')),
+                                ),
+                                NavigationRailDestination(
+                                  icon: const Icon(Icons.menu_book_outlined),
+                                  selectedIcon: const Icon(Icons.menu_book),
+                                  label: Text(tr('home_binders_tab')),
+                                ),
+                                NavigationRailDestination(
+                                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                                  selectedIcon: const Icon(Icons.account_balance_wallet),
+                                  label: Text(tr('home_budget_tab')),
+                                ),
+                                NavigationRailDestination(
+                                  icon: const Icon(Icons.calendar_today_outlined),
+                                  selectedIcon: const Icon(Icons.calendar_today),
+                                  label: Text(tr('home_calendar_tab')),
+                                ),
+                              ],
+                            ),
+                            const VerticalDivider(thickness: 1, width: 1),
+                            Expanded(
+                              child: _buildLandscapeLayout(
+                                envelope,
+                                monthTransactions,
+                                theme,
+                                accounts,
+                                allEnvelopes,
+                              ),
+                            ),
+                          ],
+                        )
+                      : ResponsiveLayout(
+                          portrait: _buildPortraitLayout(
+                            envelope,
+                            monthTransactions,
+                            theme,
+                            accounts,
+                            allEnvelopes,
+                          ),
+                          landscape: _buildLandscapeLayout(
+                            envelope,
+                            monthTransactions,
+                            theme,
+                            accounts,
+                            allEnvelopes,
+                          ),
+                        ),
 
-              bottomNavigationBar: BottomNavigationBar(
-                backgroundColor: theme.scaffoldBackgroundColor,
-                selectedItemColor: theme.colorScheme.primary,
-                unselectedItemColor: Colors.grey.shade600,
-                elevation: 8,
-                type: BottomNavigationBarType.fixed,
-                selectedLabelStyle: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
-                currentIndex: 0,
-                onTap: _onBottomNavTap,
-                items: [
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.mail_outline),
-                    activeIcon: const Icon(Icons.mail),
-                    label: tr('home_envelopes_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.folder_open_outlined),
-                    activeIcon: const Icon(Icons.folder_copy),
-                    label: tr('home_binders_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.account_balance_wallet_outlined),
-                    activeIcon: const Icon(Icons.account_balance_wallet),
-                    label: tr('home_budget_tab'),
-                  ),
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    activeIcon: const Icon(Icons.calendar_today),
-                    label: tr('home_calendar_tab'),
-                  ),
-                ],
-              ),
+              bottomNavigationBar: isLandscape
+                  ? null
+                  : BottomNavigationBar(
+                      backgroundColor: theme.scaffoldBackgroundColor,
+                      selectedItemColor: theme.colorScheme.primary,
+                      unselectedItemColor: Colors.grey.shade600,
+                      elevation: 8,
+                      type: BottomNavigationBarType.fixed,
+                      selectedLabelStyle: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+                      currentIndex: 0,
+                      onTap: _onBottomNavTap,
+                      items: [
+                        BottomNavigationBarItem(
+                          icon: const Icon(Icons.mail_outline),
+                          activeIcon: const Icon(Icons.mail),
+                          label: tr('home_envelopes_tab'),
+                        ),
+                        BottomNavigationBarItem(
+                          icon: const Icon(Icons.menu_book_outlined),
+                          activeIcon: const Icon(Icons.menu_book),
+                          label: tr('home_binders_tab'),
+                        ),
+                        BottomNavigationBarItem(
+                          icon: const Icon(Icons.account_balance_wallet_outlined),
+                          activeIcon: const Icon(Icons.account_balance_wallet),
+                          label: tr('home_budget_tab'),
+                        ),
+                        BottomNavigationBarItem(
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          activeIcon: const Icon(Icons.calendar_today),
+                          label: tr('home_calendar_tab'),
+                        ),
+                      ],
+                    ),
               floatingActionButton: timeMachine.isActive
                   ? null
                   : _buildThemedFAB(context, envelope, theme),
@@ -871,16 +927,19 @@ class _BinderInfoRowState extends State<_BinderInfoRow> {
           onTap: () async {
             final binderData = await _getBinder(_groupRepo);
             if (binderData != null && context.mounted) {
-              // Pop back to main screen - user can then tap Groups tab to see this binder
-              Navigator.of(context).pop();
+              // Pop back to home screen and navigate to Groups tab with this binder
+              // Use popUntil to find the home route instead of clearing everything
+              Navigator.of(context).popUntil((route) {
+                return route.settings.name == '/home' || route.isFirst;
+              });
 
-              // Show a snackbar to guide the user
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tap the Binders tab to view "${binderData.name}"'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
+              // Now navigate to home with the Groups tab and initialBinderId
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed(
+                  '/home',
+                  arguments: {'tabIndex': 1, 'initialBinderId': widget.binderId},
+                );
+              }
             }
           },
           child: Container(
@@ -899,7 +958,7 @@ class _BinderInfoRowState extends State<_BinderInfoRow> {
                     color: binderColor.withAlpha(77),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.folder, size: 20, color: binderColor),
+                  child: Icon(Icons.menu_book, size: 20, color: binderColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

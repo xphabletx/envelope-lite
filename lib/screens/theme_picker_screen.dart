@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
+import '../utils/responsive_helper.dart';
+import '../providers/font_provider.dart';
 
 class ThemePickerScreen extends StatelessWidget {
   const ThemePickerScreen({super.key});
@@ -13,17 +15,44 @@ class ThemePickerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themes = AppThemes.getAllThemes();
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
+    // Responsive sizing
+    final gridPadding = isLandscape ? 12.0 : 16.0;
+    final crossAxisCount = isLandscape ? 3 : 2;
+    final crossAxisSpacing = isLandscape ? 12.0 : 16.0;
+    final mainAxisSpacing = isLandscape ? 12.0 : 16.0;
+    final childAspectRatio = isLandscape ? 1.0 : 0.85;
+    final cardPadding = isLandscape ? 12.0 : 16.0;
+    final circleSize = isLandscape ? 48.0 : 60.0;
+    final checkIconSize = isLandscape ? 24.0 : 32.0;
+    final titleFontSize = isLandscape ? 14.0 : 16.0;
+    final descriptionFontSize = isLandscape ? 10.0 : 12.0;
+    final spacing = isLandscape ? 12.0 : 16.0;
+    final descSpacing = isLandscape ? 6.0 : 8.0;
 
     return Scaffold(
-      appBar: AppBar(title: const FittedBox(child: Text('Choose Theme'))),
+      appBar: AppBar(
+        title: FittedBox(
+          child: Text(
+            'Choose Theme',
+            style: fontProvider.getTextStyle(
+              fontSize: isLandscape ? 20 : 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
       body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.85,
+        padding: EdgeInsets.all(gridPadding),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: crossAxisSpacing,
+          mainAxisSpacing: mainAxisSpacing,
+          childAspectRatio: childAspectRatio,
         ),
         itemCount: themes.length,
         itemBuilder: (context, index) {
@@ -47,40 +76,40 @@ class ThemePickerScreen extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(cardPadding),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 60,
-                      height: 60,
+                      width: circleSize,
+                      height: circleSize,
                       decoration: BoxDecoration(
                         color: theme.primaryColor,
                         shape: BoxShape.circle,
                       ),
                       child: isSelected
-                          ? const Icon(
+                          ? Icon(
                               Icons.check,
                               color: Colors.white,
-                              size: 32,
+                              size: checkIconSize,
                             )
                           : null,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: spacing),
                     Text(
                       theme.name,
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: fontProvider.getTextStyle(
+                        fontSize: titleFontSize,
                         fontWeight: FontWeight.bold,
                         color: theme.primaryColor,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: descSpacing),
                     Text(
                       theme.description,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: descriptionFontSize,
                         color: theme.primaryColor.withValues(alpha: 0.7),
                       ),
                       textAlign: TextAlign.center,

@@ -7,6 +7,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../envelope/omni_icon_picker_modal.dart';
 import '../../services/icon_search_service_unlimited.dart' show IconType;
+import '../../utils/responsive_helper.dart';
 
 class AccountEditorModal extends StatefulWidget {
   const AccountEditorModal({
@@ -239,9 +240,14 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     final media = MediaQuery.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
+    // Use smaller percentage in landscape to avoid overflow
+    final modalHeight = media.size.height * (isLandscape ? 0.75 : 0.9);
 
     return Container(
-      height: media.size.height * 0.9, // Use 90% of screen height
+      height: modalHeight,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),

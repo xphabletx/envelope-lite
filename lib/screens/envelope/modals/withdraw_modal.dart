@@ -7,6 +7,7 @@ import '../../../../../providers/time_machine_provider.dart';
 import '../../../../../services/envelope_repo.dart';
 import '../../../../../services/localization_service.dart';
 import '../../../../../utils/calculator_helper.dart';
+import '../../../../../utils/responsive_helper.dart';
 
 class WithdrawModal extends StatefulWidget {
   const WithdrawModal({
@@ -136,6 +137,8 @@ class _WithdrawModalState extends State<WithdrawModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Container(
       padding: EdgeInsets.only(
@@ -143,7 +146,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
       ),
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isLandscape ? 12 : 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -7,6 +7,7 @@ import '../../../../../providers/font_provider.dart';
 import '../../../../../providers/locale_provider.dart';
 import '../../../../../providers/time_machine_provider.dart';
 import '../../../../../services/localization_service.dart';
+import '../../../../../utils/responsive_helper.dart';
 
 class DepositModal extends StatefulWidget {
   const DepositModal({
@@ -127,6 +128,8 @@ class _DepositModalState extends State<DepositModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Container(
       padding: EdgeInsets.only(
@@ -134,7 +137,7 @@ class _DepositModalState extends State<DepositModal> {
       ),
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isLandscape ? 12 : 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -291,16 +291,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                             .toList();
 
                         if (linkedEnvelopes.isEmpty) {
-                          return Column(
-                            children: [
-                              const Text('No envelopes linked to this account.'),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed: () => _showLinkEnvelopesDialog(context),
-                                child: const Text('Link Envelopes'),
-                              ),
-                            ],
-                          );
+                          return const Text('No envelopes linked to this account.');
                         }
 
                         return Column(
@@ -358,11 +349,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                   },
                                 );
                               },
-                            ),
-                            const SizedBox(height: 8),
-                            TextButton(
-                              onPressed: () => _showLinkEnvelopesDialog(context),
-                              child: const Text('Link More Envelopes'),
                             ),
                           ],
                         );

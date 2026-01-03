@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/icon_search_service_unlimited.dart';
 import '../../providers/font_provider.dart';
+import '../../utils/responsive_helper.dart';
 
 class OmniIconPickerModal extends StatefulWidget {
   const OmniIconPickerModal({
@@ -89,9 +90,14 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
+    // Use smaller percentage in landscape to avoid taking up entire screen
+    final modalHeight = MediaQuery.of(context).size.height * (isLandscape ? 0.70 : 0.85);
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: modalHeight,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),

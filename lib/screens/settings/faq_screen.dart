@@ -1,7 +1,10 @@
 // lib/screens/settings/faq_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../data/faq_data.dart';
+import '../../utils/responsive_helper.dart';
+import '../../providers/font_provider.dart';
 
 class FAQScreen extends StatefulWidget {
   const FAQScreen({super.key});
@@ -27,30 +30,45 @@ class _FAQScreenState extends State<FAQScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Help & FAQ'),
+        title: Text(
+          'Help & FAQ',
+          style: fontProvider.getTextStyle(
+            fontSize: isLandscape ? 20 : 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: Column(
         children: [
           // Search bar
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(isLandscape ? 12 : 16),
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value),
               textCapitalization: TextCapitalization.words,
+              style: TextStyle(fontSize: isLandscape ? 14 : 16),
               decoration: InputDecoration(
                 hintText: 'Search for help...',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(fontSize: isLandscape ? 14 : 16),
+                prefixIcon: Icon(Icons.search, size: isLandscape ? 20 : 24),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: Icon(Icons.clear, size: isLandscape ? 20 : 24),
                         onPressed: () => setState(() => _searchQuery = ''),
                       )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isLandscape ? 12 : 16,
+                  vertical: isLandscape ? 10 : 16,
                 ),
               ),
             ),
@@ -59,11 +77,12 @@ class _FAQScreenState extends State<FAQScreen> {
           // Results count
           if (_searchQuery.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: isLandscape ? 12 : 16),
               child: Text(
                 '${_filteredFAQs.length} result${_filteredFAQs.length == 1 ? '' : 's'}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontSize: isLandscape ? 11 : null,
                 ),
               ),
             ),
@@ -77,58 +96,66 @@ class _FAQScreenState extends State<FAQScreen> {
                       children: [
                         Icon(
                           Icons.search_off,
-                          size: 64,
+                          size: isLandscape ? 48 : 64,
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.3,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: isLandscape ? 12 : 16),
                         Text(
                           'No results found',
-                          style: theme.textTheme.titleMedium,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontSize: isLandscape ? 14 : null,
+                          ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: isLandscape ? 6 : 8),
                         Text(
                           'Try different keywords',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.6,
                             ),
+                            fontSize: isLandscape ? 11 : null,
                           ),
                         ),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isLandscape ? 12 : 16),
                     itemCount: _filteredFAQs.length,
                     itemBuilder: (context, index) {
                       final faq = _filteredFAQs[index];
 
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
+                        margin: EdgeInsets.only(bottom: isLandscape ? 8 : 12),
                         child: ExpansionTile(
                           leading: Text(
                             faq.emoji,
-                            style: const TextStyle(fontSize: 28),
+                            style: TextStyle(fontSize: isLandscape ? 22 : 28),
                           ),
-                          title: Text(faq.question),
+                          title: Text(
+                            faq.question,
+                            style: TextStyle(fontSize: isLandscape ? 14 : 16),
+                          ),
                           children: [
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: EdgeInsets.all(isLandscape ? 12 : 16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     faq.answer,
-                                    style: theme.textTheme.bodyLarge,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontSize: isLandscape ? 14 : null,
+                                    ),
                                   ),
 
                                   // Screenshot placeholder
                                   if (faq.screenshotPath != null) ...[
-                                    const SizedBox(height: 16),
+                                    SizedBox(height: isLandscape ? 12 : 16),
                                     Container(
-                                      height: 200,
+                                      height: isLandscape ? 150 : 200,
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.surfaceContainerHighest,
                                         borderRadius: BorderRadius.circular(8),
@@ -140,11 +167,11 @@ class _FAQScreenState extends State<FAQScreen> {
                                           children: [
                                             Icon(
                                               Icons.image_outlined,
-                                              size: 48,
+                                              size: isLandscape ? 36 : 48,
                                               color: theme.colorScheme.onSurface
                                                   .withValues(alpha: 0.3),
                                             ),
-                                            const SizedBox(height: 8),
+                                            SizedBox(height: isLandscape ? 6 : 8),
                                             Text(
                                               'Screenshot: ${faq.screenshotPath}',
                                               style: theme.textTheme.bodySmall
@@ -152,6 +179,7 @@ class _FAQScreenState extends State<FAQScreen> {
                                                 color: theme
                                                     .colorScheme.onSurface
                                                     .withValues(alpha: 0.5),
+                                                fontSize: isLandscape ? 11 : null,
                                               ),
                                             ),
                                           ],

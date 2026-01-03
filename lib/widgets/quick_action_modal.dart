@@ -13,6 +13,7 @@ import '../providers/locale_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../utils/calculator_helper.dart';
 import '../widgets/partner_badge.dart';
+import '../utils/responsive_helper.dart';
 
 class QuickActionModal extends StatefulWidget {
   const QuickActionModal({
@@ -144,6 +145,8 @@ class _QuickActionModalState extends State<QuickActionModal> {
     final isTransfer = widget.type == TransactionType.transfer;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     String title;
     IconData icon;
@@ -173,21 +176,23 @@ class _QuickActionModalState extends State<QuickActionModal> {
         break;
     }
 
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        top: 16,
-        left: 16,
-        right: 16,
-      ),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + (isLandscape ? 12 : 16),
+            top: isLandscape ? 12 : 16,
+            left: isLandscape ? 12 : 16,
+            right: isLandscape ? 12 : 16,
+          ),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           // Handle
           Center(
             child: Container(
@@ -280,6 +285,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
           if (isTransfer) ...[
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
+              key: ValueKey(_selectedTargetId),
               initialValue: _selectedTargetId,
               decoration: InputDecoration(
                 labelText: 'To Envelope',
@@ -305,6 +311,15 @@ class _QuickActionModalState extends State<QuickActionModal> {
                                 overflow: TextOverflow.ellipsis,
                                 // UPDATED: FontProvider
                                 style: fontProvider.getTextStyle(fontSize: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Balance
+                            Text(
+                              '${locale.currencySymbol}${e.currentAmount.toStringAsFixed(2)}',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                color: theme.colorScheme.onSurface.withAlpha(153),
                               ),
                             ),
                             if (isPartner) ...[
@@ -424,7 +439,9 @@ class _QuickActionModalState extends State<QuickActionModal> {
                     ),
                   ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

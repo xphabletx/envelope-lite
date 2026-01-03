@@ -11,6 +11,7 @@ import 'theme_picker_screen.dart';
 import '../../services/localization_service.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../services/icon_search_service_unlimited.dart';
+import '../../utils/responsive_helper.dart';
 
 class AppearanceSettingsScreen extends StatelessWidget {
   const AppearanceSettingsScreen({super.key});
@@ -21,10 +22,12 @@ class AppearanceSettingsScreen extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final fontProvider = Provider.of<FontProvider>(context);
     final localeProvider = Provider.of<LocaleProvider>(context);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     // Common style for section headers
     final headerStyle = fontProvider.getTextStyle(
-      fontSize: 14,
+      fontSize: isLandscape ? 12 : 14,
       fontWeight: FontWeight.bold,
       color: theme.colorScheme.primary,
     );
@@ -35,7 +38,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
           child: Text(
             tr('settings_appearance'),
             style: fontProvider.getTextStyle(
-              fontSize: 24,
+              fontSize: isLandscape ? 20 : 24,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -43,11 +46,17 @@ class AppearanceSettingsScreen extends StatelessWidget {
         scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: EdgeInsets.symmetric(
+          vertical: isLandscape ? 12 : 20,
+          horizontal: isLandscape ? 12 : 0,
+        ),
         children: [
           // --- THEME SECTION ---
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 16 : 20,
+              vertical: isLandscape ? 6 : 8,
+            ),
             child: Text(
               tr('appearance_theme').toUpperCase(),
               style: headerStyle,
@@ -57,8 +66,8 @@ class AppearanceSettingsScreen extends StatelessWidget {
             title: AppThemes.getThemeName(themeProvider.currentThemeId),
             subtitle: tr('appearance_change_theme_hint'),
             leading: Container(
-              width: 32,
-              height: 32,
+              width: isLandscape ? 28 : 32,
+              height: isLandscape ? 28 : 32,
               decoration: BoxDecoration(
                 color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
@@ -73,13 +82,17 @@ class AppearanceSettingsScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const ThemePickerScreen()),
               );
             },
+            isLandscape: isLandscape,
           ),
 
-          const SizedBox(height: 24),
+          SizedBox(height: isLandscape ? 16 : 24),
 
           // --- FONT SECTION ---
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 16 : 20,
+              vertical: isLandscape ? 6 : 8,
+            ),
             child: Text(
               tr('appearance_font').toUpperCase(),
               style: headerStyle,
@@ -91,15 +104,20 @@ class AppearanceSettingsScreen extends StatelessWidget {
             leading: Icon(
               Icons.font_download_outlined,
               color: theme.colorScheme.onSurface,
+              size: isLandscape ? 20 : 24,
             ),
-            onTap: () => _showFontPicker(context),
+            onTap: () => _showFontPicker(context, isLandscape),
+            isLandscape: isLandscape,
           ),
 
-          const SizedBox(height: 24),
+          SizedBox(height: isLandscape ? 16 : 24),
 
           // --- CELEBRATION SECTION ---
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 16 : 20,
+              vertical: isLandscape ? 6 : 8,
+            ),
             child: Text(
               tr('appearance_celebration').toUpperCase(),
               style: headerStyle,
@@ -110,9 +128,10 @@ class AppearanceSettingsScreen extends StatelessWidget {
             subtitle: tr('appearance_target_emoji_hint'),
             leading: Text(
               localeProvider.celebrationEmoji,
-              style: const TextStyle(fontSize: 24),
+              style: TextStyle(fontSize: isLandscape ? 20 : 24),
             ),
             onTap: () => _showSmartEmojiPicker(context, localeProvider),
+            isLandscape: isLandscape,
           ),
         ],
       ),
@@ -143,7 +162,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
   }
 
   // --- REUSED FONT PICKER (Cleaned up) ---
-  Future<void> _showFontPicker(BuildContext context) async {
+  Future<void> _showFontPicker(BuildContext context, bool isLandscape) async {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final fonts = FontProvider.getAllFonts();
     final theme = Theme.of(context);
@@ -153,7 +172,7 @@ class AppearanceSettingsScreen extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
+        height: MediaQuery.of(context).size.height * (isLandscape ? 0.8 : 0.6),
         decoration: BoxDecoration(
           color: theme.scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -161,11 +180,11 @@ class AppearanceSettingsScreen extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(isLandscape ? 16 : 20),
               child: Text(
                 tr('appearance_choose_font'),
                 style: fontProvider.getTextStyle(
-                  fontSize: 22,
+                  fontSize: isLandscape ? 18 : 22,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -182,34 +201,40 @@ class AppearanceSettingsScreen extends StatelessWidget {
 
                   // Get sample style
                   TextStyle sampleStyle;
+                  final baseFontSize = isLandscape ? 16.0 : 18.0;
                   switch (font.id) {
                     case FontProvider.caveatId:
-                      sampleStyle = GoogleFonts.caveat(fontSize: 22);
+                      sampleStyle = GoogleFonts.caveat(fontSize: baseFontSize + 4);
                       break;
                     case FontProvider.indieFlowerId:
-                      sampleStyle = GoogleFonts.indieFlower(fontSize: 20);
+                      sampleStyle = GoogleFonts.indieFlower(fontSize: baseFontSize + 2);
                       break;
                     case FontProvider.robotoId:
-                      sampleStyle = GoogleFonts.roboto(fontSize: 18);
+                      sampleStyle = GoogleFonts.roboto(fontSize: baseFontSize);
                       break;
                     case FontProvider.openSansId:
-                      sampleStyle = GoogleFonts.openSans(fontSize: 18);
+                      sampleStyle = GoogleFonts.openSans(fontSize: baseFontSize);
                       break;
                     default:
-                      sampleStyle = const TextStyle(fontSize: 18);
+                      sampleStyle = TextStyle(fontSize: baseFontSize);
                   }
 
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 8,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: isLandscape ? 20 : 24,
+                      vertical: isLandscape ? 4 : 8,
                     ),
                     leading: isSelected
                         ? Icon(
                             Icons.check_circle,
                             color: theme.colorScheme.primary,
+                            size: isLandscape ? 20 : 24,
                           )
-                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                        : Icon(
+                            Icons.circle_outlined,
+                            color: Colors.grey,
+                            size: isLandscape ? 20 : 24,
+                          ),
                     title: Text(font.name, style: sampleStyle),
                     onTap: () async {
                       await fontProvider.setFont(font.id);
@@ -232,12 +257,14 @@ class _SettingsTile extends StatelessWidget {
   final String subtitle;
   final Widget leading;
   final VoidCallback onTap;
+  final bool isLandscape;
 
   const _SettingsTile({
     required this.title,
     required this.subtitle,
     required this.leading,
     required this.onTap,
+    this.isLandscape = false,
   });
 
   @override
@@ -246,7 +273,10 @@ class _SettingsTile extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: EdgeInsets.symmetric(
+        horizontal: isLandscape ? 12 : 16,
+        vertical: isLandscape ? 3 : 4,
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
@@ -259,25 +289,29 @@ class _SettingsTile extends StatelessWidget {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isLandscape ? 16 : 20,
+          vertical: isLandscape ? 6 : 8,
+        ),
         leading: leading,
         title: Text(
           title,
           style: fontProvider.getTextStyle(
-            fontSize: 18,
+            fontSize: isLandscape ? 16 : 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         subtitle: Text(
           subtitle,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: isLandscape ? 11 : 13,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         trailing: Icon(
           Icons.chevron_right,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          size: isLandscape ? 20 : 24,
         ),
         onTap: onTap,
       ),

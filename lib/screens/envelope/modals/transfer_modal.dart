@@ -16,6 +16,7 @@ import '../../../providers/locale_provider.dart';
 import '../../../providers/time_machine_provider.dart';
 import '../../../utils/calculator_helper.dart';
 import '../../../widgets/partner_badge.dart';
+import '../../../utils/responsive_helper.dart';
 
 class TransferModal extends StatefulWidget {
   const TransferModal({
@@ -259,22 +260,26 @@ class _TransferModalState extends State<TransferModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        top: 16,
-        left: 16,
-        right: 16,
-      ),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + (isLandscape ? 12 : 16),
+            top: isLandscape ? 12 : 16,
+            left: isLandscape ? 12 : 16,
+            right: isLandscape ? 12 : 16,
+          ),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           // Handle
           Center(
             child: Container(
@@ -375,6 +380,7 @@ class _TransferModalState extends State<TransferModal> {
               final destinations = _getTransferDestinations(theme);
 
               return DropdownButtonFormField<String>(
+                key: ValueKey(_selectedTargetId),
                 decoration: InputDecoration(
                   labelText: 'To Envelope or Account',
                   border: OutlineInputBorder(
@@ -404,7 +410,7 @@ class _TransferModalState extends State<TransferModal> {
                               dest.icon,
                               const SizedBox(width: 8),
                               // Name
-                              Expanded(
+                              Flexible(
                                 child: Text(
                                   dest.name,
                                   overflow: TextOverflow.ellipsis,
@@ -543,6 +549,8 @@ class _TransferModalState extends State<TransferModal> {
                   ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

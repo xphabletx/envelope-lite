@@ -18,6 +18,7 @@ import '../../providers/theme_provider.dart';
 import '../../theme/app_themes.dart';
 import '../../utils/calculator_helper.dart';
 import '../../services/scheduled_payment_repo.dart';
+import '../../utils/responsive_helper.dart';
 
 enum EnvelopeSettingsSection {
   top,
@@ -362,6 +363,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return StreamBuilder<Envelope>(
       stream: widget.repo.envelopeStream(widget.envelopeId),
@@ -458,7 +461,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             child: Column(
             children: [
               // Header section (non-scrollable)
-              const SizedBox(height: 12),
+              SizedBox(height: isLandscape ? 8 : 12),
               Container(
                 width: 40,
                 height: 5,
@@ -467,22 +470,22 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isLandscape ? 8 : 12),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: EdgeInsets.symmetric(horizontal: isLandscape ? 16 : 24),
                 child: Row(
                   children: [
                     Icon(
                       Icons.settings,
-                      size: 28,
+                      size: isLandscape ? 20 : 28,
                       color: theme.colorScheme.primary,
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: isLandscape ? 12 : 16),
                     Expanded(
                       child: Text(
                         'Envelope Settings',
                         style: fontProvider.getTextStyle(
-                          fontSize: 28,
+                          fontSize: isLandscape ? 20 : 28,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
@@ -490,24 +493,26 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
+                      iconSize: isLandscape ? 20 : 24,
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: isLandscape ? 12 : 24),
 
               // Scrollable content section
               Expanded(
                 child: ListView(
                   controller: _scrollController,
                   padding: EdgeInsets.only(
-                    left: 24,
-                    right: 24,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                    left: isLandscape ? 16 : 24,
+                    right: isLandscape ? 16 : 24,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + (isLandscape ? 16 : 24),
                   ),
                   physics: const ClampingScrollPhysics(),
                   children: [
+                    SizedBox(height: isLandscape ? 8 : 0),
                     // NAME INPUT
                     TextField(
                       controller: _nameController,
@@ -1152,91 +1157,152 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       ),
                     ],
                     const SizedBox(height: 24),
+
+                    // INLINE BUTTONS FOR LANDSCAPE
+                    if (isLandscape) ...[
+                      FilledButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => _saveChanges(envelope),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          minimumSize: const Size(double.infinity, 0),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'Save Changes',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                debugPrint(
+                                  '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
+                                );
+                                _confirmDelete(envelope);
+                              },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: Colors.red.shade600),
+                          minimumSize: const Size(double.infinity, 0),
+                        ),
+                        child: Text(
+                          'Delete Envelope',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                   ],
                 ),
               ),
 
-              // Sticky buttons section at bottom
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outline.withAlpha(77),
-                      width: 1,
+              // Sticky buttons section at bottom (hidden in landscape)
+              if (!isLandscape)
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                    border: Border(
+                      top: BorderSide(
+                        color: theme.colorScheme.outline.withAlpha(77),
+                        width: 1,
+                      ),
                     ),
                   ),
-                ),
-                padding: EdgeInsets.only(
-                  left: 24,
-                  right: 24,
-                  top: 16,
-                  bottom: MediaQuery.of(context).padding.bottom + 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // SAVE BUTTON
-                    FilledButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => _saveChanges(envelope),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  padding: EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 16,
+                    bottom: MediaQuery.of(context).padding.bottom + 16,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // SAVE BUTTON
+                      FilledButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => _saveChanges(envelope),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          minimumSize: const Size(double.infinity, 0),
                         ),
-                        minimumSize: const Size(double.infinity, 0),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'Save Changes',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'Save Changes',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // DELETE BUTTON
-                    OutlinedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              debugPrint(
-                                '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
-                              );
-                              _confirmDelete(envelope);
-                            },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      // DELETE BUTTON
+                      OutlinedButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                debugPrint(
+                                  '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
+                                );
+                                _confirmDelete(envelope);
+                              },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: Colors.red.shade600),
+                          minimumSize: const Size(double.infinity, 0),
                         ),
-                        side: BorderSide(color: Colors.red.shade600),
-                        minimumSize: const Size(double.infinity, 0),
-                      ),
-                      child: Text(
-                        'Delete Envelope',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red.shade600,
+                        child: Text(
+                          'Delete Envelope',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade600,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
             ),
           ),

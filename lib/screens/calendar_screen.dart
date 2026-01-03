@@ -451,6 +451,764 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     }
   }
 
+  Widget _buildLandscapeLayout(
+    ThemeData theme,
+    FontProvider fontProvider,
+    NumberFormat currencyFormatter,
+    List<ScheduledPayment> scheduledPayments,
+    PayDaySettings? paySettings,
+    Map<DateTime, List<_CalendarEvent>> groupedOccurrences,
+    List<DateTime> sortedDates,
+  ) {
+    return Column(
+      children: [
+        const TimeMachineIndicator(),
+        Expanded(
+          child: Row(
+            children: [
+              // Left column: Static calendar
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      // Calendar controls row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                            // View toggle buttons
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    _compactCalendar
+                                        ? Icons.calendar_view_month
+                                        : Icons.calendar_view_week,
+                                    color: theme.colorScheme.secondary,
+                                  ),
+                                  onPressed: () {
+                                    _setCalendarMode(isWeekMode: !_compactCalendar);
+                                  },
+                                  tooltip: _compactCalendar
+                                      ? 'Show Full Calendar'
+                                      : 'Show Week Only',
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _focusedDay = DateTime.now();
+                                      _selectedDay = DateTime.now();
+                                    });
+                                  },
+                                  child: Text(
+                                    tr('calendar_today'),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.secondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Notification and add buttons
+                            Row(
+                              children: [
+                                if (widget.notificationRepo != null)
+                                  StreamBuilder<int>(
+                                    stream: widget.notificationRepo!.unreadCountStream,
+                                    builder: (context, snapshot) {
+                                      final unreadCount = snapshot.data ?? 0;
+                                      return Stack(
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.notifications_outlined,
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => NotificationsScreen(
+                                                    notificationRepo: widget.notificationRepo!,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            tooltip: 'Notifications',
+                                          ),
+                                          if (unreadCount > 0)
+                                            Positioned(
+                                              right: 8,
+                                              top: 8,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                constraints: const BoxConstraints(
+                                                  minWidth: 16,
+                                                  minHeight: 16,
+                                                ),
+                                                child: Text(
+                                                  unreadCount > 9 ? '9+' : '$unreadCount',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                IconButton(
+                                  icon: Icon(Icons.add, color: theme.colorScheme.primary),
+                                  onPressed: _addScheduledPayment,
+                                  tooltip: tr('calendar_add_payment_tooltip'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Calendar widget
+                        Flexible(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SizedBox(
+                                height: constraints.maxHeight,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: TableCalendar(
+                            firstDay: DateTime(2020),
+                            lastDay: DateTime(2030),
+                            focusedDay: _focusedDay,
+                            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                            calendarFormat: _compactCalendar
+                                ? CalendarFormat.week
+                                : CalendarFormat.month,
+                            startingDayOfWeek: StartingDayOfWeek.monday,
+                            daysOfWeekHeight: 17,
+                            rowHeight: 28,
+                          headerStyle: HeaderStyle(
+                            formatButtonVisible: false,
+                            titleCentered: true,
+                            headerPadding: const EdgeInsets.symmetric(vertical: 2),
+                            titleTextStyle: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                            leftChevronIcon: Icon(
+                              Icons.chevron_left,
+                              size: 20,
+                              color: theme.colorScheme.primary,
+                            ),
+                            rightChevronIcon: Icon(
+                              Icons.chevron_right,
+                              size: 20,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          calendarStyle: CalendarStyle(
+                            outsideDaysVisible: false,
+                            cellMargin: const EdgeInsets.all(2),
+                            todayDecoration: BoxDecoration(
+                              color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            selectedDecoration: BoxDecoration(
+                              color: theme.colorScheme.secondary,
+                              shape: BoxShape.circle,
+                            ),
+                            todayTextStyle: fontProvider.getTextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            selectedTextStyle: fontProvider.getTextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            defaultTextStyle: fontProvider.getTextStyle(
+                              color: theme.colorScheme.onSurface,
+                              fontSize: 12,
+                            ),
+                            weekendTextStyle: fontProvider.getTextStyle(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              fontSize: 12,
+                            ),
+                          ),
+                          daysOfWeekStyle: DaysOfWeekStyle(
+                            weekdayStyle: fontProvider.getTextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                            weekendStyle: fontProvider.getTextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          onDaySelected: (selectedDay, focusedDay) {
+                            final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                            if (timeMachine.isActive && timeMachine.futureDate != null) {
+                              if (selectedDay.isAfter(timeMachine.futureDate!)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Cannot select dates beyond projection date (${DateFormat('MMM dd, yyyy').format(timeMachine.futureDate!)})'),
+                                    backgroundColor: Colors.orange,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
+                            }
+
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+
+                            if (selectedDay.isAfter(DateTime.now())) {
+                              _showProjectionOption(selectedDay);
+                            }
+                          },
+                          onPageChanged: (focusedDay) {
+                            setState(() {
+                              _focusedDay = focusedDay;
+                            });
+                          },
+                          calendarBuilders: CalendarBuilders(
+                            markerBuilder: (context, date, events) {
+                              final dayEvents = _getEventsForDay(
+                                date,
+                                scheduledPayments,
+                                paySettings,
+                              );
+                              return _buildEventMarker(dayEvents);
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+              // Right column: Vertical scrolling event list
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: sortedDates.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.event_available,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _showWeekView
+                                    ? tr('calendar_no_payments_week')
+                                    : tr('calendar_no_payments_month'),
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: sortedDates.length,
+                          itemBuilder: (context, dateIndex) {
+                            final date = sortedDates[dateIndex];
+                            final occurrences = groupedOccurrences[date]!;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: EdgeInsets.only(bottom: 8, top: dateIndex == 0 ? 0 : 16),
+                                  child: Text(
+                                    _formatGroupDate(date),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                ...occurrences.map((event) {
+                                  return InkWell(
+                                    onTap: () {
+                                      if (!event.isPayDay && event.payment != null) {
+                                        final envelopeId = event.payment!.envelopeId;
+                                        if (envelopeId != null && envelopeId.isNotEmpty) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => EnvelopeDetailScreen(
+                                                envelopeId: envelopeId,
+                                                repo: widget.repo,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: Color(event.colorValue),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  event.name,
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                currencyFormatter.format(event.amount.abs()),
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.colorScheme.onSurface,
+                                                ),
+                                              ),
+                                              Text(
+                                                event.frequencyString,
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 12,
+                                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPortraitLayout(
+    ThemeData theme,
+    FontProvider fontProvider,
+    NumberFormat currencyFormatter,
+    List<ScheduledPayment> scheduledPayments,
+    PayDaySettings? paySettings,
+    Map<DateTime, List<_CalendarEvent>> groupedOccurrences,
+    List<DateTime> sortedDates,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive font sizes
+        final titleFontSize = 24.0;
+        final dayFontSize = 18.0;
+        final weekdayFontSize = 16.0;
+        final daysOfWeekHeight = 40.0;
+
+        return Column(
+          children: [
+            // Time Machine Indicator at the top
+            const TimeMachineIndicator(),
+
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TableCalendar(
+                firstDay: DateTime(2020),
+                lastDay: DateTime(2030),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                calendarFormat: _compactCalendar
+                    ? CalendarFormat.week
+                    : CalendarFormat.month,
+                startingDayOfWeek: StartingDayOfWeek.monday,
+                daysOfWeekHeight: daysOfWeekHeight,
+                headerStyle: HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  titleTextStyle: fontProvider.getTextStyle(
+                    fontSize: titleFontSize,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  leftChevronIcon: Icon(
+                    Icons.chevron_left,
+                    color: theme.colorScheme.primary,
+                  ),
+                  rightChevronIcon: Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                calendarStyle: CalendarStyle(
+                  outsideDaysVisible: false,
+                  todayDecoration: BoxDecoration(
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  selectedDecoration: BoxDecoration(
+                    color: theme.colorScheme.secondary,
+                    shape: BoxShape.circle,
+                  ),
+                  todayTextStyle: fontProvider.getTextStyle(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: dayFontSize,
+                  ),
+                  selectedTextStyle: fontProvider.getTextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: dayFontSize,
+                  ),
+                  defaultTextStyle: fontProvider.getTextStyle(
+                    color: theme.colorScheme.onSurface,
+                    fontSize: dayFontSize,
+                  ),
+                  weekendTextStyle: fontProvider.getTextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontSize: dayFontSize,
+                  ),
+                ),
+                daysOfWeekStyle: DaysOfWeekStyle(
+                  weekdayStyle: fontProvider.getTextStyle(
+                    fontSize: weekdayFontSize,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  weekendStyle: fontProvider.getTextStyle(
+                    fontSize: weekdayFontSize,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                onDaySelected: (selectedDay, focusedDay) {
+                  // Check if time machine is active and prevent selecting beyond projection date
+                  final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+                  if (timeMachine.isActive && timeMachine.futureDate != null) {
+                    if (selectedDay.isAfter(timeMachine.futureDate!)) {
+                      debugPrint('[TimeMachine::CalendarScreen] Date Selection:');
+                      debugPrint('[TimeMachine::CalendarScreen]   Blocked selection of $selectedDay beyond ${timeMachine.futureDate}');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Cannot select dates beyond projection date (${DateFormat('MMM dd, yyyy').format(timeMachine.futureDate!)})'),
+                          backgroundColor: Colors.orange,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+                  }
+
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                  });
+
+                  if (selectedDay.isAfter(DateTime.now())) {
+                    _showProjectionOption(selectedDay);
+                  }
+                },
+                onPageChanged: (focusedDay) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                  });
+                },
+                calendarBuilders: CalendarBuilders(
+                  markerBuilder: (context, date, events) {
+                    final dayEvents = _getEventsForDay(
+                      date,
+                      scheduledPayments,
+                      paySettings,
+                    );
+                    return _buildEventMarker(dayEvents);
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _setCalendarMode(isWeekMode: false),
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(12),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: !_showWeekView
+                              ? theme.colorScheme.primary
+                              : Colors.transparent,
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          tr('calendar_month_view'),
+                          textAlign: TextAlign.center,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: !_showWeekView
+                                ? Colors.white
+                                : theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _setCalendarMode(isWeekMode: true),
+                      borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(12),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _showWeekView
+                              ? theme.colorScheme.primary
+                              : Colors.transparent,
+                          borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          tr('calendar_week_view'),
+                          textAlign: TextAlign.center,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: _showWeekView
+                                ? Colors.white
+                                : theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: sortedDates.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.event_available,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _showWeekView
+                                ? tr('calendar_no_payments_week')
+                                : tr('calendar_no_payments_month'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 22,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: sortedDates.length,
+                      itemBuilder: (context, index) {
+                        final date = sortedDates[index];
+                        final occurrences = groupedOccurrences[date]!;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: 8,
+                                top: 8,
+                              ),
+                              child: Text(
+                                _formatGroupDate(date),
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                            ...occurrences.map((event) {
+                              return InkWell(
+                                onTap: () {
+                                  // Navigate to envelope detail screen if this is a scheduled payment
+                                  if (!event.isPayDay && event.payment != null) {
+                                    final envelopeId = event.payment!.envelopeId;
+                                    if (envelopeId != null && envelopeId.isNotEmpty) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => EnvelopeDetailScreen(
+                                            envelopeId: envelopeId,
+                                            repo: widget.repo,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: 8,
+                                    left: 8,
+                                    top: 8,
+                                    right: 8,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: Color(event.colorValue),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          event.name,
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Text(
+                                        currencyFormatter.format(
+                                          event.amount.abs(),
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      SizedBox(
+                                        width: 80,
+                                        child: Text(
+                                          event.frequencyString,
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: 16,
+                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                          ),
+                                          textAlign: TextAlign.end,
+                                        ),
+                                      ),
+                                      if (!event.isPayDay)
+                                        Icon(
+                                          Icons.chevron_right,
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                                          size: 20,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                            const Divider(height: 24),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -515,20 +1273,20 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                 backgroundColor: theme.scaffoldBackgroundColor,
                 elevation: 0,
                 scrolledUnderElevation: 0,
-                toolbarHeight: isLandscape ? 48 : kToolbarHeight,
-                title: FittedBox(
+                toolbarHeight: isLandscape ? 0 : kToolbarHeight,
+                title: isLandscape ? null : FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     tr('calendar_title'),
                     style: fontProvider.getTextStyle(
-                      fontSize: isLandscape ? 20 : 32,
+                      fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary,
                     ),
                   ),
                 ),
-                actions: [
+                actions: isLandscape ? null : [
                   // Notification badge button
                   if (widget.notificationRepo != null)
                     StreamBuilder<int>(
@@ -610,7 +1368,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                       child: Text(
                         tr('calendar_today'),
                         style: fontProvider.getTextStyle(
-                          fontSize: isLandscape ? 14 : 20,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.secondary,
                         ),
@@ -624,376 +1382,32 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                   ),
                 ],
               ),
-              body: LayoutBuilder(
-                builder: (context, constraints) {
-                  final responsive = context.responsive;
-                  final isLandscape = responsive.isLandscape;
-
-                  // Responsive font sizes
-                  final titleFontSize = isLandscape ? 18.0 : 24.0;
-                  final dayFontSize = isLandscape ? 14.0 : 18.0;
-                  final weekdayFontSize = isLandscape ? 12.0 : 16.0;
-                  final daysOfWeekHeight = isLandscape ? 30.0 : 40.0;
-
-                  return Column(
-                    children: [
-                      // Time Machine Indicator at the top
-                      const TimeMachineIndicator(),
-
-                      Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal: isLandscape ? 40 : 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: TableCalendar(
-                          firstDay: DateTime(2020),
-                          lastDay: DateTime(2030),
-                          focusedDay: _focusedDay,
-                          selectedDayPredicate: (day) =>
-                              isSameDay(_selectedDay, day),
-                          calendarFormat: _compactCalendar
-                              ? CalendarFormat.week
-                              : CalendarFormat.month,
-                          startingDayOfWeek: StartingDayOfWeek.monday,
-                          daysOfWeekHeight: daysOfWeekHeight,
-                          headerStyle: HeaderStyle(
-                            formatButtonVisible: false,
-                            titleCentered: true,
-                            titleTextStyle: fontProvider.getTextStyle(
-                              fontSize: titleFontSize,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                        leftChevronIcon: Icon(
-                          Icons.chevron_left,
-                          color: theme.colorScheme.primary,
-                        ),
-                        rightChevronIcon: Icon(
-                          Icons.chevron_right,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      calendarStyle: CalendarStyle(
-                        outsideDaysVisible: false,
-                        todayDecoration: BoxDecoration(
-                          color: theme.colorScheme.secondary.withValues(
-                            alpha: 0.3,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        selectedDecoration: BoxDecoration(
-                          color: theme.colorScheme.secondary,
-                          shape: BoxShape.circle,
-                        ),
-                        todayTextStyle: fontProvider.getTextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: dayFontSize,
-                        ),
-                        selectedTextStyle: fontProvider.getTextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: dayFontSize,
-                        ),
-                        defaultTextStyle: fontProvider.getTextStyle(
-                          color: theme.colorScheme.onSurface,
-                          fontSize: dayFontSize,
-                        ),
-                        weekendTextStyle: fontProvider.getTextStyle(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.7,
-                          ),
-                          fontSize: dayFontSize,
-                        ),
-                      ),
-                      daysOfWeekStyle: DaysOfWeekStyle(
-                        weekdayStyle: fontProvider.getTextStyle(
-                          fontSize: weekdayFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                        weekendStyle: fontProvider.getTextStyle(
-                          fontSize: weekdayFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      onDaySelected: (selectedDay, focusedDay) {
-                        // Check if time machine is active and prevent selecting beyond projection date
-                        final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
-                        if (timeMachine.isActive && timeMachine.futureDate != null) {
-                          if (selectedDay.isAfter(timeMachine.futureDate!)) {
-                            debugPrint('[TimeMachine::CalendarScreen] Date Selection:');
-                            debugPrint('[TimeMachine::CalendarScreen]   Blocked selection of ${selectedDay} beyond ${timeMachine.futureDate}');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Cannot select dates beyond projection date (${DateFormat('MMM dd, yyyy').format(timeMachine.futureDate!)})'),
-                                backgroundColor: Colors.orange,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                            return;
-                          }
-                        }
-
-                        setState(() {
-                          _selectedDay = selectedDay;
-                          _focusedDay = focusedDay;
-                        });
-
-                        if (selectedDay.isAfter(DateTime.now())) {
-                          _showProjectionOption(selectedDay);
-                        }
-                      },
-                      onPageChanged: (focusedDay) {
-                        setState(() {
-                          _focusedDay = focusedDay;
-                        });
-                      },
-                      calendarBuilders: CalendarBuilders(
-                        markerBuilder: (context, date, events) {
-                          final dayEvents = _getEventsForDay(
-                            date,
-                            scheduledPayments,
-                            paySettings,
-                          );
-                          return _buildEventMarker(dayEvents);
-                        },
-                      ),
+              body: isLandscape
+                  ? _buildLandscapeLayout(
+                      theme,
+                      fontProvider,
+                      currencyFormatter,
+                      scheduledPayments,
+                      paySettings,
+                      groupedOccurrences,
+                      sortedDates,
+                    )
+                  : _buildPortraitLayout(
+                      theme,
+                      fontProvider,
+                      currencyFormatter,
+                      scheduledPayments,
+                      paySettings,
+                      groupedOccurrences,
+                      sortedDates,
                     ),
-                  ),
-
-                  SizedBox(height: isLandscape ? 8 : 16),
-
-                  Container(
-                    margin: EdgeInsets.symmetric(horizontal: isLandscape ? 40 : 16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _setCalendarMode(isWeekMode: false),
-                            borderRadius: const BorderRadius.horizontal(
-                              left: Radius.circular(12),
-                            ),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(vertical: isLandscape ? 8 : 12),
-                              decoration: BoxDecoration(
-                                color: !_showWeekView
-                                    ? theme.colorScheme.primary
-                                    : Colors.transparent,
-                                borderRadius: const BorderRadius.horizontal(
-                                  left: Radius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                tr('calendar_month_view'),
-                                textAlign: TextAlign.center,
-                                style: fontProvider.getTextStyle(
-                                  fontSize: isLandscape ? 14 : 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: !_showWeekView
-                                      ? Colors.white
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _setCalendarMode(isWeekMode: true),
-                            borderRadius: const BorderRadius.horizontal(
-                              right: Radius.circular(12),
-                            ),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(vertical: isLandscape ? 8 : 12),
-                              decoration: BoxDecoration(
-                                color: _showWeekView
-                                    ? theme.colorScheme.primary
-                                    : Colors.transparent,
-                                borderRadius: const BorderRadius.horizontal(
-                                  right: Radius.circular(12),
-                                ),
-                              ),
-                              child: Text(
-                                tr('calendar_week_view'),
-                                textAlign: TextAlign.center,
-                                style: fontProvider.getTextStyle(
-                                  fontSize: isLandscape ? 14 : 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: _showWeekView
-                                      ? Colors.white
-                                      : theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: isLandscape ? 8 : 16),
-
-                  Expanded(
-                    child: sortedDates.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.event_available,
-                                  size: 64,
-                                  color: Colors.grey.shade400,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _showWeekView
-                                      ? tr('calendar_no_payments_week')
-                                      : tr('calendar_no_payments_month'),
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: 22,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: context.responsive.isLandscape ? 40 : 20,
-                            ),
-                            itemCount: sortedDates.length,
-                            itemBuilder: (context, index) {
-                              final date = sortedDates[index];
-                              final occurrences = groupedOccurrences[date]!;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: 8,
-                                      top: 8,
-                                    ),
-                                    child: Text(
-                                      _formatGroupDate(date),
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                  ...occurrences.map((event) {
-                                    return InkWell(
-                                      onTap: () {
-                                        // Navigate to envelope detail screen if this is a scheduled payment
-                                        if (!event.isPayDay && event.payment != null) {
-                                          final envelopeId = event.payment!.envelopeId;
-                                          if (envelopeId != null && envelopeId.isNotEmpty) {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => EnvelopeDetailScreen(
-                                                  envelopeId: envelopeId,
-                                                  repo: widget.repo,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 8,
-                                          left: 8,
-                                          top: 8,
-                                          right: 8,
-                                        ),
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          children: [
-                                            Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: Color(event.colorValue),
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                event.name,
-                                                style: fontProvider.getTextStyle(
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            Text(
-                                              currencyFormatter.format(
-                                                event.amount.abs(),
-                                              ),
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color:
-                                                    theme.colorScheme.onSurface,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            SizedBox(
-                                              width: 80,
-                                              child: Text(
-                                                event.frequencyString,
-                                                style: fontProvider.getTextStyle(
-                                                  fontSize: 16,
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withValues(alpha: 0.6),
-                                                ),
-                                                textAlign: TextAlign.end,
-                                              ),
-                                            ),
-                                            if (!event.isPayDay)
-                                              Icon(
-                                                Icons.chevron_right,
-                                                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                                                size: 20,
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                  const Divider(height: 24),
-                                ],
-                              );
-                            },
-                          ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ); // Scaffold
-          }, // StreamBuilder (envelopes)
-        ); // StreamBuilder (payments)
-      }, // StreamBuilder (payDay)
-    ); // Main return
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showProjectionOption(DateTime date) {
@@ -1006,46 +1420,48 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
           color: Theme.of(context).scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.auto_awesome,
-              size: 48,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Project to ${DateFormat('MMMM d, yyyy').format(date)}',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'See your projected balance on this date',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _openProjectionForDate(date);
-              },
-              icon: const Icon(Icons.rocket_launch),
-              label: const Text('Open Projection Tool'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 24,
-                ),
-                minimumSize: const Size(double.infinity, 56),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 40,
+                color: Theme.of(context).colorScheme.secondary,
               ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                'Project to ${DateFormat('MMMM d, yyyy').format(date)}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'See your projected balance on this date',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _openProjectionForDate(date);
+                },
+                icon: const Icon(Icons.rocket_launch),
+                label: const Text('Open Projection Tool'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 24,
+                  ),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
         ),
       ),
     );

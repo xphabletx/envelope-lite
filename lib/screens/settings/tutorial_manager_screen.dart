@@ -1,9 +1,12 @@
 // lib/screens/settings/tutorial_manager_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../services/tutorial_controller.dart';
 import '../../services/envelope_repo.dart';
+import '../../utils/responsive_helper.dart';
+import '../../providers/font_provider.dart';
 
 class TutorialManagerScreen extends StatefulWidget {
   const TutorialManagerScreen({
@@ -130,63 +133,82 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tutorial Manager'),
+        title: Text(
+          'Tutorial Manager',
+          style: fontProvider.getTextStyle(
+            fontSize: isLandscape ? 20 : 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, size: isLandscape ? 20 : 24),
             onPressed: _resetAll,
             tooltip: 'Reset All',
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isLandscape ? 12 : 16),
         children: [
           // Header
           Text(
             'Manage Tutorials',
-            style: theme.textTheme.headlineSmall,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontSize: isLandscape ? 18 : null,
+            ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isLandscape ? 6 : 8),
           Text(
             'Replay tutorials for specific screens. They\'ll show again next time you visit.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              fontSize: isLandscape ? 13 : null,
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: isLandscape ? 16 : 24),
 
           // Tutorial list
           ...allTutorials.map((tutorial) {
             final isComplete = _completionStatus[tutorial.screenId] ?? false;
 
             return Card(
-              margin: const EdgeInsets.only(bottom: 12),
+              margin: EdgeInsets.only(bottom: isLandscape ? 8 : 12),
               child: ListTile(
                 onTap: () => _navigateToScreen(tutorial.screenId),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isLandscape ? 12 : 16,
+                  vertical: isLandscape ? 6 : 8,
+                ),
                 leading: Icon(
                   isComplete ? Icons.check_circle : Icons.help_outline,
                   color: isComplete ? Colors.green : theme.colorScheme.primary,
-                  size: 32,
+                  size: isLandscape ? 24 : 32,
                 ),
                 title: Text(
                   tutorial.screenName,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
+                    fontSize: isLandscape ? 14 : null,
                   ),
                 ),
                 subtitle: Text(
                   '${tutorial.steps.length} tips • ${isComplete ? "Completed" : "Not started"}',
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: isLandscape ? 11 : null,
+                  ),
                 ),
                 trailing: IconButton(
                   icon: Icon(
                     Icons.play_circle_outline,
                     color: theme.colorScheme.primary,
-                    size: 32,
+                    size: isLandscape ? 24 : 32,
                   ),
                   onPressed: () => _navigateToScreen(tutorial.screenId),
                   tooltip: isComplete ? 'Review Tutorial' : 'Start Tutorial',
@@ -195,15 +217,21 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
             );
           }),
 
-          const SizedBox(height: 24),
+          SizedBox(height: isLandscape ? 16 : 24),
 
           // Reset all button
           FilledButton.icon(
             onPressed: _resetAll,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reset All Tutorials'),
+            icon: Icon(Icons.refresh, size: isLandscape ? 18 : 20),
+            label: Text(
+              'Reset All Tutorials',
+              style: TextStyle(fontSize: isLandscape ? 14 : 16),
+            ),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
+              minimumSize: Size(double.infinity, isLandscape ? 44 : 50),
+              padding: EdgeInsets.symmetric(
+                vertical: isLandscape ? 10 : 12,
+              ),
             ),
           ),
         ],

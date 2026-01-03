@@ -25,11 +25,13 @@ class BudgetOverviewCards extends StatefulWidget {
     required this.accountRepo,
     required this.envelopeRepo,
     required this.paymentRepo,
+    this.useVerticalLayout = false,
   });
 
   final AccountRepo accountRepo;
   final EnvelopeRepo envelopeRepo;
   final ScheduledPaymentRepo paymentRepo;
+  final bool useVerticalLayout; // If true, displays cards vertically instead of horizontal PageView
 
   @override
   State<BudgetOverviewCards> createState() => _BudgetOverviewCardsState();
@@ -191,100 +193,180 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               ),
             ),
 
-            // Cards PageView
-            SizedBox(
-              height: 200,
-              child: StreamBuilder<List<Account>>(
-                stream: widget.accountRepo.accountsStream(),
-                builder: (context, accountSnapshot) {
-                  return StreamBuilder<List<Envelope>>(
-                    stream: widget.envelopeRepo.envelopesStream(),
-                    builder: (context, envelopeSnapshot) {
-                      return StreamBuilder<List<Transaction>>(
-                        stream: widget.envelopeRepo.transactionsStream,
-                        builder: (context, txSnapshot) {
-                          return StreamBuilder<List<ScheduledPayment>>(
-                            stream: widget.paymentRepo.scheduledPaymentsStream,
-                            builder: (context, paymentSnapshot) {
-                              // Handle loading states gracefully
-                              var accounts = accountSnapshot.data ?? [];
-                              final envelopes = envelopeSnapshot.data ?? [];
-                              var allTx = txSnapshot.data ?? [];
-                              final scheduledPayments = paymentSnapshot.data ?? [];
+            // Cards PageView or Column
+            widget.useVerticalLayout
+                ? StreamBuilder<List<Account>>(
+                    stream: widget.accountRepo.accountsStream(),
+                    builder: (context, accountSnapshot) {
+                      return StreamBuilder<List<Envelope>>(
+                        stream: widget.envelopeRepo.envelopesStream(),
+                        builder: (context, envelopeSnapshot) {
+                          return StreamBuilder<List<Transaction>>(
+                            stream: widget.envelopeRepo.transactionsStream,
+                            builder: (context, txSnapshot) {
+                              return StreamBuilder<List<ScheduledPayment>>(
+                                stream: widget.paymentRepo.scheduledPaymentsStream,
+                                builder: (context, paymentSnapshot) {
+                                  // Handle loading states gracefully
+                                  var accounts = accountSnapshot.data ?? [];
+                                  final envelopes = envelopeSnapshot.data ?? [];
+                                  var allTx = txSnapshot.data ?? [];
+                                  final scheduledPayments = paymentSnapshot.data ?? [];
 
-                              // Merge with projected data if time machine is active
-                              if (timeMachine.isActive) {
-                                // Get projected transactions
-                                final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
-                                  historyStart,
-                                  historyEnd,
-                                  includeTransfers: true,
-                                );
-                                allTx = [...allTx, ...projectedTx];
-
-                                // Transform accounts to use projected balances
-                                accounts = accounts.map((account) {
-                                  return timeMachine.getProjectedAccount(account);
-                                }).toList();
-                              }
-
-                              // Filter transactions in HISTORY range
-                              final txInRange = allTx.where((tx) {
-                                return tx.date.isAfter(
-                                      historyStart.subtract(
-                                        const Duration(seconds: 1),
-                                      ),
-                                    ) &&
-                                    tx.date.isBefore(
-                                      historyEnd.add(const Duration(days: 1)),
+                                  // Merge with projected data if time machine is active
+                                  if (timeMachine.isActive) {
+                                    // Get projected transactions
+                                    final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
+                                      historyStart,
+                                      historyEnd,
+                                      includeTransfers: true,
                                     );
-                              }).toList();
+                                    allTx = [...allTx, ...projectedTx];
 
-                              return PageView(
-                                controller: _pageController,
-                                children: [
-                                  _buildTargetCard(envelopes),
-                                  _buildAccountsCard(accounts),
-                                  _buildIncomeCard(txInRange, historyStart, historyEnd),
-                                  _buildSpendingCard(txInRange, historyStart, historyEnd),
-                                  // Use FUTURE range for Scheduled Payments
-                                  _buildScheduledPaymentsCard(
-                                    scheduledPayments,
-                                    futureStart,
-                                    futureEnd,
-                                  ),
-                                  _buildAutoFillCard(envelopes),
-                                  _buildTopEnvelopesCard(envelopes),
-                                ],
+                                    // Transform accounts to use projected balances
+                                    accounts = accounts.map((account) {
+                                      return timeMachine.getProjectedAccount(account);
+                                    }).toList();
+                                  }
+
+                                  // Filter transactions in HISTORY range
+                                  final txInRange = allTx.where((tx) {
+                                    return tx.date.isAfter(
+                                          historyStart.subtract(
+                                            const Duration(seconds: 1),
+                                          ),
+                                        ) &&
+                                        tx.date.isBefore(
+                                          historyEnd.add(const Duration(days: 1)),
+                                        );
+                                  }).toList();
+
+                                  // Vertical layout - all cards stacked
+                                  return Column(
+                                    children: [
+                                      _buildTargetCard(envelopes),
+                                      const SizedBox(height: 12),
+                                      _buildAccountsCard(accounts),
+                                      const SizedBox(height: 12),
+                                      _buildIncomeCard(txInRange, historyStart, historyEnd),
+                                      const SizedBox(height: 12),
+                                      _buildSpendingCard(txInRange, historyStart, historyEnd),
+                                      const SizedBox(height: 12),
+                                      // Use FUTURE range for Scheduled Payments
+                                      _buildScheduledPaymentsCard(
+                                        scheduledPayments,
+                                        futureStart,
+                                        futureEnd,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _buildAutoFillCard(envelopes),
+                                      const SizedBox(height: 12),
+                                      _buildTopEnvelopesCard(envelopes),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           );
                         },
                       );
                     },
-                  );
-                },
-              ),
-            ),
+                  )
+                : SizedBox(
+                    height: 200,
+                    child: StreamBuilder<List<Account>>(
+                      stream: widget.accountRepo.accountsStream(),
+                      builder: (context, accountSnapshot) {
+                        return StreamBuilder<List<Envelope>>(
+                          stream: widget.envelopeRepo.envelopesStream(),
+                          builder: (context, envelopeSnapshot) {
+                            return StreamBuilder<List<Transaction>>(
+                              stream: widget.envelopeRepo.transactionsStream,
+                              builder: (context, txSnapshot) {
+                                return StreamBuilder<List<ScheduledPayment>>(
+                                  stream: widget.paymentRepo.scheduledPaymentsStream,
+                                  builder: (context, paymentSnapshot) {
+                                    // Handle loading states gracefully
+                                    var accounts = accountSnapshot.data ?? [];
+                                    final envelopes = envelopeSnapshot.data ?? [];
+                                    var allTx = txSnapshot.data ?? [];
+                                    final scheduledPayments = paymentSnapshot.data ?? [];
 
-            // Page indicator
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(6, (index) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentPage == index
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                                    // Merge with projected data if time machine is active
+                                    if (timeMachine.isActive) {
+                                      // Get projected transactions
+                                      final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
+                                        historyStart,
+                                        historyEnd,
+                                        includeTransfers: true,
+                                      );
+                                      allTx = [...allTx, ...projectedTx];
+
+                                      // Transform accounts to use projected balances
+                                      accounts = accounts.map((account) {
+                                        return timeMachine.getProjectedAccount(account);
+                                      }).toList();
+                                    }
+
+                                    // Filter transactions in HISTORY range
+                                    final txInRange = allTx.where((tx) {
+                                      return tx.date.isAfter(
+                                            historyStart.subtract(
+                                              const Duration(seconds: 1),
+                                            ),
+                                          ) &&
+                                          tx.date.isBefore(
+                                            historyEnd.add(const Duration(days: 1)),
+                                          );
+                                    }).toList();
+
+                                    return PageView(
+                                      controller: _pageController,
+                                      children: [
+                                        _buildTargetCard(envelopes),
+                                        _buildAccountsCard(accounts),
+                                        _buildIncomeCard(txInRange, historyStart, historyEnd),
+                                        _buildSpendingCard(txInRange, historyStart, historyEnd),
+                                        // Use FUTURE range for Scheduled Payments
+                                        _buildScheduledPaymentsCard(
+                                          scheduledPayments,
+                                          futureStart,
+                                          futureEnd,
+                                        ),
+                                        _buildAutoFillCard(envelopes),
+                                        _buildTopEnvelopesCard(envelopes),
+                                      ],
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                );
-              }),
-            ),
+
+            // Page indicator (only for horizontal PageView)
+            if (!widget.useVerticalLayout) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(7, (index) {
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentPage == index
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
+                  );
+                }),
+              ),
+            ],
           ],
         );
       },

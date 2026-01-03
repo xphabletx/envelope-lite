@@ -16,6 +16,7 @@ import '../models/account.dart';
 import '../widgets/partner_badge.dart';
 import '../widgets/tutorial_wrapper.dart';
 import '../data/tutorial_sequences.dart';
+import '../utils/responsive_helper.dart';
 
 class WorkspaceManagementScreen extends StatefulWidget {
   const WorkspaceManagementScreen({
@@ -244,11 +245,21 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     if (_loading) {
       return Scaffold(
         appBar: AppBar(
-          title: FittedBox(child: Text(tr('workspace_management'))),
+          title: FittedBox(
+            child: Text(
+              tr('workspace_management'),
+              style: fontProvider.getTextStyle(
+                fontSize: isLandscape ? 20 : 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           elevation: 0),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -263,7 +274,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
           child: Text(
             'Workspace Management',
             style: fontProvider.getTextStyle(
-              fontSize: 32,
+              fontSize: isLandscape ? 20 : 28,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -273,6 +284,13 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: theme.colorScheme.primary,
+          labelStyle: fontProvider.getTextStyle(
+            fontSize: isLandscape ? 12 : 14,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: fontProvider.getTextStyle(
+            fontSize: isLandscape ? 11 : 13,
+          ),
           tabs: [
             Tab(text: tr('workspace_tab_sharing')),
             Tab(text: tr('workspace_tab_members')),
@@ -287,13 +305,17 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
             Container(
               width: double.infinity,
               color: theme.colorScheme.primary.withValues(alpha:0.1),
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              padding: EdgeInsets.symmetric(
+                vertical: isLandscape ? 8 : 12,
+                horizontal: isLandscape ? 12 : 16,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     "Join Code: ",
                     style: TextStyle(
+                      fontSize: isLandscape ? 12 : 14,
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary,
                     ),
@@ -301,15 +323,15 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   SelectableText(
                     _joinCode,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isLandscape ? 14 : 18,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                      letterSpacing: isLandscape ? 1.2 : 1.5,
                       color: theme.colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: isLandscape ? 6 : 8),
                   IconButton(
-                    icon: const Icon(Icons.copy, size: 20),
+                    icon: Icon(Icons.copy, size: isLandscape ? 16 : 20),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: _joinCode));
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -340,30 +362,33 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         unselectedItemColor: Colors.grey.shade600,
         elevation: 8,
         type: BottomNavigationBarType.fixed,
+        iconSize: isLandscape ? 20 : 24,
         selectedLabelStyle: fontProvider.getTextStyle(
-          fontSize: 16,
+          fontSize: isLandscape ? 11 : 14,
           fontWeight: FontWeight.bold,
         ),
-        unselectedLabelStyle: fontProvider.getTextStyle(fontSize: 14),
+        unselectedLabelStyle: fontProvider.getTextStyle(
+          fontSize: isLandscape ? 10 : 12,
+        ),
         items: [
           BottomNavigationBarItem(
-            icon: const Icon(Icons.mail_outline),
-            activeIcon: const Icon(Icons.mail),
+            icon: Icon(Icons.mail_outline, size: isLandscape ? 20 : 24),
+            activeIcon: Icon(Icons.mail, size: isLandscape ? 20 : 24),
             label: tr('home_envelopes_tab'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.folder_open_outlined),
-            activeIcon: const Icon(Icons.folder_copy),
+            icon: Icon(Icons.folder_open_outlined, size: isLandscape ? 20 : 24),
+            activeIcon: Icon(Icons.folder_copy, size: isLandscape ? 20 : 24),
             label: tr('home_binders_tab'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: const Icon(Icons.account_balance_wallet),
+            icon: Icon(Icons.account_balance_wallet_outlined, size: isLandscape ? 20 : 24),
+            activeIcon: Icon(Icons.account_balance_wallet, size: isLandscape ? 20 : 24),
             label: tr('home_budget_tab'),
           ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.calendar_today_outlined),
-            activeIcon: const Icon(Icons.calendar_today),
+            icon: Icon(Icons.calendar_today_outlined, size: isLandscape ? 20 : 24),
+            activeIcon: Icon(Icons.calendar_today, size: isLandscape ? 20 : 24),
             label: tr('home_calendar_tab'),
           ),
         ],
@@ -377,19 +402,24 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
   Widget _buildSharingTab() {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Column(
       children: [
         // Filter bar with "Mine only" toggle
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 16 : 20,
+            vertical: isLandscape ? 8 : 12,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Manage Sharing',
                 style: fontProvider.getTextStyle(
-                  fontSize: 18,
+                  fontSize: isLandscape ? 14 : 18,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
@@ -402,7 +432,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                       Text(
                         'Mine only',
                         style: fontProvider.getTextStyle(
-                          fontSize: 12,
+                          fontSize: isLandscape ? 10 : 12,
                           color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
@@ -421,16 +451,16 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
 
         // Hide future envelopes toggle
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: isLandscape ? 16 : 20),
           child: SwitchListTile(
             title: Text(
               tr('workspace_hide_future'),
-              style: fontProvider.getTextStyle(fontSize: 16),
+              style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 16),
             ),
             subtitle: Text(
               'New envelopes will be private by default',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: isLandscape ? 11 : 12,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
@@ -448,17 +478,17 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
 
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(isLandscape ? 12 : 20),
             children: [
               Text(
                 tr('workspace_my_envelopes'),
                 style: fontProvider.getTextStyle(
-                  fontSize: 24,
+                  fontSize: isLandscape ? 18 : 24,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isLandscape ? 8 : 12),
               StreamBuilder<List<Envelope>>(
                 stream: widget.repo.envelopesStream(showPartnerEnvelopes: true),
                 builder: (context, snapshot) {
@@ -477,8 +507,15 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   if (envelopes.isEmpty) {
                     return Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(child: Text(tr('home_no_envelopes'))),
+                        padding: EdgeInsets.all(isLandscape ? 16 : 24),
+                        child: Center(
+                          child: Text(
+                            tr('home_no_envelopes'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 12 : 14,
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   }
@@ -501,7 +538,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                                 child: Text(
                                   env.name,
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
+                                    fontSize: isLandscape ? 14 : 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -528,7 +565,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                                     ? tr('workspace_visible_to_partner')
                                     : tr('workspace_hidden_from_partner')),
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isLandscape ? 11 : 12,
                               color: isPartner
                                   ? Colors.blue
                                   : (env.isShared ? Colors.green : Colors.grey),
@@ -540,16 +577,16 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   );
                 },
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: isLandscape ? 20 : 32),
               Text(
                 tr('workspace_my_binders'),
                 style: fontProvider.getTextStyle(
-                  fontSize: 24,
+                  fontSize: isLandscape ? 18 : 24,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isLandscape ? 8 : 12),
               StreamBuilder<List<EnvelopeGroup>>(
                 stream: widget.repo.groupsStream,
                 builder: (context, snapshot) {
@@ -568,8 +605,15 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   if (groups.isEmpty) {
                     return Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(child: Text(tr('group_no_binders'))),
+                        padding: EdgeInsets.all(isLandscape ? 16 : 24),
+                        child: Center(
+                          child: Text(
+                            tr('group_no_binders'),
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 12 : 14,
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   }
@@ -590,14 +634,14 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                             children: [
                               Text(
                                 group.emoji ?? '📁',
-                                style: const TextStyle(fontSize: 20),
+                                style: TextStyle(fontSize: isLandscape ? 16 : 20),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: isLandscape ? 6 : 8),
                               Expanded(
                                 child: Text(
                                   group.name,
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
+                                    fontSize: isLandscape ? 14 : 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -624,7 +668,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                                     ? tr('workspace_visible_to_partner')
                                     : tr('workspace_hidden_from_partner')),
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isLandscape ? 11 : 12,
                               color: isPartner
                                   ? Colors.blue
                                   : (group.isShared ? Colors.green : Colors.grey),
@@ -636,16 +680,16 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   );
                 },
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: isLandscape ? 20 : 32),
               Text(
                 'Accounts',
                 style: fontProvider.getTextStyle(
-                  fontSize: 24,
+                  fontSize: isLandscape ? 18 : 24,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: isLandscape ? 8 : 12),
               StreamBuilder<List<Account>>(
                 stream: AccountRepo(widget.repo).accountsStream(),
                 builder: (context, snapshot) {
@@ -664,8 +708,15 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   if (accounts.isEmpty) {
                     return Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(child: Text('No accounts')),
+                        padding: EdgeInsets.all(isLandscape ? 16 : 24),
+                        child: Center(
+                          child: Text(
+                            'No accounts',
+                            style: fontProvider.getTextStyle(
+                              fontSize: isLandscape ? 12 : 14,
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   }
@@ -686,14 +737,14 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                             children: [
                               Text(
                                 account.emoji ?? '💳',
-                                style: const TextStyle(fontSize: 20),
+                                style: TextStyle(fontSize: isLandscape ? 16 : 20),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: isLandscape ? 6 : 8),
                               Expanded(
                                 child: Text(
                                   account.name,
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
+                                    fontSize: isLandscape ? 14 : 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -720,7 +771,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                                     ? tr('workspace_visible_to_partner')
                                     : tr('workspace_hidden_from_partner')),
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isLandscape ? 11 : 12,
                               color: isPartner
                                   ? Colors.blue
                                   : (account.isShared ? Colors.green : Colors.grey),
@@ -741,31 +792,39 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
 
   Widget _buildMembersTab() {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isLandscape ? 12 : 20),
       children: [
         ..._members.map((member) {
           return Card(
             child: ListTile(
               leading: CircleAvatar(
+                radius: isLandscape ? 16 : 20,
                 child: Text(
                   member.displayName.isNotEmpty ? member.displayName[0] : '?',
+                  style: TextStyle(fontSize: isLandscape ? 14 : 18),
                 ),
               ),
               title: Text(
                 member.nickname ?? member.displayName,
                 style: fontProvider.getTextStyle(
-                  fontSize: 20,
+                  fontSize: isLandscape ? 14 : 18,
                   fontWeight: member.isCurrentUser
                       ? FontWeight.bold
                       : FontWeight.normal,
                 ),
               ),
-              subtitle: Text(member.email),
+              subtitle: Text(
+                member.email,
+                style: TextStyle(fontSize: isLandscape ? 11 : 13),
+              ),
               trailing: member.isCurrentUser
                   ? null
                   : IconButton(
-                      icon: const Icon(Icons.edit),
+                      icon: Icon(Icons.edit, size: isLandscape ? 20 : 24),
                       onPressed: () => _editNickname(member),
                     ),
             ),
@@ -777,17 +836,23 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
 
   Widget _buildWorkspaceTab() {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isLandscape ? 12 : 20),
       children: [
         Card(
           child: ListTile(
-            leading: const Icon(Icons.edit),
+            leading: Icon(Icons.edit, size: isLandscape ? 20 : 24),
             title: Text(
               'Rename Workspace',
-              style: fontProvider.getTextStyle(fontSize: 20),
+              style: fontProvider.getTextStyle(fontSize: isLandscape ? 14 : 18),
             ),
-            subtitle: Text(_workspaceName),
+            subtitle: Text(
+              _workspaceName,
+              style: TextStyle(fontSize: isLandscape ? 12 : 14),
+            ),
             onTap: () async {
               final ctrl = TextEditingController(text: _workspaceName);
               final newName = await showDialog<String>(
@@ -818,14 +883,22 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
             },
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: isLandscape ? 12 : 20),
         Card(
           color: Colors.red.shade50,
           child: ListTile(
-            leading: const Icon(Icons.exit_to_app, color: Colors.red),
-            title: const Text(
+            leading: Icon(
+              Icons.exit_to_app,
+              color: Colors.red,
+              size: isLandscape ? 20 : 24,
+            ),
+            title: Text(
               'Leave Workspace',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                fontSize: isLandscape ? 14 : 16,
+              ),
             ),
             onTap: _leaveWorkspace,
           ),

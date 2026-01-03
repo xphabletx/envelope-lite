@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/binder_templates.dart';
 import '../providers/font_provider.dart';
 import '../models/envelope.dart';
+import '../utils/responsive_helper.dart';
 
 class BinderTemplateSelector extends StatefulWidget {
   const BinderTemplateSelector({
@@ -37,6 +38,8 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -44,21 +47,24 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.close, color: theme.colorScheme.primary),
+          icon: Icon(Icons.close, color: theme.colorScheme.primary, size: isLandscape ? 20 : 24),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Choose Binder Template',
           style: fontProvider.getTextStyle(
-            fontSize: 28,
+            fontSize: isLandscape ? 20 : 28,
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.primary,
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
         children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.all(isLandscape ? 12 : 16),
+              children: [
           // From Scratch option
           _TemplateCard(
             title: 'From Scratch',
@@ -71,25 +77,26 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
             },
             theme: theme,
             fontProvider: fontProvider,
+            isLandscape: isLandscape,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isLandscape ? 8 : 12),
 
           Text(
             'OR START WITH A TEMPLATE',
             style: fontProvider.getTextStyle(
-              fontSize: 14,
+              fontSize: isLandscape ? 12 : 14,
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.onSurface.withAlpha(128),
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isLandscape ? 8 : 12),
 
           // Template options
           ...binderTemplates.map((template) {
             final isAlreadyUsed = _isTemplateAlreadyUsed(template);
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: EdgeInsets.only(bottom: isLandscape ? 8 : 12),
               child: _TemplateCard(
                 title: template.name,
                 emoji: template.emoji,
@@ -104,12 +111,47 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
                 },
                 theme: theme,
                 fontProvider: fontProvider,
+                isLandscape: isLandscape,
               ),
             );
           }),
+
+          // INLINE BUTTON FOR LANDSCAPE
+          if (isLandscape) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () {
+                final template = selectedTemplateId != null
+                    ? binderTemplates.firstWhere((t) => t.id == selectedTemplateId)
+                    : fromScratchTemplate;
+                Navigator.pop(context, template);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.secondary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                minimumSize: const Size(double.infinity, 0),
+              ),
+              icon: const Icon(Icons.check, color: Colors.white, size: 20),
+              label: Text(
+                'Continue',
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+          ),
+        ],
+      ),
+      floatingActionButton: isLandscape ? null : FloatingActionButton.extended(
         onPressed: () {
           // Return the selected template (or fromScratchTemplate for "from scratch")
           final template = selectedTemplateId != null
@@ -143,6 +185,7 @@ class _TemplateCard extends StatelessWidget {
     required this.theme,
     required this.fontProvider,
     this.isDisabled = false,
+    this.isLandscape = false,
   });
 
   final String title;
@@ -154,16 +197,25 @@ class _TemplateCard extends StatelessWidget {
   final VoidCallback onTap;
   final ThemeData theme;
   final FontProvider fontProvider;
+  final bool isLandscape;
 
   @override
   Widget build(BuildContext context) {
+    final cardPadding = isLandscape ? 12.0 : 20.0;
+    final emojiSize = isLandscape ? 44.0 : 60.0;
+    final emojiFontSize = isLandscape ? 24.0 : 32.0;
+    final titleFontSize = isLandscape ? 16.0 : 22.0;
+    final descriptionFontSize = isLandscape ? 12.0 : 14.0;
+    final spacing = isLandscape ? 12.0 : 16.0;
+    final iconSize = isLandscape ? 24.0 : 32.0;
+
     return InkWell(
       onTap: isDisabled ? null : onTap,
       borderRadius: BorderRadius.circular(16),
       child: Opacity(
         opacity: isDisabled ? 0.5 : 1.0,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(cardPadding),
           decoration: BoxDecoration(
             color: isDisabled
                 ? theme.colorScheme.surfaceContainerHighest
@@ -193,8 +245,8 @@ class _TemplateCard extends StatelessWidget {
           children: [
             // Emoji
             Container(
-              width: 60,
-              height: 60,
+              width: emojiSize,
+              height: emojiSize,
               decoration: BoxDecoration(
                 color: isSelected
                     ? theme.colorScheme.primary.withAlpha(51)
@@ -204,11 +256,11 @@ class _TemplateCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   emoji,
-                  style: const TextStyle(fontSize: 32),
+                  style: TextStyle(fontSize: emojiFontSize),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: spacing),
 
             // Content
             Expanded(
@@ -218,33 +270,33 @@ class _TemplateCard extends StatelessWidget {
                   Text(
                     title,
                     style: fontProvider.getTextStyle(
-                      fontSize: 22,
+                      fontSize: titleFontSize,
                       fontWeight: FontWeight.bold,
                       color: isSelected
                           ? theme.colorScheme.onPrimaryContainer
                           : theme.colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isLandscape ? 2 : 4),
                   Text(
                     description,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: descriptionFontSize,
                       color: isSelected
                           ? theme.colorScheme.onPrimaryContainer.withAlpha(179)
                           : theme.colorScheme.onSurface.withAlpha(179),
                     ),
                   ),
                   if (envelopeCount != null) ...[
-                    const SizedBox(height: 8),
+                    SizedBox(height: isLandscape ? 4 : 8),
                     Wrap(
-                      spacing: 8,
+                      spacing: isLandscape ? 6 : 8,
                       runSpacing: 4,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isLandscape ? 8 : 12,
+                            vertical: isLandscape ? 3 : 4,
                           ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.secondaryContainer,
@@ -253,7 +305,7 @@ class _TemplateCard extends StatelessWidget {
                           child: Text(
                             '$envelopeCount envelopes',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isLandscape ? 10 : 12,
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.onSecondaryContainer,
                             ),
@@ -261,9 +313,9 @@ class _TemplateCard extends StatelessWidget {
                         ),
                         if (isDisabled)
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isLandscape ? 8 : 12,
+                              vertical: isLandscape ? 3 : 4,
                             ),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.errorContainer,
@@ -274,14 +326,14 @@ class _TemplateCard extends StatelessWidget {
                               children: [
                                 Icon(
                                   Icons.check_circle,
-                                  size: 14,
+                                  size: isLandscape ? 12 : 14,
                                   color: theme.colorScheme.onErrorContainer,
                                 ),
-                                const SizedBox(width: 4),
+                                SizedBox(width: isLandscape ? 3 : 4),
                                 Text(
                                   'Already Created',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: isLandscape ? 10 : 12,
                                     fontWeight: FontWeight.bold,
                                     color: theme.colorScheme.onErrorContainer,
                                   ),
@@ -302,19 +354,19 @@ class _TemplateCard extends StatelessWidget {
                 Icon(
                   Icons.check_circle,
                   color: theme.colorScheme.primary,
-                  size: 32,
+                  size: iconSize,
                 )
               else
                 Icon(
                   Icons.circle_outlined,
                   color: theme.colorScheme.outline,
-                  size: 32,
+                  size: iconSize,
                 )
             else
               Icon(
                 Icons.lock_outline,
                 color: theme.colorScheme.outline,
-                size: 32,
+                size: iconSize,
               ),
           ],
         ), // End Row

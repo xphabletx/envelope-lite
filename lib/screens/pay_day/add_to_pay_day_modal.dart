@@ -5,6 +5,7 @@ import '../../../models/envelope.dart';
 import '../../../models/envelope_group.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/time_machine_provider.dart';
+import '../../../utils/responsive_helper.dart';
 
 class PayDayAddition {
   final String? envelopeId;
@@ -78,6 +79,8 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     // Filter out items already in the list
     final availableBinders = widget.allGroups
@@ -88,8 +91,14 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
         .where((e) => !widget.alreadyDisplayedEnvelopes.contains(e.id))
         .toList();
 
+    // Use a fixed max height in landscape to avoid Expanded overflow
+    final maxHeight = isLandscape
+        ? MediaQuery.of(context).size.height * 0.65
+        : MediaQuery.of(context).size.height * 0.75;
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isLandscape ? 16 : 24),
+      constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -101,13 +110,13 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
           Text(
             'Add Item to Pay Day',
             style: fontProvider.getTextStyle(
-              fontSize: 24,
+              fontSize: isLandscape ? 20 : 24,
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.primary,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: isLandscape ? 12 : 24),
 
           Expanded(
             child: SingleChildScrollView(
