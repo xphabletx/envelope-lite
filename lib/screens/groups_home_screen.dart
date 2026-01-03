@@ -290,173 +290,274 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             );
             }
 
+            final responsive = context.responsive;
+            final isLandscape = responsive.isLandscape;
+
             return TutorialWrapper(
               tutorialSequence: bindersTutorial,
               child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
-              appBar: AppBar(
-                title: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    tr('group_binders_title'),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 38,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
+              appBar: isLandscape
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(0),
+                    child: AppBar(
+                      toolbarHeight: 0,
+                      backgroundColor: theme.scaffoldBackgroundColor,
+                      elevation: 0,
                     ),
-                  ),
-                ),
-                backgroundColor: theme.scaffoldBackgroundColor,
-                elevation: 0,
-                actions: [
-                  if (isWorkspace)
-                    Row(
-                      children: [
-                        Text(
-                          'Mine Only',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
+                  )
+                : AppBar(
+                    title: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        tr('group_binders_title'),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 38,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
                         ),
-                        Switch(
-                          value: _mineOnly,
-                          activeTrackColor: theme.colorScheme.primary,
-                          onChanged: (val) => setState(() => _mineOnly = val),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
+                      ),
                     ),
-                  PopupMenuButton<String>(
-                    tooltip: tr('sort_by'),
-                    icon: Icon(Icons.sort, color: theme.colorScheme.primary),
-                    onSelected: (value) => setState(() => _sortBy = value),
-                    itemBuilder: (context) => [
-                      PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
-                      PopupMenuItem(value: 'total', child: const Text('Total Saved')),
-                      PopupMenuItem(value: 'created', child: const Text('Date Created')),
+                    backgroundColor: theme.scaffoldBackgroundColor,
+                    elevation: 0,
+                    actions: [
+                      if (isWorkspace)
+                        Row(
+                          children: [
+                            Text(
+                              'Mine Only',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            Switch(
+                              value: _mineOnly,
+                              activeTrackColor: theme.colorScheme.primary,
+                              onChanged: (val) => setState(() => _mineOnly = val),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
+                      PopupMenuButton<String>(
+                        tooltip: tr('sort_by'),
+                        icon: Icon(Icons.sort, color: theme.colorScheme.primary),
+                        onSelected: (value) => setState(() => _sortBy = value),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
+                          PopupMenuItem(value: 'total', child: const Text('Total Saved')),
+                          PopupMenuItem(value: 'created', child: const Text('Date Created')),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
               body: Column(
                 children: [
                   // Time Machine Indicator at the top
                   const TimeMachineIndicator(),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.chevron_left,
-                            color: _currentPage > 0
-                                ? theme.colorScheme.primary
-                                : Colors.grey.shade400,
+                  if (!isLandscape)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.chevron_left,
+                              color: _currentPage > 0
+                                  ? theme.colorScheme.primary
+                                  : Colors.grey.shade400,
+                            ),
+                            onPressed: _currentPage > 0
+                                ? () {
+                                    _pageController.previousPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
                           ),
-                          onPressed: _currentPage > 0
-                              ? () {
-                                  _pageController.previousPage(
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              : null,
-                        ),
-                        Text(
-                          '${_currentPage + 1} of ${groups.length}',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
+                          Text(
+                            '${_currentPage + 1} of ${groups.length}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.chevron_right,
-                            color: _currentPage < groups.length - 1
-                                ? theme.colorScheme.primary
-                                : Colors.grey.shade400,
+                          IconButton(
+                            icon: Icon(
+                              Icons.chevron_right,
+                              color: _currentPage < groups.length - 1
+                                  ? theme.colorScheme.primary
+                                  : Colors.grey.shade400,
+                            ),
+                            onPressed: _currentPage < groups.length - 1
+                                ? () {
+                                    _pageController.nextPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
                           ),
-                          onPressed: _currentPage < groups.length - 1
-                              ? () {
-                                  _pageController.nextPage(
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              : null,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
 
                   Expanded(
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: groups.length,
-                      onPageChanged: (index) {
-                        setState(() => _currentPage = index);
-                      },
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        final stats = _statsFor(group, envs, timeMachine);
-                        final groupEnvelopes =
-                            stats['envelopes'] as List<Envelope>;
-                        final totalSaved = stats['totalSaved'] as double;
+                    child: isLandscape
+                        ? Row(
+                            children: [
+                              // Binder PageView
+                              Expanded(
+                                child: PageView.builder(
+                                  controller: _pageController,
+                                  itemCount: groups.length,
+                                  onPageChanged: (index) {
+                                    setState(() => _currentPage = index);
+                                  },
+                                  itemBuilder: (context, index) {
+                                    final group = groups[index];
+                                    final stats = _statsFor(group, envs, timeMachine);
+                                    final groupEnvelopes =
+                                        stats['envelopes'] as List<Envelope>;
+                                    final totalSaved = stats['totalSaved'] as double;
 
-                        final binderColors = _getBinderColors(
-                          group.colorIndex,
-                          themeProvider.currentThemeId,
-                        );
+                                    final binderColors = _getBinderColors(
+                                      group.colorIndex,
+                                      themeProvider.currentThemeId,
+                                    );
 
-                        final isPartner =
-                            group.userId != widget.repo.currentUserId;
+                                    final isPartner =
+                                        group.userId != widget.repo.currentUserId;
 
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 16,
+                                      ),
+                                      child: _BinderSpread(
+                                        group: group,
+                                        binderColors: binderColors,
+                                        envelopes: groupEnvelopes,
+                                        totalSaved: totalSaved,
+                                        currency: currency,
+                                        theme: theme,
+                                        repo: widget.repo,
+                                        isPartner: isPartner && !_mineOnly,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              // Right-side control buttons (landscape only)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 16),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.sort,
+                                        size: 32,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      onPressed: () {
+                                        showMenu(
+                                          context: context,
+                                          position: const RelativeRect.fromLTRB(1000, 60, 0, 0),
+                                          items: [
+                                            PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
+                                            PopupMenuItem(value: 'total', child: const Text('Total Saved')),
+                                            PopupMenuItem(value: 'created', child: const Text('Date Created')),
+                                          ],
+                                        ).then((value) {
+                                          if (value != null) setState(() => _sortBy = value);
+                                        });
+                                      },
+                                      tooltip: tr('sort_by'),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.add,
+                                        size: 32,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      onPressed: () => _openGroupEditor(null),
+                                      tooltip: tr('group_create_binder'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : PageView.builder(
+                            controller: _pageController,
+                            itemCount: groups.length,
+                            onPageChanged: (index) {
+                              setState(() => _currentPage = index);
+                            },
+                            itemBuilder: (context, index) {
+                              final group = groups[index];
+                              final stats = _statsFor(group, envs, timeMachine);
+                              final groupEnvelopes =
+                                  stats['envelopes'] as List<Envelope>;
+                              final totalSaved = stats['totalSaved'] as double;
+
+                              final binderColors = _getBinderColors(
+                                group.colorIndex,
+                                themeProvider.currentThemeId,
+                              );
+
+                              final isPartner =
+                                  group.userId != widget.repo.currentUserId;
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: _BinderSpread(
+                                  group: group,
+                                  binderColors: binderColors,
+                                  envelopes: groupEnvelopes,
+                                  totalSaved: totalSaved,
+                                  currency: currency,
+                                  theme: theme,
+                                  repo: widget.repo,
+                                  isPartner: isPartner && !_mineOnly,
+                                ),
+                              );
+                            },
                           ),
-                          child: _BinderSpread(
-                            group: group,
-                            binderColors: binderColors,
-                            envelopes: groupEnvelopes,
-                            totalSaved: totalSaved,
-                            currency: currency,
-                            onEdit: () => _openGroupEditor(group),
-                            theme: theme,
-                            repo: widget.repo,
-                            isPartner: isPartner && !_mineOnly,
-                          ),
-                        );
-                      },
-                    ),
                   ),
 
-                  const SizedBox(height: 80),
+                  if (!isLandscape) const SizedBox(height: 80),
                 ],
               ),
-              floatingActionButton: FloatingActionButton.extended(
-                backgroundColor: theme.colorScheme.secondary,
-                foregroundColor: Colors.white,
-                icon: const Icon(Icons.add),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    tr('group_create_binder'),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+              floatingActionButton: isLandscape
+                ? null
+                : FloatingActionButton.extended(
+                    backgroundColor: theme.colorScheme.secondary,
+                    foregroundColor: Colors.white,
+                    icon: const Icon(Icons.add),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        tr('group_create_binder'),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
+                    onPressed: () => _openGroupEditor(null),
                   ),
-                ),
-                onPressed: () => _openGroupEditor(null),
-              ),
             ),
             );
           },
@@ -472,7 +573,6 @@ class _BinderSpread extends StatefulWidget {
   final List<Envelope> envelopes;
   final double totalSaved;
   final NumberFormat currency;
-  final VoidCallback onEdit;
   final ThemeData theme;
   final EnvelopeRepo repo;
   final bool isPartner;
@@ -483,7 +583,6 @@ class _BinderSpread extends StatefulWidget {
     required this.envelopes,
     required this.totalSaved,
     required this.currency,
-    required this.onEdit,
     required this.theme,
     required this.repo,
     required this.isPartner,
@@ -910,105 +1009,125 @@ class _BinderSpreadState extends State<_BinderSpread> {
                     padding: EdgeInsets.all(pagePadding),
                     child: Stack(
                       children: [
-                        // Settings Cog in top-right
+                        // Main content - use Column with spacers to distribute vertically
+                        Positioned.fill(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                              // Binder Header
+                              Column(
+                                children: [
+                                  Container(
+                                    width: iconSize,
+                                    height: iconSize,
+                                    decoration: BoxDecoration(
+                                      color: widget.binderColors.paperColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: widget.binderColors.binderColor,
+                                        width: responsive.isLandscape ? 2 : 3,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: widget.binderColors.binderColor
+                                              .withAlpha(51),
+                                          blurRadius: responsive.isLandscape ? 4 : 8,
+                                          offset: Offset(0, responsive.isLandscape ? 2 : 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: widget.group.getIconWidget(
+                                        theme,
+                                        size: responsive.isLandscape ? 18 : 22,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: responsive.isLandscape ? 2 : 4),
+                                  Text(
+                                    widget.group.name,
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: headerFontSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: widget.binderColors.envelopeTextColor,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+
+                              SizedBox(height: responsive.isLandscape ? 12 : 20),
+
+                              // Info Chips (Binder Total, Auto-fill, Target) - spaced out
+                              _buildInfoChips(context, fontProvider, responsive.isLandscape),
+
+                              SizedBox(height: responsive.isLandscape ? 12 : 20),
+
+                              // Partner Badge
+                              if (widget.isPartner)
+                                FutureBuilder<String>(
+                                  future: WorkspaceHelper.getUserDisplayName(
+                                    widget.group.userId,
+                                    widget.repo.currentUserId,
+                                  ),
+                                  builder: (context, nameSnapshot) {
+                                    return PartnerBadge(
+                                      partnerName: nameSnapshot.data ?? 'Partner',
+                                      size: PartnerBadgeSize.small,
+                                    );
+                                  },
+                                )
+                              else
+                                const SizedBox.shrink(),
+                            ],
+                          ),
+                          ),
+                        ),
+                        // Settings Cog in top-right (MUST be last in Stack to be on top)
                         Positioned(
                           top: 0,
                           right: 0,
-                          child: GestureDetector(
-                            onTap: widget.onEdit,
-                            child: Container(
-                              width: settingsButtonSize,
-                              height: settingsButtonSize,
-                              decoration: BoxDecoration(
-                                color: widget.binderColors.binderColor.withAlpha(26),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: widget.binderColors.binderColor.withAlpha(77),
-                                  width: 1,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                debugPrint('[BinderSpread] Settings cog tapped!');
+                                // Navigate to group editor screen
+                                try {
+                                  final groupRepo = GroupRepo(widget.repo);
+                                  await editor.showGroupEditor(
+                                    context: context,
+                                    groupRepo: groupRepo,
+                                    envelopeRepo: widget.repo,
+                                    group: widget.group,
+                                  );
+                                } catch (e) {
+                                  debugPrint('[BinderSpread] Error opening group editor: $e');
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: settingsButtonSize,
+                                height: settingsButtonSize,
+                                decoration: BoxDecoration(
+                                  color: widget.binderColors.binderColor.withAlpha(26),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: widget.binderColors.binderColor.withAlpha(77),
+                                    width: 1,
+                                  ),
                                 ),
-                              ),
-                              child: Icon(
-                                Icons.settings,
-                                size: settingsIconSize,
-                                color: widget.binderColors.binderColor,
+                                child: Icon(
+                                  Icons.settings,
+                                  size: settingsIconSize,
+                                  color: widget.binderColors.binderColor,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        // Main content - use Column with spacers to distribute vertically
-                        Positioned.fill(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                            // Binder Header
-                            Column(
-                              children: [
-                                Container(
-                                  width: iconSize,
-                                  height: iconSize,
-                                  decoration: BoxDecoration(
-                                    color: widget.binderColors.paperColor,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: widget.binderColors.binderColor,
-                                      width: responsive.isLandscape ? 2 : 3,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: widget.binderColors.binderColor
-                                            .withAlpha(51),
-                                        blurRadius: responsive.isLandscape ? 4 : 8,
-                                        offset: Offset(0, responsive.isLandscape ? 2 : 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: widget.group.getIconWidget(
-                                      theme,
-                                      size: responsive.isLandscape ? 18 : 22,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: responsive.isLandscape ? 2 : 4),
-                                Text(
-                                  widget.group.name,
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: headerFontSize,
-                                    fontWeight: FontWeight.bold,
-                                    color: widget.binderColors.envelopeTextColor,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-
-                            const Spacer(),
-
-                            // Info Chips (Binder Total, Auto-fill, Target) - spaced out
-                            _buildInfoChips(context, fontProvider, responsive.isLandscape),
-
-                            const Spacer(),
-
-                            // Partner Badge
-                            if (widget.isPartner)
-                              FutureBuilder<String>(
-                                future: WorkspaceHelper.getUserDisplayName(
-                                  widget.group.userId,
-                                  widget.repo.currentUserId,
-                                ),
-                                builder: (context, nameSnapshot) {
-                                  return PartnerBadge(
-                                    partnerName: nameSnapshot.data ?? 'Partner',
-                                    size: PartnerBadgeSize.small,
-                                  );
-                                },
-                              )
-                            else
-                              const SizedBox.shrink(),
-                          ],
-                        ),
                         ),
                       ],
                     ),

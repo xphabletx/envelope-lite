@@ -19,6 +19,7 @@ import 'binder_template_selector.dart';
 import 'envelope_creator.dart';
 import 'binder/binder_template_quick_setup.dart';
 import 'binder/template_envelope_selector.dart';
+import '../utils/responsive_helper.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -744,6 +745,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final responsive = context.responsive;
+    final isLandscape = responsive.isLandscape;
 
     final availableColors =
         ThemeBinderColors.getColorsForTheme(themeProvider.currentThemeId);
@@ -785,7 +788,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
                     child: Row(
                       children: [
                         Text(
@@ -793,7 +796,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                               ? tr('group_edit_binder')
                               : tr('group_new_binder'),
                           style: fontProvider.getTextStyle(
-                            fontSize: 32,
+                            fontSize: isLandscape ? 24.0 : 32.0,
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.primary,
                           ),
@@ -803,6 +806,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                           icon: Icon(
                             Icons.close,
                             color: theme.colorScheme.primary,
+                            size: isLandscape ? 20.0 : 24.0,
                           ),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
@@ -815,7 +819,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                       slivers: [
                         SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: EdgeInsets.symmetric(horizontal: isLandscape ? 12.0 : 16.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -826,11 +830,11 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     Text(
                                       tr('group_binder_color'),
                                       style: fontProvider.getTextStyle(
-                                        fontSize: 16,
+                                        fontSize: isLandscape ? 14.0 : 16.0,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    const SizedBox(height: 12),
+                                    SizedBox(height: isLandscape ? 8.0 : 12.0),
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
@@ -842,13 +846,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                         final colorOption = entry.value;
                                         final isSelected =
                                             selectedColorIndex == index;
+                                        final colorSize = isLandscape ? 32.0 : 40.0;
                                         return GestureDetector(
                                           onTap: () => setState(
                                             () => selectedColorIndex = index,
                                           ),
                                           child: Container(
-                                            width: 40,
-                                            height: 40,
+                                            width: colorSize,
+                                            height: colorSize,
                                             decoration: BoxDecoration(
                                               color: colorOption.binderColor,
                                               shape: BoxShape.circle,
@@ -866,7 +871,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 ? Icon(
                                                     Icons.check,
                                                     color: buttonTextColor,
-                                                    size: 20,
+                                                    size: isLandscape ? 16.0 : 20.0,
                                                   )
                                                 : null,
                                           ),
@@ -875,7 +880,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 20),
+                                SizedBox(height: isLandscape ? 12.0 : 20.0),
                                 // Binder Name Field
                                 TextFormField(
                                   controller: _nameCtrl,
@@ -883,14 +888,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                   decoration: InputDecoration(
                                     labelText: tr('group_binder_name_label'),
                                     labelStyle: fontProvider.getTextStyle(
-                                      fontSize: 16,
+                                      fontSize: isLandscape ? 14.0 : 16.0,
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 20,
+                                    fontSize: isLandscape ? 16.0 : 20.0,
                                     fontWeight: FontWeight.bold,
                                   ),
                                   validator: (v) => (v == null ||
@@ -910,13 +915,13 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     FocusScope.of(context).unfocus();
                                   },
                                 ),
-                                const SizedBox(height: 16),
+                                SizedBox(height: isLandscape ? 10.0 : 16.0),
                                 // Icon picker
                                 InkWell(
                                   onTap: pickEmoji,
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
                                     decoration: BoxDecoration(
                                       border: Border.all(
                                         color: theme.colorScheme.outline,
@@ -925,33 +930,34 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.emoji_emotions),
-                                        const SizedBox(width: 16),
+                                        Icon(Icons.emoji_emotions, size: isLandscape ? 20.0 : 24.0),
+                                        SizedBox(width: isLandscape ? 12.0 : 16.0),
                                         Text(
                                           tr('Icon'),
                                           style: fontProvider.getTextStyle(
-                                            fontSize: 18,
+                                            fontSize: isLandscape ? 16.0 : 18.0,
                                           ),
                                         ),
                                         const Spacer(),
                                         if (selectedIconType != null &&
                                             selectedIconValue != null)
                                           SizedBox(
-                                            width: 32,
-                                            height: 32,
+                                            width: isLandscape ? 28.0 : 32.0,
+                                            height: isLandscape ? 28.0 : 32.0,
                                             child: _buildIconDisplay(theme),
                                           )
                                         else
-                                          const Icon(
+                                          Icon(
                                             Icons.add_photo_alternate_outlined,
+                                            size: isLandscape ? 20.0 : 24.0,
                                           ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                SizedBox(height: isLandscape ? 10.0 : 16.0),
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: EdgeInsets.all(isLandscape ? 10.0 : 12.0),
                                   decoration: BoxDecoration(
                                     color: payDayEnabled
                                         ? theme.colorScheme.secondary
@@ -973,9 +979,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                             ? theme.colorScheme.secondary
                                             : theme.colorScheme.onSurface
                                                 .withAlpha((255 * 0.6).round()),
-                                        size: 28,
+                                        size: isLandscape ? 22.0 : 28.0,
                                       ),
-                                      const SizedBox(width: 12),
+                                      SizedBox(width: isLandscape ? 10.0 : 12.0),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:
@@ -984,7 +990,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                             Text(
                                               tr('group_pay_day_auto'),
                                               style: fontProvider.getTextStyle(
-                                                fontSize: 20,
+                                                fontSize: isLandscape ? 16.0 : 20.0,
                                                 fontWeight: FontWeight.bold,
                                                 color: payDayEnabled
                                                     ? theme
@@ -995,7 +1001,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                             Text(
                                               tr('group_pay_day_hint'),
                                               style: TextStyle(
-                                                fontSize: 12,
+                                                fontSize: isLandscape ? 10.0 : 12.0,
                                                 color: theme.colorScheme.onSurface
                                                     .withAlpha((255 * 0.6).round()),
                                               ),
@@ -1013,23 +1019,23 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                SizedBox(height: isLandscape ? 10.0 : 16.0),
                                 Text(
                                   tr('group_assign_envelopes'),
                                   style: fontProvider.getTextStyle(
-                                    fontSize: 18,
+                                    fontSize: isLandscape ? 16.0 : 18.0,
                                     fontWeight: FontWeight.bold,
                                     color: theme.colorScheme.primary,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                SizedBox(height: isLandscape ? 6.0 : 8.0),
 
                                 // "Create New Envelope" button
                                 InkWell(
                                   onTap: _createNewEnvelope,
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
                                     decoration: BoxDecoration(
                                       color: theme.colorScheme.primaryContainer,
                                       borderRadius: BorderRadius.circular(12),
@@ -1041,19 +1047,19 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     child: Row(
                                       children: [
                                         Container(
-                                          width: 40,
-                                          height: 40,
+                                          width: isLandscape ? 32.0 : 40.0,
+                                          height: isLandscape ? 32.0 : 40.0,
                                           decoration: BoxDecoration(
                                             color: theme.colorScheme.primary,
                                             shape: BoxShape.circle,
                                           ),
-                                          child: const Icon(
+                                          child: Icon(
                                             Icons.add,
                                             color: Colors.white,
-                                            size: 24,
+                                            size: isLandscape ? 18.0 : 24.0,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        SizedBox(width: isLandscape ? 12.0 : 16.0),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1061,16 +1067,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                               Text(
                                                 'Create New Envelope',
                                                 style: fontProvider.getTextStyle(
-                                                  fontSize: 18,
+                                                  fontSize: isLandscape ? 14.0 : 18.0,
                                                   fontWeight: FontWeight.bold,
                                                   color: theme.colorScheme.onPrimaryContainer,
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              SizedBox(height: isLandscape ? 1.0 : 2.0),
                                               Text(
                                                 'Add a custom envelope to this binder',
                                                 style: TextStyle(
-                                                  fontSize: 13,
+                                                  fontSize: isLandscape ? 11.0 : 13.0,
                                                   color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
                                                 ),
                                               ),
@@ -1079,14 +1085,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                         ),
                                         Icon(
                                           Icons.arrow_forward_ios,
-                                          size: 16,
+                                          size: isLandscape ? 14.0 : 16.0,
                                           color: theme.colorScheme.onPrimaryContainer,
                                         ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: isLandscape ? 8.0 : 12.0),
 
                                 // "Quick Setup Template" button (only show when creating with template)
                                 if (!isEdit && _selectedTemplate != null)
@@ -1094,7 +1100,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     onTap: _launchQuickSetup,
                                     borderRadius: BorderRadius.circular(12),
                                     child: Container(
-                                      padding: const EdgeInsets.all(16),
+                                      padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.tertiaryContainer,
                                         borderRadius: BorderRadius.circular(12),
@@ -1106,19 +1112,19 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                       child: Row(
                                         children: [
                                           Container(
-                                            width: 40,
-                                            height: 40,
+                                            width: isLandscape ? 32.0 : 40.0,
+                                            height: isLandscape ? 32.0 : 40.0,
                                             decoration: BoxDecoration(
                                               color: theme.colorScheme.tertiary,
                                               shape: BoxShape.circle,
                                             ),
-                                            child: const Icon(
+                                            child: Icon(
                                               Icons.auto_awesome,
                                               color: Colors.white,
-                                              size: 24,
+                                              size: isLandscape ? 18.0 : 24.0,
                                             ),
                                           ),
-                                          const SizedBox(width: 16),
+                                          SizedBox(width: isLandscape ? 12.0 : 16.0),
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1126,16 +1132,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 Text(
                                                   'Quick Setup Template',
                                                   style: fontProvider.getTextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: isLandscape ? 14.0 : 18.0,
                                                     fontWeight: FontWeight.bold,
                                                     color: theme.colorScheme.onTertiaryContainer,
                                                   ),
                                                 ),
-                                                const SizedBox(height: 2),
+                                                SizedBox(height: isLandscape ? 1.0 : 2.0),
                                                 Text(
                                                   'Add amounts and details to template envelopes',
                                                   style: TextStyle(
-                                                    fontSize: 13,
+                                                    fontSize: isLandscape ? 11.0 : 13.0,
                                                     color: theme.colorScheme.onTertiaryContainer.withAlpha(179),
                                                   ),
                                                 ),
@@ -1144,14 +1150,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           ),
                                           Icon(
                                             Icons.arrow_forward_ios,
-                                            size: 16,
+                                            size: isLandscape ? 14.0 : 16.0,
                                             color: theme.colorScheme.onTertiaryContainer,
                                           ),
                                         ],
                                       ),
                                     ),
                                   ),
-                                if (!isEdit && _selectedTemplate != null) const SizedBox(height: 12),
+                                if (!isEdit && _selectedTemplate != null) SizedBox(height: isLandscape ? 8.0 : 12.0),
 
                                 // "Add Templates" button (only show when editing existing binder)
                                 if (isEdit)
@@ -1159,7 +1165,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     onTap: _addTemplateEnvelopes,
                                     borderRadius: BorderRadius.circular(12),
                                     child: Container(
-                                      padding: const EdgeInsets.all(16),
+                                      padding: EdgeInsets.all(isLandscape ? 12.0 : 16.0),
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.secondaryContainer,
                                         borderRadius: BorderRadius.circular(12),
@@ -1171,19 +1177,19 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                       child: Row(
                                         children: [
                                           Container(
-                                            width: 40,
-                                            height: 40,
+                                            width: isLandscape ? 32.0 : 40.0,
+                                            height: isLandscape ? 32.0 : 40.0,
                                             decoration: BoxDecoration(
                                               color: theme.colorScheme.secondary,
                                               shape: BoxShape.circle,
                                             ),
-                                            child: const Icon(
+                                            child: Icon(
                                               Icons.library_add,
                                               color: Colors.white,
-                                              size: 24,
+                                              size: isLandscape ? 18.0 : 24.0,
                                             ),
                                           ),
-                                          const SizedBox(width: 16),
+                                          SizedBox(width: isLandscape ? 12.0 : 16.0),
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,16 +1197,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                                 Text(
                                                   'Add Templates',
                                                   style: fontProvider.getTextStyle(
-                                                    fontSize: 18,
+                                                    fontSize: isLandscape ? 14.0 : 18.0,
                                                     fontWeight: FontWeight.bold,
                                                     color: theme.colorScheme.onSecondaryContainer,
                                                   ),
                                                 ),
-                                                const SizedBox(height: 2),
+                                                SizedBox(height: isLandscape ? 1.0 : 2.0),
                                                 Text(
                                                   'Import envelopes from templates with quick setup',
                                                   style: TextStyle(
-                                                    fontSize: 13,
+                                                    fontSize: isLandscape ? 11.0 : 13.0,
                                                     color: theme.colorScheme.onSecondaryContainer.withAlpha(179),
                                                   ),
                                                 ),
@@ -1209,14 +1215,14 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           ),
                                           Icon(
                                             Icons.arrow_forward_ios,
-                                            size: 16,
+                                            size: isLandscape ? 14.0 : 16.0,
                                             color: theme.colorScheme.onSecondaryContainer,
                                           ),
                                         ],
                                       ),
                                     ),
                                   ),
-                                if (isEdit) const SizedBox(height: 12),
+                                if (isEdit) SizedBox(height: isLandscape ? 8.0 : 12.0),
                               ],
                             ),
                           ),
@@ -1295,9 +1301,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
 
                                 return Padding(
                                   key: ValueKey(e.id),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 4,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isLandscape ? 12.0 : 16.0,
+                                    vertical: isLandscape ? 3.0 : 4.0,
                                   ),
                                   child: Container(
                                     decoration: BoxDecoration(
@@ -1324,16 +1330,16 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           if (e.emoji != null)
                                             Text(
                                               e.emoji!,
-                                              style: const TextStyle(
-                                                fontSize: 20,
+                                              style: TextStyle(
+                                                fontSize: isLandscape ? 16.0 : 20.0,
                                               ),
                                             ),
-                                          const SizedBox(width: 8),
+                                          SizedBox(width: isLandscape ? 6.0 : 8.0),
                                           Expanded(
                                             child: Text(
                                               e.name,
                                               style: fontProvider.getTextStyle(
-                                                fontSize: 18,
+                                                fontSize: isLandscape ? 14.0 : 18.0,
                                                 fontWeight: FontWeight.bold,
                                                 color: isSelected
                                                     ? ThemeData.estimateBrightnessForColor(bgTint) == Brightness.dark
@@ -1372,94 +1378,163 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                             );
                           },
                         ),
+                        // INLINE BUTTONS FOR LANDSCAPE (at bottom after envelope list)
+                        if (isLandscape)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12.0),
+                              child: Column(
+                                children: [
+                                  const SizedBox(height: 16),
+                                  FilledButton(
+                                    onPressed: saving ? null : save,
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: groupIdentityColor,
+                                      foregroundColor: buttonTextColor,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      minimumSize: const Size(double.infinity, 0),
+                                    ),
+                                    child: saving
+                                        ? CircularProgressIndicator(
+                                            color: buttonTextColor,
+                                            strokeWidth: 2.0,
+                                          )
+                                        : Text(
+                                            isEdit
+                                                ? tr('save_changes')
+                                                : tr('group_create_binder'),
+                                            style: fontProvider.getTextStyle(
+                                              fontSize: 18.0,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                  ),
+                                  if (isEdit) ...[
+                                    const SizedBox(height: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: saving ? null : _confirmDelete,
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        side: const BorderSide(color: Colors.red, width: 2),
+                                        minimumSize: const Size(double.infinity, 0),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.delete_forever,
+                                        color: Colors.red,
+                                        size: 18.0,
+                                      ),
+                                      label: Text(
+                                        tr('group_delete_binder'),
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 16.0,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 24),
+                                ],
+                              ),
+                            ),
+                          ),
                         const SliverToBoxAdapter(child: SizedBox(height: 20)),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black
-                              .withAlpha((255 * 0.05).round()),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: groupIdentityColor,
-                              foregroundColor: buttonTextColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            onPressed: saving ? null : save,
-                            child: saving
-                                ? CircularProgressIndicator(
-                                    color: buttonTextColor,
-                                  )
-                                : FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      isEdit
-                                          ? tr('save_changes')
-                                          : tr('group_create_binder'),
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
+                  // STICKY BOTTOM BUTTONS (PORTRAIT ONLY)
+                  if (!isLandscape)
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: theme.scaffoldBackgroundColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black
+                                .withAlpha((255 * 0.05).round()),
+                            blurRadius: 10,
+                            offset: const Offset(0, -2),
                           ),
-                        ),
-                        if (isEdit) ...[
-                          const SizedBox(height: 10),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           SizedBox(
                             width: double.infinity,
-                            height: 52,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(
-                                Icons.delete_forever,
-                                color: Colors.red,
-                              ),
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  tr('group_delete_binder'),
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(
-                                  color: Colors.red,
-                                  width: 2,
-                                ),
+                            height: 52.0,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: groupIdentityColor,
+                                foregroundColor: buttonTextColor,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              // CHANGED: Now calls _confirmDelete
-                              onPressed: saving ? null : _confirmDelete,
+                              onPressed: saving ? null : save,
+                              child: saving
+                                  ? CircularProgressIndicator(
+                                      color: buttonTextColor,
+                                      strokeWidth: 3.0,
+                                    )
+                                  : FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        isEdit
+                                            ? tr('save_changes')
+                                            : tr('group_create_binder'),
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 22.0,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
                             ),
                           ),
+                          if (isEdit) ...[
+                            const SizedBox(height: 10.0),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52.0,
+                              child: OutlinedButton.icon(
+                                icon: const Icon(
+                                  Icons.delete_forever,
+                                  color: Colors.red,
+                                  size: 24.0,
+                                ),
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    tr('group_delete_binder'),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 20.0,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                    color: Colors.red,
+                                    width: 2,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: saving ? null : _confirmDelete,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
