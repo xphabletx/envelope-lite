@@ -140,8 +140,22 @@ class ProjectionService {
     print('\nGenerating scheduled payment events...');
     print('Total scheduled payments to process: ${scheduledPayments.length}');
     for (final payment in scheduledPayments) {
-      final occurrences = _getOccurrencesBetween(now, targetDate, payment);
-      print('  Scheduled payment "${payment.name}": ${occurrences.length} occurrences');
+      // Check if there's a date override for this payment
+      final hasOverride = scenario?.scheduledPaymentDateOverrides.containsKey(payment.id) ?? false;
+
+      List<DateTime> occurrences;
+      if (hasOverride) {
+        final overrideDate = scenario!.scheduledPaymentDateOverrides[payment.id]!;
+        print('  Scheduled payment "${payment.name}": DATE OVERRIDDEN to $overrideDate');
+        // Use only the override date instead of regular occurrences
+        occurrences = (overrideDate.isAfter(now) && !overrideDate.isAfter(targetDate))
+            ? [overrideDate]
+            : [];
+      } else {
+        occurrences = _getOccurrencesBetween(now, targetDate, payment);
+      }
+
+      print('  Scheduled payment "${payment.name}": ${occurrences.length} occurrences${hasOverride ? " (OVERRIDE)" : ""}');
       for (final date in occurrences) {
         if (payment.envelopeId != null) {
           final isEnabled =
@@ -187,25 +201,47 @@ class ProjectionService {
       }
     }
 
-    // Add temporary expenses
-    print('\nGenerating temporary expense events...');
+    // Add temporary income/expense events
+    print('\nGenerating temporary income/expense events...');
     if (scenario != null) {
       for (final temp in scenario.temporaryEnvelopes) {
-        if (temp.effectiveDate.isAfter(now) &&
-            temp.effectiveDate.isBefore(targetDate)) {
-          print('  Temp expense event: ${temp.effectiveDate} - "${temp.name}" £${temp.amount.toStringAsFixed(2)}');
-          events.add(
-            ProjectionEvent(
-              date: temp.effectiveDate,
-              type: 'temporary_expense',
-              description: temp.name,
-              amount: temp.amount,
-              isCredit: false,
-              envelopeId: null,
-              accountId: temp.linkedAccountId,
-              accountName: 'Temporary',
-            ),
-          );
+        final tempOccurrences = _getTemporaryOccurrences(temp, now, targetDate);
+        print('  Temp item "${temp.name}": ${tempOccurrences.length} occurrences (${temp.isIncome ? "INCOME" : "EXPENSE"}, ${temp.isRecurring ? temp.frequency : "one-time"})');
+
+        for (final date in tempOccurrences) {
+          print('    Event: $date - "${temp.name}" £${temp.amount.toStringAsFixed(2)}');
+
+          if (temp.isIncome) {
+            // Temporary income creates a pay_day event (will trigger auto-fill)
+            events.add(
+              ProjectionEvent(
+                date: date,
+                type: 'temporary_income',
+                description: temp.name,
+                amount: temp.amount,
+                isCredit: true,
+                accountId: defaultAccountId,
+                accountName: accounts
+                    .where((a) => a.id == defaultAccountId)
+                    .map((a) => a.name)
+                    .firstOrNull ?? 'Main',
+              ),
+            );
+          } else {
+            // Temporary expense deducts from account
+            events.add(
+              ProjectionEvent(
+                date: date,
+                type: 'temporary_expense',
+                description: temp.name,
+                amount: temp.amount,
+                isCredit: false,
+                envelopeId: null,
+                accountId: temp.linkedAccountId ?? defaultAccountId,
+                accountName: 'Temporary',
+              ),
+            );
+          }
         }
       }
     }
@@ -221,7 +257,7 @@ class ProjectionService {
     for (final event in events) {
       print('\n[${event.date}] Processing: ${event.type} - ${event.description} £${event.amount.toStringAsFixed(2)}');
 
-      if (event.type == 'pay_day') {
+      if (event.type == 'pay_day' || event.type == 'temporary_income') {
         final sourceAccountId = event.accountId;
 
         // Step 1: Income arrives
@@ -240,12 +276,19 @@ class ProjectionService {
             continue;
           }
 
-          if (!envelope.autoFillEnabled) {
-            print('    Envelope "${envelope.name}" - auto-fill OFF, skipping');
+          // Check for envelope setting overrides in scenario
+          final settingOverride = scenario?.envelopeSettings[envelope.id];
+          final autoFillEnabled = settingOverride?.autoFillEnabled ?? envelope.autoFillEnabled;
+          final autoFillAmount = settingOverride?.autoFillAmount ?? envelope.autoFillAmount ?? 0;
+
+          if (!autoFillEnabled) {
+            print('    Envelope "${envelope.name}" - auto-fill OFF${settingOverride?.autoFillEnabled != null ? " (OVERRIDE)" : ""}, skipping');
             continue;
           }
 
-          final autoFillAmount = envelope.autoFillAmount ?? 0;
+          if (settingOverride?.autoFillAmount != null) {
+            print('    Envelope "${envelope.name}" - auto-fill amount OVERRIDDEN: £${autoFillAmount.toStringAsFixed(2)}');
+          }
 
           if (autoFillAmount <= 0) {
             print('    Envelope "${envelope.name}" - auto-fill amount £0, skipping');
@@ -678,5 +721,64 @@ class ProjectionService {
     final clampedDay = day > daysInMonth ? daysInMonth : day;
 
     return DateTime(effectiveYear, effectiveMonth, clampedDay);
+  }
+
+  /// Generate occurrences for temporary income/expense
+  static List<DateTime> _getTemporaryOccurrences(
+    TemporaryEnvelope temp,
+    DateTime start,
+    DateTime end,
+  ) {
+    final occurrences = <DateTime>[];
+
+    // One-time item
+    if (temp.isOneTime) {
+      if (temp.startDate.isAfter(start) &&
+          !temp.startDate.isAfter(end)) {
+        occurrences.add(temp.startDate);
+      }
+      return occurrences;
+    }
+
+    // Recurring item
+    var current = temp.startDate;
+
+    // Fast forward to start if needed
+    while (current.isBefore(start)) {
+      current = _getNextTemporaryOccurrence(current, temp.frequency!);
+    }
+
+    // Add occurrences within range
+    while (!current.isAfter(end)) {
+      // Check if within end date (if specified)
+      if (temp.endDate != null && current.isAfter(temp.endDate!)) {
+        break;
+      }
+
+      if (!current.isBefore(start)) {
+        occurrences.add(current);
+      }
+
+      current = _getNextTemporaryOccurrence(current, temp.frequency!);
+    }
+
+    return occurrences;
+  }
+
+  /// Calculate next occurrence for temporary item based on frequency
+  static DateTime _getNextTemporaryOccurrence(
+    DateTime current,
+    String frequency,
+  ) {
+    switch (frequency) {
+      case 'weekly':
+        return current.add(const Duration(days: 7));
+      case 'biweekly':
+        return current.add(const Duration(days: 14));
+      case 'monthly':
+        return _clampDate(current.year, current.month + 1, current.day);
+      default:
+        return current.add(const Duration(days: 7)); // Default to weekly
+    }
   }
 }

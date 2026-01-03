@@ -115,6 +115,10 @@ class ProjectionScenario {
   final List<TemporaryEnvelope> temporaryEnvelopes;
   final Map<String, bool>
   binderEnabled; // binderId -> on/off (toggles all envelopes)
+  final Map<String, EnvelopeSettingOverride>
+  envelopeSettings; // envelopeId -> setting overrides
+  final Map<String, DateTime>
+  scheduledPaymentDateOverrides; // scheduledPaymentId -> new date
 
   ProjectionScenario({
     required this.startDate,
@@ -125,6 +129,8 @@ class ProjectionScenario {
     this.envelopeOverrides = const {},
     this.temporaryEnvelopes = const [],
     this.binderEnabled = const {},
+    this.envelopeSettings = const {},
+    this.scheduledPaymentDateOverrides = const {},
   });
 
   // Create default scenario (all envelopes enabled, no overrides)
@@ -144,6 +150,8 @@ class ProjectionScenario {
     Map<String, double>? envelopeOverrides,
     List<TemporaryEnvelope>? temporaryEnvelopes,
     Map<String, bool>? binderEnabled,
+    Map<String, EnvelopeSettingOverride>? envelopeSettings,
+    Map<String, DateTime>? scheduledPaymentDateOverrides,
   }) {
     return ProjectionScenario(
       startDate: startDate ?? this.startDate,
@@ -154,29 +162,48 @@ class ProjectionScenario {
       envelopeOverrides: envelopeOverrides ?? this.envelopeOverrides,
       temporaryEnvelopes: temporaryEnvelopes ?? this.temporaryEnvelopes,
       binderEnabled: binderEnabled ?? this.binderEnabled,
+      envelopeSettings: envelopeSettings ?? this.envelopeSettings,
+      scheduledPaymentDateOverrides:
+          scheduledPaymentDateOverrides ?? this.scheduledPaymentDateOverrides,
     );
   }
 }
 
-/// Temporary envelope for scenario testing
+/// Envelope setting overrides for scenario testing
+class EnvelopeSettingOverride {
+  final bool? autoFillEnabled; // Override auto-fill enabled state
+  final double? autoFillAmount; // Override auto-fill amount
+
+  EnvelopeSettingOverride({
+    this.autoFillEnabled,
+    this.autoFillAmount,
+  });
+}
+
+/// Temporary income/expense for scenario testing
 class TemporaryEnvelope {
   final String id; // Generated UUID
   final String name;
   final double amount;
-  final DateTime effectiveDate; // When this envelope "kicks in"
+  final DateTime startDate; // When this starts (renamed from effectiveDate)
+  final DateTime? endDate; // When this ends (null = one-time or ongoing)
   final String? linkedAccountId;
   final String? emoji;
-  final bool isRecurring; // If true, repeats monthly
-  final int? dayOfMonth; // For recurring payments
+  final bool isIncome; // true = income, false = expense
+  final String? frequency; // null = one-time, 'weekly', 'biweekly', 'monthly'
 
   TemporaryEnvelope({
     required this.id,
     required this.name,
     required this.amount,
-    required this.effectiveDate,
+    required this.startDate,
+    this.endDate,
     this.linkedAccountId,
     this.emoji,
-    this.isRecurring = false,
-    this.dayOfMonth,
+    this.isIncome = false,
+    this.frequency,
   });
+
+  bool get isRecurring => frequency != null;
+  bool get isOneTime => frequency == null;
 }

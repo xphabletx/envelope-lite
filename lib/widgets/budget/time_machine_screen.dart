@@ -52,6 +52,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   final Map<String, double> _envelopeOverrides = {};
   final Map<String, bool> _binderEnabled = {};
   final List<TemporaryEnvelope> _tempEnvelopes = [];
+  final Map<String, EnvelopeSettingOverride> _envelopeSettings = {};
+  final Map<String, DateTime> _scheduledPaymentDateOverrides = {};
 
   bool _calculating = false;
   bool _adjustmentsExpanded = false;
@@ -214,6 +216,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
       _envelopeOverrides.clear();
       _tempEnvelopes.clear();
+      _envelopeSettings.clear();
+      _scheduledPaymentDateOverrides.clear();
       _result = null;
 
       for (final env in _allEnvelopes) {
@@ -244,17 +248,40 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   Future<void> _addTemporaryEnvelope() async {
     final nameController = TextEditingController();
     final amountController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
+    DateTime selectedStartDate = DateTime.now();
+    DateTime? selectedEndDate;
+    bool isIncome = false;
+    String? frequency; // null = one-time
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Temporary Expense'),
+          title: const Text('Add Temporary Item'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Income/Expense Toggle
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Expense'),
+                      icon: Icon(Icons.arrow_downward, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text('Income'),
+                      icon: Icon(Icons.arrow_upward, size: 16),
+                    ),
+                  ],
+                  selected: {isIncome},
+                  onSelectionChanged: (Set<bool> selected) {
+                    setDialogState(() => isIncome = selected.first);
+                  },
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
@@ -277,23 +304,65 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     extentOffset: amountController.text.length,
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Frequency selector
+                DropdownButtonFormField<String?>(
+                  value: frequency,
+                  decoration: const InputDecoration(labelText: 'Frequency'),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('One-time')),
+                    DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                    DropdownMenuItem(value: 'biweekly', child: Text('Biweekly')),
+                    DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                  ],
+                  onChanged: (val) => setDialogState(() => frequency = val),
+                ),
                 const SizedBox(height: 12),
+
+                // Start Date
                 ListTile(
-                  title: const Text('Date'),
-                  subtitle: Text(DateFormat('MMM d, yyyy').format(selectedDate)),
+                  title: Text(frequency == null ? 'Date' : 'Start Date'),
+                  subtitle: Text(DateFormat('MMM d, yyyy').format(selectedStartDate)),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
                     final picked = await showDatePicker(
                       context: context,
-                      initialDate: selectedDate,
+                      initialDate: selectedStartDate,
                       firstDate: DateTime.now(),
                       lastDate: _targetDate,
                     );
                     if (picked != null) {
-                      setDialogState(() => selectedDate = picked);
+                      setDialogState(() => selectedStartDate = picked);
                     }
                   },
                 ),
+
+                // End Date (only for recurring)
+                if (frequency != null)
+                  ListTile(
+                    title: const Text('End Date (Optional)'),
+                    subtitle: Text(selectedEndDate != null
+                        ? DateFormat('MMM d, yyyy').format(selectedEndDate!)
+                        : 'Ongoing'),
+                    trailing: selectedEndDate != null
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setDialogState(() => selectedEndDate = null),
+                          )
+                        : const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedEndDate ?? selectedStartDate.add(const Duration(days: 30)),
+                        firstDate: selectedStartDate,
+                        lastDate: _targetDate,
+                      );
+                      if (picked != null) {
+                        setDialogState(() => selectedEndDate = picked);
+                      }
+                    },
+                  ),
               ],
             ),
           ),
@@ -309,7 +378,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   Navigator.pop(context, {
                     'name': nameController.text,
                     'amount': amt,
-                    'date': selectedDate,
+                    'startDate': selectedStartDate,
+                    'endDate': selectedEndDate,
+                    'isIncome': isIncome,
+                    'frequency': frequency,
                   });
                 }
               },
@@ -326,7 +398,10 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
             id: const Uuid().v4(),
             name: result['name'],
             amount: result['amount'],
-            effectiveDate: result['date'],
+            startDate: result['startDate'],
+            endDate: result['endDate'],
+            isIncome: result['isIncome'],
+            frequency: result['frequency'],
             linkedAccountId: null,
           ),
         ),
@@ -336,6 +411,114 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   void _removeTempEnvelope(String id) {
     setState(() => _tempEnvelopes.removeWhere((e) => e.id == id));
+  }
+
+  Future<void> _showEnvelopeSettings(Envelope envelope) async {
+    final currentOverride = _envelopeSettings[envelope.id];
+    final autoFillEnabled = currentOverride?.autoFillEnabled ?? envelope.autoFillEnabled;
+    final autoFillAmount = currentOverride?.autoFillAmount ?? envelope.autoFillAmount ?? 0;
+
+    bool enabledValue = autoFillEnabled;
+    final amountController = TextEditingController(
+      text: autoFillAmount.toStringAsFixed(2),
+    );
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              if (envelope.iconValue != null || envelope.emoji != null)
+                envelope.getIconWidget(Theme.of(context), size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  envelope.name,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Scenario Override Settings',
+                  style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text('Auto-fill Enabled'),
+                  value: enabledValue,
+                  onChanged: (val) => setDialogState(() => enabledValue = val),
+                ),
+                const SizedBox(height: 8),
+                if (enabledValue)
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Auto-fill Amount',
+                      prefixText: '${Provider.of<LocaleProvider>(context, listen: false).currencySymbol} ',
+                    ),
+                    onTap: () => amountController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: amountController.text.length,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                Text(
+                  'Original: ${envelope.autoFillEnabled ? "${Provider.of<LocaleProvider>(context, listen: false).currencySymbol}${envelope.autoFillAmount?.toStringAsFixed(2) ?? '0.00'}" : "OFF"}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (currentOverride != null)
+              TextButton(
+                onPressed: () => Navigator.pop(context, {'remove': true}),
+                child: const Text('Remove Override'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final amt = double.tryParse(amountController.text);
+                if (amt != null) {
+                  Navigator.pop(context, {
+                    'autoFillEnabled': enabledValue,
+                    'autoFillAmount': amt,
+                  });
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (result['remove'] == true) {
+          _envelopeSettings.remove(envelope.id);
+        } else {
+          _envelopeSettings[envelope.id] = EnvelopeSettingOverride(
+            autoFillEnabled: result['autoFillEnabled'],
+            autoFillAmount: result['autoFillAmount'],
+          );
+        }
+      });
+    }
   }
 
   Future<void> _calculate() async {
@@ -389,6 +572,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
         envelopeOverrides: _envelopeOverrides,
         temporaryEnvelopes: _tempEnvelopes,
         binderEnabled: _binderEnabled,
+        envelopeSettings: _envelopeSettings,
+        scheduledPaymentDateOverrides: _scheduledPaymentDateOverrides,
       );
 
       final anchorDate = _calculateAnchorDate(_nextPayDate, _payFrequency);
@@ -833,13 +1018,13 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   color: theme.colorScheme.secondary,
                 ),
                 title: Text(
-                  'Scenario Adjustments (Optional)',
+                  'Scenario Adjuster',
                   style: fontProvider.getTextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                subtitle: const Text('Toggle envelopes, add temp expenses'),
+                subtitle: const Text('Fine-tune envelopes, income, expenses & payments'),
                 children: [
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -874,6 +1059,18 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.settings,
+                                    size: 18,
+                                    color: _envelopeSettings.containsKey(env.id)
+                                        ? theme.colorScheme.secondary
+                                        : Colors.grey,
+                                  ),
+                                  onPressed: () => _showEnvelopeSettings(env),
+                                  tooltip: 'Override auto-fill settings',
                                 ),
                               ],
                             ),
@@ -938,6 +1135,18 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.settings,
+                                            size: 16,
+                                            color: _envelopeSettings.containsKey(env.id)
+                                                ? theme.colorScheme.secondary
+                                                : Colors.grey,
+                                          ),
+                                          onPressed: () => _showEnvelopeSettings(env),
+                                          tooltip: 'Override auto-fill settings',
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -949,9 +1158,9 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
                         const Divider(height: 32),
 
-                        // Temporary Expenses
+                        // Temporary Income/Expenses
                         Text(
-                          'Temporary Expenses:',
+                          'Temporary Income/Expenses:',
                           style: fontProvider.getTextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -960,29 +1169,48 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         const SizedBox(height: 8),
 
                         ..._tempEnvelopes.map(
-                          (temp) => Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.schedule, size: 20),
-                              title: Text(temp.name),
-                              subtitle: Text(
-                                '${currency.format(temp.amount)} on ${DateFormat('MMM d').format(temp.effectiveDate)}',
-                                style: const TextStyle(fontSize: 12),
+                          (temp) {
+                            String subtitle;
+                            if (temp.isRecurring) {
+                              final endInfo = temp.endDate != null
+                                  ? ' until ${DateFormat('MMM d').format(temp.endDate!)}'
+                                  : ' (ongoing)';
+                              subtitle = '${currency.format(temp.amount)} ${temp.frequency} from ${DateFormat('MMM d').format(temp.startDate)}$endInfo';
+                            } else {
+                              subtitle = '${currency.format(temp.amount)} on ${DateFormat('MMM d').format(temp.startDate)}';
+                            }
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              color: temp.isIncome
+                                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+                                  : null,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  temp.isIncome ? Icons.arrow_upward : Icons.arrow_downward,
+                                  size: 20,
+                                  color: temp.isIncome ? Colors.green : Colors.red,
+                                ),
+                                title: Text(temp.name),
+                                subtitle: Text(
+                                  subtitle,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, size: 20),
+                                  color: Colors.red,
+                                  onPressed: () => _removeTempEnvelope(temp.id),
+                                ),
                               ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, size: 20),
-                                color: Colors.red,
-                                onPressed: () => _removeTempEnvelope(temp.id),
-                              ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
 
                         OutlinedButton.icon(
                           onPressed: _addTemporaryEnvelope,
                           icon: const Icon(Icons.add, size: 20),
-                          label: const Text('Add Temporary Expense'),
+                          label: const Text('Add Temporary Item'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 44),
                           ),
