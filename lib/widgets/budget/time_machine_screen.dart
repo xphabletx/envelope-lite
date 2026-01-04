@@ -83,12 +83,24 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
     // Use pay frequency from settings
     _payFrequency = widget.paySettings.payFrequency;
 
-    // Use nextPayDate directly from PayDaySettings (not lastPayDate)
-    if (widget.paySettings.nextPayDate != null) {
-      // Apply weekend adjustment if enabled
-      _nextPayDate = widget.paySettings.adjustForWeekends
-          ? widget.paySettings.adjustForWeekend(widget.paySettings.nextPayDate!)
-          : widget.paySettings.nextPayDate!;
+    // Use getNextPayDateAdjusted() to intelligently calculate next pay date
+    final calculatedNextPayDate = widget.paySettings.adjustForWeekends
+        ? widget.paySettings.getNextPayDateAdjusted()
+        : widget.paySettings.getNextPayDate();
+
+    if (calculatedNextPayDate != null) {
+      // If the calculated date is in the past, advance it based on frequency
+      final now = DateTime.now();
+      _nextPayDate = calculatedNextPayDate;
+
+      // Keep advancing until we get a future date
+      while (_nextPayDate.isBefore(now)) {
+        _nextPayDate = PayDaySettings.calculateNextPayDate(_nextPayDate, _payFrequency);
+        if (widget.paySettings.adjustForWeekends) {
+          _nextPayDate = widget.paySettings.adjustForWeekend(_nextPayDate);
+        }
+      }
+
       debugPrint('[TimeMachine] ✅ Initialized with next pay date: $_nextPayDate (adjustForWeekends: ${widget.paySettings.adjustForWeekends})');
     } else {
       _nextPayDate = DateTime.now().add(const Duration(days: 1));
@@ -356,7 +368,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         context: context,
                         initialDate: selectedEndDate ?? selectedStartDate.add(const Duration(days: 30)),
                         firstDate: selectedStartDate,
-                        lastDate: _targetDate,
+                        lastDate: DateTime.now().add(const Duration(days: 730)), // Same as target date limit
                       );
                       if (picked != null) {
                         setDialogState(() => selectedEndDate = picked);
@@ -411,6 +423,23 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   void _removeTempEnvelope(String id) {
     setState(() => _tempEnvelopes.removeWhere((e) => e.id == id));
+  }
+
+  double _calculateTotalAutoFill() {
+    double total = 0;
+    for (final env in _allEnvelopes) {
+      final isEnabled = _envelopeEnabled[env.id] ?? true;
+      if (!isEnabled) continue;
+
+      final settingOverride = _envelopeSettings[env.id];
+      final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
+      final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+
+      if (autoFillEnabled && autoFillAmount > 0) {
+        total += autoFillAmount;
+      }
+    }
+    return total;
   }
 
   Future<void> _showEnvelopeSettings(Envelope envelope) async {
@@ -793,10 +822,14 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: () async {
+                      final now = DateTime.now();
+                      // Ensure initialDate is not before firstDate
+                      final initialDate = _nextPayDate.isBefore(now) ? now : _nextPayDate;
+
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: _nextPayDate,
-                        firstDate: DateTime.now(),
+                        initialDate: initialDate,
+                        firstDate: now,
                         lastDate: _targetDate,
                         helpText: 'When is your next paycheck?',
                       );
@@ -1031,50 +1064,79 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Toggle Envelopes/Binders:',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Envelopes & Auto-fill:',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'Total: ${currency.format(_calculateTotalAutoFill())}',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
 
                         // Individual envelopes
                         ...individualEnvelopes.map(
-                          (env) => CheckboxListTile(
-                            dense: true,
-                            value: _envelopeEnabled[env.id] ?? true,
-                            onChanged: (val) => _toggleEnvelope(env.id),
-                            title: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (env.iconValue != null || env.emoji != null)
-                                  env.getIconWidget(theme, size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(env.name)),
-                                Text(
-                                  currency.format(env.currentAmount),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
+                          (env) {
+                            final settingOverride = _envelopeSettings[env.id];
+                            final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
+                            final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+                            final hasOverride = _envelopeSettings.containsKey(env.id);
+
+                            return CheckboxListTile(
+                              dense: true,
+                              value: _envelopeEnabled[env.id] ?? true,
+                              onChanged: (val) => _toggleEnvelope(env.id),
+                              title: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (env.iconValue != null || env.emoji != null)
+                                    env.getIconWidget(theme, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(env.name)),
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.settings,
+                                      size: 18,
+                                      color: hasOverride
+                                          ? theme.colorScheme.secondary
+                                          : Colors.grey,
+                                    ),
+                                    onPressed: () => _showEnvelopeSettings(env),
+                                    tooltip: 'Override auto-fill settings',
                                   ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                '${currency.format(env.currentAmount)} • Auto-fill: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: hasOverride
+                                      ? theme.colorScheme.secondary
+                                      : Colors.grey[600],
+                                  fontWeight: hasOverride ? FontWeight.bold : FontWeight.normal,
                                 ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.settings,
-                                    size: 18,
-                                    color: _envelopeSettings.containsKey(env.id)
-                                        ? theme.colorScheme.secondary
-                                        : Colors.grey,
-                                  ),
-                                  onPressed: () => _showEnvelopeSettings(env),
-                                  tooltip: 'Override auto-fill settings',
-                                ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
 
                         // Binders with envelopes
@@ -1114,43 +1176,52 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                 subtitle: const Text('Toggle all'),
                               ),
                               ...envelopes.map(
-                                (env) => Padding(
-                                  padding: const EdgeInsets.only(left: 32),
-                                  child: CheckboxListTile(
-                                    dense: true,
-                                    value: _envelopeEnabled[env.id] ?? true,
-                                    onChanged: (val) => _toggleEnvelope(env.id),
-                                    title: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (env.iconValue != null ||
-                                            env.emoji != null)
-                                          env.getIconWidget(theme, size: 16),
-                                        const SizedBox(width: 8),
-                                        Expanded(child: Text(env.name)),
-                                        Text(
-                                          currency.format(env.currentAmount),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
+                                (env) {
+                                  final settingOverride = _envelopeSettings[env.id];
+                                  final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
+                                  final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+                                  final hasOverride = _envelopeSettings.containsKey(env.id);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: 32),
+                                    child: CheckboxListTile(
+                                      dense: true,
+                                      value: _envelopeEnabled[env.id] ?? true,
+                                      onChanged: (val) => _toggleEnvelope(env.id),
+                                      title: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (env.iconValue != null ||
+                                              env.emoji != null)
+                                            env.getIconWidget(theme, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text(env.name)),
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.settings,
+                                              size: 16,
+                                              color: hasOverride
+                                                  ? theme.colorScheme.secondary
+                                                  : Colors.grey,
+                                            ),
+                                            onPressed: () => _showEnvelopeSettings(env),
+                                            tooltip: 'Override auto-fill settings',
                                           ),
+                                        ],
+                                      ),
+                                      subtitle: Text(
+                                        '${currency.format(env.currentAmount)} • Auto-fill: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: hasOverride
+                                              ? theme.colorScheme.secondary
+                                              : Colors.grey[600],
+                                          fontWeight: hasOverride ? FontWeight.bold : FontWeight.normal,
                                         ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.settings,
-                                            size: 16,
-                                            color: _envelopeSettings.containsKey(env.id)
-                                                ? theme.colorScheme.secondary
-                                                : Colors.grey,
-                                          ),
-                                          onPressed: () => _showEnvelopeSettings(env),
-                                          tooltip: 'Override auto-fill settings',
-                                        ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             ],
                           );
