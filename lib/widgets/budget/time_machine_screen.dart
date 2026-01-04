@@ -368,7 +368,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         context: context,
                         initialDate: selectedEndDate ?? selectedStartDate.add(const Duration(days: 30)),
                         firstDate: selectedStartDate,
-                        lastDate: DateTime.now().add(const Duration(days: 730)), // Same as target date limit
+                        lastDate: DateTime(2100, 12, 31), // Same as target date limit
                       );
                       if (picked != null) {
                         setDialogState(() => selectedEndDate = picked);
@@ -776,7 +776,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         context: context,
                         initialDate: _targetDate,
                         firstDate: DateTime.now().add(const Duration(days: 1)),
-                        lastDate: DateTime.now().add(const Duration(days: 730)),
+                        lastDate: DateTime(2100, 12, 31), // Plan into the next century!
                       );
                       if (picked != null) setState(() => _targetDate = picked);
                     },
