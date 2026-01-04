@@ -85,6 +85,24 @@ class TimeMachineProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Get the date when an envelope's target was achieved (if it has been)
+  DateTime? getTargetAchievedDate(String envelopeId) {
+    if (!_isActive || _projectionData == null) {
+      return null;
+    }
+
+    // Search through all account projections for this envelope
+    for (final accountProj in _projectionData!.accountProjections.values) {
+      for (final envProj in accountProj.envelopeProjections) {
+        if (envProj.envelopeId == envelopeId) {
+          return envProj.targetAchievedDate;
+        }
+      }
+    }
+
+    return null;
+  }
+
   /// Get projected balance for an account
   double? getProjectedAccountBalance(String accountId) {
     if (!_isActive || _projectionData == null) {

@@ -2,7 +2,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -20,6 +19,8 @@ import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
 import '../services/customer_center_service.dart';
+import '../services/bug_report_service.dart';
+import '../services/app_update_service.dart';
 import '../providers/workspace_provider.dart';
 
 import '../screens/appearance_settings_screen.dart';
@@ -28,6 +29,7 @@ import '../screens/workspace_gate.dart';
 import '../screens/pay_day_settings_screen.dart';
 import '../screens/settings/tutorial_manager_screen.dart';
 import '../screens/settings/faq_screen.dart';
+import '../screens/settings/about_screen.dart';
 import '../services/scheduled_payment_repo.dart';
 import '../services/pay_day_settings_service.dart';
 import '../widgets/tutorial_wrapper.dart';
@@ -337,13 +339,43 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.support_agent_outlined,
                 children: [
                   _SettingsTile(
+                    title: 'Report a Bug',
+                    subtitle: 'Help us improve the app',
+                    leading: const Icon(Icons.bug_report_outlined),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => BugReportService.showBugReportDialog(context),
+                  ),
+                  _SettingsTile(
+                    title: 'Send Feedback',
+                    subtitle: 'Share your suggestions',
+                    leading: const Icon(Icons.feedback_outlined),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => BugReportService.sendFeedback(context),
+                  ),
+                  _SettingsTile(
+                    title: 'Check for Updates',
+                    subtitle: 'See if a new version is available',
+                    leading: const Icon(Icons.system_update_outlined),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await AppUpdateService.clearSkippedVersion();
+                      if (context.mounted) {
+                        await AppUpdateService.checkForUpdates(
+                          context,
+                          showNoUpdateDialog: true,
+                          respectSkipVersion: false,
+                        );
+                      }
+                    },
+                  ),
+                  _SettingsTile(
                     title: 'Contact Us',
                     leading: const Icon(Icons.email_outlined),
                     onTap: () async {
                       final Uri emailLaunchUri = Uri(
                         scheme: 'mailto',
-                        path: 'telmccall@gmail.com',
-                        query: 'subject=Envelope Lite Support',
+                        path: 'hello@develapp.tech',
+                        query: 'subject=Stuffrite Support',
                       );
                       if (!await launchUrl(emailLaunchUri)) {
                         if (context.mounted) {
@@ -392,20 +424,15 @@ class SettingsScreen extends StatelessWidget {
                       );
                     },
                   ),
-                  FutureBuilder<PackageInfo>(
-                    future: PackageInfo.fromPlatform(),
-                    builder: (context, snapshot) {
-                      String versionText = 'Loading...';
-                      if (snapshot.hasData) {
-                        versionText =
-                            '${snapshot.data!.version} (${snapshot.data!.buildNumber})';
-                      }
-
-                      return _SettingsTile(
-                        title: 'App Version',
-                        subtitle: versionText,
-                        leading: const Icon(Icons.info_outlined),
-                        onTap: null,
+                  _SettingsTile(
+                    title: 'About',
+                    subtitle: 'App version, info & credits',
+                    leading: const Icon(Icons.info_outlined),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AboutScreen()),
                       );
                     },
                   ),
@@ -935,7 +962,21 @@ class SettingsScreen extends StatelessWidget {
 
       if (context.mounted) {
         Navigator.of(context).pop(); // Dismiss the progress dialog
-        await DataExportService.showExportOptions(context, filePath);
+
+        // Show success message with file location
+        final fileName = filePath.split('/').last;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export saved to Documents: $fileName'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Share',
+              onPressed: () async {
+                await DataExportService.showExportOptions(context, filePath);
+              },
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {

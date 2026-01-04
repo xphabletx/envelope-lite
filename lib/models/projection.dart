@@ -54,6 +54,11 @@ class EnvelopeProjection {
   final double targetAmount;
   final bool hasTarget;
   final bool willMeetTarget; // Will projected amount meet/exceed target?
+  final DateTime? targetDate; // Target date from envelope settings
+  final DateTime? targetAchievedDate; // When target will be/was achieved
+  final double? overachievementAmount; // Amount above target (if exceeded)
+  final int? daysUntilTarget; // Days until target is reached (negative if overdue)
+  final int? daysBeforeTargetDate; // Days before/after target date when achieved
 
   EnvelopeProjection({
     required this.envelopeId,
@@ -66,10 +71,19 @@ class EnvelopeProjection {
     required this.targetAmount,
     required this.hasTarget,
     required this.willMeetTarget,
+    this.targetDate,
+    this.targetAchievedDate,
+    this.overachievementAmount,
+    this.daysUntilTarget,
+    this.daysBeforeTargetDate,
   });
 
   double get changeAmount => projectedAmount - currentAmount;
   bool get isIncrease => changeAmount > 0;
+  bool get hasTargetDate => targetDate != null;
+  bool get achievedEarly => daysBeforeTargetDate != null && daysBeforeTargetDate! > 0;
+  bool get achievedLate => daysBeforeTargetDate != null && daysBeforeTargetDate! < 0;
+  bool get achievedOnTime => daysBeforeTargetDate == 0;
 }
 
 /// Event that affects balance (pay day, bill, etc)

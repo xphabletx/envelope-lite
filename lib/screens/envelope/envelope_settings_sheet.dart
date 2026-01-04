@@ -374,7 +374,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       builder: (context, envelopeSnapshot) {
         // Handle envelope deletion - close the sheet if envelope is deleted
         if (envelopeSnapshot.hasError) {
-          debugPrint('[EnvelopeSettingsSheet] Stream error: ${envelopeSnapshot.error}');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               Navigator.of(context).pop();
@@ -1196,9 +1195,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         onPressed: _isLoading
                             ? null
                             : () {
-                                debugPrint(
-                                  '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
-                                );
                                 _confirmDelete(envelope);
                               },
                         style: OutlinedButton.styleFrom(
@@ -1281,9 +1277,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         onPressed: _isLoading
                             ? null
                             : () {
-                                debugPrint(
-                                  '[EnvelopeSettingsSheet] 🔴 Delete button tapped',
-                                );
                                 _confirmDelete(envelope);
                               },
                         style: OutlinedButton.styleFrom(
@@ -1395,7 +1388,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   }
 
   Future<void> _confirmDelete(Envelope envelope) async {
-    debugPrint('[EnvelopeSettingsSheet] 📋 Showing delete confirmation dialog');
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1439,41 +1431,25 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     );
 
     if (confirmed == true && mounted) {
-      debugPrint('[EnvelopeSettingsSheet] ✅ User confirmed delete');
-      debugPrint('[EnvelopeSettingsSheet] Envelope ID: ${widget.envelopeId}');
-      debugPrint('[EnvelopeSettingsSheet] Envelope name: ${envelope.name}');
-
       // CRITICAL: Close the settings sheet BEFORE deleting
       // This prevents the sheet from trying to stream the deleted envelope
       Navigator.pop(context);
 
       try {
-        debugPrint('[EnvelopeSettingsSheet] 📞 Calling repo.deleteEnvelope...');
         await widget.repo.deleteEnvelope(widget.envelopeId);
-        debugPrint('[EnvelopeSettingsSheet] ✅ Delete completed successfully');
 
         if (mounted) {
-          debugPrint(
-            '[EnvelopeSettingsSheet] Showing success message',
-          );
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Envelope deleted')));
         }
       } catch (e) {
-        debugPrint('[EnvelopeSettingsSheet] ❌ Delete failed with error: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error deleting envelope: $e')),
           );
         }
       }
-    } else if (confirmed == false) {
-      debugPrint('[EnvelopeSettingsSheet] ❌ User cancelled delete');
-    } else if (!mounted) {
-      debugPrint(
-        '[EnvelopeSettingsSheet] ⚠️ Widget not mounted, skipping delete',
-      );
     }
   }
 }

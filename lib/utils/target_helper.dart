@@ -1,4 +1,5 @@
 // lib/utils/target_helper.dart
+import 'package:flutter/foundation.dart';
 import '../models/envelope.dart';
 
 class TargetHelper {
@@ -75,34 +76,61 @@ class TargetHelper {
     required DateTime projectedDate,
     required String currencySymbol,
   }) {
+    debugPrint('[TargetHelper] ========================================');
+    debugPrint('[TargetHelper] Calculating time machine text:');
+    debugPrint('[TargetHelper]   Target Amount: $targetAmount');
+    debugPrint('[TargetHelper]   Target Date: $targetDate');
+    debugPrint('[TargetHelper]   Projected Amount: $projectedAmount');
+    debugPrint('[TargetHelper]   Projected Date (viewing): $projectedDate');
+    debugPrint('[TargetHelper]   Amount Met: ${projectedAmount >= targetAmount}');
+
     // Case 1: Projected date is exactly on target date
     if (_isSameDay(projectedDate, targetDate)) {
       if (projectedAmount >= targetAmount) {
+        debugPrint('[TargetHelper]   Result: Will reach target on time!');
+        debugPrint('[TargetHelper] ========================================');
         return "Will reach target on time! 🎉";
       } else {
         final shortfall = targetAmount - projectedAmount;
+        debugPrint('[TargetHelper]   Result: Will be short by $shortfall');
+        debugPrint('[TargetHelper] ========================================');
         return "Will be $currencySymbol${shortfall.toStringAsFixed(2)} short";
       }
     }
 
     // Case 2: Projected date is beyond target date
     if (projectedDate.isAfter(targetDate)) {
+      debugPrint('[TargetHelper]   Viewing date is AFTER target date');
       if (projectedAmount >= targetAmount) {
         // Calculate when target was/will be reached
+        // NOTE: This calculates days between viewing date and target DATE (not achievement date)
         final daysAfter = projectedDate.difference(targetDate).inDays;
+        debugPrint('[TargetHelper]   Days after target DATE: $daysAfter');
+        debugPrint('[TargetHelper]   Calculation: projectedDate ($projectedDate) - targetDate ($targetDate) = $daysAfter days');
+
         if (daysAfter == 0) {
+          debugPrint('[TargetHelper]   Result: Target reached on due date!');
+          debugPrint('[TargetHelper] ========================================');
           return "Target reached on due date! 🎉";
         } else if (daysAfter == 1) {
+          debugPrint('[TargetHelper]   Result: Target reached 1 day ago');
+          debugPrint('[TargetHelper] ========================================');
           return "Target reached 1 day ago 🎉";
         } else if (daysAfter < 30) {
+          debugPrint('[TargetHelper]   Result: Target reached $daysAfter days ago');
+          debugPrint('[TargetHelper] ========================================');
           return "Target reached $daysAfter days ago 🎉";
         } else {
           final monthsAfter = (daysAfter / 30).round();
+          debugPrint('[TargetHelper]   Result: Target reached ${monthsAfter}mo ago');
+          debugPrint('[TargetHelper] ========================================');
           return "Target reached ${monthsAfter}mo ago 🎉";
         }
       } else {
         final shortfall = targetAmount - projectedAmount;
         final daysOverdue = projectedDate.difference(targetDate).inDays;
+        debugPrint('[TargetHelper]   Result: Will be short by $shortfall ($daysOverdue days overdue)');
+        debugPrint('[TargetHelper] ========================================');
         return "Will be $currencySymbol${shortfall.toStringAsFixed(2)} short (${daysOverdue}d overdue)";
       }
     }

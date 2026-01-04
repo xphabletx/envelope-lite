@@ -20,6 +20,8 @@ import 'notifications_screen.dart';
 import '../screens/home_screen.dart';
 import '../../utils/responsive_helper.dart';
 import 'envelope/envelopes_detail_screen.dart';
+import '../../widgets/tutorial_wrapper.dart';
+import '../../data/tutorial_sequences.dart';
 
 class _PayDayOccurrence {
   final double amount;
@@ -1267,7 +1269,9 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                 final responsive = context.responsive;
                 final isLandscape = responsive.isLandscape;
 
-                return Scaffold(
+                return TutorialWrapper(
+                  tutorialSequence: calendarTutorial,
+                  child: Scaffold(
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: AppBar(
                 backgroundColor: theme.scaffoldBackgroundColor,
@@ -1401,6 +1405,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                       groupedOccurrences,
                       sortedDates,
                     ),
+                  ),
                 );
               },
             );

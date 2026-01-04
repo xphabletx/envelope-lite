@@ -22,9 +22,12 @@ import 'services/notification_repo.dart';
 import 'services/repository_manager.dart';
 import 'services/hive_service.dart';
 import 'services/subscription_service.dart';
+import 'services/logger_service.dart';
+import 'services/app_update_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'widgets/app_lifecycle_observer.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // Global navigator key for forced navigation (e.g., logout)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -90,6 +93,29 @@ void main() async {
 
   // NEW: Initialize RevenueCat
   await SubscriptionService().init();
+
+  // Initialize Logger Service
+  await LoggerService.init();
+  debugPrint('[Main] 📝 Logger service initialized');
+
+  // Log app version on startup
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    await LoggerService.info(
+      'App started: v${packageInfo.version} (${packageInfo.buildNumber})',
+    );
+    debugPrint('[Main] 📱 App version: ${packageInfo.version} (${packageInfo.buildNumber})');
+  } catch (e) {
+    debugPrint('[Main] ⚠️ Could not get package info: $e');
+  }
+
+  // Initialize Firebase Remote Config for update checking
+  try {
+    await AppUpdateService.init();
+    debugPrint('[Main] 🔄 Remote Config initialized for updates');
+  } catch (e) {
+    debugPrint('[Main] ⚠️ Remote Config initialization failed: $e');
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');

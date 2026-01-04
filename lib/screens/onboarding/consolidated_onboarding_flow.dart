@@ -237,7 +237,6 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           // Skip template AND quick setup, go to target icon
           _nextStep();
         },
-        onBack: _previousStep,
       ),
 
       // Step 10 & 11: Quick Setup (if template selected)
@@ -753,14 +752,17 @@ class _ThemeSelectionStep extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'Choose your vibe',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'Choose your vibe',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 32),
@@ -955,14 +957,17 @@ class _FontSelectionStep extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'Choose your font style',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'Choose your font style',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 32),
@@ -1076,14 +1081,17 @@ class _CurrencySelectionStep extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'What currency do you use?',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'What currency do you use?',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 32),
@@ -1230,14 +1238,17 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'How do you want to budget?',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'How do you want to budget?',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 32),
@@ -1604,14 +1615,17 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'Add your main account',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'Add your main account',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 8),
@@ -1834,14 +1848,17 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'When do you get paid?',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'When do you get paid?',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 48),
@@ -2290,12 +2307,10 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
 class _BinderTemplateSelectionStep extends StatelessWidget {
   final Function(BinderTemplate?) onContinue;
   final VoidCallback onSkip;
-  final VoidCallback? onBack;
 
   const _BinderTemplateSelectionStep({
     required this.onContinue,
     required this.onSkip,
-    this.onBack,
   });
 
   @override
@@ -2310,14 +2325,17 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Text(
-                'Let\'s create your first binder!',
-                style: fontProvider.getTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                child: Text(
+                  'Let\'s create your first binder!',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 16),
@@ -2337,7 +2355,7 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
                 child: ListView(
                   children: [
                     ...binderTemplates.map((template) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.only(bottom: 8),
                           child: _TemplateCard(
                             template: template,
                             onTap: () => onContinue(template),
@@ -2349,53 +2367,25 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  if (onBack != null)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          onBack!();
-                        },
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          'Go back',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (onBack != null) const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        onSkip();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Skip - I\'ll create later',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+              FilledButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  onSkip();
+                },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                ),
+                child: Text(
+                  'Skip - I\'ll create later',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2423,7 +2413,7 @@ class _TemplateCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
@@ -2435,8 +2425,8 @@ class _TemplateCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 60,
-              height: 60,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
                 shape: BoxShape.circle,
@@ -2444,11 +2434,11 @@ class _TemplateCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   template.emoji,
-                  style: const TextStyle(fontSize: 32),
+                  style: const TextStyle(fontSize: 28),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2456,23 +2446,23 @@ class _TemplateCard extends StatelessWidget {
                   Text(
                     '${template.name} Binder',
                     style: fontProvider.getTextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     template.description,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.secondaryContainer,
@@ -2481,7 +2471,7 @@ class _TemplateCard extends StatelessWidget {
                     child: Text(
                       '${template.envelopes.length} envelopes',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onSecondaryContainer,
                       ),
@@ -2493,7 +2483,7 @@ class _TemplateCard extends StatelessWidget {
             Icon(
               Icons.arrow_forward_ios,
               color: theme.colorScheme.primary,
-              size: 20,
+              size: 18,
             ),
           ],
         ),

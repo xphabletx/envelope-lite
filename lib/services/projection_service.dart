@@ -251,6 +251,9 @@ class ProjectionService {
     events.sort((a, b) => a.date.compareTo(b.date));
     print('Total events to process: ${events.length}');
 
+    // Track when each envelope reaches its target
+    final envelopeTargetAchievedDate = <String, DateTime>{};
+
     // Collect auto-fill events separately to avoid concurrent modification
     final autoFillEvents = <ProjectionEvent>[];
 
@@ -301,6 +304,16 @@ class ProjectionService {
           final oldEnvBalance = envelopeBalances[envelope.id] ?? 0;
           envelopeBalances[envelope.id] = oldEnvBalance + autoFillAmount;
           print('    Envelope "${envelope.name}": ${oldEnvBalance.toStringAsFixed(2)} + ${autoFillAmount.toStringAsFixed(2)} = ${envelopeBalances[envelope.id]!.toStringAsFixed(2)}');
+
+          // Check if envelope reached its target for the first time
+          final targetAmount = envelope.targetAmount;
+          if (targetAmount != null && targetAmount > 0 && !envelopeTargetAchievedDate.containsKey(envelope.id)) {
+            final newBalance = envelopeBalances[envelope.id]!;
+            if (newBalance >= targetAmount) {
+              envelopeTargetAchievedDate[envelope.id] = event.date;
+              print('    🎯 TARGET ACHIEVED! Envelope "${envelope.name}" reached target of £${targetAmount.toStringAsFixed(2)} on ${event.date}');
+            }
+          }
 
           // Create auto_fill event for envelope transaction history (deposit to envelope)
           final sourceAccountName = accounts
@@ -450,6 +463,57 @@ class ProjectionService {
         accountAssignedTotal += projectedEnvBalance;
         print('  Envelope "${env.name}": £${projectedEnvBalance.toStringAsFixed(2)}');
 
+        // Calculate target achievement metrics
+        final targetAmount = env.targetAmount ?? 0;
+        final hasTarget = targetAmount > 0;
+        final willMeetTarget = projectedEnvBalance >= targetAmount;
+        final targetDate = env.targetDate;
+        final targetAchievedDate = envelopeTargetAchievedDate[env.id];
+
+        // Calculate overachievement
+        double? overachievementAmount;
+        if (hasTarget && willMeetTarget) {
+          overachievementAmount = projectedEnvBalance - targetAmount;
+        }
+
+        // Calculate days until target achieved (from now)
+        int? daysUntilTarget;
+        if (targetAchievedDate != null) {
+          daysUntilTarget = targetAchievedDate.difference(now).inDays;
+        }
+
+        // Calculate days before/after target date when achieved
+        int? daysBeforeTargetDate;
+        if (targetDate != null && targetAchievedDate != null) {
+          daysBeforeTargetDate = targetDate.difference(targetAchievedDate).inDays;
+        }
+
+        if (hasTarget) {
+          print('    Target: £${targetAmount.toStringAsFixed(2)}');
+          if (targetDate != null) {
+            print('    Target Date: $targetDate');
+          }
+          if (targetAchievedDate != null) {
+            print('    🎯 Achieved on: $targetAchievedDate (${daysUntilTarget! >= 0 ? "in $daysUntilTarget days" : "${-daysUntilTarget} days ago"})');
+            if (daysBeforeTargetDate != null) {
+              if (daysBeforeTargetDate > 0) {
+                print('    ✅ Achieved $daysBeforeTargetDate days EARLY');
+              } else if (daysBeforeTargetDate < 0) {
+                print('    ⚠️ Achieved ${-daysBeforeTargetDate} days LATE');
+              } else {
+                print('    ✅ Achieved ON TIME');
+              }
+            }
+            if (overachievementAmount != null && overachievementAmount > 0) {
+              print('    📈 Exceeds target by £${overachievementAmount.toStringAsFixed(2)}');
+            }
+          } else if (willMeetTarget) {
+            print('    ⚠️ Will meet target by projection date but achievement date not tracked in timeline');
+          } else {
+            print('    ❌ Will NOT meet target by projection date');
+          }
+        }
+
         envProjections.add(
           EnvelopeProjection(
             envelopeId: env.id,
@@ -459,9 +523,14 @@ class ProjectionService {
             iconValue: env.iconValue,
             currentAmount: env.currentAmount,
             projectedAmount: projectedEnvBalance,
-            targetAmount: env.targetAmount ?? 0,
-            hasTarget: (env.targetAmount ?? 0) > 0,
-            willMeetTarget: projectedEnvBalance >= (env.targetAmount ?? 0),
+            targetAmount: targetAmount,
+            hasTarget: hasTarget,
+            willMeetTarget: willMeetTarget,
+            targetDate: targetDate,
+            targetAchievedDate: targetAchievedDate,
+            overachievementAmount: overachievementAmount,
+            daysUntilTarget: daysUntilTarget,
+            daysBeforeTargetDate: daysBeforeTargetDate,
           ),
         );
       }
@@ -481,6 +550,122 @@ class ProjectionService {
 
       totalAvailable += available;
       totalAssigned += accountAssignedTotal;
+    }
+
+    // Handle envelopes without linked accounts (for users who don't use accounts)
+    final unlinkedEnvelopes = envelopes
+        .where((e) => e.linkedAccountId == null || e.linkedAccountId!.isEmpty)
+        .toList();
+
+    if (unlinkedEnvelopes.isNotEmpty) {
+      print('\n--- UNLINKED ENVELOPES (No Account) ---');
+      print('Found ${unlinkedEnvelopes.length} envelopes without linked accounts');
+
+      final unlinkedEnvProjections = <EnvelopeProjection>[];
+      double unlinkedAssignedTotal = 0;
+
+      for (final env in unlinkedEnvelopes) {
+        if (scenario?.envelopeEnabled[env.id] == false) {
+          print('  Envelope "${env.name}" - DISABLED, skipping');
+          continue;
+        }
+
+        double projectedEnvBalance =
+            envelopeBalances[env.id] ?? env.currentAmount;
+
+        if (scenario?.envelopeOverrides.containsKey(env.id) == true) {
+          projectedEnvBalance = scenario!.envelopeOverrides[env.id]!;
+        }
+
+        unlinkedAssignedTotal += projectedEnvBalance;
+        print('  Envelope "${env.name}": £${projectedEnvBalance.toStringAsFixed(2)}');
+
+        // Calculate target achievement metrics
+        final targetAmount = env.targetAmount ?? 0;
+        final hasTarget = targetAmount > 0;
+        final willMeetTarget = projectedEnvBalance >= targetAmount;
+        final targetDate = env.targetDate;
+        final targetAchievedDate = envelopeTargetAchievedDate[env.id];
+
+        // Calculate overachievement
+        double? overachievementAmount;
+        if (hasTarget && willMeetTarget) {
+          overachievementAmount = projectedEnvBalance - targetAmount;
+        }
+
+        // Calculate days until target achieved (from now)
+        int? daysUntilTarget;
+        if (targetAchievedDate != null) {
+          daysUntilTarget = targetAchievedDate.difference(now).inDays;
+        }
+
+        // Calculate days before/after target date when achieved
+        int? daysBeforeTargetDate;
+        if (targetDate != null && targetAchievedDate != null) {
+          daysBeforeTargetDate = targetDate.difference(targetAchievedDate).inDays;
+        }
+
+        if (hasTarget) {
+          print('    Target: £${targetAmount.toStringAsFixed(2)}');
+          if (targetDate != null) {
+            print('    Target Date: $targetDate');
+          }
+          if (targetAchievedDate != null) {
+            print('    🎯 Achieved on: $targetAchievedDate (${daysUntilTarget! >= 0 ? "in $daysUntilTarget days" : "${-daysUntilTarget} days ago"})');
+            if (daysBeforeTargetDate != null) {
+              if (daysBeforeTargetDate > 0) {
+                print('    ✅ Achieved $daysBeforeTargetDate days EARLY');
+              } else if (daysBeforeTargetDate < 0) {
+                print('    ⚠️ Achieved ${-daysBeforeTargetDate} days LATE');
+              } else {
+                print('    ✅ Achieved ON TIME');
+              }
+            }
+            if (overachievementAmount != null && overachievementAmount > 0) {
+              print('    📈 Exceeds target by £${overachievementAmount.toStringAsFixed(2)}');
+            }
+          } else if (willMeetTarget) {
+            print('    ⚠️ Will meet target by projection date but achievement date not tracked in timeline');
+          } else {
+            print('    ❌ Will NOT meet target by projection date');
+          }
+        }
+
+        unlinkedEnvProjections.add(
+          EnvelopeProjection(
+            envelopeId: env.id,
+            envelopeName: env.name,
+            emoji: env.emoji,
+            iconType: env.iconType,
+            iconValue: env.iconValue,
+            currentAmount: env.currentAmount,
+            projectedAmount: projectedEnvBalance,
+            targetAmount: targetAmount,
+            hasTarget: hasTarget,
+            willMeetTarget: willMeetTarget,
+            targetDate: targetDate,
+            targetAchievedDate: targetAchievedDate,
+            overachievementAmount: overachievementAmount,
+            daysUntilTarget: daysUntilTarget,
+            daysBeforeTargetDate: daysBeforeTargetDate,
+          ),
+        );
+      }
+
+      // Create a virtual "Unlinked" account projection to hold these envelopes
+      if (unlinkedEnvProjections.isNotEmpty) {
+        accountProjections['__unlinked__'] = AccountProjection(
+          accountId: '__unlinked__',
+          accountName: 'Unlinked Envelopes',
+          projectedBalance: unlinkedAssignedTotal,
+          assignedAmount: unlinkedAssignedTotal,
+          availableAmount: 0, // No "available" money for unlinked envelopes
+          envelopeProjections: unlinkedEnvProjections,
+        );
+
+        totalAssigned += unlinkedAssignedTotal;
+        print('  Total in unlinked envelopes: £${unlinkedAssignedTotal.toStringAsFixed(2)}');
+      }
     }
 
     print('\n========== FINAL TOTALS ==========');

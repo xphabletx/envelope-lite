@@ -12,6 +12,7 @@ import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/projection_service.dart';
+import '../../services/pay_day_settings_service.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
@@ -20,6 +21,7 @@ import '../tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
 import '../../widgets/common/smart_text_field.dart';
+import '../../screens/pay_day_settings_screen.dart';
 
 class TimeMachineScreen extends StatefulWidget {
   const TimeMachineScreen({
@@ -984,11 +986,37 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Projection based on current auto-fill & scheduled payments',
+                            'Projection based on current auto-fill & scheduled payments. Pay day settings are stored here.',
                             style: TextStyle(
                               fontSize: 12,
                               color: theme.colorScheme.onSurface
                                   .withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () {
+                            final service = PayDaySettingsService(
+                              null, // db parameter (not used in this service)
+                              widget.envelopeRepo.currentUserId,
+                            );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PayDaySettingsScreen(
+                                  service: service,
+                                ),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.settings,
+                              size: 20,
+                              color: theme.colorScheme.primary,
                             ),
                           ),
                         ),
@@ -1692,6 +1720,63 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                         : Colors.red,
                                                   ),
                                                 ),
+                                                // Target achievement info
+                                                if (env.hasTarget && env.targetAchievedDate != null) ...[
+                                                  const SizedBox(height: 2),
+                                                  if (env.daysBeforeTargetDate != null && env.achievedEarly)
+                                                    Text(
+                                                      '🎯 Target reached ${env.daysBeforeTargetDate} days early',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.green.shade700,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    )
+                                                  else if (env.daysBeforeTargetDate != null && env.achievedLate)
+                                                    Text(
+                                                      '⚠️ Target reached ${-env.daysBeforeTargetDate!} days late',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.orange.shade700,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    )
+                                                  else if (env.achievedOnTime)
+                                                    Text(
+                                                      '🎯 Target reached on time',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.green.shade700,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    )
+                                                  else
+                                                    Text(
+                                                      '🎯 Target reached on ${DateFormat('MMM d').format(env.targetAchievedDate!)}',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.green.shade700,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  if (env.overachievementAmount != null && env.overachievementAmount! > 0)
+                                                    Text(
+                                                      'Exceeds target by ${currency.format(env.overachievementAmount)}',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.blue.shade700,
+                                                      ),
+                                                    ),
+                                                ] else if (env.hasTarget && !env.willMeetTarget) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '❌ Won\'t reach target of ${currency.format(env.targetAmount)}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.red.shade700,
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ),

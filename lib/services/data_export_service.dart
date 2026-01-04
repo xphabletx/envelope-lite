@@ -38,7 +38,7 @@ class DataExportService {
     final envelopes = await _envelopeRepo.getAllEnvelopes();
     final transactions = await _envelopeRepo.getAllTransactions();
     final scheduledPayments = await _scheduledPaymentRepo.getAllScheduledPayments();
-    
+
     // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
     final groups = await _groupRepo.getAllGroupsAsync();
 
@@ -54,7 +54,11 @@ class DataExportService {
     _createScheduledPaymentsSheet(excel, scheduledPayments);
     _createAccountsSheet(excel, accounts); // New sheet creation
 
-    final directory = await getTemporaryDirectory();
+    // Remove the default 'Sheet1' that gets created automatically
+    excel.delete('Sheet1');
+
+    // Save to Documents directory instead of temporary directory
+    final directory = await getApplicationDocumentsDirectory();
     final filePath =
         '${directory.path}/envelope_lite_export_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     final fileBytes = excel.save();
@@ -242,38 +246,10 @@ class DataExportService {
             ),
             ListTile(
               leading: const Icon(Icons.open_in_new),
-              title: const Text('Open in Excel/Sheets'),
+              title: const Text('Open File'),
               onTap: () {
                 Navigator.of(ctx).pop();
                 OpenFile.open(filePath);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.save_alt),
-              title: const Text('Save to Device'),
-              onTap: () async {
-                final navigator = Navigator.of(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                navigator.pop();
-                try {
-                  final directory = await getApplicationDocumentsDirectory();
-                  final fileName = filePath.split('/').last;
-                  final newPath = '${directory.path}/$fileName';
-                  await File(filePath).copy(newPath);
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Saved to Documents: $fileName'),
-                      action: SnackBarAction(
-                        label: 'Open',
-                        onPressed: () => OpenFile.open(newPath),
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to save file: $e')),
-                  );
-                }
               },
             ),
           ],

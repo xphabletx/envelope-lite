@@ -68,7 +68,6 @@ SpeedDialChild sdChild({
     ),
     labelBackgroundColor: theme.colorScheme.surface,
     onTap: () {
-      debugPrint('[HomeScreen] 🔔 SpeedDialChild tapped: $label');
       onTap();
     },
   );
@@ -476,8 +475,6 @@ class _AllEnvelopesFAB extends StatelessWidget {
       builder: (context, isMulti, child) {
         final allEnvelopesState = allEnvelopesKey.currentState;
 
-        debugPrint('[HomeScreen] 🔄 _AllEnvelopesFAB building - isMulti: $isMulti, state found: ${allEnvelopesState != null}');
-
         return SpeedDial(
       key: fabKey,
       icon: isMulti ? Icons.check : Icons.add,
@@ -494,7 +491,6 @@ class _AllEnvelopesFAB extends StatelessWidget {
       openCloseDial: isSpeedDialOpen,
       onOpen: () {},
       onPress: isMulti ? () {
-        debugPrint('[HomeScreen] ✅ FAB onPress called (isMulti=true)');
         allEnvelopesState?.clearSelection();
       } : null,
       children: isMulti
@@ -581,17 +577,11 @@ class _AllEnvelopesFAB extends StatelessWidget {
                     return;
                   }
 
-                  debugPrint('[HomeScreen] 🔍 Delete Envelopes button tapped');
-                  debugPrint('[HomeScreen] 🔍 allEnvelopesState is null: ${allEnvelopesState == null}');
-                  if (allEnvelopesState == null) {
-                    debugPrint('[HomeScreen] ❌ ERROR: Could not find _AllEnvelopesState ancestor');
-                  } else {
-                    debugPrint('[HomeScreen] ✅ Found _AllEnvelopesState, calling enableMultiSelect()');
+                  if (allEnvelopesState != null) {
                     allEnvelopesState.enableMultiSelect();
                   }
                   // Close the speed dial after enabling multi-select
                   Future.microtask(() {
-                    debugPrint('[HomeScreen] 🔍 Closing speed dial');
                     isSpeedDialOpen.value = false;
                   });
                 },
@@ -699,7 +689,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
              today.month == payDate.month &&
              today.day == payDate.day;
     } catch (e) {
-      debugPrint('[HomeScreen] Error checking pay day: $e');
       return false;
     }
   }
@@ -711,9 +700,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   }
 
   Future<void> _deleteSelected() async {
-    debugPrint('[HomeScreen] 📋 Showing bulk delete confirmation for ${selected.length} envelopes');
-    debugPrint('[HomeScreen] Envelope IDs: $selected');
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -736,35 +722,26 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
     );
 
     if (confirmed == true) {
-      debugPrint('[HomeScreen] ✅ User confirmed bulk delete');
-      debugPrint('[HomeScreen] 📞 Calling repo.deleteEnvelopes with ${selected.length} IDs...');
       try {
         await widget.repo.deleteEnvelopes(selected);
-        debugPrint('[HomeScreen] ✅ Bulk delete completed successfully');
         clearSelection();
       } catch (e) {
-        debugPrint('[HomeScreen] ❌ Bulk delete failed: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error deleting envelopes: $e')),
           );
         }
       }
-    } else {
-      debugPrint('[HomeScreen] ❌ User cancelled bulk delete');
     }
   }
 
   void _toggle(String id) {
-    debugPrint('[HomeScreen] 🔄 Toggling envelope selection: $id');
     HapticFeedback.selectionClick();
     setState(() {
       if (selected.contains(id)) {
         selected.remove(id);
-        debugPrint('[HomeScreen] Removed from selection. Total selected: ${selected.length}');
       } else {
         selected.add(id);
-        debugPrint('[HomeScreen] Added to selection. Total selected: ${selected.length}');
       }
       isMulti = selected.isNotEmpty;
       widget.isMultiSelectNotifier.value = isMulti;
@@ -775,23 +752,19 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   }
 
   void enableMultiSelect() {
-    debugPrint('[HomeScreen] 🎯 enableMultiSelect() called');
     HapticFeedback.mediumImpact();
     setState(() {
       isMulti = true;
       widget.isMultiSelectNotifier.value = true;
-      debugPrint('[HomeScreen] ✅ isMulti set to true');
       // Selection mode activated via FAB
     });
   }
 
   void clearSelection() {
-    debugPrint('[HomeScreen] 🧹 clearSelection() called');
     setState(() {
       selected.clear();
       isMulti = false;
       widget.isMultiSelectNotifier.value = false;
-      debugPrint('[HomeScreen] ✅ Selection cleared, isMulti set to false');
     });
   }
 

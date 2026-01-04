@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/account.dart';
 import '../models/envelope.dart';
@@ -33,13 +32,10 @@ class AccountRepo {
   /// this is a no-op but included for consistency
   void dispose() {
     if (_disposed) {
-      debugPrint('[AccountRepo] ⚠️ Already disposed, skipping');
       return;
     }
 
-    debugPrint('[AccountRepo] 🔄 Disposing (local-only repo, no active streams)');
     _disposed = true;
-    debugPrint('[AccountRepo] ✅ Disposed');
   }
 
   // ======================= STREAMS =======================
@@ -48,43 +44,28 @@ class AccountRepo {
   Stream<List<Account>> accountsStream() {
     // GUARD: Return empty stream if user is not authenticated (during logout)
     if (FirebaseAuth.instance.currentUser == null) {
-      debugPrint('[AccountRepo] ⚠️ No authenticated user - returning empty stream');
       return Stream.value([]);
-    }
-
-    debugPrint('[AccountRepo] 📦 Streaming accounts from Hive (local only)');
-    debugPrint('[AccountRepo] 🔑 Current userId: $_userId');
-    debugPrint('[AccountRepo] 📊 Total accounts in box: ${_accountBox.length}');
-
-    final allAccounts = _accountBox.values.toList();
-    for (final acc in allAccounts) {
-      debugPrint('[AccountRepo]    - Account: ${acc.name}, userId: ${acc.userId}');
     }
 
     final initial = _accountBox.values
         .where((account) => account.userId == _userId)
         .toList();
 
-    debugPrint('[AccountRepo] 📊 Initial accounts count (filtered): ${initial.length}');
-
     // Use Stream.multi() to ensure initial value is reliably emitted
     return Stream<List<Account>>.multi((controller) {
       // Emit initial value immediately
       controller.add(initial);
-      debugPrint('[AccountRepo] ✅ Initial accounts emitted to stream');
 
       // Listen to box changes
       final subscription = _accountBox.watch().listen((_) {
         final accounts = _accountBox.values
             .where((account) => account.userId == _userId)
             .toList();
-        debugPrint('[AccountRepo] 🔄 Accounts updated: ${accounts.length}');
         controller.add(accounts);
       });
 
       // Clean up when stream is cancelled
       controller.onCancel = () {
-        debugPrint('[AccountRepo] 🔄 Stream cancelled, cleaning up');
         subscription.cancel();
       };
     });
@@ -175,7 +156,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(id, account);
-    debugPrint('[AccountRepo] ✅ Account created in Hive: $name');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushAccount(account, _userId);
@@ -253,9 +233,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(accountId, updatedAccount);
-    debugPrint('[AccountRepo] ✅ Account updated in Hive: $accountId');
-    debugPrint('[AccountRepo]    payDayAutoFillEnabled: $finalPayDayAutoFillEnabled');
-    debugPrint('[AccountRepo]    payDayAutoFillAmount: $finalPayDayAutoFillAmount');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -279,22 +256,16 @@ class AccountRepo {
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
 
     if (linkedEnvelopes.isNotEmpty) {
-      debugPrint('[AccountRepo] 🔗 Unlinking ${linkedEnvelopes.length} envelope(s) from account: $accountId');
-
       for (final envelope in linkedEnvelopes) {
-        debugPrint('[AccountRepo]    - Unlinking envelope: ${envelope.name}');
         await _envelopeRepo.updateEnvelope(
           envelopeId: envelope.id,
           linkedAccountId: null,
           updateLinkedAccountId: true,
         );
       }
-
-      debugPrint('[AccountRepo] ✅ All envelopes unlinked');
     }
 
     await _accountBox.delete(accountId);
-    debugPrint('[AccountRepo] ✅ Account deleted from Hive: $accountId');
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
     _syncManager.deleteAccount(accountId, _userId);
@@ -329,7 +300,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(accountId, updatedAccount);
-    debugPrint('[AccountRepo] ✅ Balance adjusted in Hive: ${amount > 0 ? '+' : ''}\$$amount');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -364,7 +334,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(accountId, updatedAccount);
-    debugPrint('[AccountRepo] ✅ Balance set in Hive: \$$newBalance');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -387,24 +356,13 @@ class AccountRepo {
 
   Future<double> getAssignedAmount(String accountId) async {
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
-    debugPrint('[AccountRepo::getAssignedAmount] ═══════════════════════════════════════');
-    debugPrint('[AccountRepo::getAssignedAmount] Calculating for account: $accountId');
-    debugPrint('[AccountRepo::getAssignedAmount] Found ${linkedEnvelopes.length} linked envelopes');
 
     double total = 0.0;
     for (final envelope in linkedEnvelopes) {
-      debugPrint('[AccountRepo::getAssignedAmount]   - ${envelope.name}:');
-      debugPrint('[AccountRepo::getAssignedAmount]     • Auto-fill enabled: ${envelope.autoFillEnabled}');
-      debugPrint('[AccountRepo::getAssignedAmount]     • Auto-fill amount: ${envelope.autoFillAmount}');
-      debugPrint('[AccountRepo::getAssignedAmount]     • Current amount: ${envelope.currentAmount}');
-
       // CRITICAL FIX: Use autoFillAmount (what's ALLOCATED), not currentAmount (what's IN the envelope)
       // This shows how much of the account balance is committed to auto-fill on next pay day
       if (envelope.autoFillEnabled && envelope.autoFillAmount != null) {
         total += envelope.autoFillAmount!;
-        debugPrint('[AccountRepo::getAssignedAmount]     ✅ Added ${envelope.autoFillAmount} to total');
-      } else {
-        debugPrint('[AccountRepo::getAssignedAmount]     ⏭️ Skipped (auto-fill disabled or no amount)');
       }
     }
 
@@ -413,32 +371,19 @@ class AccountRepo {
     final payDaySettings = payDaySettingsBox.get(_userId);
 
     if (payDaySettings?.defaultAccountId == accountId) {
-      debugPrint('[AccountRepo::getAssignedAmount] This is the default pay day account');
-      debugPrint('[AccountRepo::getAssignedAmount] Checking for account auto-fills...');
-
       final allAccounts = _accountBox.values
           .where((account) => account.userId == _userId)
           .toList();
 
-      debugPrint('[AccountRepo::getAssignedAmount] Found ${allAccounts.length} accounts to check');
       for (final account in allAccounts) {
-        debugPrint('[AccountRepo::getAssignedAmount]   Checking "${account.name}":');
-        debugPrint('[AccountRepo::getAssignedAmount]     payDayAutoFillEnabled: ${account.payDayAutoFillEnabled}');
-        debugPrint('[AccountRepo::getAssignedAmount]     payDayAutoFillAmount: ${account.payDayAutoFillAmount}');
-
         if (account.payDayAutoFillEnabled &&
             account.payDayAutoFillAmount != null &&
             account.payDayAutoFillAmount! > 0) {
           total += account.payDayAutoFillAmount!;
-          debugPrint('[AccountRepo::getAssignedAmount]   + Account "${account.name}" auto-fill: ${account.payDayAutoFillAmount}');
-        } else {
-          debugPrint('[AccountRepo::getAssignedAmount]   ⏭️ Skipped "${account.name}"');
         }
       }
     }
 
-    debugPrint('[AccountRepo::getAssignedAmount] 📊 Total assigned: $total');
-    debugPrint('[AccountRepo::getAssignedAmount] ═══════════════════════════════════════');
     return total;
   }
 
@@ -454,21 +399,10 @@ class AccountRepo {
       final accounts = data.$2;
       final linkedEnvelopes = envelopes.where((env) => env.linkedAccountId == accountId).toList();
 
-      debugPrint('[AccountRepo::assignedAmountStream] ═══════════════════════════════════════');
-      debugPrint('[AccountRepo::assignedAmountStream] Calculating for account: $accountId');
-      debugPrint('[AccountRepo::assignedAmountStream] Found ${linkedEnvelopes.length} linked envelopes');
-
       double total = 0.0;
       for (final envelope in linkedEnvelopes) {
-        debugPrint('[AccountRepo::assignedAmountStream]   - ${envelope.name}:');
-        debugPrint('[AccountRepo::assignedAmountStream]     • Auto-fill enabled: ${envelope.autoFillEnabled}');
-        debugPrint('[AccountRepo::assignedAmountStream]     • Auto-fill amount: ${envelope.autoFillAmount}');
-
         if (envelope.autoFillEnabled && envelope.autoFillAmount != null) {
           total += envelope.autoFillAmount!;
-          debugPrint('[AccountRepo::assignedAmountStream]     ✅ Added ${envelope.autoFillAmount} to total');
-        } else {
-          debugPrint('[AccountRepo::assignedAmountStream]     ⏭️ Skipped');
         }
       }
 
@@ -477,28 +411,15 @@ class AccountRepo {
       final payDaySettings = payDaySettingsBox.get(_userId);
 
       if (payDaySettings?.defaultAccountId == accountId) {
-        debugPrint('[AccountRepo::assignedAmountStream] This is the default pay day account');
-        debugPrint('[AccountRepo::assignedAmountStream] Checking for account auto-fills...');
-        debugPrint('[AccountRepo::assignedAmountStream] Found ${accounts.length} accounts to check');
-
         for (final account in accounts) {
-          debugPrint('[AccountRepo::assignedAmountStream]   Checking "${account.name}":');
-          debugPrint('[AccountRepo::assignedAmountStream]     payDayAutoFillEnabled: ${account.payDayAutoFillEnabled}');
-          debugPrint('[AccountRepo::assignedAmountStream]     payDayAutoFillAmount: ${account.payDayAutoFillAmount}');
-
           if (account.payDayAutoFillEnabled &&
               account.payDayAutoFillAmount != null &&
               account.payDayAutoFillAmount! > 0) {
             total += account.payDayAutoFillAmount!;
-            debugPrint('[AccountRepo::assignedAmountStream]   + Account "${account.name}" auto-fill: ${account.payDayAutoFillAmount}');
-          } else {
-            debugPrint('[AccountRepo::assignedAmountStream]   ⏭️ Skipped "${account.name}"');
           }
         }
       }
 
-      debugPrint('[AccountRepo::assignedAmountStream] 📊 Total assigned: $total');
-      debugPrint('[AccountRepo::assignedAmountStream] ═══════════════════════════════════════');
       return total;
     });
   }
@@ -543,8 +464,6 @@ class AccountRepo {
     final updatedAccount = account.copyWith(isDefault: true);
     await _accountBox.put(accountId, updatedAccount);
 
-    debugPrint('[AccountRepo] ✅ Set account as default: ${account.name}');
-
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(updatedAccount, _userId);
   }
@@ -560,8 +479,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(accountId, updatedAccount);
-
-    debugPrint('[AccountRepo] Deposit: £$amount to ${account.name}');
 
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -579,8 +496,6 @@ class AccountRepo {
 
     await _accountBox.put(accountId, updatedAccount);
 
-    debugPrint('[AccountRepo] Withdraw: £$amount from ${account.name}');
-
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(updatedAccount, _userId);
   }
@@ -589,8 +504,6 @@ class AccountRepo {
   Future<void> transfer(String fromId, String toId, double amount, {String? description}) async {
     await withdraw(fromId, amount, description: description ?? 'Transfer out');
     await deposit(toId, amount, description: description ?? 'Transfer in');
-
-    debugPrint('[AccountRepo] Transfer: £$amount from $fromId to $toId');
   }
 
   /// Handle first account creation (auto-set as default)
@@ -626,7 +539,6 @@ class AccountRepo {
     );
 
     await _accountBox.put(id, account);
-    debugPrint('[AccountRepo] ✅ First account created: $name (isDefault: $isFirstAccount)');
 
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(account, _userId);
@@ -641,8 +553,6 @@ class AccountRepo {
 
   /// Transition from Budget Mode to Account Mirror Mode
   Future<void> _handleTransitionToAccountMode(Account defaultAccount) async {
-    debugPrint('[AccountRepo] Transitioning to Account Mirror Mode');
-
     // 1. Update PayDaySettings with default account
     final payDaySettingsBox = Hive.box<PayDaySettings>('payDaySettings');
     final settings = payDaySettingsBox.get(_userId);
@@ -655,8 +565,6 @@ class AccountRepo {
 
       // CRITICAL: Sync to Firebase
       _syncManager.pushPayDaySettings(updatedSettings, _userId);
-
-      debugPrint('[AccountRepo] ✅ Updated PayDaySettings with default account');
     }
 
     // 2. Auto-link all envelopes with auto-fill enabled
@@ -665,8 +573,6 @@ class AccountRepo {
     if (unlinkedEnvelopes.isNotEmpty) {
       final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();
       await _envelopeRepo.bulkLinkToAccount(envelopeIds, defaultAccount.id);
-
-      debugPrint('[AccountRepo] Auto-linked ${envelopeIds.length} envelopes to ${defaultAccount.name}');
     }
   }
 
@@ -697,6 +603,5 @@ class AccountRepo {
         await _accountBox.put(account.id, updated);
       }
     }
-    debugPrint('[AccountRepo] ✅ Unset other defaults in Hive');
   }
 }

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -54,13 +53,8 @@ class EnvelopeRepo {
         _transactionBox = HiveService.getBox<models.Transaction>('transactions') {
     // GUARD: Don't initialize if user is not authenticated
     if (FirebaseAuth.instance.currentUser == null) {
-      debugPrint('[EnvelopeRepo] ⚠️ Skipping initialization - no authenticated user');
       return;
     }
-
-    debugPrint('[EnvelopeRepo] Initialized:');
-    debugPrint('  User: $_userId');
-    debugPrint('  Workspace: ${_inWorkspace ? workspaceId : "SOLO MODE"}');
   }
 
   /// Dispose and cancel all active Firestore stream subscriptions
@@ -69,19 +63,14 @@ class EnvelopeRepo {
   /// from Firestore streams trying to access data after auth state changes
   void dispose() {
     if (_disposed) {
-      debugPrint('[EnvelopeRepo] ⚠️ Already disposed, skipping');
       return;
     }
-
-    debugPrint('[EnvelopeRepo] 🔄 Disposing and cancelling ${_activeSubscriptions.length} active Firestore subscriptions');
 
     for (final subscription in _activeSubscriptions) {
       subscription.cancel();
     }
     _activeSubscriptions.clear();
     _disposed = true;
-
-    debugPrint('[EnvelopeRepo] ✅ All Firestore streams cancelled');
   }
 
   // --------- Public getters ----------
@@ -100,19 +89,14 @@ class EnvelopeRepo {
   Stream<List<Envelope>> envelopesStream({bool showPartnerEnvelopes = true}) {
     // GUARD: Return empty stream if user is not authenticated (during logout)
     if (FirebaseAuth.instance.currentUser == null) {
-      debugPrint('[EnvelopeRepo] ⚠️ No authenticated user - returning empty stream');
       return Stream.value([]);
     }
 
     if (!_inWorkspace) {
       // SOLO MODE: Pure Hive
-      debugPrint('[EnvelopeRepo] 📦 Solo mode: streaming from Hive only');
-
       final initial = _envelopeBox.values
           .where((env) => env.userId == _userId)
           .toList();
-
-      debugPrint('[EnvelopeRepo] ✅ Initial: ${initial.length} envelopes from Hive');
 
       return Stream.value(initial).asBroadcastStream().concatWith([
         _envelopeBox.watch().map((_) {
@@ -120,14 +104,12 @@ class EnvelopeRepo {
               .where((env) => env.userId == _userId)
               .toList();
 
-          debugPrint('[EnvelopeRepo] ✅ Emitting ${envelopes.length} envelopes from Hive');
           return envelopes;
         })
       ]);
 
     } else {
       // WORKSPACE MODE: Firebase sync from workspace envelopes collection
-      debugPrint('[EnvelopeRepo] 🤝 Workspace mode: syncing with Firebase workspace/$_workspaceId');
 
       return _firestore
           .collection('workspaces')
@@ -137,7 +119,6 @@ class EnvelopeRepo {
           .snapshots()
           .handleError((error) {
             // Handle PERMISSION_DENIED errors gracefully (happens after logout)
-            debugPrint('[EnvelopeRepo] ⚠️ Firestore stream error (likely after logout): $error');
             // Return empty list to allow graceful degradation
             return const Stream<List<Envelope>>.empty();
           })
@@ -155,12 +136,10 @@ class EnvelopeRepo {
               }
             }
 
-            debugPrint('[EnvelopeRepo] ✅ Synced ${allEnvelopes.length} envelopes from workspace');
             return allEnvelopes;
           })
           .handleError((error) {
             // Catch any errors during asyncMap as well
-            debugPrint('[EnvelopeRepo] ⚠️ Error processing envelopes: $error');
           });
     }
   }
@@ -182,7 +161,6 @@ class EnvelopeRepo {
           final envelope = _envelopeBox.get(id);
           if (envelope == null) {
             // Envelope was deleted - close the stream gracefully
-            debugPrint('[EnvelopeRepo] Envelope $id was deleted, closing stream');
             throw Exception('Envelope not found: $id');
           }
           return envelope;
@@ -199,7 +177,6 @@ class EnvelopeRepo {
           .snapshots()
           .handleError((error) {
             // Handle PERMISSION_DENIED errors gracefully (happens after logout)
-            debugPrint('[EnvelopeRepo] ⚠️ Firestore envelope stream error (likely after logout): $error');
           })
           .asyncMap((doc) async {
             if (!doc.exists) {
@@ -212,15 +189,12 @@ class EnvelopeRepo {
             return envelope;
           })
           .handleError((error) {
-            debugPrint('[EnvelopeRepo] ⚠️ Error processing envelope: $error');
           });
     }
   }
 
   /// Groups stream (ALWAYS local only - no workspace sync)
   Stream<List<EnvelopeGroup>> get groupsStream {
-    debugPrint('[EnvelopeRepo] 📦 Streaming groups from Hive (local only)');
-
     final initial = _groupBox.values
         .where((g) => g.userId == _userId)
         .toList();
@@ -237,8 +211,6 @@ class EnvelopeRepo {
   /// Transactions stream (ALWAYS local only)
   /// Exception: Partner transfers are synced separately
   Stream<List<models.Transaction>> get transactionsStream {
-    debugPrint('[EnvelopeRepo] 📦 Streaming transactions from Hive (local only)');
-
     final initial = _transactionBox.values
         .where((tx) => tx.userId == _userId)
         .toList();
@@ -326,8 +298,6 @@ class EnvelopeRepo {
     double? autoFillAmount,
     String? linkedAccountId,
   }) async {
-    debugPrint('[EnvelopeRepo] Creating envelope: $name');
-
     final id = _firestore.collection('_temp').doc().id;
     final now = DateTime.now();
 
@@ -355,13 +325,11 @@ class EnvelopeRepo {
 
     // ALWAYS write to Hive first (primary storage)
     await _envelopeBox.put(id, envelope);
-    debugPrint('[EnvelopeRepo] ✅ Saved to Hive');
 
     // Background sync (fire-and-forget, non-blocking)
     // SOLO MODE: Syncs to /users/{userId}/envelopes
     // WORKSPACE MODE: Syncs to /workspaces/{workspaceId}/envelopes
     _syncManager.pushEnvelope(envelope, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for $name');
 
 
     // Create initial transaction if needed
@@ -380,7 +348,6 @@ class EnvelopeRepo {
       );
 
       await _transactionBox.put(txId, transaction);
-      debugPrint('[EnvelopeRepo] ✅ Initial transaction saved to Hive');
     }
 
     return id;
@@ -416,8 +383,6 @@ class EnvelopeRepo {
     bool updateTargetStartDateType = false, // Flag to explicitly update targetStartDateType (including to null)
     bool updateCustomTargetStartDate = false, // Flag to explicitly update customTargetStartDate (including to null)
   }) async {
-    debugPrint('[EnvelopeRepo] Updating envelope: $envelopeId');
-
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) {
       throw Exception('Envelope not found: $envelopeId');
@@ -426,49 +391,51 @@ class EnvelopeRepo {
     // Create updated envelope with sync metadata
     // Use the explicit flags to allow setting fields to null
     final now = DateTime.now();
-    final updatedEnvelope = Envelope(
-      id: envelope.id,
-      name: name ?? envelope.name,
-      userId: envelope.userId,
-      currentAmount: envelope.currentAmount,
-      targetAmount: updateTargetAmount ? targetAmount : envelope.targetAmount,
-      targetDate: updateTargetDate ? targetDate : envelope.targetDate,
-      groupId: groupId ?? envelope.groupId,
-      subtitle: subtitle ?? envelope.subtitle,
-      emoji: emoji ?? envelope.emoji,
-      iconType: iconType ?? envelope.iconType,
-      iconValue: iconValue ?? envelope.iconValue,
-      iconColor: iconColor ?? envelope.iconColor,
-      autoFillEnabled: autoFillEnabled ?? envelope.autoFillEnabled,
-      autoFillAmount: autoFillAmount ?? envelope.autoFillAmount,
-      linkedAccountId: updateLinkedAccountId ? linkedAccountId : envelope.linkedAccountId,
-      isShared: isShared ?? envelope.isShared,
-      isDebtEnvelope: envelope.isDebtEnvelope,
-      startingDebt: envelope.startingDebt,
-      termStartDate: envelope.termStartDate,
-      termMonths: envelope.termMonths,
-      monthlyPayment: envelope.monthlyPayment,
-      isSynced: false, // Mark as pending sync
-      lastUpdated: now,
-      createdAt: envelope.createdAt, // Preserve creation timestamp
-      targetStartDateType: updateTargetStartDateType ? targetStartDateType : envelope.targetStartDateType,
-      customTargetStartDate: updateCustomTargetStartDate ? customTargetStartDate : envelope.customTargetStartDate,
-    );
 
-    await _envelopeBox.put(envelopeId, updatedEnvelope);
-    debugPrint('[EnvelopeRepo] ✅ Updated in Hive');
+    late Envelope updatedEnvelope;
+    try {
+      updatedEnvelope = Envelope(
+        id: envelope.id,
+        name: name ?? envelope.name,
+        userId: envelope.userId,
+        currentAmount: envelope.currentAmount,
+        targetAmount: updateTargetAmount ? targetAmount : envelope.targetAmount,
+        targetDate: updateTargetDate ? targetDate : envelope.targetDate,
+        groupId: groupId ?? envelope.groupId,
+        subtitle: subtitle ?? envelope.subtitle,
+        emoji: emoji ?? envelope.emoji,
+        iconType: iconType ?? envelope.iconType,
+        iconValue: iconValue ?? envelope.iconValue,
+        iconColor: iconColor ?? envelope.iconColor,
+        autoFillEnabled: autoFillEnabled ?? envelope.autoFillEnabled,
+        autoFillAmount: autoFillAmount ?? envelope.autoFillAmount,
+        linkedAccountId: updateLinkedAccountId ? linkedAccountId : envelope.linkedAccountId,
+        isShared: isShared ?? envelope.isShared,
+        isDebtEnvelope: envelope.isDebtEnvelope,
+        startingDebt: envelope.startingDebt,
+        termStartDate: envelope.termStartDate,
+        termMonths: envelope.termMonths,
+        monthlyPayment: envelope.monthlyPayment,
+        isSynced: false, // Mark as pending sync
+        lastUpdated: now,
+        createdAt: envelope.createdAt, // Preserve creation timestamp
+        targetStartDateType: updateTargetStartDateType ? targetStartDateType : envelope.targetStartDateType,
+        customTargetStartDate: updateCustomTargetStartDate ? customTargetStartDate : envelope.customTargetStartDate,
+      );
+
+      await _envelopeBox.put(envelopeId, updatedEnvelope);
+    } catch (e) {
+      rethrow;
+    }
 
     // Background sync (fire-and-forget, non-blocking)
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for update');
   }
 
   // ==================== DELETE ====================
 
   /// Delete envelope
   Future<void> deleteEnvelope(String id) async {
-    debugPrint('[EnvelopeRepo] Deleting envelope: $id');
-
     // Delete transactions from Hive
     final txsToDelete = _transactionBox.values
         .where((tx) => tx.envelopeId == id)
@@ -478,7 +445,6 @@ class EnvelopeRepo {
     for (final txId in txsToDelete) {
       await _transactionBox.delete(txId);
     }
-    debugPrint('[EnvelopeRepo] ✅ Deleted ${txsToDelete.length} transactions from Hive');
 
     // Delete scheduled payments linked to this envelope from Hive
     final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
@@ -490,15 +456,12 @@ class EnvelopeRepo {
     for (final paymentId in paymentsToDelete) {
       await scheduledPaymentBox.delete(paymentId);
     }
-    debugPrint('[EnvelopeRepo] ✅ Deleted ${paymentsToDelete.length} scheduled payments from Hive');
 
     // Delete envelope from Hive
     await _envelopeBox.delete(id);
-    debugPrint('[EnvelopeRepo] ✅ Deleted envelope from Hive');
 
     // Background sync deletion (fire-and-forget, non-blocking)
     _syncManager.deleteEnvelope(id, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope deletion sync');
   }
 
   Future<void> deleteEnvelopes(Iterable<String> ids) async {
@@ -511,8 +474,6 @@ class EnvelopeRepo {
   /// Call this during app initialization to remove scheduled payments
   /// that reference deleted envelopes
   Future<int> cleanupOrphanedScheduledPayments() async {
-    debugPrint('[EnvelopeRepo] Cleaning up orphaned scheduled payments...');
-
     final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
 
     // Get all valid envelope IDs
@@ -532,15 +493,8 @@ class EnvelopeRepo {
     // Delete them
     int deletedCount = 0;
     for (final payment in orphanedPayments) {
-      debugPrint('[EnvelopeRepo] ⚠️ Deleting orphaned scheduled payment: ${payment.name} (envelope ${payment.envelopeId})');
       await scheduledPaymentBox.delete(payment.id);
       deletedCount++;
-    }
-
-    if (deletedCount > 0) {
-      debugPrint('[EnvelopeRepo] ✅ Cleaned up $deletedCount orphaned scheduled payments');
-    } else {
-      debugPrint('[EnvelopeRepo] ✅ No orphaned scheduled payments found');
     }
 
     return deletedCount;
@@ -551,13 +505,11 @@ class EnvelopeRepo {
   Future<void> _createTransaction(models.Transaction transaction) async {
     // CRITICAL: Never persist future/projected transactions from TimeMachine
     if (transaction.isFuture) {
-      debugPrint('[EnvelopeRepo] ⚠️ Blocked attempt to persist future transaction ${transaction.id}');
       return; // TimeMachine projections must never be saved
     }
 
     // ALWAYS save to Hive (local paper trail)
     await _transactionBox.put(transaction.id, transaction);
-    debugPrint('[EnvelopeRepo] ✅ Transaction saved to Hive');
 
     // Determine if this is a partner transfer (only relevant in workspace mode)
     final isPartnerTransfer = _inWorkspace &&
@@ -570,12 +522,6 @@ class EnvelopeRepo {
     // SOLO MODE: Syncs ALL transactions to /users/{userId}/transactions
     // WORKSPACE MODE: Syncs ONLY partner transfers to /workspaces/{workspaceId}/transfers
     _syncManager.pushTransaction(transaction, _workspaceId, _userId, isPartnerTransfer);
-
-    if (_inWorkspace && isPartnerTransfer) {
-      debugPrint('[EnvelopeRepo] 🔄 Queued partner transfer sync');
-    } else if (!_inWorkspace) {
-      debugPrint('[EnvelopeRepo] 🔄 Queued transaction sync to private collection');
-    }
   }
 
   // ==================== OPERATIONS ====================
@@ -639,9 +585,6 @@ class EnvelopeRepo {
 
     // 3. Background sync (fire-and-forget, non-blocking)
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for ${envelope.name}');
-
-    debugPrint('[EnvelopeRepo] ✅ Deposit: +£$amount to ${envelope.name}');
   }
 
   /// Withdraw
@@ -716,9 +659,6 @@ class EnvelopeRepo {
 
     // 3. Background sync (fire-and-forget, non-blocking)
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for ${envelope.name}');
-
-    debugPrint('[EnvelopeRepo] ✅ Withdrawal: -£$amount from ${envelope.name}');
   }
 
   /// Transfer between envelopes
@@ -854,9 +794,6 @@ class EnvelopeRepo {
     // 3. Background sync (fire-and-forget, non-blocking)
     _syncManager.pushEnvelope(updatedSource, _workspaceId, _userId);
     _syncManager.pushEnvelope(updatedTarget, _workspaceId, _userId);
-    debugPrint('[EnvelopeRepo] 🔄 Queued envelope sync for both transfer envelopes');
-
-    debugPrint('[EnvelopeRepo] ✅ Transfer: £$amount from ${sourceEnv.name} → ${targetEnv.name}');
   }
 
   // ==================== GROUP MANAGEMENT ====================
@@ -942,15 +879,11 @@ class EnvelopeRepo {
         await _envelopeBox.put(id, updated);
       }
     }
-
-    debugPrint('[EnvelopeRepo] ✅ Updated group membership in Hive (local only)');
   }
 
   // ==================== WORKSPACE ====================
 
   Future<void> setWorkspace(String? newWorkspaceId) async {
-    debugPrint('[EnvelopeRepo] Setting workspace to: $newWorkspaceId');
-
     await _firestore.collection('users').doc(_userId).set({
       'workspaceId': newWorkspaceId,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -1009,8 +942,6 @@ class EnvelopeRepo {
         _syncManager.pushEnvelope(updated, _workspaceId, _userId);
       }
     }
-    debugPrint('[EnvelopeRepo] ✅ Linked ${envelopeIds.length} envelopes to account');
-    debugPrint('[EnvelopeRepo] 🔄 Queued ${envelopeIds.length} envelope syncs for account linking');
   }
 
   Future<List<models.Transaction>> getAllTransactions() {
@@ -1119,7 +1050,6 @@ class EnvelopeRepo {
 
       return displayName ?? 'Unknown User';
     } catch (e) {
-      debugPrint('[EnvelopeRepo] Error getting user display name: $e');
       return 'Unknown User';
     }
   }
