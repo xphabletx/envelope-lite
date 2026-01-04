@@ -1,7 +1,10 @@
 // lib/services/subscription_service.dart
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import '../config/revenue_cat_config.dart';
 
 /// Result of sync authorization check
@@ -236,4 +239,48 @@ class SubscriptionService {
 
   /// Check if SDK is initialized
   bool get isInitialized => _isInitialized;
+
+  /// Present RevenueCat Customer Center
+  ///
+  /// This shows a native UI for managing subscriptions, including:
+  /// - Viewing subscription status
+  /// - Managing subscriptions
+  /// - Restoring purchases
+  /// - Accessing support
+  ///
+  /// Returns true if successfully presented, false otherwise
+  Future<bool> presentCustomerCenter(BuildContext context) async {
+    try {
+      debugPrint('[SubscriptionService] Presenting Customer Center...');
+
+      await RevenueCatUI.presentCustomerCenter();
+
+      debugPrint('[SubscriptionService] ✅ Customer Center presented successfully');
+      return true;
+    } on PlatformException catch (e) {
+      debugPrint('[SubscriptionService] ❌ Platform error: ${e.message}');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to open subscription management: ${e.message}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[SubscriptionService] ❌ Unexpected error: $e');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open subscription management'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
 }

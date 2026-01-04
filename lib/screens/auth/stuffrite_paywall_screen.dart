@@ -45,8 +45,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         child: _isCheckingSubscription
             ? _buildCheckingSubscription()
             : _isLoadingOfferings
-                ? _buildLoadingOfferings()
-                : _buildPaywallContent(),
+            ? _buildLoadingOfferings()
+            : _buildPaywallContent(),
       ),
     );
   }
@@ -61,10 +61,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
           const SizedBox(height: 16),
           Text(
             'Checking subscription status...',
-            style: TextStyle(
-              color: _darkBrown,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: _darkBrown, fontSize: 16),
           ),
         ],
       ),
@@ -81,10 +78,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
           const SizedBox(height: 16),
           Text(
             'Loading subscription options...',
-            style: TextStyle(
-              color: _darkBrown,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: _darkBrown, fontSize: 16),
           ),
         ],
       ),
@@ -131,7 +125,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'PREMIUM',
+                'UNLOCKED',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -145,7 +139,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
 
             // Title
             Text(
-              'Unlock Stuffrite Premium',
+              'Unlock Stuffrite',
               style: TextStyle(
                 color: _darkBrown,
                 fontSize: 28,
@@ -158,11 +152,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
 
             // Subtitle
             Text(
-              'Everything you need to organize your life',
-              style: TextStyle(
-                color: _brownPrimary,
-                fontSize: 16,
-              ),
+              'Everything you need to organize your personal finances',
+              style: TextStyle(color: _brownPrimary, fontSize: 16),
               textAlign: TextAlign.center,
             ),
 
@@ -184,7 +175,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
             _buildFeatureItem(
               icon: Icons.people_rounded,
               title: 'Shared Workspaces',
-              description: 'Collaborate with family and teams',
+              description: 'Collaborate with a partner',
             ),
 
             const SizedBox(height: 40),
@@ -334,10 +325,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
                 const SizedBox(height: 4),
                 Text(
                   description,
-                  style: TextStyle(
-                    color: _brownPrimary,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: _brownPrimary, fontSize: 14),
                 ),
               ],
             ),
@@ -380,7 +368,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
           package: annualPackage,
           title: 'Annual',
           price: annualPackage.storeProduct.priceString,
-          description: 'Best value - save ${_calculateSavings(monthlyPackage, annualPackage)}',
+          description:
+              'Best value - save ${_calculateSavings(monthlyPackage, annualPackage)}',
           isRecommended: true,
         ),
       ],
@@ -407,7 +396,9 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isSelected ? _brownPrimary.withValues(alpha: 0.1) : Colors.white,
+          color: isSelected
+              ? _brownPrimary.withValues(alpha: 0.1)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? _brownPrimary : _surfaceCream,
@@ -423,7 +414,9 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? _brownPrimary : _brownPrimary.withValues(alpha: 0.3),
+                  color: isSelected
+                      ? _brownPrimary
+                      : _brownPrimary.withValues(alpha: 0.3),
                   width: 2,
                 ),
                 color: isSelected ? _brownPrimary : Colors.transparent,
@@ -483,10 +476,7 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
                   const SizedBox(height: 4),
                   Text(
                     description,
-                    style: TextStyle(
-                      color: _brownPrimary,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: _brownPrimary, fontSize: 14),
                   ),
                 ],
               ),
@@ -530,14 +520,16 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         });
       } else {
         setState(() {
-          _errorMessage = 'No subscription plans available. Please try again later.';
+          _errorMessage =
+              'No subscription plans available. Please try again later.';
           _isLoadingOfferings = false;
         });
       }
     } catch (e) {
       debugPrint('[StuffritePaywall] Error loading offerings: $e');
       setState(() {
-        _errorMessage = 'Failed to load subscription plans. Please check your connection.';
+        _errorMessage =
+            'Failed to load subscription plans. Please check your connection.';
         _isLoadingOfferings = false;
       });
     }
@@ -556,21 +548,36 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final purchaseParams = PurchaseParams.package(_selectedPackage!);
       final purchaseResult = await Purchases.purchase(purchaseParams);
 
-      debugPrint('[StuffritePaywall] Purchase completed: ${purchaseResult.customerInfo.entitlements.active}');
+      debugPrint(
+        '[StuffritePaywall] Purchase completed: ${purchaseResult.customerInfo.entitlements.active}',
+      );
 
       // Debug: Print ALL entitlement keys to see what RevenueCat SDK is seeing
-      debugPrint('[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
-      debugPrint('[StuffritePaywall] 🔍 ALL entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.all.keys.toList()}');
-      debugPrint('[StuffritePaywall] 🔍 Active entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.active.keys.toList()}');
+      debugPrint(
+        '[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 ALL entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.all.keys.toList()}',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 Active entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.active.keys.toList()}',
+      );
 
       // Check if the premium entitlement is active
-      final entitlement = purchaseResult.customerInfo.entitlements.all[RevenueCatConfig.premiumEntitlementId];
+      final entitlement = purchaseResult
+          .customerInfo
+          .entitlements
+          .all[RevenueCatConfig.premiumEntitlementId];
       final hasPremium = entitlement?.isActive ?? false;
 
       if (entitlement != null) {
-        debugPrint('[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}');
+        debugPrint(
+          '[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}',
+        );
       } else {
-        debugPrint('[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND');
+        debugPrint(
+          '[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND',
+        );
       }
 
       if (hasPremium) {
@@ -578,10 +585,13 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         // Check and dismiss to trigger app rebuild
         await _checkAndDismiss();
       } else {
-        debugPrint('[StuffritePaywall] ⚠️ Purchase completed but entitlement not active');
+        debugPrint(
+          '[StuffritePaywall] ⚠️ Purchase completed but entitlement not active',
+        );
         setState(() {
           _isPurchasing = false;
-          _errorMessage = 'Purchase completed but subscription not activated. Please contact support.';
+          _errorMessage =
+              'Purchase completed but subscription not activated. Please contact support.';
         });
       }
     } on PlatformException catch (e) {
@@ -620,21 +630,34 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
 
     try {
       final customerInfo = await Purchases.restorePurchases();
-      debugPrint('[StuffritePaywall] Restore completed: ${customerInfo.entitlements.active}');
+      debugPrint(
+        '[StuffritePaywall] Restore completed: ${customerInfo.entitlements.active}',
+      );
 
       // Debug: Print ALL entitlement keys to see what RevenueCat SDK is seeing
-      debugPrint('[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
-      debugPrint('[StuffritePaywall] 🔍 ALL entitlement keys after restore: ${customerInfo.entitlements.all.keys.toList()}');
-      debugPrint('[StuffritePaywall] 🔍 Active entitlement keys after restore: ${customerInfo.entitlements.active.keys.toList()}');
+      debugPrint(
+        '[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 ALL entitlement keys after restore: ${customerInfo.entitlements.all.keys.toList()}',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 Active entitlement keys after restore: ${customerInfo.entitlements.active.keys.toList()}',
+      );
 
       // Check if the premium entitlement is active after restore
-      final entitlement = customerInfo.entitlements.all[RevenueCatConfig.premiumEntitlementId];
+      final entitlement =
+          customerInfo.entitlements.all[RevenueCatConfig.premiumEntitlementId];
       final hasPremium = entitlement?.isActive ?? false;
 
       if (entitlement != null) {
-        debugPrint('[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}');
+        debugPrint(
+          '[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}',
+        );
       } else {
-        debugPrint('[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND');
+        debugPrint(
+          '[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND',
+        );
       }
 
       if (hasPremium) {
@@ -645,7 +668,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         debugPrint('[StuffritePaywall] ⚠️ No active subscriptions found');
         setState(() {
           _isPurchasing = false;
-          _errorMessage = 'No active subscriptions found. Please purchase a subscription or contact support.';
+          _errorMessage =
+              'No active subscriptions found. Please purchase a subscription or contact support.';
         });
       }
     } on PlatformException catch (e) {
@@ -655,7 +679,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
 
       setState(() {
         _isPurchasing = false;
-        _errorMessage = e.message ?? 'Failed to restore purchases. Please try again.';
+        _errorMessage =
+            e.message ?? 'Failed to restore purchases. Please try again.';
       });
     } catch (e) {
       debugPrint('[StuffritePaywall] Unexpected restore error: $e');
@@ -674,9 +699,15 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final customerInfo = await Purchases.getCustomerInfo();
 
       // Debug: Print ALL entitlement keys to see what's available
-      debugPrint('[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
-      debugPrint('[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}');
-      debugPrint('[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
+      debugPrint(
+        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}',
+      );
+      debugPrint(
+        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}',
+      );
 
       // If active is empty, print details about ALL entitlements
       if (customerInfo.entitlements.active.isEmpty) {
@@ -684,7 +715,9 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         debugPrint('[StuffritePaywall] 🔍 Inspecting ALL entitlements:');
         for (var key in customerInfo.entitlements.all.keys) {
           final entitlement = customerInfo.entitlements.all[key];
-          debugPrint('[StuffritePaywall]   - "$key": isActive=${entitlement?.isActive}, identifier=${entitlement?.identifier}');
+          debugPrint(
+            '[StuffritePaywall]   - "$key": isActive=${entitlement?.isActive}, identifier=${entitlement?.identifier}',
+          );
         }
       }
 
@@ -694,16 +727,21 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       );
 
       if (hasPremium) {
-        debugPrint('[StuffritePaywall] ✅ Premium entitlement active - allowing access');
+        debugPrint(
+          '[StuffritePaywall] ✅ Premium entitlement active - allowing access',
+        );
         // The AuthWrapper will automatically rebuild and show HomeScreen
         // No need to manually navigate
       } else {
-        debugPrint('[StuffritePaywall] ⚠️ No premium entitlement - staying on paywall');
+        debugPrint(
+          '[StuffritePaywall] ⚠️ No premium entitlement - staying on paywall',
+        );
         if (mounted) {
           setState(() {
             _isPurchasing = false;
             _isCheckingSubscription = false;
-            _errorMessage = 'Subscribe to Stuffrite Premium to access all features';
+            _errorMessage =
+                'Subscribe to Stuffrite Premium to access all features';
           });
         }
       }
@@ -724,26 +762,18 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Sign Out?',
-          style: TextStyle(color: _darkBrown),
-        ),
+        title: Text('Sign Out?', style: TextStyle(color: _darkBrown)),
         content: Text(
           'You need a Stuffrite Premium subscription to use this app. '
           'Would you like to sign out?',
           style: TextStyle(color: _brownPrimary),
         ),
         backgroundColor: _surfaceCream,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: _brownPrimary),
-            ),
+            child: Text('Cancel', style: TextStyle(color: _brownPrimary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),

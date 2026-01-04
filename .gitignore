@@ -23,3 +23,10 @@ firebase_app_id_file.json
 *.keystore
 *.p12
 *.bak
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Log files
+*.log
