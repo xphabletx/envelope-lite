@@ -592,7 +592,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                                   ),
                                   child: TableCalendar(
                             firstDay: DateTime(2020),
-                            lastDay: DateTime(2030),
+                            lastDay: DateTime(2100, 12, 31), // Match time machine limit
                             focusedDay: _focusedDay,
                             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                             calendarFormat: _compactCalendar
@@ -880,7 +880,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
               ),
               child: TableCalendar(
                 firstDay: DateTime(2020),
-                lastDay: DateTime(2030),
+                lastDay: DateTime(2100, 12, 31), // Match time machine limit
                 focusedDay: _focusedDay,
                 selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                 calendarFormat: _compactCalendar
