@@ -470,7 +470,7 @@ class _NameSetupStepState extends State<_NameSetupStep> {
 
               TextField(
                 controller: _controller,
-                autofocus: true,
+                autofocus: false,
                 textAlign: TextAlign.center,
                 textCapitalization: TextCapitalization.words,
                 onTap: () => _controller.selection = TextSelection(

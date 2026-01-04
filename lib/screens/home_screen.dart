@@ -39,7 +39,6 @@ import '../data/tutorial_sequences.dart';
 
 import '../screens/envelope/envelopes_detail_screen.dart';
 import 'stats_history_screen.dart';
-import 'stats_history_screen_v2.dart'; // NEW: Testing redesigned stats screen
 import 'settings_screen.dart';
 import 'calendar_screen.dart';
 import 'budget_screen.dart';
@@ -365,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => StatsHistoryScreenV2(repo: widget.repo),
+                builder: (_) => StatsHistoryScreen(repo: widget.repo),
               ),
             );
           },

@@ -275,7 +275,7 @@ class DialogHelpers {
               ],
               TextFormField(
                 controller: controller,
-                autofocus: true,
+                autofocus: false,
                 maxLength: maxLength,
                 keyboardType: keyboardType,
                 decoration: InputDecoration(

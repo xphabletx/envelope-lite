@@ -1007,7 +1007,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             const SizedBox(height: 16),
             SmartTextField(
               controller: controller,
-              autofocus: true,
+              autofocus: false,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Amount',
