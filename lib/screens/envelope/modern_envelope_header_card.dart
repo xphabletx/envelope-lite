@@ -137,6 +137,11 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     // Use time machine reference date if active, otherwise current time
     final referenceDate = timeMachine.futureDate ?? DateTime.now();
 
+    // Get target achievement data from time machine if available
+    final targetAchievedDate = timeMachine.isActive
+        ? timeMachine.getTargetAchievedDate(envelope.id)
+        : null;
+
     // Logic: Progress (Amount-based)
     double amountProgress = 0;
     if (envelope.targetAmount != null && envelope.targetAmount! > 0) {
@@ -156,11 +161,13 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
 
       switch (targetStartDateType) {
         case TargetStartDateType.fromToday:
-          // Start from beginning of today (00:00:01)
+          // Start from beginning of TODAY (actual current date, not time machine date)
+          // This ensures progress is always calculated from the real "today"
+          final actualToday = DateTime.now();
           startDate = DateTime(
-            referenceDate.year,
-            referenceDate.month,
-            referenceDate.day,
+            actualToday.year,
+            actualToday.month,
+            actualToday.day,
             0, 0, 1,
           );
           break;
@@ -226,11 +233,22 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
       final totalDuration = targetWithTime.difference(startDate);
       final elapsedDuration = referenceDate.difference(startDate);
 
+      // DEBUG: Log time progress calculation
+      debugPrint('[TimeProgress] ========================================');
+      debugPrint('[TimeProgress] Start Date: $startDate');
+      debugPrint('[TimeProgress] Target Date (with time): $targetWithTime');
+      debugPrint('[TimeProgress] Reference Date (viewing): $referenceDate');
+      debugPrint('[TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inMicroseconds} microseconds)');
+      debugPrint('[TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inMicroseconds} microseconds)');
+
       // Progress based on actual time elapsed (not just days)
       // Using microseconds gives us sub-second precision for accurate percentage
       timeProgress = totalDuration.inMicroseconds > 0
           ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
           : 0.0;
+
+      debugPrint('[TimeProgress] Time Progress: ${(timeProgress * 100).toStringAsFixed(2)}%');
+      debugPrint('[TimeProgress] ========================================');
 
       daysRemaining = targetWithTime.difference(referenceDate).inDays;
     }
@@ -584,6 +602,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
               timeProgress: timeProgress,
               daysRemaining: daysRemaining,
               startDate: startDate,
+              targetAchievedDate: targetAchievedDate,
+              referenceDate: referenceDate,
               currency: currency,
               fontProvider: fontProvider,
               theme: theme,
@@ -733,6 +753,8 @@ class _LargeTargetTile extends StatelessWidget {
   final double timeProgress;
   final int daysRemaining;
   final DateTime? startDate;
+  final DateTime? targetAchievedDate;
+  final DateTime referenceDate;
   final NumberFormat currency;
   final FontProvider fontProvider;
   final ThemeData theme;
@@ -746,6 +768,8 @@ class _LargeTargetTile extends StatelessWidget {
     required this.timeProgress,
     required this.daysRemaining,
     required this.startDate,
+    this.targetAchievedDate,
+    required this.referenceDate,
     required this.currency,
     required this.fontProvider,
     required this.theme,
@@ -891,9 +915,52 @@ class _LargeTargetTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  startDate != null
-                      ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • $daysRemaining days remaining'
-                      : '$daysRemaining days until ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)}',
+                  () {
+                    // If time machine is active and target was achieved, show achievement info
+                    if (targetAchievedDate != null && envelope.targetDate != null) {
+                      debugPrint('[ModernHeaderCard] ========================================');
+                      debugPrint('[ModernHeaderCard] Calculating target achievement text:');
+                      debugPrint('[ModernHeaderCard]   Target Date (deadline): ${envelope.targetDate}');
+                      debugPrint('[ModernHeaderCard]   Target Achieved Date: $targetAchievedDate');
+                      debugPrint('[ModernHeaderCard]   Reference Date (viewing): $referenceDate');
+
+                      // Calculate how many days from reference date (time machine viewing date) to achieved date
+                      final daysFromNow = referenceDate.difference(targetAchievedDate!).inDays;
+                      debugPrint('[ModernHeaderCard]   Days from viewing to achievement: $daysFromNow');
+                      debugPrint('[ModernHeaderCard]   Calculation: referenceDate ($referenceDate) - targetAchievedDate ($targetAchievedDate) = $daysFromNow days');
+
+                      if (daysFromNow > 0) {
+                        // Target was achieved in the past (before our time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Target achieved $daysFromNow days ago');
+                        debugPrint('[ModernHeaderCard] ========================================');
+                        return 'Target achieved $daysFromNow days ago on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
+                      } else if (daysFromNow < 0) {
+                        // Target will be achieved in the future (after our time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Target will be achieved in ${daysFromNow.abs()} days');
+                        debugPrint('[ModernHeaderCard] ========================================');
+                        return 'Target will be achieved in ${daysFromNow.abs()} days on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
+                      } else {
+                        // Target achieved today (at the time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Target achieved today!');
+                        debugPrint('[ModernHeaderCard] ========================================');
+                        return 'Target achieved today!';
+                      }
+                    }
+
+                    // Standard display when target not yet achieved
+                    if (daysRemaining < 0) {
+                      final daysOverdue = daysRemaining.abs();
+                      return startDate != null
+                          ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • Target was $daysOverdue days ago'
+                          : 'Target was $daysOverdue days ago';
+                    } else if (daysRemaining == 0) {
+                      return 'Target date is today!';
+                    } else {
+                      return startDate != null
+                          ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • $daysRemaining days remaining'
+                          : '$daysRemaining days until ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)}';
+                    }
+                  }(),
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
