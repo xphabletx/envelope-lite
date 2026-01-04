@@ -19,6 +19,7 @@ import '../../theme/app_themes.dart';
 import '../../utils/calculator_helper.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../utils/responsive_helper.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 enum EnvelopeSettingsSection {
   top,
@@ -50,6 +51,7 @@ class EnvelopeSettingsSheet extends StatefulWidget {
 
 class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   final _nameController = TextEditingController();
+  final _nameFocus = FocusNode();
   final _subtitleController = TextEditingController();
   final _targetController = TextEditingController();
   final _autoFillAmountController = TextEditingController();
@@ -99,6 +101,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocus.dispose();
     _subtitleController.dispose();
     _targetController.dispose();
     _autoFillAmountController.dispose();
@@ -514,7 +517,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   children: [
                     SizedBox(height: isLandscape ? 8 : 0),
                     // NAME INPUT
-                    TextField(
+                    SmartTextField(
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
                       style: fontProvider.getTextStyle(
@@ -571,7 +574,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 16),
 
                     // SUBTITLE
-                    TextField(
+                    SmartTextField(
                       controller: _subtitleController,
                       maxLines: 1,
                       textCapitalization: TextCapitalization.words,
@@ -601,7 +604,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
 
                     // TARGET AMOUNT
                     Consumer<LocaleProvider>(
-                      builder: (context, locale, _) => TextField(
+                      builder: (context, locale, _) => SmartTextField(
                         controller: _targetController,
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
@@ -1108,7 +1111,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     if (_autoFillEnabled) ...[
                       const SizedBox(height: 16),
                       Consumer<LocaleProvider>(
-                        builder: (context, locale, _) => TextField(
+                        builder: (context, locale, _) => SmartTextField(
                           controller: _autoFillAmountController,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,

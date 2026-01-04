@@ -23,6 +23,7 @@ import '../models/envelope.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
 import '../utils/calculator_helper.dart';
+import 'common/smart_text_field.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -108,11 +109,8 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     _loadBinders();
     _loadAccounts();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _nameFocus.requestFocus();
-      }
-    });
+    // REMOVED: Auto-focus on name field - user must tap to open keyboard
+    // This follows the global keyboard UX pattern
 
     _amountFocus.addListener(() {
       if (_amountFocus.hasFocus) {
@@ -212,10 +210,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         _iconValue = iconValue;
       });
     }
-  }
-
-  void _handleNameSubmit() {
-    _subtitleFocus.requestFocus();
   }
 
   @override
@@ -464,11 +458,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Name field
-                        TextFormField(
+                        SmartTextFormField(
                           controller: _nameCtrl,
                           focusNode: _nameFocus,
+                          nextFocusNode: _subtitleFocus,
                           textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.next,
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -492,7 +486,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             }
                             return null;
                           },
-                          onEditingComplete: _handleNameSubmit,
                           onTap: () => _nameCtrl.selection = TextSelection(
                             baseOffset: 0,
                             extentOffset: _nameCtrl.text.length,
@@ -540,12 +533,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Subtitle field
-                        TextFormField(
+                        SmartTextFormField(
                           controller: _subtitleCtrl,
                           focusNode: _subtitleFocus,
+                          nextFocusNode: _amountFocus,
                           textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.next,
-                          maxLength: 50,
                           maxLines: 1, // FIX: Prevent multi-line expansion
                           style: fontProvider
                               .getTextStyle(fontSize: 18)
@@ -561,13 +553,13 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             prefixIcon: const Icon(Icons.notes),
+                            counterText: '', // Hide character counter
                             // FIX 3: Added contentPadding
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 20,
                             ),
                           ),
-                          onEditingComplete: () => _amountFocus.requestFocus(),
                           onTap: () => _subtitleCtrl.selection = TextSelection(
                             baseOffset: 0,
                             extentOffset: _subtitleCtrl.text.length,
@@ -576,13 +568,13 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Starting amount field
-                        TextFormField(
+                        SmartTextFormField(
                           controller: _amtCtrl,
                           focusNode: _amountFocus,
+                          nextFocusNode: _targetFocus,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          textInputAction: TextInputAction.next,
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -629,7 +621,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               vertical: 20,
                             ),
                           ),
-                          onEditingComplete: () => _targetFocus.requestFocus(),
                           onTap: () {
                             _amtCtrl.selection = TextSelection(
                               baseOffset: 0,
@@ -640,13 +631,14 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         const SizedBox(height: 16),
 
                         // Target field
-                        TextFormField(
+                        SmartTextFormField(
                           controller: _targetCtrl,
                           focusNode: _targetFocus,
+                          nextFocusNode: _autoFillEnabled ? _autoFillAmountFocus : null,
+                          isLastField: !_autoFillEnabled,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          textInputAction: TextInputAction.done,
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -691,13 +683,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               vertical: 20,
                             ),
                           ),
-                          onEditingComplete: () {
-                            if (_autoFillEnabled) {
-                              _autoFillAmountFocus.requestFocus();
-                            } else {
-                              FocusScope.of(context).unfocus();
-                            }
-                          },
                           onTap: () => _targetCtrl.selection = TextSelection(
                             baseOffset: 0,
                             extentOffset: _targetCtrl.text.length,
@@ -978,13 +963,13 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         if (_autoFillEnabled) ...[
                           const SizedBox(height: 16),
-                          TextFormField(
+                          SmartTextFormField(
                             controller: _autoFillAmountCtrl,
                             focusNode: _autoFillAmountFocus,
+                            isLastField: true,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            textInputAction: TextInputAction.done,
                             style: fontProvider.getTextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -1034,8 +1019,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 vertical: 20,
                               ),
                             ),
-                            onEditingComplete: () =>
-                                FocusScope.of(context).unfocus(),
                             onTap: () {
                               _autoFillAmountCtrl.selection = TextSelection(
                                 baseOffset: 0,

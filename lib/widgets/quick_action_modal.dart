@@ -14,6 +14,7 @@ import '../providers/time_machine_provider.dart';
 import '../utils/calculator_helper.dart';
 import '../widgets/partner_badge.dart';
 import '../utils/responsive_helper.dart';
+import '../widgets/common/smart_text_field.dart';
 
 class QuickActionModal extends StatefulWidget {
   const QuickActionModal({
@@ -247,7 +248,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
           const SizedBox(height: 24),
 
           // Amount
-          TextField(
+          SmartTextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             // UPDATED: FontProvider
@@ -350,7 +351,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
           const SizedBox(height: 16),
 
           // Description
-          TextField(
+          SmartTextField(
             controller: _descController,
             textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(

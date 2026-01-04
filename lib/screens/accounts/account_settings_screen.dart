@@ -7,6 +7,7 @@ import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../utils/calculator_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({
@@ -428,11 +429,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               const SizedBox(height: 16),
 
               // Name field
-              TextFormField(
+              SmartTextFormField(
                 controller: _nameController,
                 focusNode: _nameFocus,
+                nextFocusNode: _balanceFocus,
                 textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
                 style: fontProvider.getTextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -458,7 +459,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     extentOffset: _nameController.text.length,
                   );
                 },
-                onEditingComplete: () => _balanceFocus.requestFocus(),
+                
               ),
               const SizedBox(height: 16),
 
@@ -526,13 +527,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               const SizedBox(height: 16),
 
               // Balance field with calculator inside
-              TextFormField(
+              SmartTextFormField(
                 controller: _balanceController,
                 focusNode: _balanceFocus,
+                isLastField: true,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                textInputAction: TextInputAction.done,
                 style: fontProvider.getTextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -650,9 +651,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 ),
                 if (_payDayAutoFillEnabled) ...[
                   const SizedBox(height: 16),
-                  TextFormField(
+                  SmartTextFormField(
                     controller: _autoFillAmountController,
                     focusNode: _autoFillAmountFocus,
+                    isLastField: true,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),

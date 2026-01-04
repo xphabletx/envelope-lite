@@ -8,6 +8,7 @@ import '../../../../../providers/locale_provider.dart';
 import '../../../../../providers/time_machine_provider.dart';
 import '../../../../../services/localization_service.dart';
 import '../../../../../utils/responsive_helper.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 class DepositModal extends StatefulWidget {
   const DepositModal({
@@ -27,6 +28,7 @@ class DepositModal extends StatefulWidget {
 
 class _DepositModalState extends State<DepositModal> {
   final _amountController = TextEditingController();
+  final _amountFocus = FocusNode();
   final _descriptionController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
@@ -34,6 +36,7 @@ class _DepositModalState extends State<DepositModal> {
   @override
   void dispose() {
     _amountController.dispose();
+    _amountFocus.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -191,7 +194,7 @@ class _DepositModalState extends State<DepositModal> {
 
               // Amount field with calculator button
               Consumer<LocaleProvider>(
-                builder: (context, locale, _) => TextField(
+                builder: (context, locale, _) => SmartTextField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
@@ -226,7 +229,7 @@ class _DepositModalState extends State<DepositModal> {
               const SizedBox(height: 16),
 
               // Description field
-              TextField(
+              SmartTextField(
                 controller: _descriptionController,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(

@@ -8,6 +8,8 @@ import '../../services/group_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/calculator_helper.dart';
+import '../common/smart_text_field.dart';
+import '../../services/focus_manager_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BinderTemplateQuickSetup extends StatefulWidget {
@@ -145,11 +147,14 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(
-          widget.template.name,
-          style: fontProvider.getTextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 40), // Extra padding to avoid back button overlap
+          child: Text(
+            widget.template.name,
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         automaticallyImplyLeading: false,
@@ -550,6 +555,17 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
   late final TextEditingController _targetAmountController;
   late final TextEditingController _recurringAmountController;
   late final TextEditingController _payDayAmountController;
+  final ScrollController _scrollController = ScrollController();
+
+  final FocusNode _currentAmountFocus = FocusNode();
+  final FocusNode _targetAmountFocus = FocusNode();
+  final FocusNode _recurringAmountFocus = FocusNode();
+  final FocusNode _payDayAmountFocus = FocusNode();
+
+  bool _showCurrentAmountTip = false;
+  bool _showTargetAmountTip = false;
+  bool _showRecurringBillTip = false;
+  bool _showPayDayTip = false;
 
   @override
   void initState() {
@@ -590,6 +606,37 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     }
   }
 
+  Widget _buildProTip(String text) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('💡', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -598,13 +645,15 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              // Header with progress
-              Row(
+        bottom: false,
+        child: Column(
+          children: [
+            // Fixed Header with progress
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
@@ -643,18 +692,23 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                   ),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
-              // Form fields
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+            // Scrollable Form fields
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       // Current Amount
-                      TextField(
+                      SmartTextField(
                         controller: _currentAmountController,
+                        focusNode: _currentAmountFocus,
+                        nextFocusNode: _targetAmountFocus,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: 'Current Amount (optional)',
@@ -686,16 +740,29 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                             ),
                           ),
                         ),
+                        onTap: () {
+                          if (!_showCurrentAmountTip) {
+                            setState(() => _showCurrentAmountTip = true);
+                          }
+                        },
                         onChanged: (value) {
                           widget.data.currentAmount = double.tryParse(value) ?? 0.0;
                         },
                       ),
 
+                      if (_showCurrentAmountTip)
+                        _buildProTip(
+                          'If you have cash in your account now that you\'ve already set aside for this envelope, add it here. This gives you an accurate starting point.',
+                        ),
+
                       const SizedBox(height: 16),
 
                       // Target Amount
-                      TextField(
+                      SmartTextField(
                         controller: _targetAmountController,
+                        focusNode: _targetAmountFocus,
+                        isLastField: !widget.data.recurringBillEnabled,
+                        nextFocusNode: widget.data.recurringBillEnabled ? _recurringAmountFocus : null,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           labelText: 'Target Amount (optional)',
@@ -727,10 +794,20 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                             ),
                           ),
                         ),
+                        onTap: () {
+                          if (!_showTargetAmountTip) {
+                            setState(() => _showTargetAmountTip = true);
+                          }
+                        },
                         onChanged: (value) {
                           widget.data.targetAmount = double.tryParse(value);
                         },
                       ),
+
+                      if (_showTargetAmountTip)
+                        _buildProTip(
+                          'Set a savings goal for this envelope. When you reach 100%, it will show your celebration icon instead of the pie chart!',
+                        ),
 
                       const SizedBox(height: 24),
                       const Divider(),
@@ -753,22 +830,47 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                               setState(() {
                                 widget.data.recurringBillEnabled = enabled;
 
+                                // Show pro tip when toggled on
+                                if (enabled && !_showRecurringBillTip) {
+                                  _showRecurringBillTip = true;
+                                }
+
                                 // Auto-suggest for pay day deposit
                                 if (enabled && widget.data.recurringBillAmount > 0) {
                                   widget.data.payDayDepositAmount = widget.data.recurringBillAmount;
                                   _payDayAmountController.text = widget.data.recurringBillAmount.toString();
                                 }
                               });
+
+                              // Scroll down when expanded to show the fields
+                              if (enabled) {
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  if (mounted && _scrollController.hasClients) {
+                                    _scrollController.animateTo(
+                                      _scrollController.position.pixels + 200,
+                                      duration: const Duration(milliseconds: 400),
+                                      curve: Curves.easeOut,
+                                    );
+                                  }
+                                });
+                              }
                             },
                           ),
                         ],
                       ),
 
+                      if (widget.data.recurringBillEnabled && _showRecurringBillTip)
+                        _buildProTip(
+                          'Recurring bills are automatically scheduled. We\'ll remind you or auto-execute the payment based on your settings!',
+                        ),
+
                       if (widget.data.recurringBillEnabled) ...[
                         const SizedBox(height: 16),
 
-                        TextField(
+                        SmartTextField(
                           controller: _recurringAmountController,
+                          focusNode: _recurringAmountFocus,
+                          isLastField: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
                             labelText: 'Amount',
@@ -897,17 +999,42 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                             onChanged: (enabled) {
                               setState(() {
                                 widget.data.payDayDepositEnabled = enabled;
+
+                                // Show pro tip when toggled on
+                                if (enabled && !_showPayDayTip) {
+                                  _showPayDayTip = true;
+                                }
                               });
+
+                              // Scroll to bottom when expanded
+                              if (enabled) {
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  if (mounted && _scrollController.hasClients) {
+                                    _scrollController.animateTo(
+                                      _scrollController.position.maxScrollExtent,
+                                      duration: const Duration(milliseconds: 400),
+                                      curve: Curves.easeOut,
+                                    );
+                                  }
+                                });
+                              }
                             },
                           ),
                         ],
                       ),
 
+                      if (widget.data.payDayDepositEnabled && _showPayDayTip)
+                        _buildProTip(
+                          'This amount is added to your envelope every pay day. Tip: If you have a monthly bill but get paid weekly/bi-weekly, divide the bill amount by how many pay days occur before it\'s due. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button in the amount field to help!',
+                        ),
+
                       if (widget.data.payDayDepositEnabled) ...[
                         const SizedBox(height: 16),
 
-                        TextField(
+                        SmartTextField(
                           controller: _payDayAmountController,
+                          focusNode: _payDayAmountFocus,
+                          isLastField: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
                             labelText: 'Amount',
@@ -981,36 +1108,40 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
               ),
 
               // Navigation buttons
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  if (!widget.isFirst)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: widget.onBack,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  child: Row(
+                    children: [
+                      if (!widget.isFirst)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: widget.onBack,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('← Back'),
+                          ),
                         ),
-                        child: const Text('← Back'),
+                      if (!widget.isFirst) const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: widget.onNext,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: Text(widget.isLast ? 'Finish' : 'Next →'),
+                        ),
                       ),
-                    ),
-                  if (!widget.isFirst) const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      onPressed: widget.onNext,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(widget.isLast ? 'Finish' : 'Next →'),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -1020,6 +1151,11 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     _targetAmountController.dispose();
     _recurringAmountController.dispose();
     _payDayAmountController.dispose();
+    _scrollController.dispose();
+    _currentAmountFocus.dispose();
+    _targetAmountFocus.dispose();
+    _recurringAmountFocus.dispose();
+    _payDayAmountFocus.dispose();
     super.dispose();
   }
 }

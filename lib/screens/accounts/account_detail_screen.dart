@@ -13,6 +13,7 @@ import '../../services/localization_service.dart';
 import '../envelope/envelopes_detail_screen.dart';
 import '../stats_history_screen.dart';
 import 'account_settings_screen.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 class AccountDetailScreen extends StatefulWidget {
   const AccountDetailScreen({
@@ -615,7 +616,7 @@ class _EditAccountDialogState extends State<_EditAccountDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
+            SmartTextFormField(
               controller: _nameController,
               decoration: InputDecoration(
                 labelText: tr('account_name'),
@@ -630,7 +631,7 @@ class _EditAccountDialogState extends State<_EditAccountDialog> {
             ),
             const SizedBox(height: 16),
             Consumer<LocaleProvider>(
-              builder: (context, locale, _) => TextFormField(
+              builder: (context, locale, _) => SmartTextFormField(
                 controller: _balanceController,
                 decoration: InputDecoration(
                   labelText: tr('account_balance'),

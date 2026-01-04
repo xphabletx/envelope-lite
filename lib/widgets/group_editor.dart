@@ -20,6 +20,7 @@ import 'envelope_creator.dart';
 import 'binder/binder_template_quick_setup.dart';
 import 'binder/template_envelope_selector.dart';
 import '../utils/responsive_helper.dart';
+import '../widgets/common/smart_text_field.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -882,7 +883,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 ),
                                 SizedBox(height: isLandscape ? 12.0 : 20.0),
                                 // Binder Name Field
-                                TextFormField(
+                                SmartTextFormField(
                                   controller: _nameCtrl,
                                   textCapitalization: TextCapitalization.words,
                                   decoration: InputDecoration(

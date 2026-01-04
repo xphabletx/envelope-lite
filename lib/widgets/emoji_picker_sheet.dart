@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/font_provider.dart';
 import '../services/localization_service.dart';
+import '../widgets/common/smart_text_field.dart';
 
 Future<String?> showEmojiPickerSheet({
   required BuildContext context,
@@ -69,7 +70,7 @@ Future<String?> showEmojiPickerSheet({
                 color: theme.colorScheme.outline.withValues(alpha: 0.3),
               ),
             ),
-            child: TextField(
+            child: SmartTextField(
               controller: controller,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 64),

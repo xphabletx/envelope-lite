@@ -19,6 +19,7 @@ import 'time_machine_transition.dart';
 import '../tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class TimeMachineScreen extends StatefulWidget {
   const TimeMachineScreen({
@@ -294,7 +295,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                SmartTextField(
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Name'),
@@ -303,7 +304,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     extentOffset: nameController.text.length,
                   ),
                 ),
-                TextField(
+                SmartTextField(
                   controller: amountController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
@@ -486,7 +487,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (enabledValue)
-                  TextField(
+                  SmartTextField(
                     controller: amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
@@ -877,7 +878,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+                  SmartTextField(
                     controller: _payAmountController,
                     focusNode: _payAmountFocusNode,
                     keyboardType:

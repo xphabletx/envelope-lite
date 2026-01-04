@@ -7,6 +7,7 @@ import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../utils/responsive_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class PayDaySettingsScreen extends StatefulWidget {
   const PayDaySettingsScreen({
@@ -205,7 +206,7 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
               SizedBox(height: isLandscape ? 20 : 32),
 
               // Pay Amount
-              TextField(
+              SmartTextField(
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -291,11 +292,17 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
               // Next Pay Date
               OutlinedButton.icon(
                 onPressed: () async {
+                  final now = DateTime.now();
+                  // Ensure initialDate is not before firstDate
+                  final initialDate = _nextPayDate != null && _nextPayDate!.isBefore(now)
+                      ? now
+                      : (_nextPayDate ?? now);
+
                   final pickedDate = await showDatePicker(
                     context: context,
-                    initialDate: _nextPayDate ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    initialDate: initialDate,
+                    firstDate: now,
+                    lastDate: now.add(const Duration(days: 365)),
                     helpText: 'Select your next pay date',
                   );
                   if (pickedDate != null) {

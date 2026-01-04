@@ -14,6 +14,7 @@ import '../../providers/time_machine_provider.dart';
 import '../../utils/target_helper.dart';
 import '../../utils/calculator_helper.dart';
 import '../../widgets/time_machine_indicator.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 enum TargetScreenMode {
   singleEnvelope,  // From envelope detail
@@ -722,7 +723,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Total Contribution Amount Input
-                TextField(
+                SmartTextField(
                   controller: _totalContributionController,
                   decoration: InputDecoration(
                     labelText: 'Total Contribution Amount',
@@ -1004,7 +1005,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           children: [
             Text('Enter contribution amount', style: TextStyle(fontSize: 14)),
             const SizedBox(height: 16),
-            TextField(
+            SmartTextField(
               controller: controller,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),

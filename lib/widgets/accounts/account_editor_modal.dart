@@ -8,6 +8,7 @@ import '../../providers/time_machine_provider.dart';
 import '../envelope/omni_icon_picker_modal.dart';
 import '../../services/icon_search_service_unlimited.dart' show IconType;
 import '../../utils/responsive_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class AccountEditorModal extends StatefulWidget {
   const AccountEditorModal({
@@ -311,11 +312,11 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Name field
-                    TextFormField(
+                    SmartTextFormField(
                       controller: _nameController,
                       focusNode: _nameFocus,
+                      nextFocusNode: _balanceFocus,
                       textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -341,7 +342,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                           extentOffset: _nameController.text.length,
                         );
                       },
-                      onEditingComplete: () => _balanceFocus.requestFocus(),
+                      
                     ),
                     const SizedBox(height: 16),
 
@@ -413,13 +414,13 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                     const SizedBox(height: 16),
 
                     // Balance field
-                    TextFormField(
+                    SmartTextFormField(
                       controller: _balanceController,
                       focusNode: _balanceFocus,
+                      isLastField: true,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      textInputAction: TextInputAction.done,
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

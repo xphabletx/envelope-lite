@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/auth_service.dart';
 import '../services/tutorial_controller.dart';
+import '../widgets/common/smart_text_field.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -15,6 +16,8 @@ class SignInScreen extends StatefulWidget {
 class _SignInScreenState extends State<SignInScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passFocus = FocusNode();
   bool _busy = false;
   String? _error;
   bool _obscurePassword = true; // Password visibility toggle
@@ -23,6 +26,8 @@ class _SignInScreenState extends State<SignInScreen> {
   void dispose() {
     _email.dispose();
     _pass.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
     super.dispose();
   }
 
@@ -142,6 +147,9 @@ class _SignInScreenState extends State<SignInScreen> {
     final emailCtrl = TextEditingController(text: _email.text.trim());
     final passCtrl = TextEditingController();
     final confirmCtrl = TextEditingController();
+    final emailFocus = FocusNode();
+    final passFocus = FocusNode();
+    final confirmFocus = FocusNode();
 
     String? sheetError;
     bool sheetBusy = false;
@@ -340,8 +348,10 @@ class _SignInScreenState extends State<SignInScreen> {
                               key: formKey,
                               child: Column(
                                 children: [
-                                  TextFormField(
+                                  SmartTextFormField(
                                     controller: emailCtrl,
+                                    focusNode: emailFocus,
+                                    nextFocusNode: passFocus,
                                     keyboardType: TextInputType.emailAddress,
                                     textCapitalization: TextCapitalization.none,
                                     style: const TextStyle(
@@ -352,11 +362,12 @@ class _SignInScreenState extends State<SignInScreen> {
                                       labelText: 'Email',
                                     ),
                                     validator: emailValidator,
-                                    textInputAction: TextInputAction.next,
                                   ),
                                   const SizedBox(height: 16),
-                                  TextFormField(
+                                  SmartTextFormField(
                                     controller: passCtrl,
+                                    focusNode: passFocus,
+                                    nextFocusNode: confirmFocus,
                                     obscureText: obscurePass,
                                     style: const TextStyle(
                                       fontSize: 16,
@@ -379,11 +390,12 @@ class _SignInScreenState extends State<SignInScreen> {
                                       ),
                                     ),
                                     validator: passValidator,
-                                    textInputAction: TextInputAction.next,
                                   ),
                                   const SizedBox(height: 16),
-                                  TextFormField(
+                                  SmartTextFormField(
                                     controller: confirmCtrl,
+                                    focusNode: confirmFocus,
+                                    isLastField: true,
                                     obscureText: obscureConfirm,
                                     style: const TextStyle(
                                       fontSize: 16,
@@ -407,7 +419,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                       ),
                                     ),
                                     validator: confirmValidator,
-                                    onFieldSubmitted: (_) => onCreate(),
+                                    onSubmitted: (_) => onCreate(),
                                   ),
                                 ],
                               ),
@@ -475,6 +487,11 @@ class _SignInScreenState extends State<SignInScreen> {
         );
       },
     );
+
+    // Dispose focus nodes after modal closes
+    emailFocus.dispose();
+    passFocus.dispose();
+    confirmFocus.dispose();
   }
 
   @override
@@ -554,11 +571,12 @@ class _SignInScreenState extends State<SignInScreen> {
                                 ),
                               ),
                             ),
-                          TextField(
+                          SmartTextField(
                             controller: _email,
+                            focusNode: _emailFocus,
+                            nextFocusNode: _passFocus,
                             keyboardType: TextInputType.emailAddress,
                             textCapitalization: TextCapitalization.none,
-                            textInputAction: TextInputAction.next,
                             style: const TextStyle(
                               fontSize: 18,
                               fontFamily: null,
@@ -570,14 +588,13 @@ class _SignInScreenState extends State<SignInScreen> {
                                 fontFamily: null,
                               ),
                             ),
-                            onSubmitted: (_) =>
-                                FocusScope.of(context).nextFocus(),
                           ),
                           const SizedBox(height: 20),
-                          TextField(
+                          SmartTextField(
                             controller: _pass,
+                            focusNode: _passFocus,
+                            isLastField: true,
                             obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.done,
                             style: const TextStyle(
                               fontSize: 18,
                               fontFamily: null,

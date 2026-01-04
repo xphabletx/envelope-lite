@@ -22,6 +22,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../utils/onboarding_currency_converter.dart';
 import '../../widgets/binder/binder_template_quick_setup.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class ConsolidatedOnboardingFlow extends StatefulWidget {
   final String userId;
@@ -426,16 +427,19 @@ class _NameSetupStep extends StatefulWidget {
 
 class _NameSetupStepState extends State<_NameSetupStep> {
   late final TextEditingController _controller;
+  late final FocusNode _controllerFocus;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialName);
+    _controllerFocus = FocusNode();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _controllerFocus.dispose();
     super.dispose();
   }
 
@@ -1508,6 +1512,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
   late final TextEditingController _nameController;
   late final TextEditingController _balanceController;
   late final TextEditingController _bankNameController;
+  late final FocusNode _bankNameFocus;
+  late final FocusNode _nameFocus;
+  late final FocusNode _balanceFocus;
   late String _iconType;
   late String _iconValue;
 
@@ -1521,6 +1528,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
     _bankNameController = TextEditingController(text: widget.initialBankName ?? '');
     _iconType = widget.initialIconType ?? 'emoji';
     _iconValue = widget.initialIconValue ?? '🏦';
+    _bankNameFocus = FocusNode();
+    _nameFocus = FocusNode();
+    _balanceFocus = FocusNode();
   }
 
   @override
@@ -1528,6 +1538,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
     _nameController.dispose();
     _balanceController.dispose();
     _bankNameController.dispose();
+    _bankNameFocus.dispose();
+    _nameFocus.dispose();
+    _balanceFocus.dispose();
     super.dispose();
   }
 
@@ -1625,8 +1638,10 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
+                    SmartTextField(
                       controller: _bankNameController,
+                      focusNode: _bankNameFocus,
+                      nextFocusNode: _nameFocus,
                       textCapitalization: TextCapitalization.words,
                       onTap: () => _bankNameController.selection = TextSelection(
                         baseOffset: 0,
@@ -1684,8 +1699,10 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
+                    SmartTextField(
                       controller: _nameController,
+                      focusNode: _nameFocus,
+                      nextFocusNode: _balanceFocus,
                       textCapitalization: TextCapitalization.words,
                       onTap: () => _nameController.selection = TextSelection(
                         baseOffset: 0,
@@ -1708,8 +1725,10 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
+                    SmartTextField(
                       controller: _balanceController,
+                      focusNode: _balanceFocus,
+                      isLastField: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onTap: () => _balanceController.selection = TextSelection(
                         baseOffset: 0,
@@ -1776,6 +1795,7 @@ class _PayDaySetupStep extends StatefulWidget {
 
 class _PayDaySetupStepState extends State<_PayDaySetupStep> {
   late final TextEditingController _amountController;
+  late final FocusNode _amountFocus;
   late String _frequency;
   late DateTime _nextPayDate;
 
@@ -1792,6 +1812,7 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
   @override
   void dispose() {
     _amountController.dispose();
+    _amountFocus.dispose();
     super.dispose();
   }
 
@@ -1836,8 +1857,10 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
+                    SmartTextField(
                       controller: _amountController,
+                      focusNode: _amountFocus,
+                      isLastField: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onTap: () => _amountController.selection = TextSelection(
                         baseOffset: 0,

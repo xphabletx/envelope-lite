@@ -12,6 +12,7 @@ import 'pay_day_allocation_screen.dart';
 import '../../utils/calculator_helper.dart';
 import '../../widgets/tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 class PayDayAmountScreen extends StatefulWidget {
   const PayDayAmountScreen({
@@ -170,7 +171,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
               const SizedBox(height: 48),
 
               // Amount input
-              TextField(
+              SmartTextField(
                 controller: _amountController,
                 focusNode: _amountFocus,
                 keyboardType: const TextInputType.numberWithOptions(

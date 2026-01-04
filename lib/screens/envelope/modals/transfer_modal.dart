@@ -17,6 +17,7 @@ import '../../../providers/time_machine_provider.dart';
 import '../../../utils/calculator_helper.dart';
 import '../../../widgets/partner_badge.dart';
 import '../../../utils/responsive_helper.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 class TransferModal extends StatefulWidget {
   const TransferModal({
@@ -57,6 +58,7 @@ class _TransferDestination {
 
 class _TransferModalState extends State<TransferModal> {
   final _amountController = TextEditingController();
+  final _amountFocus = FocusNode();
   final _descController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String? _selectedTargetId;
@@ -75,6 +77,7 @@ class _TransferModalState extends State<TransferModal> {
   @override
   void dispose() {
     _amountController.dispose();
+    _amountFocus.dispose();
     _descController.dispose();
     super.dispose();
   }
@@ -337,7 +340,7 @@ class _TransferModalState extends State<TransferModal> {
 
           // Amount
           Consumer<LocaleProvider>(
-            builder: (context, locale, _) => TextField(
+            builder: (context, locale, _) => SmartTextField(
               controller: _amountController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: fontProvider.getTextStyle(
@@ -465,7 +468,7 @@ class _TransferModalState extends State<TransferModal> {
           const SizedBox(height: 16),
 
           // Description
-          TextField(
+          SmartTextField(
             controller: _descController,
             textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(

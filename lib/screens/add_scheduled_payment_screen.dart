@@ -12,6 +12,7 @@ import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../data/material_icons_database.dart';
 import '../../utils/calculator_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class AddScheduledPaymentScreen extends StatefulWidget {
   const AddScheduledPaymentScreen({
@@ -36,7 +37,9 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   String? _selectedEnvelopeId;
   String? _selectedGroupId;
   final _descriptionCtrl = TextEditingController();
+  final _descriptionFocus = FocusNode();
   final _amountCtrl = TextEditingController();
+  final _amountFocus = FocusNode();
   DateTime? _selectedDate;
   int _frequencyValue = 1;
   PaymentFrequencyUnit _frequencyUnit = PaymentFrequencyUnit.months;
@@ -77,7 +80,9 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
   @override
   void dispose() {
     _descriptionCtrl.dispose();
+    _descriptionFocus.dispose();
     _amountCtrl.dispose();
+    _amountFocus.dispose();
     super.dispose();
   }
 
@@ -496,8 +501,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            SmartTextField(
               controller: _descriptionCtrl,
+              focusNode: _descriptionFocus,
+              nextFocusNode: _amountFocus,
               textCapitalization: TextCapitalization.words,
               style: fontProvider.getTextStyle(fontSize: 18),
               decoration: InputDecoration(
@@ -589,8 +596,10 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
 
             // Amount field (only show for fixed amount type)
             if (_paymentType == ScheduledPaymentType.fixedAmount)
-              TextField(
+              SmartTextField(
                 controller: _amountCtrl,
+                focusNode: _amountFocus,
+                isLastField: true,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),

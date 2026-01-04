@@ -8,6 +8,7 @@ import '../../../../../services/envelope_repo.dart';
 import '../../../../../services/localization_service.dart';
 import '../../../../../utils/calculator_helper.dart';
 import '../../../../../utils/responsive_helper.dart';
+import '../../../widgets/common/smart_text_field.dart';
 
 class WithdrawModal extends StatefulWidget {
   const WithdrawModal({
@@ -29,6 +30,7 @@ class WithdrawModal extends StatefulWidget {
 
 class _WithdrawModalState extends State<WithdrawModal> {
   final _amountController = TextEditingController();
+  final _amountFocus = FocusNode();
   final _descriptionController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
@@ -36,6 +38,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
   @override
   void dispose() {
     _amountController.dispose();
+    _amountFocus.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -238,7 +241,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
 
               // Amount field with calculator button
               Consumer<LocaleProvider>(
-                builder: (context, locale, _) => TextField(
+                builder: (context, locale, _) => SmartTextField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
@@ -273,7 +276,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
               const SizedBox(height: 16),
 
               // Description field
-              TextField(
+              SmartTextField(
                 controller: _descriptionController,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(

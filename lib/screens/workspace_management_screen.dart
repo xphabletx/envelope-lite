@@ -17,6 +17,7 @@ import '../widgets/partner_badge.dart';
 import '../widgets/tutorial_wrapper.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
+import '../../widgets/common/smart_text_field.dart';
 
 class WorkspaceManagementScreen extends StatefulWidget {
   const WorkspaceManagementScreen({
@@ -205,7 +206,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Edit Nickname'),
-        content: TextField(controller: nicknameCtrl),
+        content: SmartTextField(controller: nicknameCtrl),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -859,7 +860,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text("Rename Workspace"),
-                  content: TextField(controller: ctrl),
+                  content: SmartTextField(controller: ctrl),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
