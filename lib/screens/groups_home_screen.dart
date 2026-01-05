@@ -182,11 +182,13 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             }
 
             if (groups.isEmpty) {
+              final responsive = context.responsive;
               return TutorialWrapper(
                 tutorialSequence: bindersTutorial,
                 child: Scaffold(
                   backgroundColor: theme.scaffoldBackgroundColor,
                   appBar: AppBar(
+                  toolbarHeight: responsive.isLandscape ? 64 : 80,
                   title: Row(
                     children: [
                       ElevatedButton.icon(
@@ -782,13 +784,13 @@ class _BinderSpreadState extends State<_BinderSpread> {
       ),
     );
 
-    // Auto-fill Chip
+    // Cash Flow Chip
     if (autoFillEnvelopes.isNotEmpty) {
       chips.add(
         _buildStandardChip(
           context: context,
           icon: Icons.autorenew,
-          label: 'Auto Fill',
+          label: 'Cash Flow',
           amount: currency.format(autoFillTotal),
           onTap: () {
             Navigator.push(

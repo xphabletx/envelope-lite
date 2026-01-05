@@ -86,17 +86,17 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
       // Explicit range provided (from overview card in time machine)
       rangeStart = futureStart!;
       rangeEnd = futureEnd!;
-      title = 'Scheduled Payments (Next 30 Days)';
+      title = 'Autopilot (Next 30 Days)';
     } else if (timeMachine.isActive && timeMachine.futureDate != null) {
       // Time machine active, show 30 days from target date
       rangeStart = timeMachine.futureDate!;
       rangeEnd = timeMachine.futureDate!.add(const Duration(days: 30));
-      title = 'Scheduled Payments (Next 30 Days)';
+      title = 'Autopilot (Next 30 Days)';
     } else {
       // Normal mode - show 30 days from now
       rangeStart = DateTime.now();
       rangeEnd = DateTime.now().add(const Duration(days: 30));
-      title = 'Scheduled Payments';
+      title = 'Autopilot';
     }
 
     return Scaffold(
@@ -156,7 +156,7 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No scheduled payments',
+                    'No autopilot payments',
                     style: fontProvider.getTextStyle(
                       fontSize: 18,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -188,7 +188,7 @@ class ScheduledPaymentsListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No scheduled payments in this period',
+                    'No autopilot payments in this period',
                     style: fontProvider.getTextStyle(
                       fontSize: 18,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),

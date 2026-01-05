@@ -85,6 +85,8 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
         return 'companyLogo';
       case IconType.emoji:
         return 'emoji';
+      case IconType.assetImage:
+        return 'assetImage';
     }
   }
 
@@ -400,6 +402,8 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
         return 'Company Logo';
       case IconType.emoji:
         return 'Emoji';
+      case IconType.assetImage:
+        return 'App Icon';
     }
   }
 }

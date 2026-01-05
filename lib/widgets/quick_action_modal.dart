@@ -166,7 +166,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
         break;
       case TransactionType.scheduledPayment:
         // This shouldn't be used in quick actions, but include for completeness
-        title = 'Scheduled Payment';
+        title = 'Autopilot';
         icon = Icons.event_repeat;
         color = Colors.purple.shade700;
         break;

@@ -194,6 +194,13 @@ class Envelope {
               },
             ),
           );
+
+        case 'assetImage':
+          return Image.asset(
+            iconValue!,
+            width: size * 1.3,
+            height: size * 1.3,
+          );
       }
     }
 
@@ -203,10 +210,10 @@ class Envelope {
     }
 
     // Default fallback
-    return Icon(
-      Icons.account_balance_wallet,
-      size: size,
-      color: theme.colorScheme.primary,
+    return Image.asset(
+      'assets/default/stufficon.png',
+      width: size * 1.3,
+      height: size * 1.3,
     );
   }
 

@@ -125,11 +125,11 @@ class _EnvelopeTileState extends State<EnvelopeTile>
     }
 
     // Responsive sizing
-    final tilePadding = isLandscape ? 12.0 : 16.0;
-    final emojiSize = isLandscape ? 32.0 : 40.0;
-    final titleFontSize = isLandscape ? 18.0 : 22.0;
-    final amountFontSize = isLandscape ? 14.0 : 18.0;
-    final subtitleFontSize = isLandscape ? 12.0 : 14.0;
+    final tilePadding = isLandscape ? 8.0 : 16.0;
+    final emojiSize = isLandscape ? 28.0 : 40.0;
+    final titleFontSize = isLandscape ? 16.0 : 22.0;
+    final amountFontSize = isLandscape ? 13.0 : 18.0;
+    final subtitleFontSize = isLandscape ? 11.0 : 14.0;
 
     final tileContent = Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -231,7 +231,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
             ),
             if (widget.envelope.subtitle != null &&
                 widget.envelope.subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              SizedBox(height: isLandscape ? 2 : 4),
               Padding(
                 padding: EdgeInsets.only(left: isLandscape ? 44 : 56),
                 child: Text(
@@ -247,7 +247,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                 ),
               ),
             ],
-            SizedBox(height: isLandscape ? 4 : 12),
+            SizedBox(height: isLandscape ? 2 : 12),
             Padding(
               padding: EdgeInsets.only(left: isLandscape ? 44 : 56),
               child: Row(

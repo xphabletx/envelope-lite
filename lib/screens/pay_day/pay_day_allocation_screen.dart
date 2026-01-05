@@ -147,7 +147,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
       context: context,
       title: 'Temporary Changes',
       message: 'Changes you make on this screen are temporary and only apply to this pay day session.\n\n'
-          'To permanently change auto-fill settings, edit them in the envelope, binder, or account settings.',
+          'To permanently change cash flow settings, edit them in the envelope, binder, or account settings.',
       icon: Icons.info_outline,
     );
 
@@ -207,7 +207,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
         context: context,
         title: 'Add Items Temporarily',
         message: 'Items you add here will only be included in this pay day session.\n\n'
-            'To permanently enable auto-fill for an item, edit its settings from the main screen.',
+            'To permanently enable cash flow for an item, edit its settings from the main screen.',
         icon: Icons.info_outline,
       );
 
@@ -775,7 +775,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Auto-fill Amount',
+                    'Cash Flow Amount',
                     style: TextStyle(
                       fontSize: 12,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -1135,7 +1135,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            'Auto-fill',
+                            'Cash Flow',
                             style: TextStyle(
                               fontSize: 11,
                               color: binderColorOption.envelopeTextColor.withValues(alpha: 0.6),

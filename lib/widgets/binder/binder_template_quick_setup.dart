@@ -268,7 +268,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
                     ),
                   ),
                   Text(
-                    '(Current amounts, recurring bills, etc.)',
+                    '(Current amounts, autopilot, etc.)',
                     style: TextStyle(
                       fontSize: 14,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -822,7 +822,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Recurring Bill?',
+                            'Autopilot?',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -865,7 +865,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (widget.data.recurringBillEnabled && _showRecurringBillTip)
                         _buildProTip(
-                          'Recurring bills are automatically scheduled. We\'ll remind you or auto-execute the payment based on your settings!',
+                          'Autopilot payments are automatically scheduled. We\'ll remind you or auto-execute the payment based on your settings!',
                         ),
 
                       if (widget.data.recurringBillEnabled) ...[
@@ -1047,7 +1047,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             helperText: widget.data.recurringBillEnabled
-                                ? 'Auto-suggested from recurring bill'
+                                ? 'Auto-suggested from autopilot'
                                 : null,
                             suffixIcon: Container(
                               margin: const EdgeInsets.all(4),

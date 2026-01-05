@@ -475,7 +475,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
           ),
         ),
 
-        // 2. THE CHIPS (2 Wider Chips for Auto-Fill & Scheduled Payments)
+        // 2. THE CHIPS (2 Wider Chips for Cash Flow & Autopilot)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: StreamBuilder<List<ScheduledPayment>>(
@@ -494,14 +494,14 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
 
               return Row(
                 children: [
-                  // 1. Auto-Fill Chip (Wider)
+                  // 1. Cash Flow Chip (Wider)
                   Expanded(
                     flex: 1,
                     child: _InfoChip(
                       icon: Icons.autorenew,
                       label: envelope.cashFlowEnabled
-                          ? 'Auto-fill: ${currency.format(envelope.cashFlowAmount ?? 0)}'
-                          : 'Auto-fill Off',
+                          ? 'Cash Flow: ${currency.format(envelope.cashFlowAmount ?? 0)}'
+                          : 'Cash Flow Off',
                       subLabel: 'Tap for details',
                       color: theme.colorScheme.secondaryContainer,
                       textColor: theme.colorScheme.onSecondaryContainer,
@@ -532,7 +532,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
 
-                  // 2. Scheduled Payment Chip (Wider)
+                  // 2. Autopilot Chip (Wider)
                   Expanded(
                     flex: 1,
                     child: _InfoChip(
@@ -541,7 +541,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                           ? (payments.length > 1
                               ? '${payments.length} Payments'
                               : 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}')
-                          : 'Schedule: Off',
+                          : 'Autopilot: Off',
                       subLabel: hasPayments
                           ? (payments.length > 1
                               ? 'Next: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}'
@@ -557,7 +557,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                         if (hasPayments) {
                           _showScheduledPaymentsList(context, payments);
                         } else {
-                          // Show settings sheet scrolled to scheduled payments section
+                          // Show settings sheet scrolled to autopilot section
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,

@@ -232,9 +232,9 @@ class _TransactionTile extends StatelessWidget {
       color = Colors.green.shade700;
       amountStr = '+${currency.format(t.amount)}';
     }
-    // Transaction type 2: Scheduled Payments (from envelopes)
+    // Transaction type 2: Autopilot (from envelopes)
     else if (t.type == TransactionType.scheduledPayment) {
-      title = '${envelope.name} - Scheduled payment';
+      title = '${envelope.name} - Autopilot';
       leadingIcon = envelope.id.isNotEmpty
           ? envelope.getIconWidget(theme, size: 24)
           : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);

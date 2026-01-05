@@ -104,7 +104,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
 
   late bool isEdit;
   late Set<String> selectedEnvelopeIds;
-  late String selectedEmoji;
+  late String? selectedEmoji; // Nullable to allow stufficon.png fallback
   late String? selectedIconType;
   late String? selectedIconValue;
   late int? selectedIconColor;
@@ -131,7 +131,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     isEdit = widget.group != null;
     _nameCtrl = TextEditingController(text: widget.group?.name ?? '');
     selectedEnvelopeIds = <String>{};
-    selectedEmoji = widget.group?.emoji ?? '📁';
+    selectedEmoji = widget.group?.emoji; // No default emoji - will use stufficon.png fallback
     selectedIconType = widget.group?.iconType;
     selectedIconValue = widget.group?.iconValue;
     selectedIconColor = widget.group?.iconColor;
@@ -723,35 +723,56 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                 ),
               ),
               errorWidget: (context, url, error) {
-                return FittedBox(
-                  fit: BoxFit.contain,
-                  child: Text(
-                    selectedEmoji,
-                    style: TextStyle(fontSize: iconSize),
-                  ),
+                if (selectedEmoji != null) {
+                  return FittedBox(
+                    fit: BoxFit.contain,
+                    child: Text(
+                      selectedEmoji!,
+                      style: TextStyle(fontSize: iconSize),
+                    ),
+                  );
+                }
+                return Image.asset(
+                  'assets/default/stufficon.png',
+                  width: iconSize * 1.4,
+                  height: iconSize * 1.4,
                 );
               },
             ),
           );
 
         default:
-          return FittedBox(
-            fit: BoxFit.contain,
-            child: Text(
-              selectedEmoji,
-              style: TextStyle(fontSize: iconSize),
-            ),
+          if (selectedEmoji != null) {
+            return FittedBox(
+              fit: BoxFit.contain,
+              child: Text(
+                selectedEmoji!,
+                style: TextStyle(fontSize: iconSize),
+              ),
+            );
+          }
+          return Image.asset(
+            'assets/default/stufficon.png',
+            width: iconSize * 1.4,
+            height: iconSize * 1.4,
           );
       }
     }
 
-    // Fallback to emoji
-    return FittedBox(
-      fit: BoxFit.contain,
-      child: Text(
-        selectedEmoji,
-        style: TextStyle(fontSize: iconSize),
-      ),
+    // Fallback to emoji or stufficon
+    if (selectedEmoji != null) {
+      return FittedBox(
+        fit: BoxFit.contain,
+        child: Text(
+          selectedEmoji!,
+          style: TextStyle(fontSize: iconSize),
+        ),
+      );
+    }
+    return Image.asset(
+      'assets/default/stufficon.png',
+      width: iconSize * 1.4,
+      height: iconSize * 1.4,
     );
   }
 

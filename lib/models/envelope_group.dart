@@ -182,6 +182,13 @@ class EnvelopeGroup {
               ),
             ),
           );
+
+        case 'assetImage':
+          return Image.asset(
+            iconValue!,
+            width: size * 1.4,
+            height: size * 1.4,
+          );
       }
     }
 
@@ -194,10 +201,10 @@ class EnvelopeGroup {
     }
 
     // Final fallback
-    return Icon(
-      Icons.folder_open,
-      size: size,
-      color: theme.colorScheme.primary,
+    return Image.asset(
+      'assets/default/stufficon.png',
+      width: size * 1.4,
+      height: size * 1.4,
     );
   }
 }

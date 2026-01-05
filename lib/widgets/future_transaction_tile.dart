@@ -53,9 +53,9 @@ class FutureTransactionTile extends StatelessWidget {
           : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);
       color = Colors.green.shade300;
     }
-    // Transaction type 2: Scheduled Payments (from envelopes)
+    // Transaction type 2: Autopilot (from envelopes)
     else if (t.type == TransactionType.scheduledPayment) {
-      title = '${envelope.name} - Scheduled payment';
+      title = '${envelope.name} - Autopilot';
       entityIcon = envelope.id.isNotEmpty
           ? envelope.getIconWidget(theme, size: 24)
           : Icon(Icons.mail_outline, size: 24, color: theme.colorScheme.primary);

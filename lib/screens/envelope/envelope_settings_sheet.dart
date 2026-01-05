@@ -514,7 +514,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   ),
                   physics: const ClampingScrollPhysics(),
                   children: [
-                    SizedBox(height: isLandscape ? 8 : 0),
+                    SizedBox(height: isLandscape ? 16 : 8),
                     // NAME INPUT
                     SmartTextField(
                       controller: _nameController,
@@ -1042,14 +1042,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ),
                       title: Text(
-                        'Schedule Payment',
+                        'Autopilot',
                         style: fontProvider.getTextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       subtitle: Text(
-                        'Set up recurring deposits/withdrawals',
+                        'Set up recurring withdrawals/transfers',
                         style: TextStyle(
                           fontSize: 14,
                           color: theme.colorScheme.onSurface.withAlpha(153),

@@ -7,7 +7,7 @@ import '../data/material_icons_database.dart';
 import '../data/emoji_database.dart';
 import '../data/company_logos_database.dart';
 
-enum IconType { emoji, materialIcon, companyLogo }
+enum IconType { emoji, materialIcon, companyLogo, assetImage }
 
 class IconSearchResult {
   final IconType type;
@@ -415,6 +415,19 @@ class IconSearchService {
   static OmniIconSearchResults _getPopularDefaults() {
     return OmniIconSearchResults(
       materialIcons: [
+        // Stufficon as the first default
+        IconSearchResult(
+          type: IconType.assetImage,
+          value: 'assets/default/stufficon.png',
+          displayName: 'Stuffrite Icon',
+          preview: Image.asset(
+            'assets/default/stufficon.png',
+            width: 40,
+            height: 40,
+          ),
+          keywords: ['stuffrite', 'default', 'envelope', 'binder', 'app'],
+          category: 'default',
+        ),
         _createMaterialIconResult('account_balance_wallet'),
         _createMaterialIconResult('home'),
         _createMaterialIconResult('restaurant'),

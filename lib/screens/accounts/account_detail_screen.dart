@@ -323,7 +323,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                   subtitle: displayEnvelope.cashFlowEnabled &&
                                           displayEnvelope.cashFlowAmount != null
                                       ? Text(
-                                          'Auto-fill: ${currency.format(displayEnvelope.cashFlowAmount)}',
+                                          'Cash Flow: ${currency.format(displayEnvelope.cashFlowAmount)}',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: theme.colorScheme.primary,

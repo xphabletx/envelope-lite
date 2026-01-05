@@ -588,7 +588,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
 
     return _OverviewCard(
       icon: Icons.calendar_month,
-      title: 'Scheduled',
+      title: 'Autopilot',
       value: currency.format(total),
       subtitle: 'Next 30 Days ($occurrenceCount payments)',
       color: theme.colorScheme.secondary,

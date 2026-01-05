@@ -1205,7 +1205,7 @@ class _NetImpactCard extends StatelessWidget {
             label: 'Internal Allocations',
             value: currency.format(allocations),
             color: Colors.blue.shade700,
-            subtitle: 'Transfers & auto-fills (net zero)',
+            subtitle: 'Transfers & cash flow (net zero)',
           ),
         ],
       ),
@@ -1339,7 +1339,7 @@ class _TransactionTile extends StatelessWidget {
 
         if (t.type == TransactionType.scheduledPayment) {
           title = 'Spending: ${envelope.name}';
-          subtitle = 'Scheduled payment';
+          subtitle = 'Autopilot';
         } else {
           title = 'Spending: ${envelope.name}';
           subtitle = 'Manual withdrawal';
@@ -1357,7 +1357,7 @@ class _TransactionTile extends StatelessWidget {
             orElse: () => Envelope(id: '', name: 'Unknown', userId: ''),
           );
           title = 'Allocation: ${envelope.name}';
-          subtitle = 'Auto-filled from default account';
+          subtitle = 'Cash flow from default account';
         } else if (t.description.contains('Withdrawal auto-fill')) {
           title = 'Allocation: From Default Account';
           subtitle = t.description;

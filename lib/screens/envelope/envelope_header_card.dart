@@ -121,13 +121,13 @@ class EnvelopeHeaderCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                // Auto-fill status chip - with text overflow handling
+                // Cash Flow status chip - with text overflow handling
                 if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null)
                   Flexible(
                     child: _InfoChip(
                       icon: Icons.autorenew,
                       label:
-                          'Auto-fill: ${currencyFormatter.format(envelope.cashFlowAmount!)}',
+                          'Cash Flow: ${currencyFormatter.format(envelope.cashFlowAmount!)}',
                       color: theme.colorScheme.secondary,
                     ),
                   ),
@@ -151,7 +151,7 @@ class EnvelopeHeaderCard extends StatelessWidget {
   }
 }
 
-// Info chip widget for auto-fill and pay day calculations
+// Info chip widget for cash flow and pay day calculations
 class _InfoChip extends StatelessWidget {
   const _InfoChip({
     required this.icon,

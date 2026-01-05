@@ -483,7 +483,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
-                  title: const Text('Auto-fill Enabled'),
+                  title: const Text('Cash Flow Enabled'),
                   value: enabledValue,
                   onChanged: (val) => setDialogState(() => enabledValue = val),
                 ),
@@ -493,7 +493,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                     controller: amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
-                      labelText: 'Auto-fill Amount',
+                      labelText: 'Cash Flow Amount',
                       prefixText: '${Provider.of<LocaleProvider>(context, listen: false).currencySymbol} ',
                     ),
                     onTap: () => amountController.selection = TextSelection(
@@ -986,7 +986,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Projection based on current auto-fill & scheduled payments. Pay day settings are stored here.',
+                            'Projection based on current cash flow & autopilot. Pay day settings are stored here.',
                             style: TextStyle(
                               fontSize: 12,
                               color: theme.colorScheme.onSurface
@@ -1097,7 +1097,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Envelopes & Auto-fill:',
+                              'Envelopes & Cash Flow:',
                               style: fontProvider.getTextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -1150,12 +1150,12 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                           : Colors.grey,
                                     ),
                                     onPressed: () => _showEnvelopeSettings(env),
-                                    tooltip: 'Override auto-fill settings',
+                                    tooltip: 'Override cash flow settings',
                                   ),
                                 ],
                               ),
                               subtitle: Text(
-                                '${currency.format(env.currentAmount)} • Auto-fill: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
+                                '${currency.format(env.currentAmount)} • Cash Flow: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: hasOverride
@@ -1234,12 +1234,12 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                   : Colors.grey,
                                             ),
                                             onPressed: () => _showEnvelopeSettings(env),
-                                            tooltip: 'Override auto-fill settings',
+                                            tooltip: 'Override cash flow settings',
                                           ),
                                         ],
                                       ),
                                       subtitle: Text(
-                                        '${currency.format(env.currentAmount)} • Auto-fill: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
+                                        '${currency.format(env.currentAmount)} • Cash Flow: ${autoFillEnabled && autoFillAmount > 0 ? currency.format(autoFillAmount) : "OFF"}${hasOverride ? " ⚙️" : ""}',
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: hasOverride

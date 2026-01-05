@@ -873,6 +873,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final responsive = context.responsive;
     final isWorkspace = widget.repo.inWorkspace;
     final showPartnerEnvelopes = !_mineOnly;
     final timeMachine = Provider.of<TimeMachineProvider>(context);
@@ -954,6 +955,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                     scrolledUnderElevation: 0,
                     backgroundColor: theme.scaffoldBackgroundColor,
                     elevation: 0,
+                    toolbarHeight: responsive.isLandscape ? 64 : 80,
                     title: Row(
                       children: [
                         FutureBuilder<bool>(

@@ -39,7 +39,7 @@ class GroupRepo {
       id: id,
       name: name,
       userId: _userId,
-      emoji: emoji ?? '📁',
+      emoji: emoji, // No default - will use stufficon.png fallback
       iconType: iconType,
       iconValue: iconValue,
       iconColor: iconColor,

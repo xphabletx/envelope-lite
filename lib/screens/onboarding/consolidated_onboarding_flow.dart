@@ -2967,7 +2967,7 @@ class _CompletionStep extends StatelessWidget {
                       const SizedBox(height: 16),
                       if (isAccountMode)
                         Text(
-                          'Your next pay day will auto-fill your envelopes. Check Time Machine to see your future!',
+                          'Your next pay day will use cash flow to fill your envelopes. Check Time Machine to see your future!',
                           style: const TextStyle(fontSize: 16, height: 1.5),
                           textAlign: TextAlign.center,
                         )

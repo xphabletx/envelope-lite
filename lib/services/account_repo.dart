@@ -211,13 +211,6 @@ class AccountRepo {
       throw Exception('Account not found: $accountId');
     }
 
-    // Prevent deletion of default account
-    if (account.isDefault) {
-      throw Exception(
-        'Cannot delete the default account. Please set another account as default first.',
-      );
-    }
-
     // Get linked envelopes and unlink them (don't delete them)
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
 
