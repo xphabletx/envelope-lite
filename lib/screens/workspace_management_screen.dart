@@ -488,6 +488,7 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
               SizedBox(height: isLandscape ? 8 : 12),
               StreamBuilder<List<Envelope>>(
                 stream: widget.repo.envelopesStream(showPartnerEnvelopes: true),
+                initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: true),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
