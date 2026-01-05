@@ -9,7 +9,6 @@ import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/calculator_helper.dart';
 import '../common/smart_text_field.dart';
-import '../../services/focus_manager_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BinderTemplateQuickSetup extends StatefulWidget {
@@ -73,15 +72,12 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
     final createdIds = <String>[];
 
     // Step 1: Determine the binder ID
-    String? binderId = widget.existingBinderId;
-
     // Only create a new binder if we're NOT adding to an existing one
-    if (binderId == null) {
-      binderId = await groupRepo.createGroup(
-        name: widget.template.name,
-        emoji: widget.template.emoji,
-      );
-    }
+    String? binderId = widget.existingBinderId ??
+        await groupRepo.createGroup(
+          name: widget.template.name,
+          emoji: widget.template.emoji,
+        );
 
     // Step 2: Create empty envelopes in the binder
     for (final templateEnvelope in widget.template.envelopes) {
@@ -131,11 +127,11 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
         defaultAccountId: widget.defaultAccountId,
         existingBinderId: widget.existingBinderId,
         returnEnvelopeIds: widget.returnEnvelopeIds,
-        onComplete: (count, createdIds) {
+        onComplete: (envelopeCount, createdIds) {
           if (widget.returnEnvelopeIds) {
             Navigator.of(context).pop(createdIds);
           } else {
-            widget.onComplete?.call(count);
+            widget.onComplete?.call(envelopeCount);
           }
         },
         onBack: () {
@@ -147,17 +143,18 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Padding(
-          padding: const EdgeInsets.only(left: 40), // Extra padding to avoid back button overlap
-          child: Text(
-            widget.template.name,
-            style: fontProvider.getTextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Back',
+        ),
+        title: Text(
+          widget.template.name,
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [
@@ -402,15 +399,12 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
     final createdIds = <String>[];
 
     // Step 1: Determine the binder ID
-    String? binderId = widget.existingBinderId;
-
     // Only create a new binder if we're NOT adding to an existing one
-    if (binderId == null) {
-      binderId = await groupRepo.createGroup(
-        name: widget.template.name,
-        emoji: widget.template.emoji,
-      );
-    }
+    String? binderId = widget.existingBinderId ??
+        await groupRepo.createGroup(
+          name: widget.template.name,
+          emoji: widget.template.emoji,
+        );
 
     // Step 2: Create all envelopes and assign them to the binder
     for (final data in _collectedData) {
@@ -510,6 +504,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
             onSkip: _skipCard,
             isFirst: index == 0,
             isLast: index == _selectedEnvelopes.length - 1,
+            onBackToSelection: widget.onBack, // Pass the callback to return to selection
           );
         },
       ),
@@ -532,6 +527,7 @@ class _QuickEntryCard extends StatefulWidget {
   final VoidCallback onSkip;
   final bool isFirst;
   final bool isLast;
+  final VoidCallback? onBackToSelection; // Callback to return to envelope selection
 
   const _QuickEntryCard({
     required this.template,
@@ -544,6 +540,7 @@ class _QuickEntryCard extends StatefulWidget {
     required this.onSkip,
     required this.isFirst,
     required this.isLast,
+    this.onBackToSelection,
   });
 
   @override
@@ -650,12 +647,21 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
         bottom: false,
         child: Column(
           children: [
-            // Fixed Header with progress
+            // Fixed Header with progress and back button
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: const EdgeInsets.fromLTRB(8, 16, 24, 0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Back button
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: widget.isFirst && widget.onBackToSelection != null
+                        ? widget.onBackToSelection
+                        : (!widget.isFirst ? widget.onBack : null),
+                    tooltip: widget.isFirst ? 'Back to selection' : 'Previous envelope',
+                  ),
+                  const SizedBox(width: 8),
+                  // Title with emoji
                   Expanded(
                     child: Row(
                       children: [
@@ -674,6 +680,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       ],
                     ),
                   ),
+                  // Skip button and progress
                   Row(
                     children: [
                       TextButton(
@@ -920,7 +927,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                         const SizedBox(height: 16),
 
                         DropdownButtonFormField<Frequency>(
-                          value: widget.data.recurringFrequency,
+                          initialValue: widget.data.recurringFrequency,
                           decoration: InputDecoration(
                             labelText: 'Frequency',
                             border: OutlineInputBorder(
@@ -1107,35 +1114,18 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                 ),
               ),
 
-              // Navigation buttons
+              // Navigation button
               SafeArea(
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  child: Row(
-                    children: [
-                      if (!widget.isFirst)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: widget.onBack,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('← Back'),
-                          ),
-                        ),
-                      if (!widget.isFirst) const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
-                          onPressed: widget.onNext,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: Text(widget.isLast ? 'Finish' : 'Next →'),
-                        ),
-                      ),
-                    ],
+                  child: FilledButton(
+                    onPressed: widget.onNext,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      minimumSize: const Size.fromHeight(56),
+                    ),
+                    child: Text(widget.isLast ? 'Finish' : 'Next →'),
                   ),
                 ),
               ),
