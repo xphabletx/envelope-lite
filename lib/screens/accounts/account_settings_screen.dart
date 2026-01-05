@@ -27,10 +27,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
-  final _autoFillAmountController = TextEditingController();
   final _nameFocus = FocusNode();
   final _balanceFocus = FocusNode();
-  final _autoFillAmountFocus = FocusNode();
 
   String? _iconType;
   String? _iconValue;
@@ -39,7 +37,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool _saving = false;
   AccountType _accountType = AccountType.bankAccount;
   double? _creditLimit;
-  bool _payDayAutoFillEnabled = false;
 
   @override
   void initState() {
@@ -54,18 +51,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _isDefault = widget.account.isDefault;
     _accountType = widget.account.accountType;
     _creditLimit = widget.account.creditLimit;
-    _payDayAutoFillEnabled = widget.account.payDayAutoFillEnabled;
-
-    // Debug: Log what we're loading from Hive
-    debugPrint('[AccountSettings] 🔍 Loading account: ${widget.account.name}');
-    debugPrint('[AccountSettings]    payDayAutoFillEnabled: ${widget.account.payDayAutoFillEnabled}');
-    debugPrint('[AccountSettings]    payDayAutoFillAmount: ${widget.account.payDayAutoFillAmount}');
-
-    // Populate auto-fill amount controller if it exists
-    if (widget.account.payDayAutoFillAmount != null) {
-      _autoFillAmountController.text = widget.account.payDayAutoFillAmount!.toStringAsFixed(2);
-      debugPrint('[AccountSettings]    Controller populated with: ${_autoFillAmountController.text}');
-    }
 
     // Select all text in balance when focused
     _balanceFocus.addListener(() {
@@ -76,26 +61,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         );
       }
     });
-
-    // Select all text in auto-fill amount when focused
-    _autoFillAmountFocus.addListener(() {
-      if (_autoFillAmountFocus.hasFocus) {
-        _autoFillAmountController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _autoFillAmountController.text.length,
-        );
-      }
-    });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _balanceController.dispose();
-    _autoFillAmountController.dispose();
     _nameFocus.dispose();
     _balanceFocus.dispose();
-    _autoFillAmountFocus.dispose();
     super.dispose();
   }
 
@@ -145,14 +118,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
-  Future<void> _openAutoFillCalculator() async {
-    final result = await CalculatorHelper.showCalculator(context);
-    if (result != null && mounted) {
-      setState(() {
-        _autoFillAmountController.text = result;
-      });
-    }
-  }
 
   Future<void> _handleSave() async {
     // Check if time machine mode is active - block modifications
@@ -184,33 +149,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       return;
     }
 
-    // Parse auto-fill amount from controller - explicitly handle all cases
-    double? autoFillAmount;
-    if (_payDayAutoFillEnabled) {
-      if (_autoFillAmountController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter an auto-fill amount')),
-        );
-        return;
-      }
-      autoFillAmount = double.tryParse(_autoFillAmountController.text.trim());
-      if (autoFillAmount == null || autoFillAmount <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid auto-fill amount')),
-        );
-        return;
-      }
-    } else {
-      // Auto-fill is disabled - explicitly set to null
-      autoFillAmount = null;
-    }
-
     setState(() => _saving = true);
-
-    // Debug: Log what we're about to save
-    debugPrint('[AccountSettings] 💾 Saving account: $name');
-    debugPrint('[AccountSettings]    payDayAutoFillEnabled: $_payDayAutoFillEnabled');
-    debugPrint('[AccountSettings]    payDayAutoFillAmount: $autoFillAmount');
 
     try {
       await widget.accountRepo.updateAccount(
@@ -223,9 +162,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         iconType: _iconType,
         iconValue: _iconValue,
         iconColor: _iconColor,
-        // Always pass explicit values, never rely on null-coalescing in updateAccount
-        payDayAutoFillEnabled: _payDayAutoFillEnabled,
-        payDayAutoFillAmount: autoFillAmount,
       );
 
       if (mounted) {
@@ -622,95 +558,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // Pay Day Auto-Fill section (only if NOT default account)
-              if (!_isDefault) ...[
-                SwitchListTile(
-                  value: _payDayAutoFillEnabled,
-                  onChanged: (value) {
-                    setState(() {
-                      _payDayAutoFillEnabled = value;
-                      if (!value) {
-                        _autoFillAmountController.clear();
-                      }
-                    });
-                  },
-                  title: Text(
-                    'Pay Day Auto-Fill',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Automatically allocate money from pay day to this account',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withAlpha(153),
-                    ),
-                  ),
-                ),
-                if (_payDayAutoFillEnabled) ...[
-                  const SizedBox(height: 16),
-                  SmartTextFormField(
-                    controller: _autoFillAmountController,
-                    focusNode: _autoFillAmountFocus,
-                    isLastField: true,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Pay Day Auto-Fill Amount',
-                      labelStyle: fontProvider.getTextStyle(fontSize: 18),
-                      hintText: '0.00',
-                      helperText: _accountType == AccountType.creditCard
-                          ? 'Amount to pay toward credit card each pay day'
-                          : 'Amount to deposit to this account each pay day',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      prefixText: '${localeProvider.currencySymbol} ',
-                      prefixStyle: fontProvider.getTextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      suffixIcon: Container(
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.calculate,
-                            color: theme.colorScheme.onPrimary,
-                          ),
-                          onPressed: _openAutoFillCalculator,
-                          tooltip: 'Open Calculator',
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 20,
-                      ),
-                    ),
-                    onChanged: (value) {
-                      // Value is already in the controller, no need to store separately
-                    },
-                    onTap: () {
-                      _autoFillAmountController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _autoFillAmountController.text.length,
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 16),
-              ],
-
               // Default toggle (only show for bank accounts, not credit cards)
               if (_accountType == AccountType.bankAccount) ...[
                 SwitchListTile(
@@ -718,11 +565,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   onChanged: (value) {
                     setState(() {
                       _isDefault = value;
-                      // If setting as default, disable auto-fill (can't fill itself!)
-                      if (value) {
-                        _payDayAutoFillEnabled = false;
-                        _autoFillAmountController.clear();
-                      }
                     });
                   },
                   title: Text(

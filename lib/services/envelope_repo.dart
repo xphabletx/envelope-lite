@@ -293,8 +293,8 @@ class EnvelopeRepo {
     String? iconType,
     String? iconValue,
     int? iconColor,
-    bool autoFillEnabled = false,
-    double? autoFillAmount,
+    bool cashFlowEnabled = false,
+    double? cashFlowAmount,
     String? linkedAccountId,
   }) async {
     final id = _firestore.collection('_temp').doc().id;
@@ -313,8 +313,8 @@ class EnvelopeRepo {
       iconType: iconType,
       iconValue: iconValue,
       iconColor: iconColor,
-      autoFillEnabled: autoFillEnabled,
-      autoFillAmount: autoFillAmount,
+      cashFlowEnabled: cashFlowEnabled,
+      cashFlowAmount: cashFlowAmount,
       linkedAccountId: linkedAccountId,
       isShared: _inWorkspace,
       isSynced: false, // Mark as pending sync
@@ -370,8 +370,8 @@ class EnvelopeRepo {
     int? iconColor,
     String? subtitle,
     String? groupId,
-    bool? autoFillEnabled,
-    double? autoFillAmount,
+    bool? cashFlowEnabled,
+    double? cashFlowAmount,
     bool? isShared,
     String? linkedAccountId,
     bool updateLinkedAccountId = false, // Flag to explicitly update linkedAccountId (including to null)
@@ -406,8 +406,8 @@ class EnvelopeRepo {
         iconType: iconType ?? envelope.iconType,
         iconValue: iconValue ?? envelope.iconValue,
         iconColor: iconColor ?? envelope.iconColor,
-        autoFillEnabled: autoFillEnabled ?? envelope.autoFillEnabled,
-        autoFillAmount: autoFillAmount ?? envelope.autoFillAmount,
+        cashFlowEnabled: cashFlowEnabled ?? envelope.cashFlowEnabled,
+        cashFlowAmount: cashFlowAmount ?? envelope.cashFlowAmount,
         linkedAccountId: updateLinkedAccountId ? linkedAccountId : envelope.linkedAccountId,
         isShared: isShared ?? envelope.isShared,
         isDebtEnvelope: envelope.isDebtEnvelope,
@@ -550,8 +550,8 @@ class EnvelopeRepo {
       iconType: envelope.iconType,
       iconValue: envelope.iconValue,
       iconColor: envelope.iconColor,
-      autoFillEnabled: envelope.autoFillEnabled,
-      autoFillAmount: envelope.autoFillAmount,
+      cashFlowEnabled: envelope.cashFlowEnabled,
+      cashFlowAmount: envelope.cashFlowAmount,
       linkedAccountId: envelope.linkedAccountId,
       isShared: envelope.isShared,
       isDebtEnvelope: envelope.isDebtEnvelope,
@@ -622,8 +622,8 @@ class EnvelopeRepo {
       iconType: envelope.iconType,
       iconValue: envelope.iconValue,
       iconColor: envelope.iconColor,
-      autoFillEnabled: envelope.autoFillEnabled,
-      autoFillAmount: envelope.autoFillAmount,
+      cashFlowEnabled: envelope.cashFlowEnabled,
+      cashFlowAmount: envelope.cashFlowAmount,
       linkedAccountId: envelope.linkedAccountId,
       isShared: envelope.isShared,
       isDebtEnvelope: envelope.isDebtEnvelope,
@@ -698,8 +698,8 @@ class EnvelopeRepo {
       iconType: sourceEnv.iconType,
       iconValue: sourceEnv.iconValue,
       iconColor: sourceEnv.iconColor,
-      autoFillEnabled: sourceEnv.autoFillEnabled,
-      autoFillAmount: sourceEnv.autoFillAmount,
+      cashFlowEnabled: sourceEnv.cashFlowEnabled,
+      cashFlowAmount: sourceEnv.cashFlowAmount,
       linkedAccountId: sourceEnv.linkedAccountId,
       isShared: sourceEnv.isShared,
       isDebtEnvelope: sourceEnv.isDebtEnvelope,
@@ -727,8 +727,8 @@ class EnvelopeRepo {
       iconType: targetEnv.iconType,
       iconValue: targetEnv.iconValue,
       iconColor: targetEnv.iconColor,
-      autoFillEnabled: targetEnv.autoFillEnabled,
-      autoFillAmount: targetEnv.autoFillAmount,
+      cashFlowEnabled: targetEnv.cashFlowEnabled,
+      cashFlowAmount: targetEnv.cashFlowAmount,
       linkedAccountId: targetEnv.linkedAccountId,
       isShared: targetEnv.isShared,
       isDebtEnvelope: targetEnv.isDebtEnvelope,
@@ -829,8 +829,8 @@ class EnvelopeRepo {
           iconValue: envelope.iconValue,
           iconColor: envelope.iconColor,
           subtitle: envelope.subtitle,
-          autoFillEnabled: envelope.autoFillEnabled,
-          autoFillAmount: envelope.autoFillAmount,
+          cashFlowEnabled: envelope.cashFlowEnabled,
+          cashFlowAmount: envelope.cashFlowAmount,
           isShared: envelope.isShared,
           linkedAccountId: envelope.linkedAccountId,
           isDebtEnvelope: envelope.isDebtEnvelope,
@@ -862,8 +862,8 @@ class EnvelopeRepo {
           iconValue: envelope.iconValue,
           iconColor: envelope.iconColor,
           subtitle: envelope.subtitle,
-          autoFillEnabled: envelope.autoFillEnabled,
-          autoFillAmount: envelope.autoFillAmount,
+          cashFlowEnabled: envelope.cashFlowEnabled,
+          cashFlowAmount: envelope.cashFlowAmount,
           isShared: envelope.isShared,
           linkedAccountId: envelope.linkedAccountId,
           isDebtEnvelope: envelope.isDebtEnvelope,
@@ -920,8 +920,8 @@ class EnvelopeRepo {
           iconValue: envelope.iconValue,
           iconColor: envelope.iconColor,
           subtitle: envelope.subtitle,
-          autoFillEnabled: envelope.autoFillEnabled,
-          autoFillAmount: envelope.autoFillAmount,
+          cashFlowEnabled: envelope.cashFlowEnabled,
+          cashFlowAmount: envelope.cashFlowAmount,
           isShared: envelope.isShared,
           linkedAccountId: accountId,
           isDebtEnvelope: envelope.isDebtEnvelope,
@@ -959,18 +959,18 @@ class EnvelopeRepo {
         envelopes.where((e) => e.linkedAccountId == accountId).toList());
   }
 
-  /// Get all envelopes with auto-fill but NO account link (Budget Mode leftovers)
-  Future<List<Envelope>> getUnlinkedAutoFillEnvelopes() async {
+  /// Get all envelopes with cash flow but NO account link (Budget Mode leftovers)
+  Future<List<Envelope>> getUnlinkedCashFlowEnvelopes() async {
     final envelopes = await getAllEnvelopes();
     return envelopes
-        .where((e) => e.autoFillEnabled && e.linkedAccountId == null)
+        .where((e) => e.cashFlowEnabled && e.linkedAccountId == null)
         .toList();
   }
 
-  /// Get all auto-fill envelopes (for Budget Mode)
-  Future<List<Envelope>> getAutoFillEnvelopes() async {
+  /// Get all cash flow envelopes (for Budget Mode)
+  Future<List<Envelope>> getCashFlowEnvelopes() async {
     final envelopes = await getAllEnvelopes();
-    return envelopes.where((e) => e.autoFillEnabled).toList();
+    return envelopes.where((e) => e.cashFlowEnabled).toList();
   }
 
   /// Bulk link envelopes to an account
@@ -989,7 +989,7 @@ class EnvelopeRepo {
         envelopeId: envelope.id,
         linkedAccountId: null,
         updateLinkedAccountId: true,
-        autoFillEnabled: false, // Disable auto-fill when unlinking
+        cashFlowEnabled: false, // Disable cash flow when unlinking
       );
     }
   }
@@ -1003,7 +1003,7 @@ class EnvelopeRepo {
     await deposit(
       envelopeId: envelopeId,
       amount: amount,
-      description: description ?? 'Auto-fill',
+      description: description ?? 'Cash Flow',
     );
   }
 
@@ -1015,11 +1015,11 @@ class EnvelopeRepo {
     final settings = await payDayService.getSettings();
     final isAccountMirrorMode = settings?.defaultAccountId != null;
 
-    // If auto-fill enabled in Account Mirror Mode, MUST have linked account
-    if (envelope.autoFillEnabled &&
+    // If cash flow enabled in Account Mirror Mode, MUST have linked account
+    if (envelope.cashFlowEnabled &&
         isAccountMirrorMode &&
         envelope.linkedAccountId == null) {
-      return 'Please link this envelope to an account for auto-fill';
+      return 'Please link this envelope to an account for cash flow';
     }
 
     return null; // Valid

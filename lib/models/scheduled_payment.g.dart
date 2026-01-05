@@ -34,13 +34,16 @@ class ScheduledPaymentAdapter extends TypeAdapter<ScheduledPayment> {
       createdAt: fields[14] as DateTime,
       paymentType: fields[15] as ScheduledPaymentType,
       paymentEnvelopeId: fields[16] as String?,
+      autopilotType: fields[17] as AutopilotType?,
+      sourceId: fields[18] as String?,
+      destinationId: fields[19] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ScheduledPayment obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -74,7 +77,13 @@ class ScheduledPaymentAdapter extends TypeAdapter<ScheduledPayment> {
       ..writeByte(15)
       ..write(obj.paymentType)
       ..writeByte(16)
-      ..write(obj.paymentEnvelopeId);
+      ..write(obj.paymentEnvelopeId)
+      ..writeByte(17)
+      ..write(obj.autopilotType)
+      ..writeByte(18)
+      ..write(obj.sourceId)
+      ..writeByte(19)
+      ..write(obj.destinationId);
   }
 
   @override
@@ -172,6 +181,60 @@ class ScheduledPaymentTypeAdapter extends TypeAdapter<ScheduledPaymentType> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ScheduledPaymentTypeAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class AutopilotTypeAdapter extends TypeAdapter<AutopilotType> {
+  @override
+  final int typeId = 104;
+
+  @override
+  AutopilotType read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return AutopilotType.payment;
+      case 1:
+        return AutopilotType.envelopeToAccount;
+      case 2:
+        return AutopilotType.envelopeToEnvelope;
+      case 3:
+        return AutopilotType.accountToAccount;
+      case 4:
+        return AutopilotType.accountToEnvelope;
+      default:
+        return AutopilotType.payment;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, AutopilotType obj) {
+    switch (obj) {
+      case AutopilotType.payment:
+        writer.writeByte(0);
+        break;
+      case AutopilotType.envelopeToAccount:
+        writer.writeByte(1);
+        break;
+      case AutopilotType.envelopeToEnvelope:
+        writer.writeByte(2);
+        break;
+      case AutopilotType.accountToAccount:
+        writer.writeByte(3);
+        break;
+      case AutopilotType.accountToEnvelope:
+        writer.writeByte(4);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AutopilotTypeAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

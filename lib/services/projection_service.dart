@@ -83,41 +83,7 @@ class ProjectionService {
         ),
       );
 
-      // Create account auto-fill transfer events (for transaction history)
-      for (final account in accounts) {
-        if (account.id == defaultAccountId) continue; // Skip default account
-        if (!account.payDayAutoFillEnabled) continue;
-
-        final accountAutoFillAmount = account.payDayAutoFillAmount ?? 0;
-        if (accountAutoFillAmount <= 0) continue;
-
-        // Deposit to target account
-        events.add(
-          ProjectionEvent(
-            date: date,
-            type: 'account_auto_fill',
-            description: 'Auto-fill deposit from $defaultAccountName',
-            amount: accountAutoFillAmount,
-            isCredit: true, // Credit to target account receiving the funds
-            accountId: account.id, // Target account receiving the funds
-            accountName: account.name,
-          ),
-        );
-
-        // Withdrawal from default account
-        events.add(
-          ProjectionEvent(
-            date: date,
-            type: 'account_auto_fill_withdrawal',
-            description: '${account.name} - Withdrawal auto-fill',
-            amount: accountAutoFillAmount,
-            isCredit: false, // Debit from default account
-            accountId: defaultAccountId, // Default account being debited
-            accountName: defaultAccountName,
-          ),
-        );
-
-      }
+      // Note: Account-to-account cash flow transfers have been removed from the Account model
     }
 
     // Generate scheduled payments
@@ -241,7 +207,7 @@ class ProjectionService {
           accountBalances[sourceAccountId] = oldBalance + event.amount;
         }
 
-        // Step 2: Auto-fill envelopes
+        // Step 2: Cash flow envelopes
         for (final envelope in envelopes) {
           if (scenario?.envelopeEnabled[envelope.id] == false) {
             continue;
@@ -249,17 +215,17 @@ class ProjectionService {
 
           // Check for envelope setting overrides in scenario
           final settingOverride = scenario?.envelopeSettings[envelope.id];
-          final autoFillEnabled = settingOverride?.autoFillEnabled ?? envelope.autoFillEnabled;
-          final autoFillAmount = settingOverride?.autoFillAmount ?? envelope.autoFillAmount ?? 0;
+          final cashFlowEnabled = settingOverride?.cashFlowEnabled ?? envelope.cashFlowEnabled;
+          final cashFlowAmount = settingOverride?.cashFlowAmount ?? envelope.cashFlowAmount ?? 0;
 
-          if (!autoFillEnabled) {
+          if (!cashFlowEnabled) {
             continue;
           }
 
-          if (settingOverride?.autoFillAmount != null) {
+          if (settingOverride?.cashFlowAmount != null) {
           }
 
-          if (autoFillAmount <= 0) {
+          if (cashFlowAmount <= 0) {
             continue;
           }
 
@@ -267,7 +233,7 @@ class ProjectionService {
 
           // Update envelope
           final oldEnvBalance = envelopeBalances[envelope.id] ?? 0;
-          envelopeBalances[envelope.id] = oldEnvBalance + autoFillAmount;
+          envelopeBalances[envelope.id] = oldEnvBalance + cashFlowAmount;
 
           // Check if envelope reached its target for the first time
           final targetAmount = envelope.targetAmount;
@@ -278,7 +244,7 @@ class ProjectionService {
             }
           }
 
-          // Create auto_fill event for envelope transaction history (deposit to envelope)
+          // Create cash_flow event for envelope transaction history (deposit to envelope)
           final sourceAccountName = accounts
               .where((a) => a.id == sourceAccountId)
               .map((a) => a.name)
@@ -288,9 +254,9 @@ class ProjectionService {
           autoFillEvents.add(
             ProjectionEvent(
               date: event.date,
-              type: 'auto_fill',
-              description: 'Auto-fill deposit from $sourceAccountName',
-              amount: autoFillAmount,
+              type: 'cash_flow',
+              description: 'Cash flow deposit from $sourceAccountName',
+              amount: cashFlowAmount,
               isCredit: true, // Credit to envelope
               envelopeId: envelope.id,
               envelopeName: envelope.name,
@@ -303,9 +269,9 @@ class ProjectionService {
           autoFillEvents.add(
             ProjectionEvent(
               date: event.date,
-              type: 'envelope_auto_fill_withdrawal',
-              description: '${envelope.name} - Withdrawal auto-fill',
-              amount: autoFillAmount,
+              type: 'envelope_cash_flow_withdrawal',
+              description: '${envelope.name} - Withdrawal cash flow',
+              amount: cashFlowAmount,
               isCredit: false, // Debit from account
               envelopeId: '', // Account-level transaction (no envelope)
               accountId: sourceAccountId,
@@ -319,39 +285,13 @@ class ProjectionService {
               // Transfer to different account
               final oldSourceBal = accountBalances[sourceAccountId] ?? 0;
               final oldTargetBal = accountBalances[targetAccountId] ?? 0;
-              accountBalances[sourceAccountId] = oldSourceBal - autoFillAmount;
-              accountBalances[targetAccountId] = oldTargetBal + autoFillAmount;
+              accountBalances[sourceAccountId] = oldSourceBal - cashFlowAmount;
+              accountBalances[targetAccountId] = oldTargetBal + cashFlowAmount;
             } else {
               // Same account - assign
               final oldAcctBal = accountBalances[sourceAccountId] ?? 0;
-              accountBalances[sourceAccountId] = oldAcctBal - autoFillAmount;
+              accountBalances[sourceAccountId] = oldAcctBal - cashFlowAmount;
             }
-          }
-        }
-
-        // Step 3: Process account-to-account auto-fills
-        for (final account in accounts) {
-          // Skip the default account (source of pay day funds)
-          if (account.id == sourceAccountId) {
-            continue;
-          }
-
-          if (!account.payDayAutoFillEnabled) {
-            continue;
-          }
-
-          final accountAutoFillAmount = account.payDayAutoFillAmount ?? 0;
-
-          if (accountAutoFillAmount <= 0) {
-            continue;
-          }
-
-          // Transfer from default account to this account
-          if (sourceAccountId != null) {
-            final oldSourceBal = accountBalances[sourceAccountId] ?? 0;
-            final oldTargetBal = accountBalances[account.id] ?? 0;
-            accountBalances[sourceAccountId] = oldSourceBal - accountAutoFillAmount;
-            accountBalances[account.id] = oldTargetBal + accountAutoFillAmount;
           }
         }
       } else if (!event.isCredit) {
@@ -377,7 +317,7 @@ class ProjectionService {
       }
     }
 
-    // Add auto-fill events to timeline for transaction history visibility
+    // Add cash flow events to timeline for transaction history visibility
     events.addAll(autoFillEvents);
 
     // --- 4. BUILD RESULTS ---

@@ -509,8 +509,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           targetAmount: null,
           emoji: envelope.emoji,
           subtitle: null,
-          autoFillEnabled: false,
-          autoFillAmount: null,
+          cashFlowEnabled: false,
+          cashFlowAmount: null,
           groupId: groupId, // Assign to binder immediately
         );
 

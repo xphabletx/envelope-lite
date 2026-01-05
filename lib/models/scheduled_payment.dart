@@ -23,6 +23,20 @@ enum ScheduledPaymentType {
   envelopeBalance,
 }
 
+@HiveType(typeId: 104)
+enum AutopilotType {
+  @HiveField(0)
+  payment,           // Money leaves system (bill payment)
+  @HiveField(1)
+  envelopeToAccount, // Envelope → Account
+  @HiveField(2)
+  envelopeToEnvelope, // Envelope → Envelope
+  @HiveField(3)
+  accountToAccount,  // Account → Account
+  @HiveField(4)
+  accountToEnvelope, // Account → Envelope
+}
+
 @HiveType(typeId: 4)
 class ScheduledPayment {
   @HiveField(0)
@@ -77,6 +91,16 @@ class ScheduledPayment {
   @HiveField(16)
   final String? paymentEnvelopeId; // Envelope to pull payment amount from
 
+  // NEW: Autopilot transfer support
+  @HiveField(17)
+  final AutopilotType? autopilotType; // Type of autopilot transfer
+
+  @HiveField(18)
+  final String? sourceId; // Source envelope or account ID
+
+  @HiveField(19)
+  final String? destinationId; // Destination envelope or account ID (null for payments)
+
   ScheduledPayment({
     required this.id,
     required this.userId,
@@ -95,6 +119,9 @@ class ScheduledPayment {
     required this.createdAt,
     this.paymentType = ScheduledPaymentType.fixedAmount,
     this.paymentEnvelopeId,
+    this.autopilotType,
+    this.sourceId,
+    this.destinationId,
   });
 
   // Get next due date based on last execution or start date
@@ -160,6 +187,9 @@ class ScheduledPayment {
       'createdAt': createdAt.millisecondsSinceEpoch,
       'paymentType': paymentType.name,
       'paymentEnvelopeId': paymentEnvelopeId,
+      'autopilotType': autopilotType?.name,
+      'sourceId': sourceId,
+      'destinationId': destinationId,
     };
   }
 
@@ -191,6 +221,13 @@ class ScheduledPayment {
             )
           : ScheduledPaymentType.fixedAmount,
       paymentEnvelopeId: map['paymentEnvelopeId'] as String?,
+      autopilotType: map['autopilotType'] != null
+          ? AutopilotType.values.firstWhere(
+              (e) => e.name == map['autopilotType'],
+            )
+          : null,
+      sourceId: map['sourceId'] as String?,
+      destinationId: map['destinationId'] as String?,
     );
   }
 
@@ -212,6 +249,9 @@ class ScheduledPayment {
     DateTime? createdAt,
     ScheduledPaymentType? paymentType,
     String? paymentEnvelopeId,
+    AutopilotType? autopilotType,
+    String? sourceId,
+    String? destinationId,
   }) {
     return ScheduledPayment(
       id: id ?? this.id,
@@ -231,6 +271,9 @@ class ScheduledPayment {
       createdAt: createdAt ?? this.createdAt,
       paymentType: paymentType ?? this.paymentType,
       paymentEnvelopeId: paymentEnvelopeId ?? this.paymentEnvelopeId,
+      autopilotType: autopilotType ?? this.autopilotType,
+      sourceId: sourceId ?? this.sourceId,
+      destinationId: destinationId ?? this.destinationId,
     );
   }
 }

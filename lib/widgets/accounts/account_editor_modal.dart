@@ -39,8 +39,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
   bool _saving = false;
   AccountType _accountType = AccountType.bankAccount;
   double? _creditLimit;
-  bool _payDayAutoFillEnabled = false;
-  double? _payDayAutoFillAmount;
 
   bool get _isEditMode => widget.account != null;
 
@@ -60,8 +58,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       _isDefault = widget.account!.isDefault;
       _accountType = widget.account!.accountType;
       _creditLimit = widget.account!.creditLimit;
-      _payDayAutoFillEnabled = widget.account!.payDayAutoFillEnabled;
-      _payDayAutoFillAmount = widget.account!.payDayAutoFillAmount;
     }
 
     // Auto-focus name field - DISABLED to prevent keyboard popup
@@ -192,8 +188,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
           iconType: _iconType,
           iconValue: _iconValue,
           iconColor: _iconColor,
-          payDayAutoFillEnabled: _payDayAutoFillEnabled,
-          payDayAutoFillAmount: _payDayAutoFillAmount,
         );
       } else {
         // Create new account
@@ -209,8 +203,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
           iconColor: _iconColor,
           accountType: _accountType,
           creditLimit: _creditLimit,
-          payDayAutoFillEnabled: _payDayAutoFillEnabled,
-          payDayAutoFillAmount: _payDayAutoFillAmount,
         );
       }
 
@@ -540,73 +532,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Pay Day Auto-Fill section (only if NOT default account)
-                    if (!_isDefault) ...[
-                      SwitchListTile(
-                        value: _payDayAutoFillEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _payDayAutoFillEnabled = value;
-                            if (!value) {
-                              _payDayAutoFillAmount = null;
-                            }
-                          });
-                        },
-                        title: Text(
-                          'Pay Day Auto-Fill',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          'Automatically allocate money from pay day to this account',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withAlpha(153),
-                          ),
-                        ),
-                      ),
-                      if (_payDayAutoFillEnabled) ...[
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          initialValue: _payDayAutoFillAmount?.toStringAsFixed(2),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: 'Auto-Fill Amount',
-                            labelStyle: fontProvider.getTextStyle(fontSize: 18),
-                            hintText: '0.00',
-                            helperText: _accountType == AccountType.creditCard
-                                ? 'Amount to pay toward credit card each pay day'
-                                : 'Amount to deposit each pay day',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            prefixText: '${localeProvider.currencySymbol} ',
-                            prefixStyle: fontProvider.getTextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 20,
-                            ),
-                          ),
-                          onChanged: (value) {
-                            final amount = double.tryParse(value);
-                            setState(() => _payDayAutoFillAmount = amount);
-                          },
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                    ],
-
                     // Default toggle (only show for bank accounts, not credit cards)
                     if (_accountType == AccountType.bankAccount) ...[
                       SwitchListTile(
@@ -614,11 +539,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                         onChanged: (value) {
                           setState(() {
                             _isDefault = value;
-                            // If setting as default, disable auto-fill (can't fill itself!)
-                            if (value) {
-                              _payDayAutoFillEnabled = false;
-                              _payDayAutoFillAmount = null;
-                            }
                           });
                         },
                         title: Text(

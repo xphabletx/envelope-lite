@@ -70,20 +70,20 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   final _amtCtrl = TextEditingController(text: '0.00');
   final _targetCtrl = TextEditingController();
   final _subtitleCtrl = TextEditingController();
-  final _autoFillAmountCtrl = TextEditingController();
+  final _cashFlowAmountCtrl = TextEditingController();
 
   // Focus nodes
   final _nameFocus = FocusNode();
   final _amountFocus = FocusNode();
   final _targetFocus = FocusNode();
   final _subtitleFocus = FocusNode();
-  final _autoFillAmountFocus = FocusNode();
+  final _cashFlowAmountFocus = FocusNode();
 
   // Target date
   DateTime? _targetDate;
 
-  // Auto-fill state
-  bool _autoFillEnabled = false;
+  // Cash flow state
+  bool _cashFlowEnabled = false;
   bool _addScheduledPayment = false;
 
   // Binder selection state
@@ -130,11 +130,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       }
     });
 
-    _autoFillAmountFocus.addListener(() {
-      if (_autoFillAmountFocus.hasFocus) {
-        _autoFillAmountCtrl.selection = TextSelection(
+    _cashFlowAmountFocus.addListener(() {
+      if (_cashFlowAmountFocus.hasFocus) {
+        _cashFlowAmountCtrl.selection = TextSelection(
           baseOffset: 0,
-          extentOffset: _autoFillAmountCtrl.text.length,
+          extentOffset: _cashFlowAmountCtrl.text.length,
         );
       }
     });
@@ -218,12 +218,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     _amtCtrl.dispose();
     _targetCtrl.dispose();
     _subtitleCtrl.dispose();
-    _autoFillAmountCtrl.dispose();
+    _cashFlowAmountCtrl.dispose();
     _nameFocus.dispose();
     _amountFocus.dispose();
     _targetFocus.dispose();
     _subtitleFocus.dispose();
-    _autoFillAmountFocus.dispose();
+    _cashFlowAmountFocus.dispose();
     super.dispose();
   }
 
@@ -321,11 +321,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       return;
     }
 
-    // Auto-fill amount
-    double? autoFillAmount;
-    if (_autoFillEnabled) {
-      final rawAutoFill = _autoFillAmountCtrl.text.trim();
-      if (rawAutoFill.isEmpty) {
+    // Cash flow amount
+    double? cashFlowAmount;
+    if (_cashFlowEnabled) {
+      final rawCashFlow = _cashFlowAmountCtrl.text.trim();
+      if (rawCashFlow.isEmpty) {
         if (!mounted) return;
         await ErrorHandler.handle(
           context,
@@ -337,7 +337,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         );
         return;
       }
-      final parsed = double.tryParse(rawAutoFill);
+      final parsed = double.tryParse(rawCashFlow);
       if (parsed == null || parsed <= 0) {
         if (!mounted) return;
         await ErrorHandler.handle(
@@ -350,7 +350,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         );
         return;
       }
-      autoFillAmount = parsed;
+      cashFlowAmount = parsed;
     }
 
     setState(() => _saving = true);
@@ -365,8 +365,8 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         emoji: null, // OLD, DEPRECATED
         iconType: _iconType,
         iconValue: _iconValue,
-        autoFillEnabled: _autoFillEnabled,
-        autoFillAmount: autoFillAmount,
+        cashFlowEnabled: _cashFlowEnabled,
+        cashFlowAmount: cashFlowAmount,
         groupId: _selectedBinderId,
         linkedAccountId: _selectedAccountId,
       );
@@ -634,8 +634,8 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         SmartTextFormField(
                           controller: _targetCtrl,
                           focusNode: _targetFocus,
-                          nextFocusNode: _autoFillEnabled ? _autoFillAmountFocus : null,
-                          isLastField: !_autoFillEnabled,
+                          nextFocusNode: _cashFlowEnabled ? _cashFlowAmountFocus : null,
+                          isLastField: !_cashFlowEnabled,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
@@ -942,9 +942,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         const SizedBox(height: 8),
                         SwitchListTile(
-                          value: _autoFillEnabled,
+                          value: _cashFlowEnabled,
                           onChanged: (value) {
-                            setState(() => _autoFillEnabled = value);
+                            setState(() => _cashFlowEnabled = value);
                           },
                           title: Text(
                             tr('envelope_enable_autofill'),
@@ -961,11 +961,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                           ),
                         ),
-                        if (_autoFillEnabled) ...[
+                        if (_cashFlowEnabled) ...[
                           const SizedBox(height: 16),
                           SmartTextFormField(
-                            controller: _autoFillAmountCtrl,
-                            focusNode: _autoFillAmountFocus,
+                            controller: _cashFlowAmountCtrl,
+                            focusNode: _cashFlowAmountFocus,
                             isLastField: true,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
@@ -1003,7 +1003,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                     final result = await CalculatorHelper.showCalculator(context);
                                     if (result != null && mounted) {
                                       setState(() {
-                                        _autoFillAmountCtrl.text = result;
+                                        _cashFlowAmountCtrl.text = result;
                                       });
                                     }
                                   },
@@ -1020,9 +1020,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               ),
                             ),
                             onTap: () {
-                              _autoFillAmountCtrl.selection = TextSelection(
+                              _cashFlowAmountCtrl.selection = TextSelection(
                                 baseOffset: 0,
-                                extentOffset: _autoFillAmountCtrl.text.length,
+                                extentOffset: _cashFlowAmountCtrl.text.length,
                               );
                             },
                           ),

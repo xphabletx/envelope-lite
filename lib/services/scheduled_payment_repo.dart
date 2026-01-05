@@ -97,12 +97,19 @@ class ScheduledPaymentRepo {
     required int colorValue,
     bool isAutomatic = false,
     ScheduledPaymentType paymentType = ScheduledPaymentType.fixedAmount,
+    String? paymentEnvelopeId,
+    AutopilotType? autopilotType,
+    String? sourceId,
+    String? destinationId,
   }) async {
     // Special case: Allow "Pay Day" (income) entries without envelope/group
     final isPayDayEntry = name.contains('Pay Day') || name.contains('💰');
 
-    // Validate that either envelope or group is set (unless it's a pay day entry)
-    if (!isPayDayEntry && envelopeId == null && groupId == null) {
+    // Special case: Allow Autopilot entries (use sourceId/destinationId instead)
+    final isAutopilotEntry = autopilotType != null;
+
+    // Validate that either envelope or group is set (unless it's a pay day or autopilot entry)
+    if (!isPayDayEntry && !isAutopilotEntry && envelopeId == null && groupId == null) {
       throw ArgumentError('Must provide either envelopeId or groupId');
     }
 
@@ -128,6 +135,10 @@ class ScheduledPaymentRepo {
       isAutomatic: isAutomatic,
       createdAt: DateTime.now(),
       paymentType: paymentType,
+      paymentEnvelopeId: paymentEnvelopeId,
+      autopilotType: autopilotType,
+      sourceId: sourceId,
+      destinationId: destinationId,
     );
 
     await _paymentBox.put(id, payment);

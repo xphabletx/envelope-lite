@@ -160,42 +160,6 @@ class AccountCard extends StatelessWidget {
                               ),
                             ],
                           ),
-                          // Show auto-fill badge for non-default accounts if auto-fill is enabled
-                          if (!account.isDefault &&
-                              account.payDayAutoFillEnabled &&
-                              account.payDayAutoFillAmount != null &&
-                              account.payDayAutoFillAmount! > 0) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primaryContainer.withAlpha(128),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: theme.colorScheme.primary.withAlpha(77),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.autorenew,
-                                    size: 16,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Auto-fill: ${currency.format(account.payDayAutoFillAmount)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     const SizedBox(height: 16),

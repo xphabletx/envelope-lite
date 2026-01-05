@@ -614,14 +614,14 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final autoFillTotal = envelopes
-        .where((e) => e.autoFillEnabled && e.autoFillAmount != null)
-        .fold(0.0, (sum, e) => sum + e.autoFillAmount!);
+        .where((e) => e.cashFlowEnabled && e.cashFlowAmount != null)
+        .fold(0.0, (sum, e) => sum + e.cashFlowAmount!);
 
-    final count = envelopes.where((e) => e.autoFillEnabled).length;
+    final count = envelopes.where((e) => e.cashFlowEnabled).length;
 
     return _OverviewCard(
       icon: Icons.autorenew,
-      title: 'Auto-Fill',
+      title: 'Cash Flow',
       value: currency.format(autoFillTotal),
       subtitle: '$count active envelopes',
       color: Colors.purple,

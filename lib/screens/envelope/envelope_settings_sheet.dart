@@ -54,7 +54,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   final _nameFocus = FocusNode();
   final _subtitleController = TextEditingController();
   final _targetController = TextEditingController();
-  final _autoFillAmountController = TextEditingController();
+  final _cashFlowAmountController = TextEditingController();
   final _scrollController = ScrollController();
 
   // Keys for scrolling to specific sections
@@ -72,7 +72,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   DateTime? _selectedTargetDate;
   TargetStartDateType? _targetStartDateType;
   DateTime? _customTargetStartDate;
-  bool _autoFillEnabled = false;
+  bool _cashFlowEnabled = false;
   bool _isLoading = false;
   bool _initialized = false;
   List<EnvelopeGroup> _binders = [];
@@ -82,14 +82,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   String? _originalName;
   String? _originalSubtitle;
   String? _originalTarget;
-  String? _originalAutoFillAmount;
+  String? _originalCashFlowAmount;
   String? _originalEmoji;
   String? _originalIconType;
   String? _originalIconValue;
   String? _originalBinderId;
   String? _originalAccountId;
   DateTime? _originalTargetDate;
-  bool _originalAutoFillEnabled = false;
+  bool _originalCashFlowEnabled = false;
 
   @override
   void initState() {
@@ -104,7 +104,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     _nameFocus.dispose();
     _subtitleController.dispose();
     _targetController.dispose();
-    _autoFillAmountController.dispose();
+    _cashFlowAmountController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -204,14 +204,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
     return _nameController.text != _originalName ||
            _subtitleController.text != _originalSubtitle ||
            _targetController.text != _originalTarget ||
-           _autoFillAmountController.text != _originalAutoFillAmount ||
+           _cashFlowAmountController.text != _originalCashFlowAmount ||
            _selectedEmoji != _originalEmoji ||
            _iconType != _originalIconType ||
            _iconValue != _originalIconValue ||
            _selectedBinderId != _originalBinderId ||
            _selectedAccountId != _originalAccountId ||
            _selectedTargetDate != _originalTargetDate ||
-           _autoFillEnabled != _originalAutoFillEnabled;
+           _cashFlowEnabled != _originalCashFlowEnabled;
   }
 
   Future<bool?> _confirmDiscard() {
@@ -397,8 +397,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           _subtitleController.text = envelope.subtitle ?? '';
           _targetController.text =
               envelope.targetAmount?.toStringAsFixed(2) ?? '';
-          _autoFillAmountController.text =
-              envelope.autoFillAmount?.toStringAsFixed(2) ?? '';
+          _cashFlowAmountController.text =
+              envelope.cashFlowAmount?.toStringAsFixed(2) ?? '';
           _selectedEmoji = envelope.emoji;
           _iconType = envelope.iconType;
           _iconValue = envelope.iconValue;
@@ -414,20 +414,20 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             _selectedBinderId = null;
           }
 
-          _autoFillEnabled = envelope.autoFillEnabled;
+          _cashFlowEnabled = envelope.cashFlowEnabled;
 
           // Save original values for unsaved changes detection
           _originalName = envelope.name;
           _originalSubtitle = envelope.subtitle ?? '';
           _originalTarget = envelope.targetAmount?.toStringAsFixed(2) ?? '';
-          _originalAutoFillAmount = envelope.autoFillAmount?.toStringAsFixed(2) ?? '';
+          _originalCashFlowAmount = envelope.cashFlowAmount?.toStringAsFixed(2) ?? '';
           _originalEmoji = envelope.emoji;
           _originalIconType = envelope.iconType;
           _originalIconValue = envelope.iconValue;
           _originalBinderId = _selectedBinderId;
           _originalAccountId = envelope.linkedAccountId;
           _originalTargetDate = envelope.targetDate;
-          _originalAutoFillEnabled = envelope.autoFillEnabled;
+          _originalCashFlowEnabled = envelope.cashFlowEnabled;
 
           _initialized = true;
 
@@ -1077,9 +1077,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
-                      value: _autoFillEnabled,
+                      value: _cashFlowEnabled,
                       onChanged: (value) {
-                        setState(() => _autoFillEnabled = value);
+                        setState(() => _cashFlowEnabled = value);
                         // When enabled, scroll to bottom to reveal the amount field
                         if (value && _scrollController.hasClients) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1107,11 +1107,11 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ),
                     ),
-                    if (_autoFillEnabled) ...[
+                    if (_cashFlowEnabled) ...[
                       const SizedBox(height: 16),
                       Consumer<LocaleProvider>(
                         builder: (context, locale, _) => SmartTextField(
-                          controller: _autoFillAmountController,
+                          controller: _cashFlowAmountController,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
@@ -1140,7 +1140,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                 onPressed: () async {
                                   final result = await CalculatorHelper.showCalculator(context);
                                   if (result != null) {
-                                    _autoFillAmountController.text = result;
+                                    _cashFlowAmountController.text = result;
                                   }
                                 },
                                 tooltip: 'Calculator',
@@ -1150,9 +1150,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             helperStyle: fontProvider.getTextStyle(fontSize: 14),
                           ),
                           onTap: () {
-                            _autoFillAmountController.selection = TextSelection(
+                            _cashFlowAmountController.selection = TextSelection(
                               baseOffset: 0,
-                              extentOffset: _autoFillAmountController.text.length,
+                              extentOffset: _cashFlowAmountController.text.length,
                             );
                           },
                         ),
@@ -1334,9 +1334,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         return;
       }
 
-      final autoFillAmount =
-          _autoFillEnabled && _autoFillAmountController.text.isNotEmpty
-          ? double.tryParse(_autoFillAmountController.text)
+      final cashFlowAmount =
+          _cashFlowEnabled && _cashFlowAmountController.text.isNotEmpty
+          ? double.tryParse(_cashFlowAmountController.text)
           : null;
 
       // Update envelope using repo
@@ -1348,7 +1348,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
         iconValue: _iconValue,
         targetAmount: targetAmount,
         targetDate: _selectedTargetDate,
-        autoFillEnabled: _autoFillEnabled,
+        cashFlowEnabled: _cashFlowEnabled,
         linkedAccountId: _selectedAccountId,
         updateLinkedAccountId: true, // Always update linkedAccountId (allows unlinking)
         updateTargetAmount: true, // Always update targetAmount (allows clearing)
@@ -1357,8 +1357,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             ? null
             : _subtitleController.text.trim(),
         groupId: _selectedBinderId,
-        autoFillAmount: (_autoFillEnabled && autoFillAmount != null)
-            ? autoFillAmount
+        cashFlowAmount: (_cashFlowEnabled && cashFlowAmount != null)
+            ? cashFlowAmount
             : null,
         targetStartDateType: _selectedTargetDate != null ? _targetStartDateType : null,
         customTargetStartDate: _targetStartDateType == TargetStartDateType.customDate ? _customTargetStartDate : null,

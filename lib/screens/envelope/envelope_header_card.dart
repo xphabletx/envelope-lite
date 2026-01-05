@@ -28,15 +28,15 @@ class EnvelopeHeaderCard extends StatelessWidget {
         ? (envelope.currentAmount / envelope.targetAmount!).clamp(0.0, 1.0)
         : 0.0;
 
-    // Calculate pay days until target (if auto-fill is enabled)
+    // Calculate pay days until target (if cash flow is enabled)
     int? payDaysUntilTarget;
     if (envelope.targetAmount != null &&
-        envelope.autoFillEnabled &&
-        envelope.autoFillAmount != null &&
-        envelope.autoFillAmount! > 0) {
+        envelope.cashFlowEnabled &&
+        envelope.cashFlowAmount != null &&
+        envelope.cashFlowAmount! > 0) {
       final remaining = envelope.targetAmount! - envelope.currentAmount;
       if (remaining > 0) {
-        payDaysUntilTarget = (remaining / envelope.autoFillAmount!).ceil();
+        payDaysUntilTarget = (remaining / envelope.cashFlowAmount!).ceil();
       }
     }
 
@@ -122,12 +122,12 @@ class EnvelopeHeaderCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 // Auto-fill status chip - with text overflow handling
-                if (envelope.autoFillEnabled && envelope.autoFillAmount != null)
+                if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null)
                   Flexible(
                     child: _InfoChip(
                       icon: Icons.autorenew,
                       label:
-                          'Auto-fill: ${currencyFormatter.format(envelope.autoFillAmount!)}',
+                          'Auto-fill: ${currencyFormatter.format(envelope.cashFlowAmount!)}',
                       color: theme.colorScheme.secondary,
                     ),
                   ),

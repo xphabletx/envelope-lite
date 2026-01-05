@@ -166,8 +166,8 @@ class TimeMachineProvider extends ChangeNotifier {
       iconValue: realEnvelope.iconValue,
       iconColor: realEnvelope.iconColor,
       subtitle: realEnvelope.subtitle,
-      autoFillEnabled: realEnvelope.autoFillEnabled,
-      autoFillAmount: realEnvelope.autoFillAmount,
+      cashFlowEnabled: realEnvelope.cashFlowEnabled,
+      cashFlowAmount: realEnvelope.cashFlowAmount,
       isShared: realEnvelope.isShared,
       linkedAccountId: realEnvelope.linkedAccountId,
     );

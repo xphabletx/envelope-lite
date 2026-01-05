@@ -42,26 +42,26 @@ class PayDayProcessor {
     }
 
     final budgetAmount = settings.expectedPayAmount ?? 0.0;
-    final autoFillEnvelopes = await envelopeRepo.getAutoFillEnvelopes();
+    final cashFlowEnvelopes = await envelopeRepo.getCashFlowEnvelopes();
 
-    final totalAutoFill = autoFillEnvelopes.fold(
+    final totalCashFlow = cashFlowEnvelopes.fold(
       0.0,
-      (sum, e) => sum + (e.autoFillAmount ?? 0.0),
+      (sum, e) => sum + (e.cashFlowAmount ?? 0.0),
     );
 
-    debugPrint('[PayDay] Budget: £$budgetAmount, Auto-fill: £$totalAutoFill');
+    debugPrint('[PayDay] Budget: £$budgetAmount, Cash Flow: £$totalCashFlow');
 
-    // Process auto-fills (magic money appears!)
+    // Process cash flows (magic money appears!)
     int successCount = 0;
-    for (final envelope in autoFillEnvelopes) {
+    for (final envelope in cashFlowEnvelopes) {
       try {
         await envelopeRepo.addMoney(
           envelope.id,
-          envelope.autoFillAmount ?? 0.0,
-          description: 'Pay Day Auto-Fill',
+          envelope.cashFlowAmount ?? 0.0,
+          description: 'Pay Day Cash Flow',
         );
         successCount++;
-        debugPrint('[PayDay] ✅ ${envelope.name}: +£${envelope.autoFillAmount}');
+        debugPrint('[PayDay] ✅ ${envelope.name}: +£${envelope.cashFlowAmount}');
       } catch (e) {
         debugPrint('[PayDay] ❌ ${envelope.name} failed: $e');
       }
@@ -73,9 +73,9 @@ class PayDayProcessor {
     return PayDayResult.success(
       mode: 'Budget Mode',
       envelopesFilled: successCount,
-      totalAllocated: totalAutoFill,
+      totalAllocated: totalCashFlow,
       budgetAmount: budgetAmount,
-      remaining: budgetAmount - totalAutoFill,
+      remaining: budgetAmount - totalCashFlow,
     );
   }
 
@@ -104,28 +104,28 @@ class PayDayProcessor {
     );
     debugPrint('[PayDay] 💰 Deposited £$payAmount into ${defaultAccount.name}');
 
-    // 2. AUTO-FILL ENVELOPES LINKED TO DEFAULT ACCOUNT
+    // 2. CASH FLOW ENVELOPES LINKED TO DEFAULT ACCOUNT
     final defaultEnvelopes = await envelopeRepo.getEnvelopesLinkedToAccount(defaultAccount.id).first;
-    final defaultAutoFill = defaultEnvelopes.where((e) => e.autoFillEnabled).toList();
+    final defaultCashFlow = defaultEnvelopes.where((e) => e.cashFlowEnabled).toList();
 
     int envelopesFilled = 0;
     double totalEnvelopeFill = 0;
 
-    for (final envelope in defaultAutoFill) {
+    for (final envelope in defaultCashFlow) {
       final currentAccount = await accountRepo.getAccount(defaultAccount.id);
-      final fillAmount = envelope.autoFillAmount ?? 0.0;
+      final fillAmount = envelope.cashFlowAmount ?? 0.0;
 
       if (currentAccount!.currentBalance >= fillAmount) {
         await accountRepo.withdraw(
           defaultAccount.id,
           fillAmount,
-          description: 'Auto-fill ${envelope.name}',
+          description: 'Cash Flow ${envelope.name}',
         );
 
         await envelopeRepo.addMoney(
           envelope.id,
           fillAmount,
-          description: 'Pay Day Auto-Fill',
+          description: 'Pay Day Cash Flow',
         );
 
         envelopesFilled++;
@@ -137,59 +137,38 @@ class PayDayProcessor {
       }
     }
 
-    // 3. ACCOUNT-TO-ACCOUNT AUTO-FILLS (Savings, Credit Cards)
-    final otherAccounts = await accountRepo.getAccountsWithAutoFill();
-    final accountsToFill = otherAccounts.where((a) => a.id != defaultAccount.id).toList();
+    // 3. Process envelopes linked to other accounts (no account-to-account transfers needed)
+    final allAccounts = await accountRepo.getAllAccounts();
+    final otherAccounts = allAccounts.where((a) => a.id != defaultAccount.id).toList();
 
-    int accountsFilled = 0;
-    double totalAccountFill = 0;
+    for (final account in otherAccounts) {
+      // Process cash flow envelopes for this account
+      final accountEnvelopes = await envelopeRepo.getEnvelopesLinkedToAccount(account.id).first;
+      final accountCashFlow = accountEnvelopes.where((e) => e.cashFlowEnabled).toList();
 
-    for (final account in accountsToFill) {
-      final currentBalance = await accountRepo.getAccount(defaultAccount.id);
-      final fillAmount = account.payDayAutoFillAmount ?? 0.0;
+      for (final envelope in accountCashFlow) {
+        final accountBalance = await accountRepo.getAccount(account.id);
+        final envelopeFillAmount = envelope.cashFlowAmount ?? 0.0;
 
-      if (currentBalance!.currentBalance >= fillAmount) {
-        await accountRepo.transfer(
-          defaultAccount.id,
-          account.id,
-          fillAmount,
-          description: 'Auto-transfer to ${account.name}',
-        );
+        if (accountBalance!.currentBalance >= envelopeFillAmount) {
+          await accountRepo.withdraw(
+            account.id,
+            envelopeFillAmount,
+            description: 'Cash Flow ${envelope.name}',
+          );
 
-        accountsFilled++;
-        totalAccountFill += fillAmount;
-        debugPrint('[PayDay] 💸 ${account.name}: +£$fillAmount');
+          await envelopeRepo.addMoney(
+            envelope.id,
+            envelopeFillAmount,
+            description: 'Pay Day Cash Flow',
+          );
 
-        // 4. AUTO-FILL THIS ACCOUNT'S ENVELOPES
-        final accountEnvelopes = await envelopeRepo.getEnvelopesLinkedToAccount(account.id).first;
-        final accountAutoFill = accountEnvelopes.where((e) => e.autoFillEnabled).toList();
-
-        for (final envelope in accountAutoFill) {
-          final accountBalance = await accountRepo.getAccount(account.id);
-          final envelopeFillAmount = envelope.autoFillAmount ?? 0.0;
-
-          if (accountBalance!.currentBalance >= envelopeFillAmount) {
-            await accountRepo.withdraw(
-              account.id,
-              envelopeFillAmount,
-              description: 'Auto-fill ${envelope.name}',
-            );
-
-            await envelopeRepo.addMoney(
-              envelope.id,
-              envelopeFillAmount,
-              description: 'Pay Day Auto-Fill',
-            );
-
-            envelopesFilled++;
-            totalEnvelopeFill += envelopeFillAmount;
-            debugPrint('[PayDay] ✅ ${envelope.name} (from ${account.name}): +£$envelopeFillAmount');
-          } else {
-            warnings.add('Skipped ${envelope.name} - insufficient funds in ${account.name}');
-          }
+          envelopesFilled++;
+          totalEnvelopeFill += envelopeFillAmount;
+          debugPrint('[PayDay] ✅ ${envelope.name} (from ${account.name}): +£$envelopeFillAmount');
+        } else {
+          warnings.add('Skipped ${envelope.name} - insufficient funds in ${account.name}');
         }
-      } else {
-        warnings.add('Skipped transfer to ${account.name} - insufficient funds');
       }
     }
 
@@ -202,8 +181,8 @@ class PayDayProcessor {
     return PayDayResult.success(
       mode: 'Account Mirror Mode',
       envelopesFilled: envelopesFilled,
-      accountsFilled: accountsFilled,
-      totalAllocated: totalEnvelopeFill + totalAccountFill,
+      accountsFilled: 0,
+      totalAllocated: totalEnvelopeFill,
       payAmount: payAmount,
       remaining: finalDefaultAccount!.currentBalance,
       warnings: warnings,

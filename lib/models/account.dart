@@ -66,23 +66,9 @@ class Account {
   @HiveField(15)
   final double? creditLimit;
 
-  // NEW: Pay day auto-fill support
-  @HiveField(16)
-  final bool? _payDayAutoFillEnabled;
-
-  @HiveField(17)
-  final double? payDayAutoFillAmount;
-
   // NEW: Sync tracking field (nullable for backward compatibility)
   @HiveField(18)
   final bool? isSynced;
-
-  // NEW: Account-to-account auto-fill source
-  @HiveField(19)
-  final String? sourceAccountId; // Which account funds this account's auto-fill
-
-  // Getter with default for backward compatibility
-  bool get payDayAutoFillEnabled => _payDayAutoFillEnabled ?? false;
 
   Account({
     required this.id,
@@ -101,11 +87,8 @@ class Account {
     this.iconColor,
     this.accountType = AccountType.bankAccount,
     this.creditLimit,
-    bool payDayAutoFillEnabled = false,
-    this.payDayAutoFillAmount,
     this.isSynced,
-    this.sourceAccountId,
-  }) : _payDayAutoFillEnabled = payDayAutoFillEnabled;
+  });
 
   /// Get icon widget for display
   Widget getIconWidget(ThemeData theme, {double size = 40}) {
@@ -220,10 +203,7 @@ class Account {
       'iconColor': iconColor,
       'accountType': accountType.name,
       'creditLimit': creditLimit,
-      'payDayAutoFillEnabled': payDayAutoFillEnabled,
-      'payDayAutoFillAmount': payDayAutoFillAmount,
       'isSynced': isSynced,
-      'sourceAccountId': sourceAccountId,
     };
   }
 
@@ -248,12 +228,7 @@ class Account {
           ? AccountType.values.firstWhere((e) => e.name == map['accountType'])
           : AccountType.bankAccount,
       creditLimit: map['creditLimit'] != null ? (map['creditLimit'] as num).toDouble() : null,
-      payDayAutoFillEnabled: map['payDayAutoFillEnabled'] as bool? ?? false,
-      payDayAutoFillAmount: map['payDayAutoFillAmount'] != null
-          ? (map['payDayAutoFillAmount'] as num).toDouble()
-          : null,
       isSynced: map['isSynced'] as bool?,
-      sourceAccountId: map['sourceAccountId'] as String?,
     );
   }
 
@@ -270,10 +245,7 @@ class Account {
     int? iconColor,
     AccountType? accountType,
     double? creditLimit,
-    bool? payDayAutoFillEnabled,
-    double? payDayAutoFillAmount,
     bool? isSynced,
-    String? sourceAccountId,
   }) {
     return Account(
       id: id,
@@ -292,10 +264,7 @@ class Account {
       iconColor: iconColor ?? this.iconColor,
       accountType: accountType ?? this.accountType,
       creditLimit: creditLimit ?? this.creditLimit,
-      payDayAutoFillEnabled: payDayAutoFillEnabled ?? this.payDayAutoFillEnabled,
-      payDayAutoFillAmount: payDayAutoFillAmount ?? this.payDayAutoFillAmount,
       isSynced: isSynced ?? this.isSynced,
-      sourceAccountId: sourceAccountId ?? this.sourceAccountId,
     );
   }
 

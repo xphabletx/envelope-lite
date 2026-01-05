@@ -126,8 +126,6 @@ class AccountRepo {
     int? iconColor,
     AccountType accountType = AccountType.bankAccount,
     double? creditLimit,
-    bool payDayAutoFillEnabled = false,
-    double? payDayAutoFillAmount,
   }) async {
     if (isDefault) {
       await _unsetOtherDefaults();
@@ -151,8 +149,6 @@ class AccountRepo {
       iconColor: iconColor,
       accountType: accountType,
       creditLimit: creditLimit,
-      payDayAutoFillEnabled: isDefault ? false : payDayAutoFillEnabled, // Never auto-fill default account
-      payDayAutoFillAmount: isDefault ? null : payDayAutoFillAmount,
     );
 
     await _accountBox.put(id, account);
@@ -174,8 +170,6 @@ class AccountRepo {
     String? iconType,
     String? iconValue,
     int? iconColor,
-    bool? payDayAutoFillEnabled,
-    double? payDayAutoFillAmount,
   }) async {
     if (isDefault == true) {
       await _unsetOtherDefaults(excludeAccountId: accountId);
@@ -184,32 +178,6 @@ class AccountRepo {
     final account = _accountBox.get(accountId);
     if (account == null) {
       throw Exception('Account not found: $accountId');
-    }
-
-    final finalIsDefault = isDefault ?? account.isDefault;
-
-    // For pay day auto-fill fields, we need to handle explicit updates differently
-    // If both parameters are provided (even as false/null), use them
-    // Otherwise, keep existing values
-    bool finalPayDayAutoFillEnabled;
-    double? finalPayDayAutoFillAmount;
-
-    if (finalIsDefault) {
-      // Default accounts can never have auto-fill
-      finalPayDayAutoFillEnabled = false;
-      finalPayDayAutoFillAmount = null;
-    } else if (payDayAutoFillEnabled != null) {
-      // Explicit update to auto-fill settings
-      finalPayDayAutoFillEnabled = payDayAutoFillEnabled;
-      // If enabling auto-fill, use provided amount (or keep existing if not provided)
-      // If disabling auto-fill, clear the amount
-      finalPayDayAutoFillAmount = payDayAutoFillEnabled
-          ? (payDayAutoFillAmount ?? account.payDayAutoFillAmount)
-          : null;
-    } else {
-      // No update to auto-fill settings, keep existing
-      finalPayDayAutoFillEnabled = account.payDayAutoFillEnabled;
-      finalPayDayAutoFillAmount = account.payDayAutoFillAmount;
     }
 
     final updatedAccount = Account(
@@ -221,15 +189,13 @@ class AccountRepo {
       colorName: colorName ?? account.colorName,
       createdAt: account.createdAt,
       lastUpdated: DateTime.now(),
-      isDefault: finalIsDefault,
+      isDefault: isDefault ?? account.isDefault,
       isShared: account.isShared,
       iconType: iconType ?? account.iconType,
       iconValue: iconValue ?? account.iconValue,
       iconColor: iconColor ?? account.iconColor,
       accountType: account.accountType,
       creditLimit: account.creditLimit,
-      payDayAutoFillEnabled: finalPayDayAutoFillEnabled,
-      payDayAutoFillAmount: finalPayDayAutoFillAmount,
     );
 
     await _accountBox.put(accountId, updatedAccount);
@@ -359,64 +325,25 @@ class AccountRepo {
 
     double total = 0.0;
     for (final envelope in linkedEnvelopes) {
-      // CRITICAL FIX: Use autoFillAmount (what's ALLOCATED), not currentAmount (what's IN the envelope)
-      // This shows how much of the account balance is committed to auto-fill on next pay day
-      if (envelope.autoFillEnabled && envelope.autoFillAmount != null) {
-        total += envelope.autoFillAmount!;
-      }
-    }
-
-    // Add account auto-fills if this is the default pay day account
-    final payDaySettingsBox = Hive.box<PayDaySettings>('payDaySettings');
-    final payDaySettings = payDaySettingsBox.get(_userId);
-
-    if (payDaySettings?.defaultAccountId == accountId) {
-      final allAccounts = _accountBox.values
-          .where((account) => account.userId == _userId)
-          .toList();
-
-      for (final account in allAccounts) {
-        if (account.payDayAutoFillEnabled &&
-            account.payDayAutoFillAmount != null &&
-            account.payDayAutoFillAmount! > 0) {
-          total += account.payDayAutoFillAmount!;
-        }
+      // CRITICAL FIX: Use cashFlowAmount (what's ALLOCATED), not currentAmount (what's IN the envelope)
+      // This shows how much of the account balance is committed to cash flow on next pay day
+      if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
+        total += envelope.cashFlowAmount!;
       }
     }
 
     return total;
   }
 
-  /// Stream the assigned amount for an account (updates when envelopes or accounts change)
+  /// Stream the assigned amount for an account (updates when envelopes change)
   Stream<double> assignedAmountStream(String accountId) {
-    // Combine envelope and account streams to update when either changes
-    return Rx.combineLatest2(
-      _envelopeRepo.envelopesStream(),
-      accountsStream(),
-      (envelopes, accounts) => (envelopes, accounts),
-    ).asyncMap((data) async {
-      final envelopes = data.$1;
-      final accounts = data.$2;
+    return _envelopeRepo.envelopesStream().map((envelopes) {
       final linkedEnvelopes = envelopes.where((env) => env.linkedAccountId == accountId).toList();
 
       double total = 0.0;
       for (final envelope in linkedEnvelopes) {
-        if (envelope.autoFillEnabled && envelope.autoFillAmount != null) {
-          total += envelope.autoFillAmount!;
-        }
-      }
-
-      // Add account auto-fills if this is the default pay day account
-      final payDaySettingsBox = Hive.box<PayDaySettings>('payDaySettings');
-      final payDaySettings = payDaySettingsBox.get(_userId);
-
-      if (payDaySettings?.defaultAccountId == accountId) {
-        for (final account in accounts) {
-          if (account.payDayAutoFillEnabled &&
-              account.payDayAutoFillAmount != null &&
-              account.payDayAutoFillAmount! > 0) {
-            total += account.payDayAutoFillAmount!;
-          }
+        if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
+          total += envelope.cashFlowAmount!;
         }
       }
 
@@ -446,11 +373,6 @@ class AccountRepo {
   // Note: Account transactions are now tracked at the account level only.
   // We removed the virtual envelope system that was creating phantom envelopes.
 
-  /// Get accounts with account-level auto-fill enabled
-  Future<List<Account>> getAccountsWithAutoFill() async {
-    final accounts = await getAllAccounts();
-    return accounts.where((a) => a.payDayAutoFillEnabled).toList();
-  }
 
   /// Set an account as default (unset others)
   Future<void> setDefaultAccount(String accountId) async {
@@ -567,8 +489,8 @@ class AccountRepo {
       _syncManager.pushPayDaySettings(updatedSettings, _userId);
     }
 
-    // 2. Auto-link all envelopes with auto-fill enabled
-    final unlinkedEnvelopes = await _envelopeRepo.getUnlinkedAutoFillEnvelopes();
+    // 2. Auto-link all envelopes with cash flow enabled
+    final unlinkedEnvelopes = await _envelopeRepo.getUnlinkedCashFlowEnvelopes();
 
     if (unlinkedEnvelopes.isNotEmpty) {
       final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();

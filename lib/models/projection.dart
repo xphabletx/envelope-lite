@@ -89,7 +89,7 @@ class EnvelopeProjection {
 /// Event that affects balance (pay day, bill, etc)
 class ProjectionEvent {
   final DateTime date;
-  final String type; // 'pay_day', 'scheduled_payment', 'auto_fill'
+  final String type; // 'pay_day', 'scheduled_payment', 'cash_flow'
   final String description;
   final double amount;
   final bool isCredit; // true = money in, false = money out
@@ -185,12 +185,12 @@ class ProjectionScenario {
 
 /// Envelope setting overrides for scenario testing
 class EnvelopeSettingOverride {
-  final bool? autoFillEnabled; // Override auto-fill enabled state
-  final double? autoFillAmount; // Override auto-fill amount
+  final bool? cashFlowEnabled; // Override cash flow enabled state
+  final double? cashFlowAmount; // Override cash flow amount
 
   EnvelopeSettingOverride({
-    this.autoFillEnabled,
-    this.autoFillAmount,
+    this.cashFlowEnabled,
+    this.cashFlowAmount,
   });
 }
 

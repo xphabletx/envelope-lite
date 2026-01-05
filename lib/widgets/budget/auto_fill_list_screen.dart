@@ -41,7 +41,7 @@ class AutoFillListScreen extends StatelessWidget {
         ),
         title: FittedBox(
           child: Text(
-            groupId != null ? 'Binder Auto-Fill' : 'Auto-Fill Envelopes',
+            groupId != null ? 'Binder Cash Flow' : 'Cash Flow Envelopes',
             style: fontProvider.getTextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -64,7 +64,7 @@ class AutoFillListScreen extends StatelessWidget {
               : allEnvelopes;
 
           final autoFillEnvelopes = filteredEnvelopes
-              .where((e) => e.autoFillEnabled && (e.autoFillAmount ?? 0) > 0)
+              .where((e) => e.cashFlowEnabled && (e.cashFlowAmount ?? 0) > 0)
               .toList();
 
           if (autoFillEnvelopes.isEmpty) {
@@ -79,7 +79,7 @@ class AutoFillListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No auto-fill envelopes active',
+                    'No cash flow envelopes active',
                     style: fontProvider.getTextStyle(
                       fontSize: 18,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -87,7 +87,7 @@ class AutoFillListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Enable auto-fill in envelope settings',
+                    'Enable cash flow in envelope settings',
                     style: TextStyle(
                       fontSize: 14,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
@@ -101,7 +101,7 @@ class AutoFillListScreen extends StatelessWidget {
           // Calculate total per pay period
           final totalAmount = autoFillEnvelopes.fold(
             0.0,
-            (sum, e) => sum + (e.autoFillAmount ?? 0),
+            (sum, e) => sum + (e.cashFlowAmount ?? 0),
           );
 
           return Column(
@@ -218,7 +218,7 @@ class AutoFillListScreen extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text(
-                          'Fills ${currency.format(envelope.autoFillAmount)}',
+                          'Fills ${currency.format(envelope.cashFlowAmount)}',
                           style: TextStyle(
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.6,

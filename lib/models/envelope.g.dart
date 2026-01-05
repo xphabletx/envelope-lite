@@ -29,8 +29,8 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       iconValue: fields[9] as String?,
       iconColor: fields[10] as int?,
       subtitle: fields[11] as String?,
-      autoFillEnabled: fields[12] as bool,
-      autoFillAmount: fields[13] as double?,
+      cashFlowEnabled: fields[12] as bool,
+      cashFlowAmount: fields[13] as double?,
       isShared: fields[14] as bool,
       linkedAccountId: fields[15] as String?,
       isDebtEnvelope: fields[20] as bool,
@@ -75,9 +75,9 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       ..writeByte(11)
       ..write(obj.subtitle)
       ..writeByte(12)
-      ..write(obj.autoFillEnabled)
+      ..write(obj.cashFlowEnabled)
       ..writeByte(13)
-      ..write(obj.autoFillAmount)
+      ..write(obj.cashFlowAmount)
       ..writeByte(14)
       ..write(obj.isShared)
       ..writeByte(15)

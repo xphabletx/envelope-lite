@@ -435,8 +435,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
       if (!isEnabled) continue;
 
       final settingOverride = _envelopeSettings[env.id];
-      final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
-      final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+      final autoFillEnabled = settingOverride?.cashFlowEnabled ?? env.cashFlowEnabled;
+      final autoFillAmount = settingOverride?.cashFlowAmount ?? env.cashFlowAmount ?? 0;
 
       if (autoFillEnabled && autoFillAmount > 0) {
         total += autoFillAmount;
@@ -447,8 +447,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   Future<void> _showEnvelopeSettings(Envelope envelope) async {
     final currentOverride = _envelopeSettings[envelope.id];
-    final autoFillEnabled = currentOverride?.autoFillEnabled ?? envelope.autoFillEnabled;
-    final autoFillAmount = currentOverride?.autoFillAmount ?? envelope.autoFillAmount ?? 0;
+    final autoFillEnabled = currentOverride?.cashFlowEnabled ?? envelope.cashFlowEnabled;
+    final autoFillAmount = currentOverride?.cashFlowAmount ?? envelope.cashFlowAmount ?? 0;
 
     bool enabledValue = autoFillEnabled;
     final amountController = TextEditingController(
@@ -503,7 +503,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                   ),
                 const SizedBox(height: 16),
                 Text(
-                  'Original: ${envelope.autoFillEnabled ? "${Provider.of<LocaleProvider>(context, listen: false).currencySymbol}${envelope.autoFillAmount?.toStringAsFixed(2) ?? '0.00'}" : "OFF"}',
+                  'Original: ${envelope.cashFlowEnabled ? "${Provider.of<LocaleProvider>(context, listen: false).currencySymbol}${envelope.cashFlowAmount?.toStringAsFixed(2) ?? '0.00'}" : "OFF"}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -545,8 +545,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
           _envelopeSettings.remove(envelope.id);
         } else {
           _envelopeSettings[envelope.id] = EnvelopeSettingOverride(
-            autoFillEnabled: result['autoFillEnabled'],
-            autoFillAmount: result['autoFillAmount'],
+            cashFlowEnabled: result['autoFillEnabled'],
+            cashFlowAmount: result['autoFillAmount'],
           );
         }
       });
@@ -1126,8 +1126,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         ...individualEnvelopes.map(
                           (env) {
                             final settingOverride = _envelopeSettings[env.id];
-                            final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
-                            final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+                            final autoFillEnabled = settingOverride?.cashFlowEnabled ?? env.cashFlowEnabled;
+                            final autoFillAmount = settingOverride?.cashFlowAmount ?? env.cashFlowAmount ?? 0;
                             final hasOverride = _envelopeSettings.containsKey(env.id);
 
                             return CheckboxListTile(
@@ -1207,8 +1207,8 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                               ...envelopes.map(
                                 (env) {
                                   final settingOverride = _envelopeSettings[env.id];
-                                  final autoFillEnabled = settingOverride?.autoFillEnabled ?? env.autoFillEnabled;
-                                  final autoFillAmount = settingOverride?.autoFillAmount ?? env.autoFillAmount ?? 0;
+                                  final autoFillEnabled = settingOverride?.cashFlowEnabled ?? env.cashFlowEnabled;
+                                  final autoFillAmount = settingOverride?.cashFlowAmount ?? env.cashFlowAmount ?? 0;
                                   final hasOverride = _envelopeSettings.containsKey(env.id);
 
                                   return Padding(

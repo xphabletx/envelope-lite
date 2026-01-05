@@ -62,10 +62,10 @@ class Envelope {
   final String? subtitle;
 
   @HiveField(12)
-  final bool autoFillEnabled;
+  final bool cashFlowEnabled;
 
   @HiveField(13)
-  final double? autoFillAmount;
+  final double? cashFlowAmount;
 
   @HiveField(14)
   final bool isShared;
@@ -121,8 +121,8 @@ class Envelope {
     this.iconValue,
     this.iconColor,
     this.subtitle,
-    this.autoFillEnabled = false,
-    this.autoFillAmount,
+    this.cashFlowEnabled = false,
+    this.cashFlowAmount,
     this.isShared = true,
     this.linkedAccountId,
     this.isDebtEnvelope = false,
@@ -316,8 +316,8 @@ class Envelope {
     String? iconValue,
     int? iconColor,
     String? subtitle,
-    bool? autoFillEnabled,
-    double? autoFillAmount,
+    bool? cashFlowEnabled,
+    double? cashFlowAmount,
     bool? isShared,
     String? linkedAccountId,
     bool? isDebtEnvelope,
@@ -344,8 +344,8 @@ class Envelope {
       iconValue: iconValue ?? this.iconValue,
       iconColor: iconColor ?? this.iconColor,
       subtitle: subtitle ?? this.subtitle,
-      autoFillEnabled: autoFillEnabled ?? this.autoFillEnabled,
-      autoFillAmount: autoFillAmount ?? this.autoFillAmount,
+      cashFlowEnabled: cashFlowEnabled ?? this.cashFlowEnabled,
+      cashFlowAmount: cashFlowAmount ?? this.cashFlowAmount,
       isShared: isShared ?? this.isShared,
       linkedAccountId: linkedAccountId ?? this.linkedAccountId,
       isDebtEnvelope: isDebtEnvelope ?? this.isDebtEnvelope,
@@ -374,8 +374,8 @@ class Envelope {
       'iconValue': iconValue,
       'iconColor': iconColor,
       'subtitle': subtitle,
-      'autoFillEnabled': autoFillEnabled,
-      'autoFillAmount': autoFillAmount,
+      'cashFlowEnabled': cashFlowEnabled,
+      'cashFlowAmount': cashFlowAmount,
       'isShared': isShared,
       'linkedAccountId': linkedAccountId,
       'isDebtEnvelope': isDebtEnvelope,
@@ -432,10 +432,10 @@ class Envelope {
       iconValue: data['iconValue'] as String?,
       iconColor: data['iconColor'] as int?,
       subtitle: data['subtitle'] as String?,
-      autoFillEnabled: (data['autoFillEnabled'] as bool?) ?? false,
-      autoFillAmount: (data['autoFillAmount'] == null)
-          ? null
-          : toDouble(data['autoFillAmount']),
+      cashFlowEnabled: (data['cashFlowEnabled'] as bool?) ?? (data['autoFillEnabled'] as bool?) ?? false,
+      cashFlowAmount: (data['cashFlowAmount'] == null)
+          ? (data['autoFillAmount'] == null ? null : toDouble(data['autoFillAmount']))
+          : toDouble(data['cashFlowAmount']),
       isShared: (data['isShared'] as bool?) ?? true,
       linkedAccountId: data['linkedAccountId'] as String?,
       isDebtEnvelope: (data['isDebtEnvelope'] as bool?) ?? false,

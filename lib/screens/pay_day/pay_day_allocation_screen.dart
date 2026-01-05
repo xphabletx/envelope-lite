@@ -69,7 +69,6 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     try {
       final envelopeBox = Hive.box<Envelope>('envelopes');
       final groupBox = Hive.box<EnvelopeGroup>('groups');
-      final accountBox = Hive.box<Account>('accounts');
 
       // Load all envelopes for current user (filter out virtual account envelopes)
       final envelopes = envelopeBox.values
@@ -85,44 +84,18 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
           .toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-      // Load all accounts for current user (exclude the default/source account)
-      final accounts = accountBox.values
-          .where((a) =>
-              a.userId == widget.repo.currentUserId &&
-              a.id != widget.accountId)
-          .toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      // Account-level auto-fill has been removed - accounts are no longer needed here
 
-      // Separate bank accounts and credit cards with auto-fill
-      final bankAccounts = accounts
-          .where((a) =>
-              a.accountType == AccountType.bankAccount &&
-              a.payDayAutoFillEnabled &&
-              a.payDayAutoFillAmount != null &&
-              a.payDayAutoFillAmount! > 0)
-          .toList();
-
-      final creditCards = accounts
-          .where((a) =>
-              a.accountType == AccountType.creditCard &&
-              a.payDayAutoFillEnabled &&
-              a.payDayAutoFillAmount != null &&
-              a.payDayAutoFillAmount! > 0)
-          .toList();
-
-      // Initialize allocations with auto-fill envelopes
+      // Initialize allocations with cash flow envelopes
       final Map<String, double> initialAllocations = {};
       for (final env in envelopes) {
-        if (env.autoFillEnabled && env.autoFillAmount != null && env.autoFillAmount! > 0) {
-          initialAllocations[env.id] = env.autoFillAmount!;
+        if (env.cashFlowEnabled && env.cashFlowAmount != null && env.cashFlowAmount! > 0) {
+          initialAllocations[env.id] = env.cashFlowAmount!;
         }
       }
 
-      // Initialize account allocations with auto-fill accounts
+      // Account allocations are no longer supported (account-level auto-fill removed)
       final Map<String, double> initialAccountAllocations = {};
-      for (final account in [...bankAccounts, ...creditCards]) {
-        initialAccountAllocations[account.id] = account.payDayAutoFillAmount!;
-      }
 
       // Auto-expand pay day binders
       final autoExpandBinders = binders
@@ -134,8 +107,8 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
         setState(() {
           allEnvelopes = envelopes;
           allBinders = binders;
-          allBankAccounts = bankAccounts;
-          allCreditCards = creditCards;
+          allBankAccounts = []; // Account allocations removed
+          allCreditCards = []; // Account allocations removed
           allocations = initialAllocations;
           accountAllocations = initialAccountAllocations;
           expandedBinderIds = autoExpandBinders;
@@ -183,29 +156,18 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     });
   }
 
-  void _toggleEnvelope(String envelopeId, double? autoFillAmount) async {
+  void _toggleEnvelope(String envelopeId, double? cashFlowAmount) async {
     await _showTemporaryChangeWarning();
 
     setState(() {
       if (allocations.containsKey(envelopeId)) {
         allocations.remove(envelopeId);
       } else {
-        allocations[envelopeId] = autoFillAmount ?? 0.0;
+        allocations[envelopeId] = cashFlowAmount ?? 0.0;
       }
     });
   }
 
-  void _toggleAccount(String accountId, double? autoFillAmount) async {
-    await _showTemporaryChangeWarning();
-
-    setState(() {
-      if (accountAllocations.containsKey(accountId)) {
-        accountAllocations.remove(accountId);
-      } else {
-        accountAllocations[accountId] = autoFillAmount ?? 0.0;
-      }
-    });
-  }
 
   Future<void> _editEnvelopeAmount(Envelope envelope) async {
     await _showTemporaryChangeWarning();
@@ -227,25 +189,6 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     }
   }
 
-  Future<void> _editAccountAmount(Account account) async {
-    await _showTemporaryChangeWarning();
-
-    if (!mounted) return;
-    final result = await CalculatorHelper.showCalculator(context);
-
-    if (result != null && mounted) {
-      final amount = double.tryParse(result);
-      if (amount != null && amount >= 0) {
-        setState(() {
-          if (amount > 0) {
-            accountAllocations[account.id] = amount;
-          } else {
-            accountAllocations.remove(account.id);
-          }
-        });
-      }
-    }
-  }
 
   void _toggleBinder(String binderId) {
     setState(() {
@@ -287,10 +230,10 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
       if (env.groupId != null && payDayBinderIds.contains(env.groupId)) {
         return true;
       }
-      // Has auto-fill but not in a pay day binder
-      if (env.autoFillEnabled &&
-          env.autoFillAmount != null &&
-          env.autoFillAmount! > 0 &&
+      // Has cash flow but not in a pay day binder
+      if (env.cashFlowEnabled &&
+          env.cashFlowAmount != null &&
+          env.cashFlowAmount! > 0 &&
           (env.groupId == null || !payDayBinderIds.contains(env.groupId))) {
         return true;
       }
@@ -311,28 +254,9 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
         .where((b) => !b.payDayEnabled && !temporarilyAddedBinderIds.contains(b.id))
         .toList();
 
-    // Available accounts (those without auto-fill and not already in allocations)
-    final availableBankAccounts = Hive.box<Account>('accounts').values
-        .where((a) =>
-            a.userId == widget.repo.currentUserId &&
-            a.id != widget.accountId &&
-            a.accountType == AccountType.bankAccount &&
-            !accountAllocations.containsKey(a.id) &&
-            (!a.payDayAutoFillEnabled ||
-                a.payDayAutoFillAmount == null ||
-                a.payDayAutoFillAmount! <= 0))
-        .toList();
-
-    final availableCreditCards = Hive.box<Account>('accounts').values
-        .where((a) =>
-            a.userId == widget.repo.currentUserId &&
-            a.id != widget.accountId &&
-            a.accountType == AccountType.creditCard &&
-            !accountAllocations.containsKey(a.id) &&
-            (!a.payDayAutoFillEnabled ||
-                a.payDayAutoFillAmount == null ||
-                a.payDayAutoFillAmount! <= 0))
-        .toList();
+    // Available accounts - no longer supported
+    final availableBankAccounts = <Account>[];
+    final availableCreditCards = <Account>[];
 
     if (availableEnvelopes.isEmpty && availableBinders.isEmpty &&
         availableBankAccounts.isEmpty && availableCreditCards.isEmpty) {
@@ -364,26 +288,23 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
       setState(() {
         if (type == 'envelope') {
           final envelope = item as Envelope;
-          // Add with auto-fill amount or 0
-          allocations[envelope.id] = envelope.autoFillAmount ?? 0.0;
+          // Add with cash flow amount or 0
+          allocations[envelope.id] = envelope.cashFlowAmount ?? 0.0;
         } else if (type == 'binder') {
           // Add binder temporarily (without permanently updating the database)
           final binder = item as EnvelopeGroup;
           temporarilyAddedBinderIds.add(binder.id);
           expandedBinderIds.add(binder.id);
 
-          // Add all envelopes in this binder with their auto-fill amounts
+          // Add all envelopes in this binder with their cash flow amounts
           final binderEnvelopes = allEnvelopes.where((e) => e.groupId == binder.id);
           for (final env in binderEnvelopes) {
-            if (env.autoFillEnabled && env.autoFillAmount != null && env.autoFillAmount! > 0) {
-              allocations[env.id] = env.autoFillAmount!;
+            if (env.cashFlowEnabled && env.cashFlowAmount != null && env.cashFlowAmount! > 0) {
+              allocations[env.id] = env.cashFlowAmount!;
             }
           }
-        } else if (type == 'account') {
-          final account = item as Account;
-          // Add with auto-fill amount or 0
-          accountAllocations[account.id] = account.payDayAutoFillAmount ?? 0.0;
         }
+        // Account allocation removed - no longer supported
       });
     }
   }
@@ -467,8 +388,8 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     // Section 2: Individual auto-fill envelopes not in pay day binders
     final payDayBinderIds = payDayBinders.map((b) => b.id).toSet();
     final individualAutoFillEnvelopes = allEnvelopes.where((env) {
-      // Must have auto-fill enabled
-      if (!env.autoFillEnabled || env.autoFillAmount == null || env.autoFillAmount! <= 0) {
+      // Must have cash flow enabled
+      if (!env.cashFlowEnabled || env.cashFlowAmount == null || env.cashFlowAmount! <= 0) {
         return false;
       }
       // Must not be in a pay day binder
@@ -549,47 +470,11 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // SECTION 3: Bank Accounts
-                if (allBankAccounts.isNotEmpty) ...[
-                  _buildSectionHeader(
-                    'Accounts',
-                    Icons.account_balance,
-                    theme,
-                    fontProvider,
-                    allBankAccounts,
-                    currency,
-                    isAccount: true,
-                  ),
-                  const SizedBox(height: 16),
-                  ...allBankAccounts.map(
-                    (account) => _buildAccountTile(account, theme, fontProvider, currency),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // SECTION 4: Credit Cards
-                if (allCreditCards.isNotEmpty) ...[
-                  _buildSectionHeader(
-                    'Credit Cards',
-                    Icons.credit_card,
-                    theme,
-                    fontProvider,
-                    allCreditCards,
-                    currency,
-                    isAccount: true,
-                  ),
-                  const SizedBox(height: 16),
-                  ...allCreditCards.map(
-                    (account) => _buildAccountTile(account, theme, fontProvider, currency),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                // Account sections removed - account-level auto-fill no longer supported
 
                 // Empty state
                 if (payDayBinders.isEmpty &&
-                    individualAutoFillEnvelopes.isEmpty &&
-                    allBankAccounts.isEmpty &&
-                    allCreditCards.isEmpty)
+                    individualAutoFillEnvelopes.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -606,7 +491,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'No Auto-Fill Setup',
+                          'No Cash Flow Setup',
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -616,7 +501,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Enable auto-fill on binders, envelopes, or accounts to see them here!',
+                          'Enable cash flow on binders or envelopes to see them here!',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.orange.shade700,
@@ -933,7 +818,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     final payDayBinders = allBinders.where((b) => b.payDayEnabled).toList();
     final payDayBinderIds = payDayBinders.map((b) => b.id).toSet();
     final individualAutoFillEnvelopes = allEnvelopes.where((env) {
-      if (!env.autoFillEnabled || env.autoFillAmount == null || env.autoFillAmount! <= 0) {
+      if (!env.cashFlowEnabled || env.cashFlowAmount == null || env.cashFlowAmount! <= 0) {
         return false;
       }
       return env.groupId == null || !payDayBinderIds.contains(env.groupId);
@@ -1113,9 +998,9 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
           allocations.remove(env.id);
         }
       } else {
-        // Select all with their auto-fill amounts
+        // Select all with their cash flow amounts
         for (final env in binderEnvelopes) {
-          allocations[env.id] = env.autoFillAmount ?? 0.0;
+          allocations[env.id] = env.cashFlowAmount ?? 0.0;
         }
       }
     });
@@ -1337,7 +1222,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
           children: [
             Checkbox(
               value: isSelected,
-              onChanged: (value) => _toggleEnvelope(envelope.id, envelope.autoFillAmount),
+              onChanged: (value) => _toggleEnvelope(envelope.id, envelope.cashFlowAmount),
             ),
             const SizedBox(width: 8),
             Text(
@@ -1405,7 +1290,7 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
                   ),
                 ),
                 Text(
-                  'Auto-fill: ${currency.format(amount)}',
+                  'Cash Flow: ${currency.format(amount)}',
                   style: fontProvider.getTextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1422,97 +1307,6 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     );
   }
 
-  Widget _buildAccountTile(
-    Account account,
-    ThemeData theme,
-    FontProvider fontProvider,
-    NumberFormat currency,
-  ) {
-    final isSelected = accountAllocations.containsKey(account.id);
-    final amount = accountAllocations[account.id] ?? 0.0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-            : theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outline.withValues(alpha: 0.3),
-          width: isSelected ? 3 : 2,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Checkbox(
-              value: isSelected,
-              onChanged: (value) => _toggleAccount(account.id, account.payDayAutoFillAmount),
-            ),
-            const SizedBox(width: 8),
-            account.getIconWidget(theme, size: 32),
-          ],
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                account.name,
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected
-                      ? theme.colorScheme.onSurface
-                      : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-            if (isSelected)
-              IconButton(
-                icon: Icon(
-                  Icons.settings,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
-                onPressed: () => _editAccountAmount(account),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-          ],
-        ),
-        subtitle: Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          children: [
-            Text(
-              'Balance: ${currency.format(account.currentBalance)}',
-              style: TextStyle(
-                fontSize: 14,
-                color: isSelected
-                    ? theme.colorScheme.onSurface.withValues(alpha: 0.8)
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-            Text(
-              'Auto-fill: ${currency.format(amount)}',
-              style: fontProvider.getTextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // Add item selection sheet

@@ -499,8 +499,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                     flex: 1,
                     child: _InfoChip(
                       icon: Icons.autorenew,
-                      label: envelope.autoFillEnabled
-                          ? 'Auto-fill: ${currency.format(envelope.autoFillAmount ?? 0)}'
+                      label: envelope.cashFlowEnabled
+                          ? 'Auto-fill: ${currency.format(envelope.cashFlowAmount ?? 0)}'
                           : 'Auto-fill Off',
                       subLabel: 'Tap for details',
                       color: theme.colorScheme.secondaryContainer,

@@ -747,9 +747,9 @@ class _BinderSpreadState extends State<_BinderSpread> {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Calculate auto-fill stats
-    final autoFillEnvelopes = widget.envelopes.where((e) => e.autoFillEnabled && (e.autoFillAmount ?? 0) > 0).toList();
-    final autoFillTotal = autoFillEnvelopes.fold(0.0, (sum, e) => sum + (e.autoFillAmount ?? 0));
+    // Calculate cash flow stats
+    final autoFillEnvelopes = widget.envelopes.where((e) => e.cashFlowEnabled && (e.cashFlowAmount ?? 0) > 0).toList();
+    final autoFillTotal = autoFillEnvelopes.fold(0.0, (sum, e) => sum + (e.cashFlowAmount ?? 0));
 
     // Calculate target stats
     final targetEnvelopes = widget.envelopes.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
@@ -1346,8 +1346,8 @@ class _InlineEnvelopeDetail extends StatelessWidget {
             ],
           ),
 
-          // Auto-fill Amount (if applicable)
-          if (envelope.autoFillEnabled && (envelope.autoFillAmount ?? 0) > 0) ...[
+          // Cash Flow Amount (if applicable)
+          if (envelope.cashFlowEnabled && (envelope.cashFlowAmount ?? 0) > 0) ...[
             SizedBox(height: itemSpacing),
             Row(
               children: [
@@ -1361,7 +1361,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      currency.format(envelope.autoFillAmount),
+                      currency.format(envelope.cashFlowAmount),
                       style: fontProvider.getTextStyle(
                         fontSize: detailFontSize,
                         fontWeight: FontWeight.bold,

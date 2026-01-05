@@ -320,10 +320,10 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                 return ListTile(
                                   leading: displayEnvelope.getIconWidget(theme),
                                   title: Text(displayEnvelope.name),
-                                  subtitle: displayEnvelope.autoFillEnabled &&
-                                          displayEnvelope.autoFillAmount != null
+                                  subtitle: displayEnvelope.cashFlowEnabled &&
+                                          displayEnvelope.cashFlowAmount != null
                                       ? Text(
-                                          'Auto-fill: ${currency.format(displayEnvelope.autoFillAmount)}',
+                                          'Auto-fill: ${currency.format(displayEnvelope.cashFlowAmount)}',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: theme.colorScheme.primary,

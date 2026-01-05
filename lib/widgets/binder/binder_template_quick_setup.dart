@@ -87,7 +87,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
         name: templateEnvelope.name,
         startingAmount: 0.0,
         emoji: templateEnvelope.emoji,
-        autoFillEnabled: false,
+        cashFlowEnabled: false,
         groupId: binderId, // Link to binder
       );
       createdIds.add(envelopeId);
@@ -417,7 +417,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           name: data.template.name,
           startingAmount: 0.0,
           emoji: data.template.emoji,
-          autoFillEnabled: false,
+          cashFlowEnabled: false,
           groupId: binderId, // Assign to the binder
         );
         createdIds.add(envelopeId);
@@ -429,8 +429,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           startingAmount: data.currentAmount,
           targetAmount: data.targetAmount,
           emoji: data.template.emoji,
-          autoFillEnabled: data.payDayDepositEnabled,
-          autoFillAmount: data.payDayDepositEnabled ? data.payDayDepositAmount : null,
+          cashFlowEnabled: data.payDayDepositEnabled,
+          cashFlowAmount: data.payDayDepositEnabled ? data.payDayDepositAmount : null,
           linkedAccountId: data.payDayDepositEnabled && widget.defaultAccountId != null
               ? widget.defaultAccountId
               : null,

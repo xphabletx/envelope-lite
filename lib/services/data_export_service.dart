@@ -99,7 +99,7 @@ class DataExportService {
     final sheet = excel['Envelopes'];
     final headers = [
       'Name', 'Balance', 'Target Amount', 'Progress %', 'Group Name',
-      'Icon (emoji/text)', 'Is Shared', 'Auto-Fill Settings', 'Linked Account Name' // New header
+      'Icon (emoji/text)', 'Is Shared', 'Cash Flow Settings', 'Linked Account Name' // Updated header
     ];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
 
@@ -113,8 +113,8 @@ class DataExportService {
       final progress = ((envelope.targetAmount ?? 0) > 0)
           ? (envelope.currentAmount / envelope.targetAmount! * 100)
           : 0.0;
-      final autoFillSettings = envelope.autoFillEnabled 
-          ? 'Enabled: ${envelope.autoFillAmount ?? 0.0}' 
+      final autoFillSettings = envelope.cashFlowEnabled
+          ? 'Enabled: ${envelope.cashFlowAmount ?? 0.0}'
           : 'Disabled';
       
       final linkedAccountName = envelope.linkedAccountId != null
