@@ -485,6 +485,10 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false, // Disable automatic back button
+        toolbarHeight: 0, // Hide the AppBar completely
+      ),
       body: PageView.builder(
         controller: _pageController,
         physics: const NeverScrollableScrollPhysics(),
@@ -655,9 +659,13 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                   // Back button
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    onPressed: widget.isFirst && widget.onBackToSelection != null
-                        ? widget.onBackToSelection
-                        : (!widget.isFirst ? widget.onBack : null),
+                    onPressed: () {
+                      if (widget.isFirst && widget.onBackToSelection != null) {
+                        widget.onBackToSelection!();
+                      } else if (!widget.isFirst) {
+                        widget.onBack();
+                      }
+                    },
                     tooltip: widget.isFirst ? 'Back to selection' : 'Previous envelope',
                   ),
                   const SizedBox(width: 8),
