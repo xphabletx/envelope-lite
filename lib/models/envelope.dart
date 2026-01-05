@@ -204,12 +204,7 @@ class Envelope {
       }
     }
 
-    // Fallback to old emoji system
-    if (emoji != null) {
-      return Text(emoji!, style: TextStyle(fontSize: size * 0.8));
-    }
-
-    // Default fallback
+    // Should never reach here since iconType/iconValue have defaults
     return Image.asset(
       'assets/default/stufficon.png',
       width: size * 1.3,

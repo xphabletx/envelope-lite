@@ -39,9 +39,9 @@ class GroupRepo {
       id: id,
       name: name,
       userId: _userId,
-      emoji: emoji, // No default - will use stufficon.png fallback
-      iconType: iconType,
-      iconValue: iconValue,
+      emoji: emoji,
+      iconType: iconType ?? 'assetImage',
+      iconValue: iconValue ?? 'assets/default/stufficon.png',
       iconColor: iconColor,
       colorIndex: colorIndex ?? 0,
       payDayEnabled: payDayEnabled ?? false,
