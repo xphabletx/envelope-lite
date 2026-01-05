@@ -206,19 +206,58 @@ class EnvelopeRepo {
     }
   }
 
-  /// Groups stream (ALWAYS local only - no workspace sync)
+  /// Groups stream - syncs from workspace in workspace mode
   Stream<List<EnvelopeGroup>> get groupsStream {
-    final initial = _groupBox.values
-        .where((g) => g.userId == _userId)
-        .toList();
+    if (!_inWorkspace) {
+      // SOLO MODE: Local Hive only
+      final initial = _groupBox.values
+          .where((g) => g.userId == _userId)
+          .toList();
 
-    return Stream.value(initial).asBroadcastStream().concatWith([
-      _groupBox.watch().map((_) {
-        return _groupBox.values
-            .where((g) => g.userId == _userId)
-            .toList();
-      })
-    ]);
+      return Stream.value(initial).asBroadcastStream().concatWith([
+        _groupBox.watch().map((_) {
+          return _groupBox.values
+              .where((g) => g.userId == _userId)
+              .toList();
+        })
+      ]);
+    } else {
+      // WORKSPACE MODE: Firebase sync from workspace groups collection
+      debugPrint('[EnvelopeRepo] DEBUG: Setting up workspace groups stream for workspace: $_workspaceId');
+
+      return _firestore
+          .collection('workspaces')
+          .doc(_workspaceId!)
+          .collection('groups')
+          .orderBy('createdAt', descending: false)
+          .snapshots()
+          .handleError((error) {
+            debugPrint('[EnvelopeRepo] ERROR: Workspace groups stream error: $error');
+            return const Stream<List<EnvelopeGroup>>.empty();
+          })
+          .asyncMap((snapshot) async {
+            debugPrint('[EnvelopeRepo] DEBUG: Received workspace groups update: ${snapshot.docs.length} groups');
+            final List<EnvelopeGroup> allGroups = [];
+
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              data['id'] = doc.id; // Ensure ID is set
+              final group = EnvelopeGroup.fromMap(data);
+
+              debugPrint('[EnvelopeRepo] DEBUG: - Group: "${group.name}" (${group.id}) - Owner: ${group.userId} - isShared: ${group.isShared}');
+              allGroups.add(group);
+
+              // Cache to Hive for offline access
+              await _groupBox.put(group.id, group);
+            }
+
+            debugPrint('[EnvelopeRepo] DEBUG: Returning ${allGroups.length} groups');
+            return allGroups;
+          })
+          .handleError((error) {
+            debugPrint('[EnvelopeRepo] ERROR: asyncMap error: $error');
+          });
+    }
   }
 
   /// Transactions stream (ALWAYS local only)

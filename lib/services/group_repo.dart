@@ -1,6 +1,7 @@
 // lib/services/group_repo.dart
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/envelope_group.dart';
 import 'envelope_repo.dart';
 import 'hive_service.dart';
@@ -9,7 +10,7 @@ import 'sync_manager.dart';
 /// Group repository - Syncs to Firebase for cloud backup
 ///
 /// CRITICAL: Groups MUST sync to prevent data loss on logout/login
-/// Syncs to: /users/{userId}/groups
+/// Syncs to: /users/{userId}/groups (solo mode) or /workspaces/{workspaceId}/groups (workspace mode)
 class GroupRepo {
   GroupRepo(this._envelopeRepo) {
     _groupBox = HiveService.getBox<EnvelopeGroup>('groups');
@@ -18,8 +19,11 @@ class GroupRepo {
   final EnvelopeRepo _envelopeRepo;
   late final Box<EnvelopeGroup> _groupBox;
   final SyncManager _syncManager = SyncManager();
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   String get _userId => _envelopeRepo.currentUserId;
+  bool get _inWorkspace => _envelopeRepo.inWorkspace;
+  String? get _workspaceId => _envelopeRepo.workspaceId;
 
   // ======================= CREATE =======================
 
@@ -45,14 +49,28 @@ class GroupRepo {
       iconColor: iconColor,
       colorIndex: colorIndex ?? 0,
       payDayEnabled: payDayEnabled ?? false,
-      isShared: false,
+      isShared: true,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
 
     await _groupBox.put(id, group);
     debugPrint('[GroupRepo] ✅ Group created in Hive: $name');
 
     // CRITICAL: Sync to Firebase to prevent data loss
-    _syncManager.pushGroup(group, _userId);
+    if (_inWorkspace && _workspaceId != null) {
+      // Workspace mode: sync to workspace collection
+      debugPrint('[GroupRepo] DEBUG: Syncing group to workspace: $_workspaceId');
+      await _db
+          .collection('workspaces')
+          .doc(_workspaceId!)
+          .collection('groups')
+          .doc(id)
+          .set(group.toMap());
+    } else {
+      // Solo mode: sync to user collection
+      _syncManager.pushGroup(group, _userId);
+    }
 
     return id;
   }
@@ -86,13 +104,27 @@ class GroupRepo {
       colorIndex: colorIndex ?? group.colorIndex,
       payDayEnabled: payDayEnabled ?? group.payDayEnabled,
       isShared: group.isShared,
+      createdAt: group.createdAt,
+      updatedAt: DateTime.now(),
     );
 
     await _groupBox.put(groupId, updatedGroup);
     debugPrint('[GroupRepo] ✅ Group updated in Hive: $groupId');
 
     // CRITICAL: Sync to Firebase to prevent data loss
-    _syncManager.pushGroup(updatedGroup, _userId);
+    if (_inWorkspace && _workspaceId != null) {
+      // Workspace mode: sync to workspace collection
+      debugPrint('[GroupRepo] DEBUG: Syncing updated group to workspace: $_workspaceId');
+      await _db
+          .collection('workspaces')
+          .doc(_workspaceId!)
+          .collection('groups')
+          .doc(groupId)
+          .set(updatedGroup.toMap());
+    } else {
+      // Solo mode: sync to user collection
+      _syncManager.pushGroup(updatedGroup, _userId);
+    }
   }
 
   // ======================= DELETE =======================
@@ -106,7 +138,19 @@ class GroupRepo {
     debugPrint('[GroupRepo] ✅ Group deleted from Hive: $groupId');
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
-    _syncManager.deleteGroup(groupId, _userId);
+    if (_inWorkspace && _workspaceId != null) {
+      // Workspace mode: delete from workspace collection
+      debugPrint('[GroupRepo] DEBUG: Deleting group from workspace: $_workspaceId');
+      await _db
+          .collection('workspaces')
+          .doc(_workspaceId!)
+          .collection('groups')
+          .doc(groupId)
+          .delete();
+    } else {
+      // Solo mode: delete from user collection
+      _syncManager.deleteGroup(groupId, _userId);
+    }
   }
 
   // ======================= GETTERS =======================
