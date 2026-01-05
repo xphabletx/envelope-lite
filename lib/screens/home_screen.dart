@@ -374,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         IconButton(
           icon: Icon(
-            Icons.account_balance_wallet,
+            Icons.credit_card,
             size: responsive.isLandscape ? 20 : 28,
           ),
           tooltip: 'Manage Accounts',
