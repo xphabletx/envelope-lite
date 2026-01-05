@@ -142,37 +142,41 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        automaticallyImplyLeading: false, // Disable automatic back button (parent overlay handles it)
-        title: Text(
-          widget.template.name,
-          style: fontProvider.getTextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-              border: Border(
-                bottom: BorderSide(color: theme.dividerColor),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Title Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(60, 16, 20, 16),
+              child: Text(
+                widget.template.name,
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Select the envelopes you want:',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                border: Border(
+                  bottom: BorderSide(color: theme.dividerColor),
                 ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select the envelopes you want:',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -303,6 +307,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -647,27 +652,15 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
         bottom: false,
         child: Column(
           children: [
-            // Fixed Header with progress and back button
+            // Fixed Header with title centered, skip and progress on right
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 16, 24, 0),
+              padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
               child: Row(
                 children: [
-                  // Back button
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () {
-                      if (widget.isFirst && widget.onBackToSelection != null) {
-                        widget.onBackToSelection!();
-                      } else if (!widget.isFirst) {
-                        widget.onBack();
-                      }
-                    },
-                    tooltip: widget.isFirst ? 'Back to selection' : 'Previous envelope',
-                  ),
-                  const SizedBox(width: 8),
-                  // Title with emoji
+                  // Title with emoji (centered)
                   Expanded(
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(widget.template.emoji, style: const TextStyle(fontSize: 32)),
                         const SizedBox(width: 12),

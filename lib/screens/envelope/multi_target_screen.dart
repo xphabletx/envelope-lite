@@ -53,6 +53,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   final TextEditingController _totalContributionController = TextEditingController();
   String _defaultFrequency = 'monthly';
   bool _showCalculator = false;
+  final Set<String> _expandedBinderIds = {}; // Track which binders are expanded
+  final Set<String> _expandedEnvelopeProjections = {}; // Track which envelope projections are expanded
+  List<EnvelopeGroup> _cachedGroups = []; // Cache groups to prevent "Unknown Binder" during rebuilds
 
   @override
   void initState() {
@@ -259,9 +262,11 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Hint text for multi-select
-        if (widget.mode != TargetScreenMode.singleEnvelope)
-          _buildHintText(theme, fontProvider),
+        // Contribution Calculator (if selected)
+        if (_selectedEnvelopeIds.isNotEmpty) ...[
+          _buildContributionCalculator(targetEnvelopes, theme, fontProvider, locale),
+          const SizedBox(height: 16),
+        ],
 
         // Overall Progress Summary
         _buildProgressSummary(targetEnvelopes, theme, fontProvider, locale, timeMachine),
@@ -269,47 +274,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
         // Envelope List with Selection
         _buildEnvelopeList(targetEnvelopes, theme, fontProvider, locale, timeMachine),
-        const SizedBox(height: 24),
-
-        // Contribution Calculator
-        if (_selectedEnvelopeIds.isNotEmpty)
-          _buildContributionCalculator(targetEnvelopes, theme, fontProvider, locale),
 
         const SizedBox(height: 32),
       ],
-    );
-  }
-
-  Widget _buildHintText(ThemeData theme, FontProvider fontProvider) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer.withAlpha(77),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.secondary.withAlpha(77),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            color: theme.colorScheme.secondary,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Tap to select envelopes for contribution calculation',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -336,8 +303,32 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     // Calculate if exceeded in time machine mode
     final exceeded = remaining < 0 ? remaining.abs() : 0.0;
 
+    // Calculate earliest target date
+    DateTime? earliestTargetDate;
+    for (var envelope in envelopesToShow) {
+      if (envelope.targetDate != null) {
+        if (earliestTargetDate == null || envelope.targetDate!.isBefore(earliestTargetDate)) {
+          earliestTargetDate = envelope.targetDate;
+        }
+      }
+    }
+
+    // Calculate time progress
+    double? timeProgress;
+    int? daysRemaining;
+    if (earliestTargetDate != null) {
+      final referenceDate = timeMachine.isActive ? timeMachine.futureDate! : DateTime.now();
+      final startDate = DateTime.now(); // Assume targets started today (could be improved)
+      final totalDays = earliestTargetDate.difference(startDate).inDays;
+      final daysPassed = referenceDate.difference(startDate).inDays;
+      daysRemaining = earliestTargetDate.difference(referenceDate).inDays;
+      if (totalDays > 0) {
+        timeProgress = (daysPassed / totalDays).clamp(0.0, 1.0);
+      }
+    }
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -347,84 +338,187 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: theme.colorScheme.shadow.withAlpha(51),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.track_changes,
-            size: 48,
-            color: theme.colorScheme.primary,
+          // Header row with icon and count
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.track_changes,
+                    size: 24,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    selectedEnvelopes.isNotEmpty
+                        ? '${selectedEnvelopes.length} Selected'
+                        : '${targetEnvelopes.length} Targets',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+              if (daysRemaining != null && daysRemaining > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withAlpha(51),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${daysRemaining}d left',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            selectedEnvelopes.isNotEmpty
-                ? '${selectedEnvelopes.length} Selected'
-                : '${targetEnvelopes.length} Targets',
-            style: fontProvider.getTextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
+          const SizedBox(height: 12),
+
+          // Amount Progress
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Amount Progress',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    locale.formatCurrency(totalCurrent),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                'of ${locale.formatCurrency(totalTarget)}',
+                style: fontProvider.getTextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onPrimaryContainer.withAlpha(204),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          Text(
-            locale.formatCurrency(totalCurrent),
-            style: fontProvider.getTextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w900,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          Text(
-            'of ${locale.formatCurrency(totalTarget)}',
-            style: fontProvider.getTextStyle(
-              fontSize: 18,
-              color: theme.colorScheme.onPrimaryContainer.withAlpha(204),
-            ),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 12,
+              minHeight: 8,
               backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(51),
               valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            '${(progress * 100).toStringAsFixed(1)}% complete',
-            style: fontProvider.getTextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(progress * 100).toStringAsFixed(1)}% complete',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+              if (exceeded > 0)
+                Text(
+                  '+${locale.formatCurrency(exceeded)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                )
+              else
+                Text(
+                  '${locale.formatCurrency(remaining)} left',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                  ),
+                ),
+            ],
           ),
-          if (exceeded > 0)
-            Text(
-              'Exceeded by ${locale.formatCurrency(exceeded)} 🎉',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
-              ),
-            )
-          else
-            Text(
-              '${locale.formatCurrency(remaining)} remaining',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+
+          // Time Progress (if available)
+          if (timeProgress != null) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(
+                  'Time Progress',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: timeProgress,
+                minHeight: 8,
+                backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(51),
+                valueColor: AlwaysStoppedAnimation(
+                  theme.colorScheme.secondary,
+                ),
               ),
             ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${(timeProgress * 100).toStringAsFixed(1)}% of time elapsed',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                  ),
+                ),
+                if (earliestTargetDate != null)
+                  Text(
+                    '${earliestTargetDate.day}/${earliestTargetDate.month}/${earliestTargetDate.year}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -440,13 +534,21 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     return StreamBuilder<List<EnvelopeGroup>>(
       stream: widget.envelopeRepo.groupsStream,
       builder: (context, groupSnapshot) {
-        final groups = groupSnapshot.data ?? [];
+        // Cache groups when available to prevent "Unknown Binder" during rebuilds
+        if (groupSnapshot.hasData && groupSnapshot.data!.isNotEmpty) {
+          _cachedGroups = groupSnapshot.data!;
+        }
+        final groups = _cachedGroups;
 
         // Group envelopes by binder
         final Map<String?, List<Envelope>> envelopesByGroup = {};
         for (var envelope in targetEnvelopes) {
           envelopesByGroup.putIfAbsent(envelope.groupId, () => []).add(envelope);
         }
+
+        // Separate binders from ungrouped envelopes
+        final binderEntries = envelopesByGroup.entries.where((e) => e.key != null).toList();
+        final ungroupedEnvelopes = envelopesByGroup[null] ?? [];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,14 +561,16 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            ...envelopesByGroup.entries.map((entry) {
-              final groupId = entry.key;
+
+            // Binders first
+            ...binderEntries.map((entry) {
+              final groupId = entry.key!;
               final envelopes = entry.value;
               final group = groups.firstWhere(
                 (g) => g.id == groupId,
                 orElse: () => EnvelopeGroup(
-                  id: 'unknown',
-                  name: 'Ungrouped',
+                  id: groupId,
+                  name: 'Unknown Binder',
                   userId: '',
                 ),
               );
@@ -480,6 +584,33 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 timeMachine,
               );
             }),
+
+            // Individual/ungrouped envelopes after binders
+            if (ungroupedEnvelopes.isNotEmpty) ...[
+              if (binderEntries.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(color: theme.colorScheme.outline.withAlpha(77)),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Individual Envelopes',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface.withAlpha(179),
+                  ),
+                ),
+              ),
+              ...ungroupedEnvelopes.map((envelope) => _buildEnvelopeTile(
+                envelope,
+                theme,
+                fontProvider,
+                locale,
+                timeMachine,
+              )),
+            ],
           ],
         );
       },
@@ -494,35 +625,191 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     LocaleProvider locale,
     TimeMachineProvider timeMachine,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              group.getIconWidget(theme, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                group.name,
-                style: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
+    final isExpanded = _expandedBinderIds.contains(group.id);
+
+    // Calculate combined stats
+    final totalTarget = envelopes.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
+    final totalCurrent = envelopes.fold(0.0, (sum, e) => sum + e.currentAmount);
+    final progress = totalTarget > 0 ? (totalCurrent / totalTarget).clamp(0.0, 1.0) : 0.0;
+
+    // Calculate earliest target date for time progress
+    DateTime? earliestTargetDate;
+    for (var envelope in envelopes) {
+      if (envelope.targetDate != null) {
+        if (earliestTargetDate == null || envelope.targetDate!.isBefore(earliestTargetDate)) {
+          earliestTargetDate = envelope.targetDate;
+        }
+      }
+    }
+
+    // Count unique target dates for elegant handling
+    final targetDates = envelopes
+        .where((e) => e.targetDate != null)
+        .map((e) => e.targetDate!)
+        .toSet();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedBinderIds.remove(group.id);
+                } else {
+                  _expandedBinderIds.add(group.id);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Header row
+                  Row(
+                    children: [
+                      group.getIconWidget(theme, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              group.name,
+                              style: fontProvider.getTextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${envelopes.length} envelope${envelopes.length == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Combined stats
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        locale.formatCurrency(totalCurrent),
+                        style: fontProvider.getTextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      Text(
+                        'of ${locale.formatCurrency(totalTarget)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface.withAlpha(179),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Amount progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 8,
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Progress percentage and time info
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${(progress * 100).toStringAsFixed(1)}% complete',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      if (earliestTargetDate != null)
+                        Row(
+                          children: [
+                            if (targetDates.length > 1)
+                              Text(
+                                '${targetDates.length} dates • ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface.withAlpha(179),
+                                ),
+                              ),
+                            Icon(
+                              Icons.calendar_today,
+                              size: 12,
+                              color: theme.colorScheme.onSurface.withAlpha(179),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${earliestTargetDate.day}/${earliestTargetDate.month}/${earliestTargetDate.year}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        ...envelopes.map((envelope) => _buildEnvelopeTile(
-          envelope,
-          theme,
-          fontProvider,
-          locale,
-          timeMachine,
-        )),
-        const SizedBox(height: 12),
-      ],
+
+          // Expanded envelope list
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                children: [
+                  Divider(color: theme.colorScheme.outline.withAlpha(77)),
+                  const SizedBox(height: 8),
+                  ...envelopes.map((envelope) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _buildEnvelopeTile(
+                      envelope,
+                      theme,
+                      fontProvider,
+                      locale,
+                      timeMachine,
+                    ),
+                  )),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -783,11 +1070,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   onChanged: (value) {
                     setState(() {
                       _defaultFrequency = value!;
-                      // Update all envelopes that don't have custom frequency
+                      // Update ALL envelope frequencies to match the new default
                       for (var id in _selectedEnvelopeIds) {
-                        if (!_envelopeFrequencies.containsKey(id)) {
-                          _envelopeFrequencies[id] = value;
-                        }
+                        _envelopeFrequencies[id] = value;
                       }
                     });
                   },
@@ -813,18 +1098,15 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 const SizedBox(height: 16),
 
                 ...selectedEnvelopes.map((envelope) {
+                  final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
                   return _buildEnvelopeAllocationTile(
                     envelope,
                     theme,
                     fontProvider,
                     locale,
+                    totalAmount,
                   );
                 }),
-
-                const SizedBox(height: 24),
-
-                // Projection Results
-                _buildProjectionResults(selectedEnvelopes, theme, fontProvider, locale),
               ],
             ),
           ),
@@ -838,152 +1120,251 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     ThemeData theme,
     FontProvider fontProvider,
     LocaleProvider locale,
+    double totalAmount,
   ) {
     final percentage = _contributionAllocations[envelope.id] ?? 0;
-    final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
     final envelopeAmount = totalAmount * (percentage / 100);
     final frequency = _envelopeFrequencies[envelope.id] ?? _defaultFrequency;
+    final isExpanded = _expandedEnvelopeProjections.contains(envelope.id);
+
+    // Calculate projection
+    final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
+    final contributionsNeeded = envelopeAmount > 0 ? (remaining / envelopeAmount).ceil() : 0;
+    final daysPerContribution = _getDaysPerFrequency(frequency);
+    final daysToTarget = contributionsNeeded * daysPerContribution;
+    final targetDate = DateTime.now().add(Duration(days: daysToTarget));
+
+    final frequencyLabel = _getFrequencyLabel(frequency);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                envelope.getIconWidget(theme, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    envelope.name,
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${percentage.toStringAsFixed(1)}%',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Percentage Slider
-            Slider(
-              value: percentage,
-              min: 0,
-              max: 100,
-              divisions: 100,
-              label: '${percentage.toStringAsFixed(1)}%',
-              onChanged: (value) {
-                _updateAllocation(envelope.id, value);
-              },
-            ),
-
-            // Amount Display and Input
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        children: [
+          // Main tile content
+          InkWell(
+            onTap: totalAmount > 0 && remaining > 0
+                ? () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedEnvelopeProjections.remove(envelope.id);
+                      } else {
+                        _expandedEnvelopeProjections.add(envelope.id);
+                      }
+                    });
+                  }
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        'Amount',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.onSurface.withAlpha(179),
+                      envelope.getIconWidget(theme, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          envelope.name,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      GestureDetector(
-                        onTap: () => _showAmountInput(envelope, theme, fontProvider, locale),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer.withAlpha(77),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: theme.colorScheme.primary.withAlpha(77),
+                      Text(
+                        '${percentage.toStringAsFixed(1)}%',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      if (totalAmount > 0 && remaining > 0)
+                        Icon(
+                          isExpanded ? Icons.expand_less : Icons.expand_more,
+                          color: theme.colorScheme.primary,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Percentage Slider
+                  Slider(
+                    value: percentage,
+                    min: 0,
+                    max: 100,
+                    divisions: 100,
+                    label: '${percentage.toStringAsFixed(1)}%',
+                    onChanged: (value) {
+                      _updateAllocation(envelope.id, value);
+                    },
+                  ),
+
+                  // Amount Display and Frequency
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Amount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                locale.formatCurrency(envelopeAmount),
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.primary,
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: () => _showAmountInput(envelope, theme, fontProvider, locale),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primaryContainer.withAlpha(77),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary.withAlpha(77),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      locale.formatCurrency(envelopeAmount),
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      size: 14,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.edit_outlined,
-                                size: 14,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
+                      const SizedBox(width: 12),
 
-                // Frequency Override
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Frequency',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.onSurface.withAlpha(179),
+                      // Frequency Display (read-only, controlled by global default)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Frequency',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: theme.colorScheme.outline.withAlpha(77),
+                                ),
+                              ),
+                              child: Text(
+                                frequencyLabel,
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      DropdownButtonFormField<String>(
-                        initialValue: frequency,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          isDense: true,
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'daily', child: Text('Daily', style: TextStyle(fontSize: 14))),
-                          DropdownMenuItem(value: 'weekly', child: Text('Weekly', style: TextStyle(fontSize: 14))),
-                          DropdownMenuItem(value: 'biweekly', child: Text('Biweekly', style: TextStyle(fontSize: 14))),
-                          DropdownMenuItem(value: 'monthly', child: Text('Monthly', style: TextStyle(fontSize: 14))),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _envelopeFrequencies[envelope.id] = value!;
-                          });
-                        },
                       ),
                     ],
                   ),
-                ),
-              ],
+
+                  // Quick projection summary (always visible)
+                  if (totalAmount > 0 && remaining > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer.withAlpha(51),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Target in $contributionsNeeded $frequencyLabel${contributionsNeeded == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSecondaryContainer,
+                            ),
+                          ),
+                          Text(
+                            '${targetDate.day}/${targetDate.month}/${targetDate.year}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+
+          // Expanded projection details
+          if (isExpanded && totalAmount > 0 && remaining > 0)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                children: [
+                  Divider(color: theme.colorScheme.outline.withAlpha(77)),
+                  const SizedBox(height: 8),
+                  _buildProjectionRow('Remaining', locale.formatCurrency(remaining), fontProvider),
+                  _buildProjectionRow('Per $frequencyLabel', locale.formatCurrency(envelopeAmount), fontProvider),
+                  _buildProjectionRow('Contributions needed', '$contributionsNeeded', fontProvider),
+                  _buildProjectionRow('Days to target', '$daysToTarget days', fontProvider),
+                  _buildProjectionRow(
+                    'Target reached by',
+                    '${targetDate.day}/${targetDate.month}/${targetDate.year}',
+                    fontProvider,
+                    valueColor: theme.colorScheme.primary,
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  String _getFrequencyLabel(String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return 'day';
+      case 'weekly':
+        return 'week';
+      case 'biweekly':
+        return 'fortnight';
+      case 'monthly':
+        return 'month';
+      default:
+        return frequency;
+    }
   }
 
   void _showAmountInput(Envelope envelope, ThemeData theme, FontProvider fontProvider, LocaleProvider locale) {
@@ -1049,115 +1430,6 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       case 'monthly': return 30;
       default: return 30;
     }
-  }
-
-  Widget _buildProjectionResults(
-    List<Envelope> selectedEnvelopes,
-    ThemeData theme,
-    FontProvider fontProvider,
-    LocaleProvider locale,
-  ) {
-    final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
-
-    if (totalContribution <= 0) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          'Enter a total contribution amount to see projections',
-          style: TextStyle(
-            color: theme.colorScheme.onSurface.withAlpha(179),
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withAlpha(77),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.insights, color: theme.colorScheme.primary, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Projection Summary',
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...selectedEnvelopes.map((envelope) {
-            final percentage = _contributionAllocations[envelope.id] ?? 0;
-            final envelopeAmount = totalContribution * (percentage / 100);
-            final frequency = _envelopeFrequencies[envelope.id] ?? _defaultFrequency;
-            final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
-
-            if (remaining <= 0) return const SizedBox.shrink();
-
-            final contributionsNeeded = envelopeAmount > 0 ? (remaining / envelopeAmount).ceil() : 0;
-            final daysPerContribution = _getDaysPerFrequency(frequency);
-            final daysToTarget = contributionsNeeded * daysPerContribution;
-            final targetDate = DateTime.now().add(Duration(days: daysToTarget));
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outline.withAlpha(77)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        envelope.getIconWidget(theme, size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            envelope.name,
-                            style: fontProvider.getTextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    _buildProjectionRow('Remaining', locale.formatCurrency(remaining), fontProvider),
-                    _buildProjectionRow('Per $frequency', locale.formatCurrency(envelopeAmount), fontProvider),
-                    _buildProjectionRow('Contributions needed', '$contributionsNeeded', fontProvider),
-                    _buildProjectionRow(
-                      'Target reached by',
-                      '${targetDate.day}/${targetDate.month}/${targetDate.year}',
-                      fontProvider,
-                      valueColor: theme.colorScheme.primary,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
   }
 
   Widget _buildProjectionRow(String label, String value, FontProvider fontProvider, {Color? valueColor}) {

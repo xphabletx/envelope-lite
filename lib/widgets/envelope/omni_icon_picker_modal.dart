@@ -78,7 +78,7 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
   String _getTypeString(IconType type) {
     switch (type) {
       case IconType.materialIcon:
-        return 'material';
+        return 'materialIcon';
       case IconType.companyLogo:
         return 'companyLogo';
       case IconType.emoji:
