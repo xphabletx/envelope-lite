@@ -85,16 +85,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
       return;
     }
 
-    if (_selectedAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an account to deposit into'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
+    // Account is optional - user can proceed without selecting one
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -103,7 +94,7 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
           groupRepo: widget.groupRepo,
           accountRepo: widget.accountRepo,
           totalAmount: amount,
-          accountId: _selectedAccountId!,
+          accountId: _selectedAccountId,
         ),
       ),
     );
@@ -282,14 +273,14 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.errorContainer,
+                        color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Please create an account first',
+                        'No accounts yet. You can still continue with pay day allocation.',
                         style: fontProvider.getTextStyle(
                           fontSize: 16,
-                          color: theme.colorScheme.error,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),

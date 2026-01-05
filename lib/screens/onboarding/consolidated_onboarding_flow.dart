@@ -18,6 +18,7 @@ import '../home_screen.dart';
 import '../../data/binder_templates.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../utils/onboarding_currency_converter.dart';
 import '../../widgets/binder/binder_template_quick_setup.dart';
@@ -27,18 +28,20 @@ import '../../widgets/common/smart_text_field.dart';
 class ConsolidatedOnboardingFlow extends StatefulWidget {
   final String userId;
 
-  const ConsolidatedOnboardingFlow({
-    super.key,
-    required this.userId,
-  });
+  const ConsolidatedOnboardingFlow({super.key, required this.userId});
 
   @override
-  State<ConsolidatedOnboardingFlow> createState() => _ConsolidatedOnboardingFlowState();
+  State<ConsolidatedOnboardingFlow> createState() =>
+      _ConsolidatedOnboardingFlowState();
 }
 
-class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow> {
+class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
+    with AutomaticKeepAliveClientMixin {
   final PageController _pageController = PageController();
   late final OnboardingProgressService _progressService;
+
+  @override
+  bool get wantKeepAlive => true;
 
   // User data collection
   String? _userName;
@@ -67,7 +70,13 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   @override
   void initState() {
     super.initState();
-    _progressService = OnboardingProgressService(FirebaseFirestore.instance, widget.userId);
+    debugPrint(
+      '[ConsolidatedOnboardingFlow] 🔄 initState called for user: ${widget.userId}',
+    );
+    _progressService = OnboardingProgressService(
+      FirebaseFirestore.instance,
+      widget.userId,
+    );
     _loadSavedProgress();
   }
 
@@ -252,9 +261,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         ),
 
       // Step 12: Target Icon
-      _TargetIconStep(
-        onContinue: _nextStep,
-      ),
+      _TargetIconStep(onContinue: _nextStep),
 
       // Step 13: Completion
       _CompletionStep(
@@ -291,7 +298,10 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   Future<void> _completeOnboarding() async {
     try {
       // Save user profile and mark onboarding as complete
-      final userService = UserService(FirebaseFirestore.instance, widget.userId);
+      final userService = UserService(
+        FirebaseFirestore.instance,
+        widget.userId,
+      );
       await userService.createUserProfile(
         displayName: _userName ?? 'User',
         photoURL: _photoUrl,
@@ -318,7 +328,9 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         );
 
         // Save pay day settings
-        if (_payAmount != null && _payFrequency != null && _nextPayDate != null) {
+        if (_payAmount != null &&
+            _payFrequency != null &&
+            _nextPayDate != null) {
           final settings = PayDaySettings(
             userId: widget.userId,
             payFrequency: _payFrequency!,
@@ -327,7 +339,10 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
             defaultAccountId: accountId,
           );
 
-          final payDayService = PayDaySettingsService(FirebaseFirestore.instance, widget.userId);
+          final payDayService = PayDaySettingsService(
+            FirebaseFirestore.instance,
+            widget.userId,
+          );
           await payDayService.updatePayDaySettings(settings);
         }
       }
@@ -343,9 +358,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         );
 
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => HomeScreen(repo: repo),
-          ),
+          MaterialPageRoute(builder: (_) => HomeScreen(repo: repo)),
         );
       }
     } catch (e) {
@@ -363,13 +376,13 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    debugPrint(
+      '[ConsolidatedOnboardingFlow] 🎨 build() called - currentPage: $_currentPageIndex, loading: $_isLoading',
+    );
     // Show loading indicator while pages are being built
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return PopScope(
@@ -415,10 +428,7 @@ class _NameSetupStep extends StatefulWidget {
   final String? initialName;
   final Function(String) onContinue;
 
-  const _NameSetupStep({
-    this.initialName,
-    required this.onContinue,
-  });
+  const _NameSetupStep({this.initialName, required this.onContinue});
 
   @override
   State<_NameSetupStep> createState() => _NameSetupStepState();
@@ -501,6 +511,8 @@ class _NameSetupStepState extends State<_NameSetupStep> {
               FilledButton(
                 onPressed: () {
                   if (_controller.text.trim().isNotEmpty) {
+                    // Dismiss keyboard before continuing
+                    FocusManager.instance.primaryFocus?.unfocus();
                     HapticFeedback.mediumImpact();
                     widget.onContinue(_controller.text.trim());
                   }
@@ -563,29 +575,70 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 85,
       );
 
-      if (image != null) {
+      if (image == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Get theme colors before async gap
+      final primaryColor = Theme.of(context).colorScheme.primary;
+      final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+
+      // Crop the image to a circle
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Profile Photo',
+            toolbarColor: primaryColor,
+            toolbarWidgetColor: onPrimaryColor,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+          IOSUiSettings(
+            title: 'Crop Profile Photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
         // Save to app documents directory
         final appDir = await getApplicationDocumentsDirectory();
         final fileName = 'profile_${widget.userId}.jpg';
-        final savedImage = await File(image.path).copy(
-          '${appDir.path}/$fileName',
-        );
+        final savedImage = await File(
+          croppedFile.path,
+        ).copy('${appDir.path}/$fileName');
 
-        setState(() {
-          _photoPath = savedImage.path;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _photoPath = savedImage.path;
+            _isLoading = false;
+          });
+        }
       } else {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     } catch (e) {
       debugPrint('Error picking photo: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -631,17 +684,17 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : _photoPath != null
-                          ? ClipOval(
-                              child: Image.file(
-                                File(_photoPath!),
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Icon(
-                              Icons.person,
-                              size: 80,
-                              color: theme.colorScheme.primary,
-                            ),
+                      ? ClipOval(
+                          child: Image.file(
+                            File(_photoPath!),
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Icon(
+                          Icons.person,
+                          size: 80,
+                          color: theme.colorScheme.primary,
+                        ),
                 ),
               ),
 
@@ -753,7 +806,9 @@ class _ThemeSelectionStep extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'Choose your vibe',
                   style: fontProvider.getTextStyle(
@@ -802,7 +857,8 @@ class _ThemeSelectionStep extends StatelessWidget {
                       name: 'Lavender Dreams',
                       description: 'Soft purples & lilacs',
                       emoji: '💜',
-                      isSelected: themeProvider.currentThemeId == 'lavender_dreams',
+                      isSelected:
+                          themeProvider.currentThemeId == 'lavender_dreams',
                       onTap: () => themeProvider.setTheme('lavender_dreams'),
                     ),
                     const SizedBox(height: 12),
@@ -911,10 +967,7 @@ class _ThemeCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    description,
-                    style: const TextStyle(fontSize: 14),
-                  ),
+                  Text(description, style: const TextStyle(fontSize: 14)),
                 ],
               ),
             ),
@@ -944,10 +997,18 @@ class _FontSelectionStep extends StatelessWidget {
 
     final fonts = [
       {'id': 'caveat', 'name': 'Caveat', 'desc': 'Handwritten & Friendly'},
-      {'id': 'indie_flower', 'name': 'Indie Flower', 'desc': 'Casual & Playful'},
+      {
+        'id': 'indie_flower',
+        'name': 'Indie Flower',
+        'desc': 'Casual & Playful',
+      },
       {'id': 'roboto', 'name': 'Roboto', 'desc': 'Clean & Modern'},
       {'id': 'open_sans', 'name': 'Open Sans', 'desc': 'Friendly & Readable'},
-      {'id': 'system_default', 'name': 'System Default', 'desc': 'Your device font'},
+      {
+        'id': 'system_default',
+        'name': 'System Default',
+        'desc': 'Your device font',
+      },
     ];
 
     return Scaffold(
@@ -958,7 +1019,9 @@ class _FontSelectionStep extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'Choose your font style',
                   style: fontProvider.getTextStyle(
@@ -975,7 +1038,8 @@ class _FontSelectionStep extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: fonts.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final font = fonts[index];
                     final fontId = font['id']!;
@@ -1082,7 +1146,9 @@ class _CurrencySelectionStep extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'What currency do you use?',
                   style: fontProvider.getTextStyle(
@@ -1099,7 +1165,8 @@ class _CurrencySelectionStep extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: LocaleProvider.supportedCurrencies.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final currency = LocaleProvider.supportedCurrencies[index];
                     final code = currency['code']!;
@@ -1123,7 +1190,9 @@ class _CurrencySelectionStep extends StatelessWidget {
                           border: Border.all(
                             color: isSelected
                                 ? theme.colorScheme.primary
-                                : theme.colorScheme.outline.withValues(alpha: 0.3),
+                                : theme.colorScheme.outline.withValues(
+                                    alpha: 0.3,
+                                  ),
                             width: isSelected ? 2 : 1,
                           ),
                         ),
@@ -1239,7 +1308,9 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'How do you want to budget?',
                   style: fontProvider.getTextStyle(
@@ -1298,7 +1369,9 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
+                  color: theme.colorScheme.secondaryContainer.withValues(
+                    alpha: 0.3,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1427,7 +1500,9 @@ class _ModeCard extends StatelessWidget {
                         description,
                         style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -1445,7 +1520,10 @@ class _ModeCard extends StatelessWidget {
             if (isRecommended) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.secondary,
                   borderRadius: BorderRadius.circular(8),
@@ -1470,26 +1548,28 @@ class _ModeCard extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            ...features.map((feature) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.check,
-                        size: 20,
-                        color: theme.colorScheme.primary,
+            ...features.map(
+              (feature) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.check,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        feature,
+                        style: const TextStyle(fontSize: 15),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          feature,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1504,7 +1584,14 @@ class _AccountSetupStep extends StatefulWidget {
   final double? initialBalance;
   final String? initialIconType;
   final String? initialIconValue;
-  final Function(String accountName, String bankName, double balance, String iconType, String iconValue) onContinue;
+  final Function(
+    String accountName,
+    String bankName,
+    double balance,
+    String iconType,
+    String iconValue,
+  )
+  onContinue;
 
   const _AccountSetupStep({
     this.initialAccountName,
@@ -1532,11 +1619,17 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialAccountName ?? 'Main Account');
-    _balanceController = TextEditingController(
-      text: widget.initialBalance != null ? widget.initialBalance.toString() : '',
+    _nameController = TextEditingController(
+      text: widget.initialAccountName ?? 'Main Account',
     );
-    _bankNameController = TextEditingController(text: widget.initialBankName ?? '');
+    _balanceController = TextEditingController(
+      text: widget.initialBalance != null
+          ? widget.initialBalance.toString()
+          : '',
+    );
+    _bankNameController = TextEditingController(
+      text: widget.initialBankName ?? '',
+    );
     _iconType = widget.initialIconType ?? 'emoji';
     _iconValue = widget.initialIconValue ?? '🏦';
     _bankNameFocus = FocusNode();
@@ -1560,9 +1653,8 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => OmniIconPickerModal(
-        initialQuery: _bankNameController.text.trim(),
-      ),
+      builder: (_) =>
+          OmniIconPickerModal(initialQuery: _bankNameController.text.trim()),
     );
 
     if (result != null) {
@@ -1616,7 +1708,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'Add your main account',
                   style: fontProvider.getTextStyle(
@@ -1657,10 +1751,11 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       focusNode: _bankNameFocus,
                       nextFocusNode: _nameFocus,
                       textCapitalization: TextCapitalization.words,
-                      onTap: () => _bankNameController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _bankNameController.text.length,
-                      ),
+                      onTap: () =>
+                          _bankNameController.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: _bankNameController.text.length,
+                          ),
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1695,7 +1790,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                               'Tap to select icon',
                               style: fontProvider.getTextStyle(
                                 fontSize: 16,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                               ),
                             ),
                           ],
@@ -1743,7 +1840,9 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       controller: _balanceController,
                       focusNode: _balanceFocus,
                       isLastField: true,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       onTap: () => _balanceController.selection = TextSelection(
                         baseOffset: 0,
                         extentOffset: _balanceController.text.length,
@@ -1794,7 +1893,8 @@ class _PayDaySetupStep extends StatefulWidget {
   final double? initialPayAmount;
   final String? initialFrequency;
   final DateTime? initialNextPayDate;
-  final Function(double payAmount, String frequency, DateTime nextPayDate) onContinue;
+  final Function(double payAmount, String frequency, DateTime nextPayDate)
+  onContinue;
 
   const _PayDaySetupStep({
     this.initialPayAmount,
@@ -1817,11 +1917,15 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: widget.initialPayAmount != null ? widget.initialPayAmount.toString() : '',
+      text: widget.initialPayAmount != null
+          ? widget.initialPayAmount.toString()
+          : '',
     );
     _amountFocus = FocusNode();
     _frequency = widget.initialFrequency ?? 'monthly';
-    _nextPayDate = widget.initialNextPayDate ?? DateTime.now().add(const Duration(days: 7));
+    _nextPayDate =
+        widget.initialNextPayDate ??
+        DateTime.now().add(const Duration(days: 7));
   }
 
   @override
@@ -1850,7 +1954,9 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'When do you get paid?',
                   style: fontProvider.getTextStyle(
@@ -1879,7 +1985,9 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
                       controller: _amountController,
                       focusNode: _amountFocus,
                       isLastField: true,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       onTap: () => _amountController.selection = TextSelection(
                         baseOffset: 0,
                         extentOffset: _amountController.text.length,
@@ -1910,10 +2018,22 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
                         ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                        DropdownMenuItem(value: 'biweekly', child: Text('Bi-weekly')),
-                        DropdownMenuItem(value: 'fourweekly', child: Text('Four-weekly')),
-                        DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                        DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text('Weekly'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'biweekly',
+                          child: Text('Bi-weekly'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'fourweekly',
+                          child: Text('Four-weekly'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'monthly',
+                          child: Text('Monthly'),
+                        ),
                       ],
                       onChanged: (value) => setState(() => _frequency = value!),
                     ),
@@ -1934,7 +2054,9 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
                           context: context,
                           initialDate: _nextPayDate,
                           firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 90)),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 90),
+                          ),
                         );
                         if (date != null) {
                           setState(() => _nextPayDate = date);
@@ -2002,12 +2124,15 @@ class _EnvelopeMindsetStep extends StatefulWidget {
 }
 
 class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _animationController;
+  late AnimationController _buttonAnimationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _buttonFadeAnimation;
   late final List<Map<String, dynamic>> _examples;
 
   int _currentExampleIndex = 0;
+  bool _showButton = false;
 
   /// Get singular currency name for the tagline
   String _getCurrencySingularName(String currencyCode) {
@@ -2073,10 +2198,26 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
 
     // Build examples with converted amounts
     _examples = [
-      {'text': 'Netflix gets', 'amount': convertedAmounts['netflix']!, 'emoji': '📺'},
-      {'text': 'Groceries get', 'amount': convertedAmounts['groceries']!, 'emoji': '🛒'},
-      {'text': 'Savings get', 'amount': convertedAmounts['savings']!, 'emoji': '💰'},
-      {'text': 'That coffee run gets', 'amount': convertedAmounts['coffee']!, 'emoji': '☕'},
+      {
+        'text': 'Netflix gets',
+        'amount': convertedAmounts['netflix']!,
+        'emoji': '📺',
+      },
+      {
+        'text': 'Groceries get',
+        'amount': convertedAmounts['groceries']!,
+        'emoji': '🛒',
+      },
+      {
+        'text': 'Savings get',
+        'amount': convertedAmounts['savings']!,
+        'emoji': '💰',
+      },
+      {
+        'text': 'That coffee run gets',
+        'amount': convertedAmounts['coffee']!,
+        'emoji': '☕',
+      },
     ];
 
     _animationController = AnimationController(
@@ -2086,6 +2227,16 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
 
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
+      curve: Curves.easeIn,
+    );
+
+    _buttonAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _buttonFadeAnimation = CurvedAnimation(
+      parent: _buttonAnimationController,
       curve: Curves.easeIn,
     );
 
@@ -2101,11 +2252,18 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
         _animationController.forward();
       }
     }
+    // After all examples, show the button with a fade-in using separate controller
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() => _showButton = true);
+      _buttonAnimationController.forward();
+    }
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _buttonAnimationController.dispose();
     super.dispose();
   }
 
@@ -2122,141 +2280,34 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom - 48,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-              // Animated envelope icon
-              TweenAnimationBuilder(
-                tween: Tween<double>(begin: 0.8, end: 1.0),
-                duration: const Duration(milliseconds: 1000),
-                curve: Curves.elasticOut,
-                builder: (context, double scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.mail,
-                        size: 60,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 40),
-
-              // Main headline
-              Text(
-                'Welcome to Envelope Thinking',
-                style: fontProvider.getTextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 32),
-
-              // Tagline - dynamic currency
-              Text(
-                '"Give every $currencyName a purpose"',
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 40),
-
-              // Animated examples
-              SizedBox(
-                height: 200,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List.generate(_examples.length, (index) {
-                    if (index > _currentExampleIndex) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final example = _examples[index];
-                    final formattedAmount = _formatSimpleCurrency(
-                      example['amount'] as double,
-                      localeProvider.currencySymbol,
-                    );
-                    return FadeTransition(
-                      opacity: index == _currentExampleIndex
-                          ? _fadeAnimation
-                          : const AlwaysStoppedAnimation(1.0),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          '→ ${example['text']} $formattedAmount ${example['emoji']}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Value propositions
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Column(
                   children: [
+                    // Main headline
                     Text(
-                      'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
-                      style: TextStyle(
-                        fontSize: 16,
+                      'Welcome to Envelope Thinking',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onSurface,
-                        height: 1.5,
                       ),
                       textAlign: TextAlign.center,
                     ),
 
                     const SizedBox(height: 16),
 
+                    // Tagline - dynamic currency
                     Text(
-                      'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.colorScheme.primary,
-                        height: 1.5,
+                      '"Give every $currencyName a purpose"',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -2264,39 +2315,161 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
-              // CTA button
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  widget.onContinue();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              Expanded(
+                child: ListView(
                   children: [
-                    Text(
-                      'I\'m Ready!',
-                      style: fontProvider.getTextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    // Animated envelope icon
+                    TweenAnimationBuilder(
+                      tween: Tween<double>(begin: 0.8, end: 1.0),
+                      duration: const Duration(milliseconds: 1000),
+                      curve: Curves.elasticOut,
+                      builder: (context, double scale, child) {
+                        return Transform.scale(
+                          scale: scale,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.mail,
+                              size: 60,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // Animated examples
+                    SizedBox(
+                      height: 200,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: List.generate(_examples.length, (index) {
+                          if (index > _currentExampleIndex) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final example = _examples[index];
+                          final formattedAmount = _formatSimpleCurrency(
+                            example['amount'] as double,
+                            localeProvider.currencySymbol,
+                          );
+                          return FadeTransition(
+                            opacity: index == _currentExampleIndex
+                                ? _fadeAnimation
+                                : const AlwaysStoppedAnimation(1.0),
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Text(
+                                '→ ${example['text']} $formattedAmount ${example['emoji']}',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: theme.colorScheme.onSurface,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const Text('🎯', style: TextStyle(fontSize: 24)),
+
+                    const SizedBox(height: 32),
+
+                    // Value propositions
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: theme.colorScheme.onSurface,
+                              height: 1.5,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          Text(
+                            'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: theme.colorScheme.primary,
+                              height: 1.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
+
+              const SizedBox(height: 16),
+
+              // CTA button with fade-in animation
+              if (_showButton)
+                FadeTransition(
+                  opacity: _buttonFadeAnimation,
+                  child: FilledButton(
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      widget.onContinue();
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'I\'m Ready!',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('🎯', style: TextStyle(fontSize: 24)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                // Placeholder to maintain layout space
+                const SizedBox(height: 56),
             ],
-              ),
-            ),
           ),
         ),
       ),
@@ -2327,7 +2500,9 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 40), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
                 child: Text(
                   'Let\'s create your first binder!',
                   style: fontProvider.getTextStyle(
@@ -2355,13 +2530,15 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
               Expanded(
                 child: ListView(
                   children: [
-                    ...binderTemplates.map((template) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _TemplateCard(
-                            template: template,
-                            onTap: () => onContinue(template),
-                          ),
-                        )),
+                    ...binderTemplates.map(
+                      (template) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _TemplateCard(
+                          template: template,
+                          onTap: () => onContinue(template),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2400,10 +2577,7 @@ class _TemplateCard extends StatelessWidget {
   final BinderTemplate template;
   final VoidCallback onTap;
 
-  const _TemplateCard({
-    required this.template,
-    required this.onTap,
-  });
+  const _TemplateCard({required this.template, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2418,10 +2592,7 @@ class _TemplateCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: theme.colorScheme.outline,
-            width: 1,
-          ),
+          border: Border.all(color: theme.colorScheme.outline, width: 1),
         ),
         child: Row(
           children: [
@@ -2511,9 +2682,7 @@ class _TargetIconStepState extends State<_TargetIconStep> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(
-        initialQuery: '',
-      ),
+      builder: (_) => const OmniIconPickerModal(initialQuery: ''),
     );
 
     if (!mounted) return;
@@ -2524,7 +2693,10 @@ class _TargetIconStepState extends State<_TargetIconStep> {
         _selectedEmoji = emoji;
       });
       // Save to provider
-      final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+      final localeProvider = Provider.of<LocaleProvider>(
+        context,
+        listen: false,
+      );
       localeProvider.setCelebrationEmoji(emoji);
     }
   }
@@ -2551,109 +2723,120 @@ class _TargetIconStepState extends State<_TargetIconStep> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom - 48,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: 40,
+                ), // Add padding to avoid back button overlap
+                child: Column(
+                  children: [
+                    Text(
+                      'Choose Your 100% Celebration!',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Text(
+                      'When your envelopes hit their target, they\'ll show this icon instead of the pie.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Choose Your 100% Celebration!',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
 
-                  const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
-                  Text(
-                    'When your envelopes hit their target, they\'ll show this icon instead of the pie.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 48),
-
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        displayEmoji,
-                        style: const TextStyle(fontSize: 60),
+              Expanded(
+                child: ListView(
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          displayEmoji,
+                          style: const TextStyle(fontSize: 60),
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 48),
+                    const SizedBox(height: 48),
 
-                  Text(
-                    'Quick picks:',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildEmojiOption('🎯', displayEmoji),
-                      const SizedBox(width: 16),
-                      _buildEmojiOption('💯', displayEmoji),
-                      const SizedBox(width: 16),
-                      _buildEmojiOption('🥳', displayEmoji),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  OutlinedButton.icon(
-                    onPressed: _openEmojiPicker,
-                    icon: const Icon(Icons.search),
-                    label: Text(
-                      'Search for emoji',
+                    Text(
+                      'Quick picks:',
                       style: fontProvider.getTextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+
+                    const SizedBox(height: 16),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildEmojiOption('🎯', displayEmoji),
+                        const SizedBox(width: 16),
+                        _buildEmojiOption('💯', displayEmoji),
+                        const SizedBox(width: 16),
+                        _buildEmojiOption('🥳', displayEmoji),
+                      ],
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    OutlinedButton.icon(
+                      onPressed: _openEmojiPicker,
+                      icon: const Icon(Icons.search),
+                      label: Text(
+                        'Search for emoji',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                  ),
 
-              const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-              Text(
-                'Or just type an emoji from your keyboard! 😎',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    Text(
+                      'Or just type an emoji from your keyboard! 😎',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 16),
 
               FilledButton(
                 onPressed: () {
@@ -2676,8 +2859,6 @@ class _TargetIconStepState extends State<_TargetIconStep> {
                 ),
               ),
             ],
-          ),
-            ),
           ),
         ),
       ),
@@ -2705,12 +2886,7 @@ class _TargetIconStepState extends State<_TargetIconStep> {
             width: isSelected ? 3 : 1,
           ),
         ),
-        child: Center(
-          child: Text(
-            emoji,
-            style: const TextStyle(fontSize: 40),
-          ),
-        ),
+        child: Center(child: Text(emoji, style: const TextStyle(fontSize: 40))),
       ),
     );
   }
@@ -2773,7 +2949,9 @@ class _CompletionStep extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                    color: theme.colorScheme.primaryContainer.withValues(
+                      alpha: 0.3,
+                    ),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -2790,19 +2968,13 @@ class _CompletionStep extends StatelessWidget {
                       if (isAccountMode)
                         Text(
                           'Your next pay day will auto-fill your envelopes. Check Time Machine to see your future!',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                          ),
+                          style: const TextStyle(fontSize: 16, height: 1.5),
                           textAlign: TextAlign.center,
                         )
                       else
                         Text(
                           'Tap Pay Day to allocate money across your envelopes',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.5,
-                          ),
+                          style: const TextStyle(fontSize: 16, height: 1.5),
                           textAlign: TextAlign.center,
                         ),
                     ],
@@ -2814,7 +2986,9 @@ class _CompletionStep extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
+                  color: theme.colorScheme.secondaryContainer.withValues(
+                    alpha: 0.3,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: theme.colorScheme.secondary.withValues(alpha: 0.3),
@@ -2827,10 +3001,7 @@ class _CompletionStep extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Pro tip: If you have cash in your account now, go to each envelope and add the current amount you\'ve already set aside for it.',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.4,
-                        ),
+                        style: const TextStyle(fontSize: 14, height: 1.4),
                       ),
                     ),
                   ],
@@ -2866,4 +3037,3 @@ class _CompletionStep extends StatelessWidget {
     );
   }
 }
-

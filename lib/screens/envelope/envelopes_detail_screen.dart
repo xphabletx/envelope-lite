@@ -29,7 +29,6 @@ import '../../widgets/tutorial_wrapper.dart';
 import '../../data/tutorial_sequences.dart';
 import '../../utils/responsive_helper.dart';
 import '../../widgets/responsive_layout.dart';
-import '../../widgets/responsive_navigation.dart';
 
 class EnvelopeDetailScreen extends StatefulWidget {
   const EnvelopeDetailScreen({

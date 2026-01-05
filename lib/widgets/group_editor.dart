@@ -673,21 +673,26 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     }
   }
 
-  Widget _buildIconDisplay(ThemeData theme) {
+  Widget _buildIconDisplay(ThemeData theme, {double? size}) {
+    final iconSize = size ?? 36;
+
     // Use new icon system if available
     if (selectedIconType != null && selectedIconValue != null) {
       switch (selectedIconType) {
         case 'emoji':
-          return Text(
-            selectedIconValue!,
-            style: const TextStyle(fontSize: 36),
+          return FittedBox(
+            fit: BoxFit.contain,
+            child: Text(
+              selectedIconValue!,
+              style: TextStyle(fontSize: iconSize),
+            ),
           );
 
         case 'materialIcon':
           final iconData = materialIconsDatabase[selectedIconValue!]?['icon'] as IconData? ?? Icons.circle;
           return Icon(
             iconData,
-            size: 36,
+            size: iconSize,
             color: selectedIconColor != null
                 ? Color(selectedIconColor!)
                 : theme.colorScheme.primary,
@@ -697,19 +702,19 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           final logoUrl =
               'https://www.google.com/s2/favicons?sz=128&domain=$selectedIconValue';
           return ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             child: CachedNetworkImage(
               imageUrl: logoUrl,
-              width: 36,
-              height: 36,
+              width: iconSize,
+              height: iconSize,
               fit: BoxFit.contain,
               placeholder: (context, url) => SizedBox(
-                width: 36,
-                height: 36,
+                width: iconSize,
+                height: iconSize,
                 child: Center(
                   child: SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: iconSize / 2,
+                    height: iconSize / 2,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: theme.colorScheme.primary,
@@ -718,26 +723,35 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                 ),
               ),
               errorWidget: (context, url, error) {
-                return Text(
-                  selectedEmoji,
-                  style: const TextStyle(fontSize: 36),
+                return FittedBox(
+                  fit: BoxFit.contain,
+                  child: Text(
+                    selectedEmoji,
+                    style: TextStyle(fontSize: iconSize),
+                  ),
                 );
               },
             ),
           );
 
         default:
-          return Text(
-            selectedEmoji,
-            style: const TextStyle(fontSize: 36),
+          return FittedBox(
+            fit: BoxFit.contain,
+            child: Text(
+              selectedEmoji,
+              style: TextStyle(fontSize: iconSize),
+            ),
           );
       }
     }
 
     // Fallback to emoji
-    return Text(
-      selectedEmoji,
-      style: const TextStyle(fontSize: 36),
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: Text(
+        selectedEmoji,
+        style: TextStyle(fontSize: iconSize),
+      ),
     );
   }
 
@@ -945,7 +959,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           SizedBox(
                                             width: isLandscape ? 28.0 : 32.0,
                                             height: isLandscape ? 28.0 : 32.0,
-                                            child: _buildIconDisplay(theme),
+                                            child: _buildIconDisplay(
+                                              theme,
+                                              size: isLandscape ? 28.0 : 32.0,
+                                            ),
                                           )
                                         else
                                           Icon(

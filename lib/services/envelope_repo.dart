@@ -8,7 +8,6 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart' as models;
 import '../models/scheduled_payment.dart';
-import '../models/pay_day_settings.dart';
 import 'hive_service.dart';
 import 'sync_manager.dart';
 import 'pay_day_settings_service.dart';

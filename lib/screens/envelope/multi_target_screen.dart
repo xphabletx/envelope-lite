@@ -1302,7 +1302,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Target in $contributionsNeeded $frequencyLabel${contributionsNeeded == 1 ? '' : 's'}',
+                            'Target in ${_getSmartTimePeriod(contributionsNeeded, frequency)}',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1355,15 +1355,96 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   String _getFrequencyLabel(String frequency) {
     switch (frequency) {
       case 'daily':
-        return 'day';
+        return 'Day';
       case 'weekly':
-        return 'week';
+        return 'Week';
       case 'biweekly':
-        return 'fortnight';
+        return 'Fortnight';
       case 'monthly':
-        return 'month';
+        return 'Month';
       default:
         return frequency;
+    }
+  }
+
+  /// Smart time period formatter that chooses the most natural time unit
+  /// and returns properly formatted string with singular/plural forms
+  String _getSmartTimePeriod(int contributionsNeeded, String frequency) {
+    final daysPerContribution = _getDaysPerFrequency(frequency);
+    final totalDays = contributionsNeeded * daysPerContribution;
+
+    // Convert to the most natural time unit
+    if (totalDays == 0) {
+      return 'Today';
+    }
+
+    // For 1 day
+    if (totalDays == 1) {
+      return '1 Day';
+    }
+
+    // For less than a week, use days
+    if (totalDays < 7) {
+      return '$totalDays Days';
+    }
+
+    // For exactly 1 week
+    if (totalDays == 7) {
+      return '1 Week';
+    }
+
+    // For exactly 2 weeks (fortnight)
+    if (totalDays == 14) {
+      return '1 Fortnight';
+    }
+
+    // For exactly 4 weeks (1 month)
+    if (totalDays == 28 || totalDays == 30 || totalDays == 31) {
+      return '1 Month';
+    }
+
+    // For 8 weeks (2 months)
+    if (totalDays >= 56 && totalDays <= 62) {
+      return '2 Months';
+    }
+
+    // For 12 weeks (3 months)
+    if (totalDays >= 84 && totalDays <= 93) {
+      return '3 Months';
+    }
+
+    // For less than 4 weeks but more than 2 weeks, use weeks
+    if (totalDays < 28) {
+      final weeks = (totalDays / 7).round();
+      return weeks == 1 ? '1 Week' : '$weeks Weeks';
+    }
+
+    // For 4-12 weeks, check if it's close to months
+    if (totalDays < 90) {
+      final months = (totalDays / 30).round();
+      if (months == 0) {
+        // Too short for months, use weeks
+        final weeks = (totalDays / 7).round();
+        return weeks == 1 ? '1 Week' : '$weeks Weeks';
+      } else if (months == 1) {
+        return '1 Month';
+      } else {
+        return '$months Months';
+      }
+    }
+
+    // For 3+ months, use months
+    final months = (totalDays / 30).round();
+    if (months < 12) {
+      return months == 1 ? '1 Month' : '$months Months';
+    }
+
+    // For 12+ months, use years
+    final years = (totalDays / 365).round();
+    if (years == 1) {
+      return '1 Year';
+    } else {
+      return '$years Years';
     }
   }
 

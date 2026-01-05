@@ -7,12 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:provider/provider.dart';
 
-import '../services/run_migrations_once.dart';
 import '../services/subscription_service.dart';
 import '../services/hive_service.dart';
 import '../services/repository_manager.dart';
 import '../providers/workspace_provider.dart';
 import '../main.dart' show navigatorKey;
+import '../screens/auth/auth_wrapper.dart' show AuthWrapperState;
 
 class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -37,10 +37,6 @@ class AuthService {
     );
     final cred = await _auth.signInWithCredential(credential);
     await _touchUserDoc(cred.user);
-    await runMigrationsOncePerBuild(
-      db: FirebaseFirestore.instance,
-      explicitUid: cred.user?.uid,
-    );
 
     // NEW: Identify user in RevenueCat
     if (cred.user != null) {
@@ -59,10 +55,6 @@ class AuthService {
       password: password,
     );
     await _touchUserDoc(cred.user);
-    await runMigrationsOncePerBuild(
-      db: FirebaseFirestore.instance,
-      explicitUid: cred.user?.uid,
-    );
 
     // NEW: Identify user in RevenueCat
     if (cred.user != null) {
@@ -89,10 +81,6 @@ class AuthService {
     }
 
     await _touchUserDoc(cred.user, displayNameOverride: displayName);
-    await runMigrationsOncePerBuild(
-      db: FirebaseFirestore.instance,
-      explicitUid: cred.user?.uid,
-    );
 
     // NEW: Identify user in RevenueCat
     if (cred.user != null) {
@@ -171,10 +159,6 @@ class AuthService {
       }
 
       await _touchUserDoc(cred.user);
-      await runMigrationsOncePerBuild(
-        db: FirebaseFirestore.instance,
-        explicitUid: cred.user?.uid,
-      );
 
       // NEW: Identify user in RevenueCat
       if (cred.user != null) {
@@ -215,10 +199,6 @@ class AuthService {
     try {
       final cred = await _auth.signInAnonymously();
       await _touchUserDoc(cred.user, displayNameOverride: 'Guest User');
-      await runMigrationsOncePerBuild(
-        db: FirebaseFirestore.instance,
-        explicitUid: cred.user?.uid,
-      );
       debugPrint('[AuthService::signInAnonymously] ✅ Anonymous sign-in successful');
       return cred;
     } catch (e) {
@@ -432,6 +412,11 @@ class AuthService {
   static Future<void> signOut() async {
     try {
       debugPrint('[AuthService::signOut] 🔄 Starting logout process...');
+
+      // STEP 0: Clear auth wrapper initialization state
+      // This allows the next user to run through initialization properly
+      debugPrint('[AuthService::signOut] Step 0: Clearing auth wrapper state...');
+      AuthWrapperState.clearInitializationState();
 
       // STEP 1: Dispose all repositories FIRST to cancel Firestore streams
       // This prevents PERMISSION_DENIED errors when we sign out from Firebase

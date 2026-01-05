@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,8 +19,8 @@ import '../services/account_security_service.dart';
 import '../services/data_export_service.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
-import '../services/customer_center_service.dart';
 import '../services/bug_report_service.dart';
+import '../services/subscription_service.dart';
 import '../services/app_update_service.dart';
 import '../providers/workspace_provider.dart';
 
@@ -89,9 +90,17 @@ class SettingsScreen extends StatelessWidget {
                         ? 'Tap to change'
                         : 'Tap to add',
                     leading: profile?.photoURL != null
-                        ? CircleAvatar(
-                            backgroundImage: NetworkImage(profile!.photoURL!),
-                            radius: 20,
+                        ? FutureBuilder<Widget>(
+                            future: _buildProfilePhotoWidget(profile!.photoURL!),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData) {
+                                return snapshot.data!;
+                              }
+                              return const CircleAvatar(
+                                radius: 20,
+                                child: Icon(Icons.person),
+                              );
+                            },
                           )
                         : const Icon(Icons.add_a_photo_outlined),
                     onTap: () async {
@@ -395,7 +404,7 @@ class SettingsScreen extends StatelessWidget {
                     leading: const Icon(Icons.card_membership_outlined),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      await CustomerCenterService.presentCustomerCenter(context);
+                      await SubscriptionService().presentCustomerCenter(context);
                     },
                   ),
                   _SettingsTile(
@@ -809,12 +818,44 @@ class SettingsScreen extends StatelessWidget {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
     );
 
     if (pickedFile == null) return;
+
+    // Get theme colors before async gap
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+
+    // Crop the image to a circle
+    final croppedFile = await ImageCropper().cropImage(
+      sourcePath: pickedFile.path,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Profile Photo',
+          toolbarColor: primaryColor,
+          toolbarWidgetColor: onPrimaryColor,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: true,
+          cropStyle: CropStyle.circle,
+          aspectRatioPresets: [
+            CropAspectRatioPreset.square,
+          ],
+        ),
+        IOSUiSettings(
+          title: 'Crop Profile Photo',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          cropStyle: CropStyle.circle,
+          aspectRatioPresets: [
+            CropAspectRatioPreset.square,
+          ],
+        ),
+      ],
+    );
+
+    if (croppedFile == null) return;
 
     if (!context.mounted) return;
 
@@ -826,7 +867,7 @@ class SettingsScreen extends StatelessWidget {
     );
 
     try {
-      final imageFile = File(pickedFile.path);
+      final imageFile = File(croppedFile.path);
       final userId = userService.userId;
       final workspaceId = repo.workspaceId;
 
@@ -878,6 +919,34 @@ class SettingsScreen extends StatelessWidget {
             content: Text('Error uploading photo: $e'),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  // Helper to build profile photo widget that supports both network URLs and local file paths
+  static Future<Widget> _buildProfilePhotoWidget(String photoURL) async {
+    // Check if it's a network URL (starts with http/https)
+    if (photoURL.startsWith('http://') || photoURL.startsWith('https://')) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(photoURL),
+        radius: 20,
+      );
+    } else {
+      // It's a local file path - check if photoURL is stored in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final localPath = prefs.getString('profile_photo_path');
+
+      if (localPath != null && File(localPath).existsSync()) {
+        return CircleAvatar(
+          backgroundImage: FileImage(File(localPath)),
+          radius: 20,
+        );
+      } else {
+        // Fallback to default icon
+        return const CircleAvatar(
+          radius: 20,
+          child: Icon(Icons.person),
         );
       }
     }

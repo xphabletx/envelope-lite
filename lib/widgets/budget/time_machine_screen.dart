@@ -323,7 +323,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
                 // Frequency selector
                 DropdownButtonFormField<String?>(
-                  value: frequency,
+                  initialValue: frequency,
                   decoration: const InputDecoration(labelText: 'Frequency'),
                   items: const [
                     DropdownMenuItem(value: null, child: Text('One-time')),

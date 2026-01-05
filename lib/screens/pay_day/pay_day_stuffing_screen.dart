@@ -22,7 +22,7 @@ class PayDayStuffingScreen extends StatefulWidget {
     this.accountAllocations = const {},
     this.accounts = const [],
     required this.totalAmount,
-    required this.accountId,
+    this.accountId,
   });
 
   final EnvelopeRepo repo;
@@ -32,7 +32,7 @@ class PayDayStuffingScreen extends StatefulWidget {
   final Map<String, double> accountAllocations;
   final List<Account> accounts;
   final double totalAmount;
-  final String accountId;
+  final String? accountId;
 
   @override
   State<PayDayStuffingScreen> createState() => _PayDayStuffingScreenState();
@@ -164,33 +164,35 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // 3. Update Default Account Balance
-    try {
-      // Fetch current account state
-      final account = await widget.accountRepo
-          .accountStream(widget.accountId)
-          .first;
+    // 3. Update Default Account Balance (if account is specified)
+    if (widget.accountId != null) {
+      try {
+        // Fetch current account state
+        final account = await widget.accountRepo
+            .accountStream(widget.accountId!)
+            .first;
 
-      // Calculate new balance:
-      // + Pay amount (income)
-      // - Envelope auto-fills (allocations to envelopes)
-      // - Account auto-fills (transfers to other accounts)
-      final newBalance = account.currentBalance + widget.totalAmount - totalEnvelopeAutoFill - totalAccountAutoFill;
+        // Calculate new balance:
+        // + Pay amount (income)
+        // - Envelope auto-fills (allocations to envelopes)
+        // - Account auto-fills (transfers to other accounts)
+        final newBalance = account.currentBalance + widget.totalAmount - totalEnvelopeAutoFill - totalAccountAutoFill;
 
-      await widget.accountRepo.updateAccount(
-        accountId: widget.accountId,
-        currentBalance: newBalance,
-      );
+        await widget.accountRepo.updateAccount(
+          accountId: widget.accountId!,
+          currentBalance: newBalance,
+        );
 
-      debugPrint('[PayDay] ✅ Default account updated:');
-      debugPrint('  Previous Balance: ${account.currentBalance}');
-      debugPrint('  Pay Amount: +${widget.totalAmount}');
-      debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
-      debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
-      debugPrint('  New Balance: $newBalance');
-    } catch (e) {
-      debugPrint('Error updating account balance: $e');
-      // Non-fatal error for UI, but important to log
+        debugPrint('[PayDay] ✅ Default account updated:');
+        debugPrint('  Previous Balance: ${account.currentBalance}');
+        debugPrint('  Pay Amount: +${widget.totalAmount}');
+        debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
+        debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
+        debugPrint('  New Balance: $newBalance');
+      } catch (e) {
+        debugPrint('Error updating account balance: $e');
+        // Non-fatal error for UI, but important to log
+      }
     }
 
     // 3. Update Settings History in Hive

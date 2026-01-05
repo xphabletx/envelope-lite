@@ -6,7 +6,6 @@ import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../envelope/omni_icon_picker_modal.dart';
-import '../../services/icon_search_service_unlimited.dart' show IconType;
 import '../../utils/responsive_helper.dart';
 import '../../widgets/common/smart_text_field.dart';
 

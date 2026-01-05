@@ -104,7 +104,9 @@ void main() async {
     await LoggerService.info(
       'App started: v${packageInfo.version} (${packageInfo.buildNumber})',
     );
-    debugPrint('[Main] 📱 App version: ${packageInfo.version} (${packageInfo.buildNumber})');
+    debugPrint(
+      '[Main] 📱 App version: ${packageInfo.version} (${packageInfo.buildNumber})',
+    );
   } catch (e) {
     debugPrint('[Main] ⚠️ Could not get package info: $e');
   }
@@ -151,14 +153,10 @@ class MyApp extends StatelessWidget {
         final baseTheme = themeProvider.currentTheme;
         final fontTheme = fontProvider.getTextTheme();
 
-        // CRITICAL: KeyedSubtree inside Consumer ensures theme is evaluated
-        // BEFORE widget tree is rebuilt on user change
-        return KeyedSubtree(
-          key: ValueKey(FirebaseAuth.instance.currentUser?.uid ?? 'logged-out'),
-          child: MaterialApp(
-            navigatorKey: navigatorKey,
-            title: 'Stuffrite',
-            debugShowCheckedModeBanner: false,
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'Stuffrite',
+          debugShowCheckedModeBanner: false,
           // Apply the dynamic font to the dynamic theme
           theme: baseTheme.copyWith(
             textTheme: fontTheme.apply(
@@ -167,7 +165,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
           // Global tap-to-dismiss keyboard behavior + back button handling
-          builder: (context, child) {
+          builder: (context, widgetChild) {
             return PopScope(
               canPop: true,
               onPopInvokedWithResult: (bool didPop, dynamic result) {
@@ -184,14 +182,12 @@ class MyApp extends StatelessWidget {
                     FocusManager.instance.primaryFocus?.unfocus();
                   }
                 },
-                child: child,
+                child: widgetChild,
               ),
             );
           },
           routes: {'/home': (context) => const HomeScreenWrapper()},
-          home:
-              const AuthGate(), // Uses AuthWrapper internally for email verification
-          ),
+          home: const AuthGate(),
         );
       },
     );
@@ -251,9 +247,11 @@ class HomeScreenWrapper extends StatelessWidget {
 
         // Clean up any orphaned scheduled payments from deleted envelopes
         // This is a one-time migration for existing users
-        envelopeRepo.cleanupOrphanedScheduledPayments().then((count) {
-          if (count > 0) {
-            debugPrint('[Main] Cleaned up $count orphaned scheduled payments');
+        envelopeRepo.cleanupOrphanedScheduledPayments().then((cleanedCount) {
+          if (cleanedCount > 0) {
+            debugPrint(
+              '[Main] Cleaned up $cleanedCount orphaned scheduled payments',
+            );
           }
         });
 

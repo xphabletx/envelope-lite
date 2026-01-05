@@ -24,14 +24,14 @@ class PayDayAllocationScreen extends StatefulWidget {
     required this.groupRepo,
     required this.accountRepo,
     required this.totalAmount,
-    required this.accountId,
+    this.accountId,
   });
 
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
   final double totalAmount;
-  final String accountId;
+  final String? accountId;
 
   @override
   State<PayDayAllocationScreen> createState() => _PayDayAllocationScreenState();

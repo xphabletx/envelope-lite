@@ -105,19 +105,11 @@ class AboutScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      _InfoRow(
-                        label: 'Version',
-                        value: packageInfo.version,
-                      ),
+                      _InfoRow(label: 'Version', value: packageInfo.version),
                       const SizedBox(height: 8),
                       _InfoRow(
                         label: 'Build Number',
                         value: packageInfo.buildNumber,
-                      ),
-                      const SizedBox(height: 8),
-                      _InfoRow(
-                        label: 'Package Name',
-                        value: packageInfo.packageName,
                       ),
                     ],
                   ),
@@ -156,7 +148,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Developed by DevelApp Technologies',
+                        'Developed by DevelApp Ltd',
                         style: theme.textTheme.bodyMedium,
                         textAlign: TextAlign.center,
                       ),
@@ -207,13 +199,17 @@ class AboutScreen extends StatelessWidget {
                       _LinkButton(
                         icon: Icons.policy_outlined,
                         label: 'Privacy Policy',
-                        onTap: () => _openUrl('https://develapp.tech/stuffrite/privacy.html'),
+                        onTap: () => _openUrl(
+                          'https://develapp.tech/stuffrite/privacy.html',
+                        ),
                       ),
                       const SizedBox(height: 8),
                       _LinkButton(
                         icon: Icons.description_outlined,
                         label: 'Terms of Service',
-                        onTap: () => _openUrl('https://develapp.tech/stuffrite/terms.html'),
+                        onTap: () => _openUrl(
+                          'https://develapp.tech/stuffrite/terms.html',
+                        ),
                       ),
                       const SizedBox(height: 8),
                       _LinkButton(
@@ -228,7 +224,7 @@ class AboutScreen extends StatelessWidget {
 
                 // Footer
                 Text(
-                  'Made with ❤️ for better budgeting',
+                  'Made with ❤️',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withAlpha(128),
                   ),
@@ -262,10 +258,7 @@ class AboutScreen extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -316,11 +309,7 @@ class _LinkButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 12),
             Expanded(
               child: Text(

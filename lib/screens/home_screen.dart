@@ -1,4 +1,5 @@
 // lib/screens/home_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, SystemNavigator;
 import 'package:provider/provider.dart';
@@ -10,7 +11,6 @@ import '../utils/calculator_helper.dart';
 
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
-import '../services/run_migrations_once.dart';
 import '../services/user_service.dart';
 import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
@@ -147,12 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    Future.microtask(() {
-      return runMigrationsOncePerBuild(
-        db: widget.repo.db,
-        explicitUid: widget.repo.currentUserId,
-      );
-    });
+    // Migration logic removed - was part of cleanup
 
     Future.microtask(() async {
       final prefs = await SharedPreferences.getInstance();
@@ -199,6 +194,34 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
     );
+  }
+
+  // Helper to build profile avatar that supports both network URLs and local file paths
+  Future<CircleAvatar> _buildProfileAvatar(String photoURL, double radius) async {
+    // Check if it's a network URL (starts with http/https)
+    if (photoURL.startsWith('http://') || photoURL.startsWith('https://')) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(photoURL),
+        radius: radius,
+      );
+    } else {
+      // It's a local file path - check if photoURL is stored in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final localPath = prefs.getString('profile_photo_path');
+
+      if (localPath != null && File(localPath).existsSync()) {
+        return CircleAvatar(
+          backgroundImage: FileImage(File(localPath)),
+          radius: radius,
+        );
+      } else {
+        // Fallback to default icon
+        return CircleAvatar(
+          radius: radius,
+          child: const Icon(Icons.person),
+        );
+      }
+    }
   }
 
   void _openSettings() {
@@ -314,9 +337,20 @@ class _HomeScreenState extends State<HomeScreen> {
               if (photoURL != null && photoURL.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(right: 12.0),
-                  child: CircleAvatar(
-                    backgroundImage: NetworkImage(photoURL),
-                    radius: responsive.isLandscape ? 16 : 20,
+                  child: FutureBuilder<CircleAvatar>(
+                    future: _buildProfileAvatar(
+                      photoURL,
+                      responsive.isLandscape ? 16 : 20,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        return snapshot.data!;
+                      }
+                      return CircleAvatar(
+                        radius: responsive.isLandscape ? 16 : 20,
+                        child: const Icon(Icons.person),
+                      );
+                    },
                   ),
                 ),
               Flexible(

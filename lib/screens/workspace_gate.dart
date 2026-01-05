@@ -7,8 +7,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import '../models/envelope.dart';
-import '../models/envelope_group.dart';
-import '../models/account.dart';
 import '../services/localization_service.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
@@ -273,13 +271,9 @@ class _WorkspaceSharingSelectionScreenState
 
   // Set of IDs to HIDE. If ID is here, isShared = false.
   final Set<String> _hiddenEnvelopeIds = {};
-  final Set<String> _hiddenGroupIds = {};
-  final Set<String> _hiddenAccountIds = {};
   bool _hideFutureEnvelopes = false; // New Checkbox
 
   List<dynamic> _myEnvelopes = [];
-  List<dynamic> _myGroups = [];
-  List<dynamic> _myAccounts = [];
 
   @override
   void initState() {
@@ -294,26 +288,14 @@ class _WorkspaceSharingSelectionScreenState
     try {
       // FETCH FROM HIVE (PRIMARY STORAGE)
       final envelopeBox = Hive.box<Envelope>('envelopes');
-      final groupBox = Hive.box<EnvelopeGroup>('groups');
-      final accountBox = Hive.box<Account>('accounts');
 
       final myEnvelopes = envelopeBox.values
           .where((e) => e.userId == uid)
           .toList();
 
-      final myGroups = groupBox.values
-          .where((g) => g.userId == uid)
-          .toList();
-
-      final myAccounts = accountBox.values
-          .where((a) => a.userId == uid)
-          .toList();
-
       if (mounted) {
         setState(() {
           _myEnvelopes = myEnvelopes;
-          _myGroups = myGroups;
-          _myAccounts = myAccounts;
           _loading = false;
         });
       }
@@ -371,23 +353,11 @@ class _WorkspaceSharingSelectionScreenState
       // 2. Update Sharing Preferences in Hive
     // print('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences in Hive.');
       final envelopeBox = Hive.box<Envelope>('envelopes');
-      final groupBox = Hive.box<EnvelopeGroup>('groups');
-      final accountBox = Hive.box<Account>('accounts');
 
       for (var envelope in _myEnvelopes) {
         final hide = _hiddenEnvelopeIds.contains(envelope.id);
         envelope.isShared = !hide;
         await envelopeBox.put(envelope.id, envelope);
-      }
-      for (var group in _myGroups) {
-        final hide = _hiddenGroupIds.contains(group.id);
-        group.isShared = !hide;
-        await groupBox.put(group.id, group);
-      }
-      for (var account in _myAccounts) {
-        final hide = _hiddenAccountIds.contains(account.id);
-        account.isShared = !hide;
-        await accountBox.put(account.id, account);
       }
 
       // 3. Save "Hide Future" Preference to Firebase (user profile)
@@ -463,10 +433,10 @@ class _WorkspaceSharingSelectionScreenState
           const Divider(),
 
           Expanded(
-            child: (_myEnvelopes.isEmpty && _myGroups.isEmpty && _myAccounts.isEmpty)
+            child: _myEnvelopes.isEmpty
                 ? Center(
                     child: Text(
-                      "No items to share",
+                      "No envelopes to share",
                       style: TextStyle(
                         color: Colors.grey.shade600,
                         fontSize: isLandscape ? 12 : 14,
@@ -475,51 +445,6 @@ class _WorkspaceSharingSelectionScreenState
                   )
                 : ListView(
                     children: [
-                      if (_myGroups.isNotEmpty) ...[
-                        Padding(
-                          padding: EdgeInsets.all(isLandscape ? 12 : 16),
-                          child: Text(
-                            tr('binders'),
-                            style: fontProvider.getTextStyle(
-                              fontSize: isLandscape ? 14 : 16,
-                              color: theme.primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        ..._myGroups.map((group) {
-                          final isHidden = _hiddenGroupIds.contains(group.id);
-                          return CheckboxListTile(
-                            value: isHidden,
-                            title: Text(
-                              group.name ?? 'Unnamed',
-                              style: fontProvider.getTextStyle(
-                                fontSize: isLandscape ? 14 : 16,
-                              ),
-                            ),
-                            secondary: Text(
-                              group.emoji ?? '📁',
-                              style: TextStyle(fontSize: isLandscape ? 16 : 20),
-                            ),
-                            subtitle: Text(
-                              isHidden ? "Private" : "Shared",
-                              style: TextStyle(
-                                fontSize: isLandscape ? 11 : 12,
-                                color: isHidden ? Colors.red : Colors.green,
-                              ),
-                            ),
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _hiddenGroupIds.add(group.id);
-                                } else {
-                                  _hiddenGroupIds.remove(group.id);
-                                }
-                              });
-                            },
-                          );
-                        }),
-                      ],
                       if (_myEnvelopes.isNotEmpty) ...[
                         Padding(
                           padding: EdgeInsets.all(isLandscape ? 12 : 16),
@@ -559,51 +484,6 @@ class _WorkspaceSharingSelectionScreenState
                                   _hiddenEnvelopeIds.add(envelope.id);
                                 } else {
                                   _hiddenEnvelopeIds.remove(envelope.id);
-                                }
-                              });
-                            },
-                          );
-                        }),
-                      ],
-                      if (_myAccounts.isNotEmpty) ...[
-                        Padding(
-                          padding: EdgeInsets.all(isLandscape ? 12 : 16),
-                          child: Text(
-                            'Accounts',
-                            style: fontProvider.getTextStyle(
-                              fontSize: isLandscape ? 14 : 16,
-                              color: theme.primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        ..._myAccounts.map((account) {
-                          final isHidden = _hiddenAccountIds.contains(account.id);
-                          return CheckboxListTile(
-                            value: isHidden,
-                            title: Text(
-                              account.name ?? 'Unnamed Account',
-                              style: fontProvider.getTextStyle(
-                                fontSize: isLandscape ? 14 : 16,
-                              ),
-                            ),
-                            secondary: Icon(
-                              Icons.account_balance_wallet,
-                              size: isLandscape ? 20 : 24,
-                            ),
-                            subtitle: Text(
-                              isHidden ? "Private" : "Shared",
-                              style: TextStyle(
-                                fontSize: isLandscape ? 11 : 12,
-                                color: isHidden ? Colors.red : Colors.green,
-                              ),
-                            ),
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _hiddenAccountIds.add(account.id);
-                                } else {
-                                  _hiddenAccountIds.remove(account.id);
                                 }
                               });
                             },

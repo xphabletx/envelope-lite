@@ -7,7 +7,6 @@ import 'email_verification_screen.dart';
 import '../sign_in_screen.dart';
 import '../onboarding/consolidated_onboarding_flow.dart';
 import 'stuffrite_paywall_screen.dart';
-import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_migration_service.dart';
 import '../../services/subscription_service.dart';
@@ -16,6 +15,37 @@ import '../../providers/locale_provider.dart';
 import '../../providers/workspace_provider.dart';
 import '../../widgets/migration_overlay.dart';
 import '../../main.dart';
+
+/// Helper class to manage AuthWrapper state across rebuilds
+class AuthWrapperState {
+  static final Map<String, bool> _initializedUsers = {};
+  static final Map<String, GlobalKey<_UserProfileWrapperState>> _userKeys = {};
+
+  /// Get or create a GlobalKey for a user to preserve widget state
+  static GlobalKey<_UserProfileWrapperState> getKeyForUser(String userId) {
+    return _userKeys.putIfAbsent(
+      userId,
+      () => GlobalKey<_UserProfileWrapperState>(debugLabel: 'user_$userId'),
+    );
+  }
+
+  /// Clear initialization state for all users (called during logout)
+  static void clearInitializationState() {
+    _initializedUsers.clear();
+    _userKeys.clear();
+    debugPrint('[AuthWrapper] 🧹 Cleared initialization state for all users');
+  }
+
+  /// Check if user has been initialized
+  static bool isInitialized(String userId) {
+    return _initializedUsers[userId] == true;
+  }
+
+  /// Mark user as initialized
+  static void markInitialized(String userId) {
+    _initializedUsers[userId] = true;
+  }
+}
 
 /// Auth Wrapper
 ///
@@ -33,13 +63,15 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[AuthWrapper] 🏗️ build() called');
+
     // CRITICAL: Check if we're logging out FIRST to prevent phantom builds
     final workspaceProvider = Provider.of<WorkspaceProvider>(context);
     if (workspaceProvider.isLoggingOut) {
-      debugPrint('[AuthWrapper] 🚫 Logging out - showing loading screen to prevent phantom build');
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      debugPrint(
+        '[AuthWrapper] 🚫 Logging out - showing loading screen to prevent phantom build',
       );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return StreamBuilder<User?>(
@@ -62,13 +94,9 @@ class AuthWrapper extends StatelessWidget {
         final user = snapshot.data!;
 
         // Anonymous users - let them in (no verification needed)
-        // Use ValueKey with UID to force tree rebuild when user changes
         if (user.isAnonymous) {
           debugPrint('[AuthWrapper] Anonymous user - no verification needed');
-          return Container(
-            key: ValueKey(user.uid),
-            child: _buildUserProfileWrapper(user),
-          );
+          return _buildUserProfileWrapper(user);
         }
 
         // Get sign-in method
@@ -82,19 +110,13 @@ class AuthWrapper extends StatelessWidget {
 
         if (isGoogleOrApple) {
           debugPrint('[AuthWrapper] Google/Apple user - auto-verified');
-          return Container(
-            key: ValueKey(user.uid),
-            child: _buildUserProfileWrapper(user),
-          );
+          return _buildUserProfileWrapper(user);
         }
 
         // Email/password users need verification check
         if (user.emailVerified) {
           debugPrint('[AuthWrapper] Email verified ✅');
-          return Container(
-            key: ValueKey(user.uid),
-            child: _buildUserProfileWrapper(user),
-          );
+          return _buildUserProfileWrapper(user);
         }
 
         // Unverified email/password user
@@ -105,11 +127,9 @@ class AuthWrapper extends StatelessWidget {
         if (accountCreated == null) {
           // Safety fallback - if we can't determine age, treat as old account
           debugPrint(
-              '[AuthWrapper] Cannot determine account age - grandfathering in');
-          return Container(
-            key: ValueKey(user.uid),
-            child: _buildUserProfileWrapper(user),
+            '[AuthWrapper] Cannot determine account age - grandfathering in',
           );
+          return _buildUserProfileWrapper(user);
         }
 
         final now = DateTime.now();
@@ -118,15 +138,16 @@ class AuthWrapper extends StatelessWidget {
         // Accounts older than 7 days = existing users (grandfathered)
         // Let them in but show optional banner
         if (accountAge > 7) {
-          debugPrint('[AuthWrapper] Old account ($accountAge days) - grandfathered in');
-          return Container(
-            key: ValueKey(user.uid),
-            child: _buildUserProfileWrapper(user),
+          debugPrint(
+            '[AuthWrapper] Old account ($accountAge days) - grandfathered in',
           );
+          return _buildUserProfileWrapper(user);
         }
 
         // New account (< 7 days old) - REQUIRE verification
-        debugPrint('[AuthWrapper] New account ($accountAge days) - verification required');
+        debugPrint(
+          '[AuthWrapper] New account ($accountAge days) - verification required',
+        );
         return const EmailVerificationScreen();
       },
     );
@@ -134,7 +155,9 @@ class AuthWrapper extends StatelessWidget {
 
   /// Build the user profile wrapper with migration support
   Widget _buildUserProfileWrapper(User user) {
-    return _UserProfileWrapper(user: user);
+    // Use GlobalKey to preserve widget state across rebuilds
+    final key = AuthWrapperState.getKeyForUser(user.uid);
+    return _UserProfileWrapper(key: key, user: user);
   }
 }
 
@@ -142,7 +165,7 @@ class AuthWrapper extends StatelessWidget {
 class _UserProfileWrapper extends StatefulWidget {
   final User user;
 
-  const _UserProfileWrapper({required this.user});
+  const _UserProfileWrapper({super.key, required this.user});
 
   @override
   State<_UserProfileWrapper> createState() => _UserProfileWrapperState();
@@ -153,25 +176,50 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   bool _restorationComplete = false;
   bool? _hasCompletedOnboarding;
 
+  // Cache the onboarding flow widget to prevent recreation on rebuilds
+  Widget? _cachedOnboardingFlow;
+
   @override
   void initState() {
     super.initState();
-    // Start restoration immediately
+    debugPrint(
+      '[_UserProfileWrapperState] 🔄 initState called for user: ${widget.user.uid}',
+    );
+    // Start restoration immediately (but only once per user)
     _performRestoration();
   }
 
   @override
   void dispose() {
+    debugPrint(
+      '[_UserProfileWrapperState] 🗑️ dispose called for user: ${widget.user.uid}',
+    );
     _migrationService.dispose();
     super.dispose();
   }
 
   Future<void> _performRestoration() async {
+    // Prevent re-initialization if already done for this user
+    final userId = widget.user.uid;
+    if (AuthWrapperState.isInitialized(userId)) {
+      debugPrint(
+        '[AuthWrapper] ⏭️ Already initialized for user $userId - skipping restoration',
+      );
+
+      // Still need to check onboarding status and mark restoration complete
+      final completed = await _checkOnboardingStatus(userId);
+      if (mounted) {
+        setState(() {
+          _hasCompletedOnboarding = completed;
+          _restorationComplete = true;
+        });
+      }
+      return;
+    }
+    AuthWrapperState.markInitialized(userId);
+
     // Initialize providers (local-only)
-    Provider.of<ThemeProvider>(
-      context,
-      listen: false,
-    ).initialize();
+    Provider.of<ThemeProvider>(context, listen: false).initialize();
     Provider.of<LocaleProvider>(
       context,
       listen: false,
@@ -180,16 +228,21 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     // Check if user is brand new (first sign-in)
     final creationTime = widget.user.metadata.creationTime;
     final lastSignInTime = widget.user.metadata.lastSignInTime;
-    final isBrandNewUser = creationTime != null &&
-                           lastSignInTime != null &&
-                           lastSignInTime.difference(creationTime).inSeconds < 5;
+    final isBrandNewUser =
+        creationTime != null &&
+        lastSignInTime != null &&
+        lastSignInTime.difference(creationTime).inSeconds < 5;
 
     if (isBrandNewUser) {
       // Brand new user - skip migration and go straight to onboarding
-      debugPrint('[AuthWrapper] 👶 Brand new user detected - skipping restoration check');
+      debugPrint(
+        '[AuthWrapper] 👶 Brand new user detected - skipping restoration check',
+      );
 
       // CRITICAL: Clear any ghost data from previous accounts
-      debugPrint('[AuthWrapper] 🧹 Clearing local onboarding flags for brand new user');
+      debugPrint(
+        '[AuthWrapper] 🧹 Clearing local onboarding flags for brand new user',
+      );
       await AuthService.clearLocalOnboardingFlags(widget.user.uid);
 
       // CRITICAL: Clear Hive data if it belongs to a different user
@@ -211,7 +264,10 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     debugPrint('[AuthWrapper] 🔄 Returning user - starting restoration check');
 
     // Get workspace ID from provider
-    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+    final workspaceProvider = Provider.of<WorkspaceProvider>(
+      context,
+      listen: false,
+    );
     final workspaceId = workspaceProvider.workspaceId;
 
     await _migrationService.migrateIfNeeded(
@@ -248,17 +304,17 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     // Restoration complete - decide based on whether user has completed onboarding
     final hasCompletedOnboarding = _hasCompletedOnboarding ?? false;
 
-    // TEMPORARY: Skip onboarding for debugging
-    const bool SKIP_ONBOARDING = false;
-
-    if (!hasCompletedOnboarding && !SKIP_ONBOARDING) {
+    if (!hasCompletedOnboarding) {
       // New user or hasn't completed onboarding - show onboarding flow
-      debugPrint('[AuthWrapper] 📝 No onboarding completion - showing ConsolidatedOnboardingFlow');
-      return ConsolidatedOnboardingFlow(userId: widget.user.uid);
-    }
-
-    if (SKIP_ONBOARDING && !hasCompletedOnboarding) {
-      debugPrint('[AuthWrapper] ⏭️ SKIPPING onboarding (debug mode)');
+      debugPrint(
+        '[AuthWrapper] 📝 No onboarding completion - showing ConsolidatedOnboardingFlow',
+      );
+      // Cache the onboarding flow to prevent recreation on theme changes
+      _cachedOnboardingFlow ??= ConsolidatedOnboardingFlow(
+        key: ValueKey('onboarding_${widget.user.uid}'),
+        userId: widget.user.uid,
+      );
+      return _cachedOnboardingFlow!;
     }
 
     // User has completed onboarding - check subscription
@@ -279,12 +335,16 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
 
         if (!hasPremium) {
           // No premium subscription - show paywall
-          debugPrint('[AuthWrapper] ⛔ No premium subscription - showing paywall');
+          debugPrint(
+            '[AuthWrapper] ⛔ No premium subscription - showing paywall',
+          );
           return const StuffritePaywallScreen();
         }
 
         // User has premium and completed onboarding - go to home
-        debugPrint('[AuthWrapper] ✅ Premium subscription active - showing HomeScreen');
+        debugPrint(
+          '[AuthWrapper] ✅ Premium subscription active - showing HomeScreen',
+        );
         // Use UniqueKey to force new widget instance and prevent state leakage
         return HomeScreenWrapper(key: UniqueKey());
       },
