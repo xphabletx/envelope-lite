@@ -203,7 +203,10 @@ class _AccountListScreenState extends State<AccountListScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AccountEditorModal(accountRepo: _accountRepo),
+      builder: (_) => AccountEditorModal(
+        accountRepo: _accountRepo,
+        envelopeRepo: widget.envelopeRepo,
+      ),
     );
   }
 }
