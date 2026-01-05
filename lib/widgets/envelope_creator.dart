@@ -93,8 +93,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
 
   // Account selection state
   String? _selectedAccountId;
-  List<dynamic> _accounts = [];
+  List<Account> _accounts = [];
   bool _accountsLoaded = false;
+  bool _hasAccounts = false; // Track if user has any accounts
 
   // Icon selection state
   String? _iconType;
@@ -162,7 +163,17 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
 
       setState(() {
         _accounts = allAccounts..sort((a, b) => a.name.compareTo(b.name));
+        _hasAccounts = allAccounts.isNotEmpty;
         _accountsLoaded = true;
+
+        // Pre-select default account if Cash Flow is enabled and accounts exist
+        if (_cashFlowEnabled && _hasAccounts) {
+          final defaultAccount = allAccounts.firstWhere(
+            (a) => a.isDefault,
+            orElse: () => allAccounts.first,
+          );
+          _selectedAccountId = defaultAccount.id;
+        }
       });
     } catch (e) {
       debugPrint('Error loading accounts: $e');
@@ -351,6 +362,48 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         return;
       }
       cashFlowAmount = parsed;
+
+      // CRITICAL VALIDATION: Account Mode enforcement
+      // If user has accounts, they MUST link the envelope to an account
+      if (_hasAccounts && _selectedAccountId == null) {
+        if (!mounted) return;
+        await showDialog(
+          context: context,
+          builder: (context) {
+            final fontProvider = Provider.of<FontProvider>(context, listen: false);
+            return AlertDialog(
+              title: Text(
+                'Link Required',
+                style: fontProvider.getTextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Text(
+                'You need to link this envelope to an account.\n\n'
+                'Options:\n'
+                '• Select an account from the dropdown\n'
+                '• Disable Cash Flow\n'
+                '• Delete all accounts to use Budget Mode',
+                style: fontProvider.getTextStyle(fontSize: 16),
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Go Back',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      }
     }
 
     setState(() => _saving = true);
@@ -765,11 +818,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        Divider(color: theme.colorScheme.outline),
-                        const SizedBox(height: 16),
-
-                        // Account selection
-                        if (_accountsLoaded) ...[
+                        // ACCOUNT MODE ENFORCEMENT: Only show account dropdown when Cash Flow is enabled
+                        if (_cashFlowEnabled && _accountsLoaded && _hasAccounts) ...[
+                          Divider(color: theme.colorScheme.outline),
+                          const SizedBox(height: 16),
                           Text(
                             'Linked Account',
                             style: fontProvider.getTextStyle(
@@ -779,10 +831,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          DropdownButtonFormField<String?>(
+                          DropdownButtonFormField<String>(
                             initialValue: _selectedAccountId,
                             decoration: InputDecoration(
-                              labelText: 'Select Account (Optional)',
+                              labelText: 'Select Account',
                               labelStyle: fontProvider.getTextStyle(
                                 fontSize: 16,
                               ),
@@ -795,41 +847,33 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                 vertical: 16,
                               ),
                             ),
-                            items: [
-                              DropdownMenuItem(
-                                value: null,
-                                child: Text(
-                                  'No Account',
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                              ..._accounts.map((account) {
-                                final typedAccount = account as Account;
-                                return DropdownMenuItem(
-                                  value: typedAccount.id,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      typedAccount.getIconWidget(theme, size: 20),
-                                      const SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          typedAccount.name,
-                                          style: fontProvider.getTextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: theme.colorScheme.onSurface,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                            items: _accounts.map((account) {
+                              return DropdownMenuItem(
+                                value: account.id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    account.getIconWidget(theme, size: 20),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        account.name,
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface,
                                         ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
+                                    ),
+                                    if (account.isDefault) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.star, color: Colors.amber, size: 16),
                                     ],
-                                  ),
-                                );
-                              }),
-                            ],
+                                  ],
+                                ),
+                              );
+                            }).toList(),
                             onChanged: (value) =>
                                 setState(() => _selectedAccountId = value),
                           ),
@@ -944,7 +988,18 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         SwitchListTile(
                           value: _cashFlowEnabled,
                           onChanged: (value) {
-                            setState(() => _cashFlowEnabled = value);
+                            setState(() {
+                              _cashFlowEnabled = value;
+
+                              // Pre-select default account when Cash Flow is enabled
+                              if (value && _hasAccounts && _selectedAccountId == null) {
+                                final defaultAccount = _accounts.firstWhere(
+                                  (a) => a.isDefault,
+                                  orElse: () => _accounts.first,
+                                );
+                                _selectedAccountId = defaultAccount.id;
+                              }
+                            });
                           },
                           title: Text(
                             tr('envelope_enable_autofill'),

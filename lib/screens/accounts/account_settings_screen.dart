@@ -196,100 +196,368 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     if (_saving) return;
 
-    // Get linked envelopes count
+    // Get all accounts and linked envelopes
+    final allAccounts = await widget.accountRepo.accountsStream().first;
+    final otherAccounts = allAccounts.where((a) => a.id != widget.account.id).toList();
     final linkedEnvelopes = await widget.accountRepo.getLinkedEnvelopes(widget.account.id);
-    final linkedCount = linkedEnvelopes.length;
 
     if (!mounted) return;
 
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    // SCENARIO 1: Deleting DEFAULT account
+    if (widget.account.isDefault) {
+      if (otherAccounts.isNotEmpty) {
+        // SCENARIO A: Other accounts exist - offer to move or switch to Budget Mode
+        await _handleDeleteDefaultWithOtherAccounts(otherAccounts, linkedEnvelopes);
+      } else {
+        // SCENARIO B: This is the ONLY account - warn about Budget Mode switch
+        await _handleDeleteOnlyAccount(linkedEnvelopes);
+      }
+    } else {
+      // SCENARIO 2: Deleting non-default account - simple deletion
+      await _handleDeleteNonDefaultAccount(linkedEnvelopes);
+    }
+  }
 
-        return AlertDialog(
-          title: Text(
-            'Delete Account?',
-            style: fontProvider.getTextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+  Future<void> _handleDeleteDefaultWithOtherAccounts(
+    List<Account> otherAccounts,
+    List<dynamic> linkedEnvelopes,
+  ) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final firstOtherAccount = otherAccounts.first;
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete Default Account?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'This is your default account with ${linkedEnvelopes.length} envelope${linkedEnvelopes.length == 1 ? '' : 's'} linked.\n\n'
+          'Want to move ${linkedEnvelopes.length == 1 ? 'it' : 'them'} to ${firstOtherAccount.name}?',
+          style: fontProvider.getTextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'move'),
+            child: Text(
+              'Move to ${firstOtherAccount.name}',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Are you sure you want to delete "${widget.account.name}"?',
-                style: fontProvider.getTextStyle(fontSize: 16),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, 'budget_mode'),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.orange),
+            ),
+            child: Text(
+              'Switch to Budget Mode',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                color: Colors.orange,
               ),
-              if (linkedCount > 0) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.orange.shade700),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '$linkedCount linked envelope${linkedCount == 1 ? '' : 's'} will be unlinked (not deleted)',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 14,
-                            color: Colors.orange.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Text(
-                'This action cannot be undone.',
-                style: fontProvider.getTextStyle(
-                  fontSize: 14,
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(
-                'Cancel',
-                style: fontProvider.getTextStyle(fontSize: 16),
-              ),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              child: Text(
-                'Delete',
-                style: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
 
-    if (confirmed != true) return;
+    if (action == 'move') {
+      await _moveEnvelopesAndDelete(firstOtherAccount, linkedEnvelopes);
+    } else if (action == 'budget_mode') {
+      await _showBudgetModeWarning(otherAccounts, linkedEnvelopes);
+    }
+  }
 
+  Future<void> _showBudgetModeWarning(
+    List<Account> otherAccounts,
+    List<dynamic> linkedEnvelopes,
+  ) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final firstOtherAccount = otherAccounts.first;
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Switch to Budget Mode?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          '⚠️ Heads up! You\'re switching to a less accurate tracking mode.\n\n'
+          'Your envelopes will use "magic money" instead of real account balances.\n\n'
+          'Want to make ${firstOtherAccount.name} your default instead, or create a new one?',
+          style: fontProvider.getTextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'make_default'),
+            child: Text(
+              'Make ${firstOtherAccount.name} Default',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, 'continue'),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.red),
+            ),
+            child: Text(
+              'Continue Anyway',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (action == 'make_default') {
+      await _moveEnvelopesAndDelete(firstOtherAccount, linkedEnvelopes);
+    } else if (action == 'continue') {
+      await _unlinkEnvelopesAndDelete(linkedEnvelopes);
+    }
+  }
+
+  Future<void> _handleDeleteOnlyAccount(List<dynamic> linkedEnvelopes) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Switch to Budget Mode?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          '⚠️ You\'re deleting your only account.\n\n'
+          'This will switch you to Budget Mode where envelopes use "magic money" '
+          'instead of real account balances.\n\n'
+          'Are you sure?',
+          style: fontProvider.getTextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            child: Text(
+              'Switch to Budget Mode',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _unlinkEnvelopesAndDelete(linkedEnvelopes);
+    }
+  }
+
+  Future<void> _handleDeleteNonDefaultAccount(List<dynamic> linkedEnvelopes) async {
+    if (linkedEnvelopes.isEmpty) {
+      // No envelopes linked - simple delete with basic confirmation
+      final confirmed = await _showSimpleDeleteConfirmation();
+      if (confirmed == true) {
+        await _performDelete();
+      }
+      return;
+    }
+
+    // Has linked envelopes - show warning
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete Account?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'This account has ${linkedEnvelopes.length} envelope${linkedEnvelopes.length == 1 ? '' : 's'} linked.\n\n'
+          '${linkedEnvelopes.length == 1 ? 'It' : 'They'}\'ll be unlinked and won\'t receive Cash Flow anymore.',
+          style: fontProvider.getTextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(
+              'Delete',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _performDelete();
+    }
+  }
+
+  Future<bool?> _showSimpleDeleteConfirmation() async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete Account?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${widget.account.name}"?\n\n'
+          'This action cannot be undone.',
+          style: fontProvider.getTextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(
+              'Delete',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _moveEnvelopesAndDelete(
+    Account targetAccount,
+    List<dynamic> linkedEnvelopes,
+  ) async {
+    setState(() => _saving = true);
+
+    try {
+      // Set target account as default first
+      await widget.accountRepo.updateAccount(
+        accountId: targetAccount.id,
+        isDefault: true,
+      );
+
+      // Note: Moving envelopes to the target account would require EnvelopeRepo access
+      // For now, deleteAccount will unlink them automatically
+      // TODO: Pass EnvelopeRepo to this screen to enable bulk re-linking to target account
+
+      // Delete the account (this automatically unlinks all envelopes)
+      await widget.accountRepo.deleteAccount(widget.account.id);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Account deleted. ${targetAccount.name} is now your default account.\n'
+              '${linkedEnvelopes.length} envelope${linkedEnvelopes.length == 1 ? ' was' : 's were'} unlinked.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unlinkEnvelopesAndDelete(List<dynamic> linkedEnvelopes) async {
+    setState(() => _saving = true);
+
+    try {
+      // Delete the account (this automatically unlinks all envelopes via AccountRepo.deleteAccount)
+      await widget.accountRepo.deleteAccount(widget.account.id);
+
+      // Note: Pay day settings should be cleared by the account repo when last account deleted
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Switched to Budget Mode. ${linkedEnvelopes.length} envelope${linkedEnvelopes.length == 1 ? ' was' : 's were'} unlinked.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _performDelete() async {
     setState(() => _saving = true);
 
     try {

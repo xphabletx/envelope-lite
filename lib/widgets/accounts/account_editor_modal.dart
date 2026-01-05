@@ -263,33 +263,61 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       return;
     }
 
-    // Show bulk linking dialog
+    // AUTOMATIC BULK LINKING - No choice, this just happens
+    final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();
+    await widget.envelopeRepo.bulkLinkToAccount(envelopeIds, accountId);
+
+    // Update pay day settings with default account
+    final payDayService = PayDaySettingsService(
+      FirebaseFirestore.instance,
+      widget.envelopeRepo.currentUserId,
+    );
+    final settings = await payDayService.getSettings();
+    if (settings != null) {
+      await payDayService.updatePayDaySettings(
+        settings.copyWith(defaultAccountId: accountId),
+      );
+    }
+
+    // Get account name for display
+    final accounts = await widget.accountRepo.accountsStream().first;
+    final account = accounts.firstWhere((a) => a.id == accountId);
+    final accountName = account.name;
+
+    // Show NOTIFICATION dialog (not asking permission, just informing)
     if (!mounted) return;
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final shouldLink = await showDialog<bool>(
+
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Link Cash Flow Envelopes?',
+          'Linking Envelopes',
           style: fontProvider.getTextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
-          'You have ${unlinkedEnvelopes.length} cash flow envelope${unlinkedEnvelopes.length == 1 ? '' : 's'} that ${unlinkedEnvelopes.length == 1 ? 'is' : 'are'} not linked to an account.\n\n'
-          'Would you like to link ${unlinkedEnvelopes.length == 1 ? 'it' : 'them all'} to this default account?',
+          'You have ${unlinkedEnvelopes.length} envelope${unlinkedEnvelopes.length == 1 ? '' : 's'} with Cash Flow enabled.\n\n'
+          'We\'re linking ${unlinkedEnvelopes.length == 1 ? 'it' : 'them'} to $accountName (your new default account) '
+          'so pay day deposits can flow into this account.\n\n'
+          'Want to set up your pay day schedule now? It powers the Time Machine.',
           style: const TextStyle(fontSize: 16),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Skip', style: fontProvider.getTextStyle(fontSize: 16)),
+            onPressed: () => Navigator.pop(context),
+            child: Text('Skip For Now', style: fontProvider.getTextStyle(fontSize: 16)),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(context);
+              // Navigate to pay day settings
+              Navigator.pushNamed(context, '/settings/payday');
+            },
             child: Text(
-              'Link ${unlinkedEnvelopes.length == 1 ? 'It' : 'All'}',
+              'Set Up Pay Day',
               style: fontProvider.getTextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -300,35 +328,12 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       ),
     );
 
-    if (shouldLink == true) {
-      // Bulk link envelopes
-      final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();
-      await widget.envelopeRepo.bulkLinkToAccount(envelopeIds, accountId);
-
-      // Update pay day settings with default account
-      final payDayService = PayDaySettingsService(
-        FirebaseFirestore.instance,
-        widget.envelopeRepo.currentUserId,
-      );
-      final settings = await payDayService.getSettings();
-      if (settings != null) {
-        await payDayService.updatePayDaySettings(
-          settings.copyWith(defaultAccountId: accountId),
-        );
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Linked ${envelopeIds.length} envelope${envelopeIds.length == 1 ? '' : 's'} to account'),
-          ),
-        );
-      }
-    }
-
-    // Show pay day setup offer
     if (mounted) {
-      await _checkPayDaySetup(accountId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Linked ${envelopeIds.length} envelope${envelopeIds.length == 1 ? '' : 's'} to $accountName'),
+        ),
+      );
     }
   }
 
