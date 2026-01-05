@@ -25,7 +25,6 @@ class AccountListScreen extends StatefulWidget {
 }
 
 class _AccountListScreenState extends State<AccountListScreen> {
-  bool _mineOnly = false;
   late final AccountRepo _accountRepo;
 
   @override
@@ -38,7 +37,6 @@ class _AccountListScreenState extends State<AccountListScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final isWorkspace = widget.envelopeRepo.inWorkspace;
 
     return TutorialWrapper(
       tutorialSequence: accountsTutorial,
@@ -62,27 +60,6 @@ class _AccountListScreenState extends State<AccountListScreen> {
             ),
           ),
         ),
-        actions: [
-          if (isWorkspace)
-            Row(
-              children: [
-                Text(
-                  'Mine Only',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                Switch(
-                  value: _mineOnly,
-                  activeTrackColor: theme.colorScheme.primary,
-                  onChanged: (val) => setState(() => _mineOnly = val),
-                ),
-                const SizedBox(width: 16),
-              ],
-            ),
-        ],
       ),
       body: Column(
         children: [
@@ -99,11 +76,6 @@ class _AccountListScreenState extends State<AccountListScreen> {
           }
 
           var accounts = snapshot.data!;
-
-          // Filter accounts based on Mine Only toggle
-          if (_mineOnly) {
-            accounts = accounts.where((a) => a.userId == widget.envelopeRepo.currentUserId).toList();
-          }
 
           if (accounts.isEmpty) {
             return Center(
@@ -163,7 +135,7 @@ class _AccountListScreenState extends State<AccountListScreen> {
                       );
                     },
                   ),
-                  if (isPartner && !_mineOnly)
+                  if (isPartner)
                     Positioned(
                       bottom: 8,
                       left: 8,

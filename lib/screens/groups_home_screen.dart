@@ -46,7 +46,6 @@ class GroupsHomeScreen extends StatefulWidget {
 class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  bool _mineOnly = false;
   String _sortBy = 'name';
   bool _hasScrolledToInitialBinder = false;
 
@@ -131,12 +130,11 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final timeMachine = Provider.of<TimeMachineProvider>(context);
-    final isWorkspace = widget.repo.inWorkspace;
 
     return StreamBuilder<List<Envelope>>(
-      initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: !_mineOnly),
+      initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: true),
       stream: widget.repo.envelopesStream(
-        showPartnerEnvelopes: !_mineOnly,
+        showPartnerEnvelopes: true,
       ),
       builder: (_, s1) {
         final envs = s1.data ?? [];
@@ -156,7 +154,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
             final allGroups = s2.data ?? [];
             final filteredGroups = allGroups.where((g) {
               if (g.userId == widget.repo.currentUserId) return true;
-              if (_mineOnly) return false;
               return g.isShared;
             }).toList();
 
@@ -350,25 +347,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                         ],
                       ),
                       actions: [
-                        if (isWorkspace)
-                          Row(
-                            children: [
-                              Text(
-                                'Mine Only',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                              Switch(
-                                value: _mineOnly,
-                                activeTrackColor: theme.colorScheme.primary,
-                                onChanged: (val) => setState(() => _mineOnly = val),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                          ),
                         PopupMenuButton<String>(
                           tooltip: tr('sort_by'),
                           icon: Icon(Icons.sort, color: theme.colorScheme.primary),
@@ -430,25 +408,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                     backgroundColor: theme.scaffoldBackgroundColor,
                     elevation: 0,
                     actions: [
-                      if (isWorkspace)
-                        Row(
-                          children: [
-                            Text(
-                              'Mine Only',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            Switch(
-                              value: _mineOnly,
-                              activeTrackColor: theme.colorScheme.primary,
-                              onChanged: (val) => setState(() => _mineOnly = val),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                        ),
                       PopupMenuButton<String>(
                         tooltip: tr('sort_by'),
                         icon: Icon(Icons.sort, color: theme.colorScheme.primary),
@@ -556,7 +515,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                         currency: currency,
                                         theme: theme,
                                         repo: widget.repo,
-                                        isPartner: isPartner && !_mineOnly,
+                                        isPartner: isPartner,
                                       ),
                                     );
                                   },
@@ -616,7 +575,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                   currency: currency,
                                   theme: theme,
                                   repo: widget.repo,
-                                  isPartner: isPartner && !_mineOnly,
+                                  isPartner: isPartner,
                                 ),
                               );
                             },
