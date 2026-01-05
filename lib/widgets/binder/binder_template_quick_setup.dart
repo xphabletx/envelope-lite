@@ -143,11 +143,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Back',
-        ),
+        automaticallyImplyLeading: false, // Disable automatic back button (parent overlay handles it)
         title: Text(
           widget.template.name,
           style: fontProvider.getTextStyle(
