@@ -656,7 +656,9 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   bool isMulti = false;
   final selected = <String>{};
   String _sortBy = 'name';
-  bool _mineOnly = false;
+
+  // Three-way filter: 'both', 'mine', 'theirs'
+  String _envelopeFilter = 'both';
 
   // Pay Day animation
   late AnimationController _pulseController;
@@ -875,7 +877,15 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final responsive = context.responsive;
     final isWorkspace = widget.repo.inWorkspace;
-    final showPartnerEnvelopes = !_mineOnly;
+
+    debugPrint('[HomeScreen] DEBUG: build() called');
+    debugPrint('[HomeScreen] DEBUG: - widget.repo.inWorkspace: ${widget.repo.inWorkspace}');
+    debugPrint('[HomeScreen] DEBUG: - widget.repo.workspaceId: ${widget.repo.workspaceId}');
+    debugPrint('[HomeScreen] DEBUG: - isWorkspace variable: $isWorkspace');
+
+    // Three-way filter logic - we filter envelopes in the UI logic below
+    final showPartnerEnvelopes = _envelopeFilter == 'both' || _envelopeFilter == 'theirs';
+
     final timeMachine = Provider.of<TimeMachineProvider>(context);
 
     return PopScope(
@@ -906,7 +916,17 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
               initialData: widget.repo.getTransactionsSync(), // ✅ Instant data!
               stream: widget.repo.transactionsStream,
               builder: (c3, s3) {
-                final sortedEnvs = _sortEnvelopes(displayEnvs);
+                // Apply three-way filter in workspace mode
+                final filteredEnvs = isWorkspace
+                    ? displayEnvs.where((e) {
+                        final isMyEnvelope = e.userId == widget.repo.currentUserId;
+                        if (_envelopeFilter == 'mine') return isMyEnvelope;
+                        if (_envelopeFilter == 'theirs') return !isMyEnvelope;
+                        return true; // 'both'
+                      }).toList()
+                    : displayEnvs;
+
+                final sortedEnvs = _sortEnvelopes(filteredEnvs);
                 return Scaffold(
                   appBar: isMulti ? AppBar(
                     scrolledUnderElevation: 0,
@@ -1019,23 +1039,85 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                     ),
                     actions: [
                       if (isWorkspace)
-                        Row(
-                          children: [
-                            Text(
-                              'Mine Only',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
+                        PopupMenuButton<String>(
+                          key: widget.mineOnlyToggleKey,
+                          tooltip: 'Filter Envelopes',
+                          icon: Icon(
+                            _envelopeFilter == 'both'
+                                ? Icons.group
+                                : _envelopeFilter == 'mine'
+                                    ? Icons.person
+                                    : Icons.person_outline,
+                            color: theme.colorScheme.primary,
+                          ),
+                          onSelected: (value) => setState(() => _envelopeFilter = value),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'both',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.group,
+                                    color: _envelopeFilter == 'both'
+                                        ? theme.colorScheme.primary
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Both',
+                                    style: TextStyle(
+                                      fontWeight: _envelopeFilter == 'both'
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Switch(
-                              key: widget.mineOnlyToggleKey,
-                              value: _mineOnly,
-                              activeTrackColor: theme.colorScheme.primary,
-                              onChanged: (val) => setState(() => _mineOnly = val),
+                            PopupMenuItem(
+                              value: 'mine',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.person,
+                                    color: _envelopeFilter == 'mine'
+                                        ? theme.colorScheme.primary
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Mine Only',
+                                    style: TextStyle(
+                                      fontWeight: _envelopeFilter == 'mine'
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 8),
+                            PopupMenuItem(
+                              value: 'theirs',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.person_outline,
+                                    color: _envelopeFilter == 'theirs'
+                                        ? theme.colorScheme.primary
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Theirs Only',
+                                    style: TextStyle(
+                                      fontWeight: _envelopeFilter == 'theirs'
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       PopupMenuButton<String>(
@@ -1146,7 +1228,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                                                     isMultiSelectMode: isMulti,
                                                     onTap: isMulti ? () => _toggle(e.id) : () => _openDetails(e),
                                                   ),
-                                                  if (isPartner && !_mineOnly)
+                                                  if (isPartner && _envelopeFilter != 'mine')
                                                     Positioned(
                                                       bottom: 24,
                                                       right: 16,
@@ -1194,7 +1276,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                                                     isMultiSelectMode: isMulti,
                                                     onTap: isMulti ? () => _toggle(e.id) : () => _openDetails(e),
                                                   ),
-                                                  if (isPartner && !_mineOnly)
+                                                  if (isPartner && _envelopeFilter != 'mine')
                                                     Positioned(
                                                       bottom: 24,
                                                       right: 16,
