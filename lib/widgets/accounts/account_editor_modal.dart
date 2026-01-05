@@ -4,6 +4,7 @@ import '../../models/account.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/pay_day_settings_service.dart';
+import '../../screens/pay_day_settings_screen.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
@@ -314,7 +315,16 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
             onPressed: () {
               Navigator.pop(context);
               // Navigate to pay day settings
-              Navigator.pushNamed(context, '/settings/payday');
+              final payDayService = PayDaySettingsService(
+                FirebaseFirestore.instance,
+                widget.envelopeRepo.currentUserId,
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PayDaySettingsScreen(service: payDayService),
+                ),
+              );
             },
             child: Text(
               'Set Up Pay Day',
@@ -385,7 +395,16 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
 
       if (shouldSetup == true && mounted) {
         // Navigate to pay day settings
-        Navigator.pushNamed(context, '/settings/payday');
+        final payDayService = PayDaySettingsService(
+          FirebaseFirestore.instance,
+          widget.envelopeRepo.currentUserId,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PayDaySettingsScreen(service: payDayService),
+          ),
+        );
       }
     }
   }
