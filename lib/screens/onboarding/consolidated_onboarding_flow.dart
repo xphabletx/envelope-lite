@@ -975,7 +975,7 @@ class _FontSelectionStep extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: fonts.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final font = fonts[index];
                     final fontId = font['id']!;
@@ -1099,7 +1099,7 @@ class _CurrencySelectionStep extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   itemCount: LocaleProvider.supportedCurrencies.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (context, index) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final currency = LocaleProvider.supportedCurrencies[index];
                     final code = currency['code']!;
@@ -1819,6 +1819,7 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
     _amountController = TextEditingController(
       text: widget.initialPayAmount != null ? widget.initialPayAmount.toString() : '',
     );
+    _amountFocus = FocusNode();
     _frequency = widget.initialFrequency ?? 'monthly';
     _nextPayDate = widget.initialNextPayDate ?? DateTime.now().add(const Duration(days: 7));
   }
