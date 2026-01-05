@@ -1,6 +1,7 @@
 // lib/services/account_repo.dart
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/account.dart';
@@ -206,28 +207,60 @@ class AccountRepo {
 
   /// Delete account
   Future<void> deleteAccount(String accountId) async {
+    debugPrint('[AccountRepo] ========== DELETING ACCOUNT ==========');
+    debugPrint('[AccountRepo] Account ID: $accountId');
+    debugPrint('[AccountRepo] User ID: $_userId');
+
     final account = _accountBox.get(accountId);
     if (account == null) {
+      debugPrint('[AccountRepo] ERROR: Account not found in Hive: $accountId');
       throw Exception('Account not found: $accountId');
     }
 
+    debugPrint('[AccountRepo] Found account in Hive: ${account.name} (isDefault: ${account.isDefault})');
+
     // Get linked envelopes and unlink them (don't delete them)
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
+    debugPrint('[AccountRepo] Found ${linkedEnvelopes.length} linked envelopes');
 
     if (linkedEnvelopes.isNotEmpty) {
+      debugPrint('[AccountRepo] Unlinking ${linkedEnvelopes.length} envelopes...');
       for (final envelope in linkedEnvelopes) {
+        debugPrint('[AccountRepo]   Unlinking envelope: ${envelope.name} (${envelope.id})');
         await _envelopeRepo.updateEnvelope(
           envelopeId: envelope.id,
           linkedAccountId: null,
           updateLinkedAccountId: true,
         );
       }
+      debugPrint('[AccountRepo] All envelopes unlinked successfully');
     }
 
+    debugPrint('[AccountRepo] Deleting account from Hive...');
     await _accountBox.delete(accountId);
+    debugPrint('[AccountRepo] Account deleted from Hive');
+
+    // Verify deletion
+    final verifyDeleted = _accountBox.get(accountId);
+    if (verifyDeleted != null) {
+      debugPrint('[AccountRepo] WARNING: Account still exists in Hive after deletion!');
+    } else {
+      debugPrint('[AccountRepo] Verified: Account no longer in Hive');
+    }
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
+    debugPrint('[AccountRepo] Syncing deletion to Firebase...');
     _syncManager.deleteAccount(accountId, _userId);
+    debugPrint('[AccountRepo] Firebase sync initiated');
+
+    // Check remaining accounts
+    final remainingAccounts = getAccountsSync();
+    debugPrint('[AccountRepo] Remaining accounts: ${remainingAccounts.length}');
+    for (final acc in remainingAccounts) {
+      debugPrint('[AccountRepo]   - ${acc.name} (isDefault: ${acc.isDefault})');
+    }
+
+    debugPrint('[AccountRepo] ========== DELETE COMPLETE ==========');
   }
 
   /// Adjust balance by a delta amount

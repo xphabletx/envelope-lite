@@ -173,20 +173,100 @@ class _PayDayAllocationScreenState extends State<PayDayAllocationScreen> {
     await _showTemporaryChangeWarning();
 
     if (!mounted) return;
-    final result = await CalculatorHelper.showCalculator(context);
+
+    final currentAmount = allocations[envelope.id] ?? 0.0;
+    final controller = TextEditingController(
+      text: currentAmount > 0 ? currentAmount.toStringAsFixed(2) : '',
+    );
+
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final theme = Theme.of(context);
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Edit Cash Flow Amount',
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              envelope.name,
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              onTap: () {
+                controller.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: controller.text.length,
+                );
+              },
+              decoration: InputDecoration(
+                labelText: 'Cash Flow Amount',
+                prefixText: locale.currencySymbol,
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.calculate),
+                  onPressed: () async {
+                    final calcResult = await CalculatorHelper.showCalculator(context);
+                    if (calcResult != null) {
+                      controller.text = calcResult;
+                    }
+                  },
+                  tooltip: 'Use Calculator',
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text);
+              if (amount != null && amount >= 0) {
+                Navigator.pop(context, amount);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid amount')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
 
     if (result != null && mounted) {
-      final amount = double.tryParse(result);
-      if (amount != null && amount >= 0) {
-        setState(() {
-          if (amount > 0) {
-            allocations[envelope.id] = amount;
-          } else {
-            allocations.remove(envelope.id);
-          }
-        });
-      }
+      setState(() {
+        if (result > 0) {
+          allocations[envelope.id] = result;
+        } else {
+          allocations.remove(envelope.id);
+        }
+      });
     }
+
+    controller.dispose();
   }
 
 

@@ -109,6 +109,14 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
         ..addAll(widget.initialEnvelopeIds ?? const <String>{})
         ..addAll(widget.initialGroupIds ?? const <String>{});
       _didApplyExplicitInitialSelection = true;
+
+      // Set active filters based on what was explicitly provided
+      if (widget.initialEnvelopeIds != null && widget.initialEnvelopeIds!.isNotEmpty) {
+        activeFilters.add(StatsFilterType.envelopes);
+      }
+      if (widget.initialGroupIds != null && widget.initialGroupIds!.isNotEmpty) {
+        activeFilters.add(StatsFilterType.groups);
+      }
     }
   }
 

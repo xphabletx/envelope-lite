@@ -193,7 +193,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                     children: [
                       ElevatedButton.icon(
                         onPressed: () {
-                          final accountRepo = Provider.of<AccountRepo>(context, listen: false);
+                          final accountRepo = AccountRepo(widget.repo);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -301,25 +301,131 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               backgroundColor: theme.scaffoldBackgroundColor,
               appBar: isLandscape
                 ? PreferredSize(
-                    preferredSize: const Size.fromHeight(0),
+                    preferredSize: const Size.fromHeight(64),
                     child: AppBar(
-                      toolbarHeight: 0,
+                      toolbarHeight: 64,
                       backgroundColor: theme.scaffoldBackgroundColor,
                       elevation: 0,
+                      title: Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: timeMachine.isActive ? null : () {
+                              final accountRepo = AccountRepo(widget.repo);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PayDayAmountScreen(
+                                    repo: widget.repo,
+                                    groupRepo: widget.groupRepo,
+                                    accountRepo: accountRepo,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.monetization_on, size: 20),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                tr('home_pay_day_button'),
+                                style: fontProvider.getTextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 22,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.secondary,
+                              foregroundColor: Colors.white,
+                              elevation: 3,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        if (isWorkspace)
+                          Row(
+                            children: [
+                              Text(
+                                'Mine Only',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              Switch(
+                                value: _mineOnly,
+                                activeTrackColor: theme.colorScheme.primary,
+                                onChanged: (val) => setState(() => _mineOnly = val),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ),
+                        PopupMenuButton<String>(
+                          tooltip: tr('sort_by'),
+                          icon: Icon(Icons.sort, color: theme.colorScheme.primary),
+                          onSelected: (value) => setState(() => _sortBy = value),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
+                            PopupMenuItem(value: 'total', child: const Text('Total Saved')),
+                            PopupMenuItem(value: 'created', child: const Text('Date Created')),
+                          ],
+                        ),
+                      ],
                     ),
                   )
                 : AppBar(
-                    title: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        tr('group_binders_title'),
-                        style: fontProvider.getTextStyle(
-                          fontSize: 38,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+                    toolbarHeight: 80,
+                    title: Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: timeMachine.isActive ? null : () {
+                            final accountRepo = AccountRepo(widget.repo);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PayDayAmountScreen(
+                                  repo: widget.repo,
+                                  groupRepo: widget.groupRepo,
+                                  accountRepo: accountRepo,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.monetization_on, size: 20),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              tr('home_pay_day_button'),
+                              style: fontProvider.getTextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.secondary,
+                            foregroundColor: Colors.white,
+                            elevation: 3,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                     backgroundColor: theme.scaffoldBackgroundColor,
                     elevation: 0,
@@ -456,34 +562,12 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                   },
                                 ),
                               ),
-                              // Right-side control buttons (landscape only)
+                              // Right-side control button (landscape only)
                               Padding(
                                 padding: const EdgeInsets.only(right: 16),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.sort,
-                                        size: 32,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                      onPressed: () {
-                                        showMenu(
-                                          context: context,
-                                          position: const RelativeRect.fromLTRB(1000, 60, 0, 0),
-                                          items: [
-                                            PopupMenuItem(value: 'name', child: Text(tr('sort_az'))),
-                                            PopupMenuItem(value: 'total', child: const Text('Total Saved')),
-                                            PopupMenuItem(value: 'created', child: const Text('Date Created')),
-                                          ],
-                                        ).then((value) {
-                                          if (value != null) setState(() => _sortBy = value);
-                                        });
-                                      },
-                                      tooltip: tr('sort_by'),
-                                    ),
-                                    const SizedBox(height: 16),
                                     IconButton(
                                       icon: Icon(
                                         Icons.add,
@@ -544,21 +628,12 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
               ),
               floatingActionButton: isLandscape
                 ? null
-                : FloatingActionButton.extended(
+                : FloatingActionButton(
                     backgroundColor: theme.colorScheme.secondary,
                     foregroundColor: Colors.white,
-                    icon: const Icon(Icons.add),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        tr('group_create_binder'),
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                     onPressed: () => _openGroupEditor(null),
+                    tooltip: tr('group_create_binder'),
+                    child: const Icon(Icons.add),
                   ),
             ),
             );

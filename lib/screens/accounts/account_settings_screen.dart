@@ -484,24 +484,37 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     Account targetAccount,
     List<dynamic> linkedEnvelopes,
   ) async {
+    debugPrint('[AccountSettings] _moveEnvelopesAndDelete START');
+    debugPrint('[AccountSettings] Deleting: ${widget.account.name} (${widget.account.id})');
+    debugPrint('[AccountSettings] Target: ${targetAccount.name} (${targetAccount.id})');
+
     setState(() => _saving = true);
 
     try {
+      debugPrint('[AccountSettings] Setting ${targetAccount.name} as default...');
       // Set target account as default first
       await widget.accountRepo.updateAccount(
         accountId: targetAccount.id,
         isDefault: true,
       );
+      debugPrint('[AccountSettings] Default account updated');
 
       // Note: Moving envelopes to the target account would require EnvelopeRepo access
       // For now, deleteAccount will unlink them automatically
       // TODO: Pass EnvelopeRepo to this screen to enable bulk re-linking to target account
 
+      debugPrint('[AccountSettings] Calling deleteAccount...');
       // Delete the account (this automatically unlinks all envelopes)
       await widget.accountRepo.deleteAccount(widget.account.id);
+      debugPrint('[AccountSettings] deleteAccount completed');
 
       if (mounted) {
+        debugPrint('[AccountSettings] Widget still mounted, navigating back...');
+        // Pop twice: once for settings screen, once for detail screen
         Navigator.pop(context);
+        debugPrint('[AccountSettings] First pop complete');
+        Navigator.pop(context);
+        debugPrint('[AccountSettings] Second pop complete');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -511,8 +524,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+        debugPrint('[AccountSettings] Success message shown');
+      } else {
+        debugPrint('[AccountSettings] WARNING: Widget not mounted after delete!');
       }
     } catch (e) {
+      debugPrint('[AccountSettings] ERROR in _moveEnvelopesAndDelete: $e');
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -523,19 +540,31 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         );
       }
     }
+    debugPrint('[AccountSettings] _moveEnvelopesAndDelete END');
   }
 
   Future<void> _unlinkEnvelopesAndDelete(List<dynamic> linkedEnvelopes) async {
+    debugPrint('[AccountSettings] _unlinkEnvelopesAndDelete START');
+    debugPrint('[AccountSettings] Deleting: ${widget.account.name} (${widget.account.id})');
+    debugPrint('[AccountSettings] Switching to Budget Mode');
+
     setState(() => _saving = true);
 
     try {
+      debugPrint('[AccountSettings] Calling deleteAccount...');
       // Delete the account (this automatically unlinks all envelopes via AccountRepo.deleteAccount)
       await widget.accountRepo.deleteAccount(widget.account.id);
+      debugPrint('[AccountSettings] deleteAccount completed');
 
       // Note: Pay day settings should be cleared by the account repo when last account deleted
 
       if (mounted) {
+        debugPrint('[AccountSettings] Widget still mounted, navigating back...');
+        // Pop twice: once for settings screen, once for detail screen
         Navigator.pop(context);
+        debugPrint('[AccountSettings] First pop complete');
+        Navigator.pop(context);
+        debugPrint('[AccountSettings] Second pop complete');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -543,8 +572,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             ),
           ),
         );
+        debugPrint('[AccountSettings] Success message shown');
+      } else {
+        debugPrint('[AccountSettings] WARNING: Widget not mounted after delete!');
       }
     } catch (e) {
+      debugPrint('[AccountSettings] ERROR in _unlinkEnvelopesAndDelete: $e');
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -555,21 +588,36 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         );
       }
     }
+    debugPrint('[AccountSettings] _unlinkEnvelopesAndDelete END');
   }
 
   Future<void> _performDelete() async {
+    debugPrint('[AccountSettings] _performDelete START');
+    debugPrint('[AccountSettings] Deleting: ${widget.account.name} (${widget.account.id})');
+
     setState(() => _saving = true);
 
     try {
+      debugPrint('[AccountSettings] Calling deleteAccount...');
       await widget.accountRepo.deleteAccount(widget.account.id);
+      debugPrint('[AccountSettings] deleteAccount completed');
 
       if (mounted) {
+        debugPrint('[AccountSettings] Widget still mounted, navigating back...');
+        // Pop twice: once for settings screen, once for detail screen
         Navigator.pop(context);
+        debugPrint('[AccountSettings] First pop complete');
+        Navigator.pop(context);
+        debugPrint('[AccountSettings] Second pop complete');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Account deleted successfully')),
         );
+        debugPrint('[AccountSettings] Success message shown');
+      } else {
+        debugPrint('[AccountSettings] WARNING: Widget not mounted after delete!');
       }
     } catch (e) {
+      debugPrint('[AccountSettings] ERROR in _performDelete: $e');
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -580,6 +628,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         );
       }
     }
+    debugPrint('[AccountSettings] _performDelete END');
   }
 
   @override
