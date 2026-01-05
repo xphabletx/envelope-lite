@@ -2,21 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/account.dart';
 import '../../services/account_repo.dart';
+import '../../services/envelope_repo.dart';
+import '../../services/pay_day_settings_service.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../envelope/omni_icon_picker_modal.dart';
 import '../../utils/responsive_helper.dart';
 import '../../widgets/common/smart_text_field.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AccountEditorModal extends StatefulWidget {
   const AccountEditorModal({
     super.key,
     required this.accountRepo,
+    required this.envelopeRepo,
     this.account, // null = create mode, not null = edit mode
   });
 
   final AccountRepo accountRepo;
+  final EnvelopeRepo envelopeRepo;
   final Account? account;
 
   @override
@@ -39,12 +44,17 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
   bool _saving = false;
   AccountType _accountType = AccountType.bankAccount;
   double? _creditLimit;
+  bool _isFirstAccount = false;
 
   bool get _isEditMode => widget.account != null;
 
   @override
   void initState() {
     super.initState();
+
+    // Check if this is the first account
+    _checkIfFirstAccount();
+
     // If editing, populate fields
     if (_isEditMode) {
       _nameController.text = widget.account!.name;
@@ -76,6 +86,16 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
         );
       }
     });
+  }
+
+  void _checkIfFirstAccount() {
+    final accounts = widget.accountRepo.getAccountsSync();
+    _isFirstAccount = accounts.isEmpty;
+
+    // Auto-enable default for first account
+    if (_isFirstAccount) {
+      _isDefault = true;
+    }
   }
 
   @override
@@ -177,6 +197,8 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     setState(() => _saving = true);
 
     try {
+      String? newAccountId;
+
       if (_isEditMode) {
         // Update existing account
         await widget.accountRepo.updateAccount(
@@ -191,7 +213,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
         );
       } else {
         // Create new account
-        await widget.accountRepo.createAccount(
+        newAccountId = await widget.accountRepo.createAccount(
           name: name,
           startingBalance: _accountType == AccountType.creditCard
               ? -balance.abs()  // Credit cards are negative
@@ -215,6 +237,11 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
             ),
           ),
         );
+
+        // If this is the first default account, check for bulk linking
+        if (!_isEditMode && _isDefault && newAccountId != null) {
+          await _checkBulkLinking(newAccountId);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -222,6 +249,138 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _checkBulkLinking(String accountId) async {
+    // Check for unlinked cash flow envelopes
+    final unlinkedEnvelopes = await widget.envelopeRepo.getUnlinkedCashFlowEnvelopes();
+
+    if (unlinkedEnvelopes.isEmpty) {
+      // No unlinked envelopes, check pay day setup
+      await _checkPayDaySetup(accountId);
+      return;
+    }
+
+    // Show bulk linking dialog
+    if (!mounted) return;
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final shouldLink = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Link Cash Flow Envelopes?',
+          style: fontProvider.getTextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'You have ${unlinkedEnvelopes.length} cash flow envelope${unlinkedEnvelopes.length == 1 ? '' : 's'} that ${unlinkedEnvelopes.length == 1 ? 'is' : 'are'} not linked to an account.\n\n'
+          'Would you like to link ${unlinkedEnvelopes.length == 1 ? 'it' : 'them all'} to this default account?',
+          style: const TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Skip', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Link ${unlinkedEnvelopes.length == 1 ? 'It' : 'All'}',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLink == true) {
+      // Bulk link envelopes
+      final envelopeIds = unlinkedEnvelopes.map((e) => e.id).toList();
+      await widget.envelopeRepo.bulkLinkToAccount(envelopeIds, accountId);
+
+      // Update pay day settings with default account
+      final payDayService = PayDaySettingsService(
+        FirebaseFirestore.instance,
+        widget.envelopeRepo.currentUserId,
+      );
+      final settings = await payDayService.getSettings();
+      if (settings != null) {
+        await payDayService.updatePayDaySettings(
+          settings.copyWith(defaultAccountId: accountId),
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Linked ${envelopeIds.length} envelope${envelopeIds.length == 1 ? '' : 's'} to account'),
+          ),
+        );
+      }
+    }
+
+    // Show pay day setup offer
+    if (mounted) {
+      await _checkPayDaySetup(accountId);
+    }
+  }
+
+  Future<void> _checkPayDaySetup(String accountId) async {
+    // Check if pay day is already configured
+    final payDayService = PayDaySettingsService(
+      FirebaseFirestore.instance,
+      widget.envelopeRepo.currentUserId,
+    );
+    final settings = await payDayService.getSettings();
+
+    // Only offer setup if not already configured
+    if (settings == null || settings.nextPayDate == null) {
+      if (!mounted) return;
+      final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+      final shouldSetup = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            'Set Up Pay Day?',
+            style: fontProvider.getTextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Would you like to configure your pay day settings now? This will help automate your envelope stuffing.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Later', style: fontProvider.getTextStyle(fontSize: 16)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                'Set Up Pay Day',
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldSetup == true && mounted) {
+        // Navigate to pay day settings
+        Navigator.pushNamed(context, '/settings/payday');
       }
     }
   }
@@ -375,6 +534,63 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // Default toggle (ABOVE other options, only for bank accounts)
+                    if (_accountType == AccountType.bankAccount) ...[
+                      SwitchListTile(
+                        value: _isDefault,
+                        onChanged: (value) async {
+                          // If trying to unset default on first/only account, show warning
+                          if (!value && _isFirstAccount) {
+                            await showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text(
+                                  'Default Account Required',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                content: const Text(
+                                  'You need at least one default account for Pay Day deposits. Please create another account and set it as default before removing this one.',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: Text(
+                                      'OK',
+                                      style: fontProvider.getTextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return; // Don't change the value
+                          }
+
+                          setState(() {
+                            _isDefault = value;
+                          });
+                        },
+                        title: Text(
+                          'Set as default account',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Pay Day deposits will go to this account',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withAlpha(153),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Icon picker
                     InkWell(
@@ -530,35 +746,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                         }
                       },
                     ),
-                    const SizedBox(height: 16),
-
-                    // Default toggle (only show for bank accounts, not credit cards)
-                    if (_accountType == AccountType.bankAccount) ...[
-                      SwitchListTile(
-                        value: _isDefault,
-                        onChanged: (value) {
-                          setState(() {
-                            _isDefault = value;
-                          });
-                        },
-                        title: Text(
-                          'Set as default account',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          'Pay Day deposits will go to this account',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface.withAlpha(153),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                    ] else
-                      const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
                     // Save button
                     FilledButton(

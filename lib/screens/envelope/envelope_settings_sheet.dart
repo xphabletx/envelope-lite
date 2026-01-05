@@ -263,7 +263,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Existing Scheduled Payment${existingPayments.length > 1 ? 's' : ''}',
+          'Existing Autopilot${existingPayments.length > 1 ? 's' : ''}',
           style: fontProvider.getTextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -275,7 +275,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'This envelope already has ${existingPayments.length} scheduled payment${existingPayments.length > 1 ? 's' : ''}:',
+                'This envelope already has ${existingPayments.length} Autopilot${existingPayments.length > 1 ? 's' : ''}:',
                 style: const TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
@@ -317,7 +317,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
               )),
               const SizedBox(height: 8),
               Text(
-                'Do you want to add another scheduled payment?',
+                'Do you want to add another Autopilot?',
                 style: fontProvider.getTextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -1065,9 +1065,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     Divider(color: theme.colorScheme.outline),
                     const SizedBox(height: 16),
 
-                    // AUTO-FILL SECTION
+                    // CASH FLOW SECTION
                     Text(
-                      'Pay Day Auto-Fill',
+                      'Cash Flow',
                       key: _autofillKey,
                       style: fontProvider.getTextStyle(
                         fontSize: 22,
@@ -1093,7 +1093,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         }
                       },
                       title: Text(
-                        'Enable Auto-Fill',
+                        'Enable Cash Flow',
                         style: fontProvider.getTextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1120,7 +1120,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             fontWeight: FontWeight.bold,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Auto-Fill Amount (${locale.currencySymbol})',
+                            labelText: 'Cash Flow Amount (${locale.currencySymbol})',
                             labelStyle: fontProvider.getTextStyle(fontSize: 18),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),

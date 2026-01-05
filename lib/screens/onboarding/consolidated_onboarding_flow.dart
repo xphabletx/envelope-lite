@@ -3000,7 +3000,7 @@ class _CompletionStep extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Pro tip: If you have cash in your account now, go to each envelope and add the current amount you\'ve already set aside for it.',
+                        'Pro tip: Use Cash Flow to automate regular envelope stuffing, and Autopilot to schedule transfers and payments between your envelopes.',
                         style: const TextStyle(fontSize: 14, height: 1.4),
                       ),
                     ),

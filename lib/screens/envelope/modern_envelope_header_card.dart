@@ -50,12 +50,12 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Scheduled Payments',
+                'Autopilot',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               if (payments.isEmpty)
-                const Text('No scheduled payments for this envelope.'),
+                const Text('No Autopilot set for this envelope.'),
               ...payments.map(
                 (p) => ListTile(
                   leading: const Icon(Icons.calendar_today),

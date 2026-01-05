@@ -79,7 +79,7 @@ class AutoFillListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No cash flow envelopes active',
+                    'No Cash Flow envelopes active',
                     style: fontProvider.getTextStyle(
                       fontSize: 18,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -87,7 +87,7 @@ class AutoFillListScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Enable cash flow in envelope settings',
+                    'Enable Cash Flow in envelope settings',
                     style: TextStyle(
                       fontSize: 14,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
