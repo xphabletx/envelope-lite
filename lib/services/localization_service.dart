@@ -175,7 +175,7 @@ class LocalizationService {
     'workspace_visible_to_partner': 'Visible to partner',
     'workspace_hidden_from_partner': 'Hidden from partner',
     'workspace_sharing_setup': 'Sharing Setup',
-    'workspace_select_to_hide': 'Select envelopes/binders to HIDE (Private):',
+    'workspace_select_to_hide': 'Select envelopes to HIDE (Private):',
     'workspace_create_confirm': 'Create & Share',
     'workspace_join_confirm': 'Join & Share',
     'workspace_hide_future': 'Hide future envelopes by default',
