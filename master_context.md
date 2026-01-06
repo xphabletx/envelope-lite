@@ -2,11 +2,78 @@
 
 **Last Updated:** January 6, 2026
 **Branch:** main
-**Latest Commit:** 46be4e6 - Implement Horizon aesthetic refactor across entire app
+**Latest Commit:** 7bbccfc - Transform Multi Target Screen into Horizon Navigator Strategy Dashboard
 
 ---
 
 ## Recent Major Changes
+
+### Horizon Navigator Strategy Dashboard (Commit: 7bbccfc)
+Complete transformation of Multi Target Screen from manual calculator into intelligent strategy dashboard with auto-detection, simulation, and deployment capabilities.
+
+**New Architecture - Three Zones:**
+
+1. **Zone A: Strategy Dashboard (The Vision)**
+   - Enhanced summary card with Financial Freedom Date (latest target)
+   - On Track / Behind Schedule status badge with color coding
+   - Strategy Delta showing time saved/added by current strategy
+   - Weighted progress bars for both amount and time
+   - Visual metaphor: "Financial Cockpit" showing strategy health at a glance
+
+2. **Zone B: Velocity Slider (The Engine)**
+   - Interactive Strategy Booster slider (0% to +100% boost)
+   - Auto-detected baseline display (e.g., "£250/mo detected")
+   - Bidirectional sync between slider and manual text input
+   - Real-time simulation updates as slider moves
+   - Visual feedback: faster/slower/baseline with color coding
+   - Commit Strategy button to deploy sandbox to Cash Flow settings
+
+3. **Zone C: Horizon List (unchanged but integrated)**
+   - Individual envelope cards show real-time impact
+   - Dates update dynamically as slider moves
+   - Per-envelope time saved indicators
+
+**Smart Baseline Engine:**
+- Auto-detects contribution speed for each envelope
+- Priority system:
+  1. Cash Flow amount (if enabled)
+  2. Most recent EXTERNAL inflow transaction from history
+  3. Zero (stalled)
+- Normalizes all speeds to monthly frequency
+- Pre-fills total contribution with detected baseline
+
+**User Flow:**
+```
+Discovery → Experimentation → Decision → Action
+Current Reality → Sandbox Testing → Impact Analysis → Deploy Strategy
+```
+
+**Key Features:**
+- **Smart Detection**: Scans Cash Flow + transaction history automatically
+- **What-if Simulation**: Slider allows experimentation without commitment
+- **Time Impact**: Shows exactly how many days/months/years saved or added
+- **One-click Deploy**: "Commit Strategy" writes simulation to Cash Flow settings
+- **Confirmation Dialog**: Preview changes before applying
+- **Success Feedback**: Clear messaging when strategy is deployed
+
+**Technical Implementation:**
+- Added `transaction.dart` import for baseline detection from history
+- New state variables: `_envelopeBaselines`, `_baselineTotal`, `_velocityMultiplier`, `_manualOverride`, `_baselineCalculated`
+- New methods: `_calculateBaseline()`, `_normalizeToMonthly()`, `_calculateTimeSaved()`, `_formatDays()`, `_commitStrategy()`
+- Integration with `EnvelopeRepo.getTransactionsForEnvelopeSync()` for history access
+- Bidirectional sync: manual input ↔ velocity slider
+
+**Files Modified:**
+- [multi_target_screen.dart](lib/screens/envelope/multi_target_screen.dart): +604 lines, complete refactor
+
+**Visual Improvements:**
+- Removed divider line in summary card for cleaner separation
+- Gradient-based Strategy Booster card with subtle elevation
+- Color-coded status: green (on track), red (behind schedule), neutral (baseline)
+- Celebration icon for Financial Freedom Date
+- Trending indicators for time saved/lost
+
+---
 
 ### Horizon Aesthetic Refactor (Commit: 46be4e6)
 Complete refactoring from "Target" terminology to "Horizon" aesthetic, aligning with Philosophy of the Wall and Latte Love theme.
@@ -72,6 +139,7 @@ Complete refactoring from "Target" terminology to "Horizon" aesthetic, aligning 
 ## Recent Development Timeline
 
 ### January 6, 2026
+- **7bbccfc**: Horizon Navigator Strategy Dashboard (major UX transformation)
 - **46be4e6**: Horizon aesthetic refactor (major UI/terminology update)
 - **ff35e9a**: Calendar icon button added to date picker
 - **23de64f**: Account dropdown icon fix
@@ -128,7 +196,14 @@ The app follows the "Philosophy of the Wall" - a visual and conceptual metaphor 
    - Time Machine integration for accurate progress tracking
    - Gradient-based sun visualization
 
-3. **Workspace Sync**
+3. **Horizon Navigator Dashboard**
+   - Smart Baseline Engine for auto-detecting contribution speeds
+   - Three-zone UI: Strategy Dashboard + Velocity Slider + Horizon List
+   - Sandbox simulation with real-time what-if analysis
+   - One-click strategy deployment to Cash Flow settings
+   - Transaction history integration for behavioral analysis
+
+4. **Workspace Sync**
    - Binders (groups) now sync across workspaces
    - Improved StreamBuilder initialization to prevent loading spinners
 
@@ -136,7 +211,7 @@ The app follows the "Philosophy of the Wall" - a visual and conceptual metaphor 
 
 ## Next Context Update
 When updating this file next time, include:
-- New commits since 46be4e6
+- New commits since 7bbccfc
 - Any new features or bug fixes
 - Architecture changes or refactors
 - Breaking changes or migrations
