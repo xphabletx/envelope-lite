@@ -437,7 +437,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     final targetCount = targetEnvelopes.length;
 
     return _OverviewCard(
-      icon: Icons.track_changes,
+      icon: Icons.wb_twilight,
       title: 'Target Horizons',
       value: targetCount.toString(),
       subtitle: targetCount == 1 ? 'Horizon' : 'Horizons',

@@ -850,7 +850,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
       chips.add(
         _buildStandardChip(
           context: context,
-          icon: Icons.track_changes,
+          icon: Icons.wb_twilight,
           label: 'Horizon',
           amount: currency.format(totalTargetAmount),
           onTap: () {
@@ -1416,7 +1416,7 @@ class _InlineEnvelopeDetail extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  Icons.track_changes,
+                  Icons.wb_twilight,
                   size: iconSize,
                   color: binderColors.binderColor,
                 ),

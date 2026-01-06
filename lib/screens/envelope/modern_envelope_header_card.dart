@@ -806,7 +806,7 @@ class _LargeTargetTile extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    Icons.track_changes,
+                    Icons.wb_twilight,
                     color: theme.colorScheme.onPrimaryContainer,
                     size: 24,
                   ),

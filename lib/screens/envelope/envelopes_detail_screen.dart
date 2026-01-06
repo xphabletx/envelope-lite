@@ -856,7 +856,7 @@ class _TargetStatusCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.track_changes, color: theme.colorScheme.secondary),
+          Icon(Icons.wb_twilight, color: theme.colorScheme.secondary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

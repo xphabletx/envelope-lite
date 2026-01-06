@@ -203,4 +203,153 @@ class TargetHelper {
   static bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
+
+  /// Calculate granular time progress using microsecond precision
+  /// Synchronized with ModernEnvelopeHeaderCard logic for consistent display
+  ///
+  /// Returns a value between 0.0 and 1.0 representing time elapsed
+  static double calculateTimeProgress(
+    Envelope envelope, {
+    DateTime? referenceDate,
+  }) {
+    if (envelope.targetDate == null) return 0.0;
+
+    final reference = referenceDate ?? DateTime.now();
+
+    // Determine start date based on user's selected type
+    DateTime startDate;
+    final targetStartDateType = envelope.targetStartDateType ?? TargetStartDateType.fromToday;
+
+    switch (targetStartDateType) {
+      case TargetStartDateType.fromToday:
+        // Start from beginning of TODAY (actual current date, not time machine date)
+        final actualToday = DateTime.now();
+        startDate = DateTime(
+          actualToday.year,
+          actualToday.month,
+          actualToday.day,
+          0, 0, 1,
+        );
+        break;
+
+      case TargetStartDateType.fromEnvelopeCreation:
+        // Use envelope creation date, or fallback to lastUpdated, or today
+        if (envelope.createdAt != null) {
+          startDate = DateTime(
+            envelope.createdAt!.year,
+            envelope.createdAt!.month,
+            envelope.createdAt!.day,
+            0, 0, 1,
+          );
+        } else if (envelope.lastUpdated != null) {
+          // Fallback for legacy envelopes without createdAt
+          startDate = DateTime(
+            envelope.lastUpdated!.year,
+            envelope.lastUpdated!.month,
+            envelope.lastUpdated!.day,
+            0, 0, 1,
+          );
+        } else {
+          // Ultimate fallback - use today
+          startDate = DateTime(
+            reference.year,
+            reference.month,
+            reference.day,
+            0, 0, 1,
+          );
+        }
+        break;
+
+      case TargetStartDateType.customDate:
+        // Use custom date if provided, otherwise fallback to today
+        if (envelope.customTargetStartDate != null) {
+          startDate = DateTime(
+            envelope.customTargetStartDate!.year,
+            envelope.customTargetStartDate!.month,
+            envelope.customTargetStartDate!.day,
+            0, 0, 1,
+          );
+        } else {
+          // Fallback if custom date not set
+          startDate = DateTime(
+            reference.year,
+            reference.month,
+            reference.day,
+            0, 0, 1,
+          );
+        }
+        break;
+    }
+
+    // Target date at midnight + 1 second (00:00:01)
+    final targetWithTime = DateTime(
+      envelope.targetDate!.year,
+      envelope.targetDate!.month,
+      envelope.targetDate!.day,
+      0, 0, 1,
+    );
+
+    // Calculate using microseconds for granular progress
+    final totalDuration = targetWithTime.difference(startDate);
+    final elapsedDuration = reference.difference(startDate);
+
+    // Progress based on actual time elapsed (not just days)
+    final progress = totalDuration.inMicroseconds > 0
+        ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    return progress;
+  }
+
+  /// Get the effective start date for a target envelope
+  /// Used for displaying start date in UI
+  static DateTime? getTargetStartDate(Envelope envelope) {
+    if (envelope.targetDate == null) return null;
+
+    final targetStartDateType = envelope.targetStartDateType ?? TargetStartDateType.fromToday;
+
+    switch (targetStartDateType) {
+      case TargetStartDateType.fromToday:
+        final actualToday = DateTime.now();
+        return DateTime(
+          actualToday.year,
+          actualToday.month,
+          actualToday.day,
+          0, 0, 1,
+        );
+
+      case TargetStartDateType.fromEnvelopeCreation:
+        if (envelope.createdAt != null) {
+          return DateTime(
+            envelope.createdAt!.year,
+            envelope.createdAt!.month,
+            envelope.createdAt!.day,
+            0, 0, 1,
+          );
+        } else if (envelope.lastUpdated != null) {
+          return DateTime(
+            envelope.lastUpdated!.year,
+            envelope.lastUpdated!.month,
+            envelope.lastUpdated!.day,
+            0, 0, 1,
+          );
+        } else {
+          final now = DateTime.now();
+          return DateTime(now.year, now.month, now.day, 0, 0, 1);
+        }
+
+      case TargetStartDateType.customDate:
+        if (envelope.customTargetStartDate != null) {
+          return DateTime(
+            envelope.customTargetStartDate!.year,
+            envelope.customTargetStartDate!.month,
+            envelope.customTargetStartDate!.day,
+            0, 0, 1,
+          );
+        } else {
+          final now = DateTime.now();
+          return DateTime(now.year, now.month, now.day, 0, 0, 1);
+        }
+    }
+  }
 }

@@ -305,6 +305,45 @@ class Envelope {
     return (end.year - start.year) * 12 + (end.month - start.month);
   }
 
+  // =========================================================================
+  // HORIZON NAVIGATOR - CONTRIBUTION SPEED DETECTION
+  // =========================================================================
+
+  /// Get the detected contribution speed for this envelope
+  /// Priority:
+  /// 1. Cash Flow amount (if enabled)
+  /// 2. Last deposit from transaction history
+  /// 3. Zero (stalled)
+  double getContributionSpeed(List<dynamic> transactionHistory) {
+    // Primary: Use cash flow if enabled
+    if (cashFlowEnabled && (cashFlowAmount ?? 0) > 0) {
+      return cashFlowAmount!;
+    }
+
+    // Secondary: Query transaction history for last deposit
+    if (transactionHistory.isNotEmpty) {
+      // Find most recent external inflow (deposit)
+      for (var tx in transactionHistory) {
+        // Check if this is an inflow transaction
+        if (tx.direction != null && tx.direction.toString().contains('inflow')) {
+          return tx.amount as double;
+        }
+        // Legacy support: check old transaction types
+        if (tx.type != null && tx.type.toString().contains('deposit')) {
+          return tx.amount as double;
+        }
+      }
+    }
+
+    // Tertiary: No history or cash flow - stalled
+    return 0.0;
+  }
+
+  /// Check if the envelope is "stalled" (no contribution speed detected)
+  bool isStalled(List<dynamic> transactionHistory) {
+    return getContributionSpeed(transactionHistory) == 0.0;
+  }
+
   Envelope copyWith({
     String? id,
     String? name,

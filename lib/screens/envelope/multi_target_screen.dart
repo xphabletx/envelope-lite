@@ -1,5 +1,6 @@
 // lib/screens/envelope/multi_target_screen.dart
-// Context-aware target screen supporting single/multiple envelopes and binders
+// Horizon Navigator - Dynamic financial simulator for envelope targets
+// Features: Temporal progress sync, weighted average calculations, sandbox contribution engine
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -62,6 +63,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   List<EnvelopeGroup> _cachedGroups =
       []; // Cache groups to prevent "Unknown Binder" during rebuilds
 
+  // Sandbox Engine: Virtual reach dates for simulation
+  final Map<String, DateTime> _virtualReachDates = {};
+  final Map<String, bool> _onTrackStatus = {}; // Track if envelope is on track
+
   @override
   void initState() {
     super.initState();
@@ -110,8 +115,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   }
 
   void _initializeAllocations(List<Envelope> targetEnvelopes) {
-    if (_selectedEnvelopeIds.isEmpty || _contributionAllocations.isNotEmpty)
+    if (_selectedEnvelopeIds.isEmpty || _contributionAllocations.isNotEmpty) {
       return;
+    }
 
     final count = _selectedEnvelopeIds.length;
     final equalPercentage = count > 0 ? 100.0 / count : 0.0;
@@ -164,6 +170,76 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       _contributionAllocations[id] =
           (_contributionAllocations[id] ?? 0) * factor;
     }
+  }
+
+  /// Sandbox Engine: Simulate horizon reach dates based on contribution inputs
+  /// This is a "what-if" calculator that doesn't modify Hive data
+  void _simulateHorizon(List<Envelope> allEnvelopes) {
+    final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
+
+    if (totalContribution <= 0) {
+      // Clear simulations if no contribution
+      _virtualReachDates.clear();
+      _onTrackStatus.clear();
+      return;
+    }
+
+    for (var id in _selectedEnvelopeIds) {
+      final envelope = allEnvelopes.firstWhere(
+        (e) => e.id == id,
+        orElse: () => allEnvelopes.first,
+      );
+
+      // Skip if no target amount set
+      if (envelope.targetAmount == null || envelope.targetAmount! <= 0) {
+        continue;
+      }
+
+      // Calculate allocated contribution for this envelope
+      final allocationPercentage = _contributionAllocations[id] ?? 0;
+      final envelopeContribution = totalContribution * (allocationPercentage / 100);
+
+      // Calculate remaining amount to reach target
+      final remaining = envelope.targetAmount! - envelope.currentAmount;
+
+      if (remaining <= 0) {
+        // Already reached target
+        _virtualReachDates[id] = DateTime.now();
+        _onTrackStatus[id] = true;
+        continue;
+      }
+
+      if (envelopeContribution <= 0) {
+        // No contribution allocated - stalled
+        _onTrackStatus[id] = false;
+        continue;
+      }
+
+      // Calculate frequency days
+      final frequency = _envelopeFrequencies[id] ?? _defaultFrequency;
+      final daysPerContribution = _getDaysPerFrequency(frequency);
+
+      // Calculate contributions needed
+      final contributionsNeeded = (remaining / envelopeContribution).ceil();
+      final daysToTarget = contributionsNeeded * daysPerContribution;
+
+      // Calculate virtual reach date
+      final reachDate = DateTime.now().add(Duration(days: daysToTarget));
+      _virtualReachDates[id] = reachDate;
+
+      // Check if on track (will reach before target date)
+      if (envelope.targetDate != null) {
+        _onTrackStatus[id] = reachDate.isBefore(envelope.targetDate!) ||
+            _isSameDay(reachDate, envelope.targetDate!);
+      } else {
+        _onTrackStatus[id] = true; // No deadline, so always "on track"
+      }
+    }
+  }
+
+  /// Helper: Check if two dates are the same day
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   @override
@@ -247,13 +323,13 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.track_changes,
+            Icons.wb_twilight,
             size: 64,
             color: theme.colorScheme.onSurface.withAlpha(77),
           ),
           const SizedBox(height: 16),
           Text(
-            'No Target Envelopes',
+            'No Horizon Envelopes',
             style: fontProvider.getTextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -262,7 +338,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Set targets in envelope settings',
+            'Set horizons in envelope settings',
             style: TextStyle(
               fontSize: 16,
               color: theme.colorScheme.onSurface.withAlpha(128),
@@ -333,6 +409,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         ? selectedEnvelopes
         : targetEnvelopes;
 
+    // FIXED: Weighted Average Amount Progress
     final totalTarget = envelopesToShow.fold(
       0.0,
       (sum, e) => sum + (e.targetAmount ?? 0),
@@ -349,34 +426,43 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     // Calculate if exceeded in time machine mode
     final exceeded = remaining < 0 ? remaining.abs() : 0.0;
 
-    // Calculate earliest target date
+    // FIXED: Calculate Average Time Progress across all selected horizons
+    double? timeProgress;
+    int? daysRemaining;
+    final referenceDate = timeMachine.isActive ? timeMachine.futureDate! : DateTime.now();
+
+    // Calculate average time progress using TargetHelper for consistency
+    final envelopesWithDates = envelopesToShow.where((e) => e.targetDate != null).toList();
+    if (envelopesWithDates.isNotEmpty) {
+      double totalTimeProgress = 0.0;
+      int totalDaysRemaining = 0;
+
+      for (var envelope in envelopesWithDates) {
+        // Use unified TargetHelper calculation
+        final envTimeProgress = TargetHelper.calculateTimeProgress(
+          envelope,
+          referenceDate: referenceDate,
+        );
+        totalTimeProgress += envTimeProgress;
+        totalDaysRemaining += TargetHelper.getDaysRemaining(
+          envelope,
+          projectedDate: referenceDate,
+        );
+      }
+
+      // Average time progress
+      timeProgress = totalTimeProgress / envelopesWithDates.length;
+      daysRemaining = (totalDaysRemaining / envelopesWithDates.length).round();
+    }
+
+    // Find earliest target date for display
     DateTime? earliestTargetDate;
-    for (var envelope in envelopesToShow) {
+    for (var envelope in envelopesWithDates) {
       if (envelope.targetDate != null) {
         if (earliestTargetDate == null ||
             envelope.targetDate!.isBefore(earliestTargetDate)) {
           earliestTargetDate = envelope.targetDate;
         }
-      }
-    }
-
-    // Calculate time progress
-    double? timeProgress;
-    int? daysRemaining;
-    if (earliestTargetDate != null) {
-      final now = DateTime.now();
-      final referenceDate = timeMachine.isActive ? timeMachine.futureDate! : now;
-
-      // Calculate time progress: from now to target date
-      // In time machine mode, show how much time has "elapsed" from today to the viewing date
-      final totalDays = earliestTargetDate.difference(now).inDays;
-      final daysPassed = timeMachine.isActive
-          ? referenceDate.difference(now).inDays
-          : 0; // In normal mode, we haven't elapsed any time yet
-      daysRemaining = earliestTargetDate.difference(referenceDate).inDays;
-
-      if (totalDays > 0) {
-        timeProgress = (daysPassed / totalDays).clamp(0.0, 1.0);
       }
     }
 
@@ -409,7 +495,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               Row(
                 children: [
                   Icon(
-                    Icons.track_changes,
+                    Icons.wb_twilight,
                     size: 24,
                     color: theme.colorScheme.primary,
                   ),
@@ -1081,14 +1167,14 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         },
         leading: Icon(Icons.calculate, color: theme.colorScheme.primary),
         title: Text(
-          'Target Horizon',
+          'Horizon Navigator',
           style: fontProvider.getTextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         subtitle: Text(
-          'Plan contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}',
+          'Simulate contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}',
         ),
         children: [
           Padding(
@@ -1154,6 +1240,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                           _selectedEnvelopeIds,
                         );
                       }
+                      // Run sandbox simulation
+                      _simulateHorizon(targetEnvelopes);
                     });
                   },
                 ),
@@ -1186,6 +1274,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                       for (var id in _selectedEnvelopeIds) {
                         _envelopeFrequencies[id] = value;
                       }
+                      // Re-run sandbox simulation with new frequency
+                      _simulateHorizon(targetEnvelopes);
                     });
                   },
                 ),
@@ -1193,7 +1283,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
                 // Per-Envelope Allocation
                 Text(
-                  'Contribution Allocation',
+                  'Horizon Velocity',
                   style: fontProvider.getTextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1201,7 +1291,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Adjust how the total contribution is split between envelopes',
+                  'Adjust contribution speed to reach each horizon',
                   style: TextStyle(
                     fontSize: 14,
                     color: theme.colorScheme.onSurface.withAlpha(179),
@@ -1428,36 +1518,83 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   // Quick projection summary (always visible)
                   if (totalAmount > 0 && remaining > 0) ...[
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.secondaryContainer.withAlpha(
-                          51,
+
+                    // Check if on track vs behind schedule
+                    () {
+                      final isOnTrack = _onTrackStatus[envelope.id] ?? true;
+                      final virtualReachDate = _virtualReachDates[envelope.id];
+
+                      return Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isOnTrack
+                              ? theme.colorScheme.secondaryContainer.withAlpha(51)
+                              : theme.colorScheme.errorContainer.withAlpha(51),
+                          borderRadius: BorderRadius.circular(8),
+                          border: !isOnTrack
+                              ? Border.all(
+                                  color: theme.colorScheme.error.withAlpha(128),
+                                  width: 1.5,
+                                )
+                              : null,
                         ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Horizon in ${_getSmartTimePeriod(contributionsNeeded, frequency)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSecondaryContainer,
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isOnTrack ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                                      size: 16,
+                                      color: isOnTrack
+                                          ? theme.colorScheme.secondary
+                                          : theme.colorScheme.error,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      isOnTrack
+                                          ? 'Horizon in ${_getSmartTimePeriod(contributionsNeeded, frequency)}'
+                                          : 'Behind Schedule',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isOnTrack
+                                            ? theme.colorScheme.onSecondaryContainer
+                                            : theme.colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  virtualReachDate != null
+                                      ? '${virtualReachDate.day}/${virtualReachDate.month}/${virtualReachDate.year}'
+                                      : '${targetDate.day}/${targetDate.month}/${targetDate.year}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isOnTrack
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.error,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Text(
-                            '${targetDate.day}/${targetDate.month}/${targetDate.year}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                            if (!isOnTrack && envelope.targetDate != null && virtualReachDate != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Target: ${envelope.targetDate!.day}/${envelope.targetDate!.month}/${envelope.targetDate!.year} • ${virtualReachDate.difference(envelope.targetDate!).inDays} days late',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: theme.colorScheme.error.withAlpha(179),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }(),
                   ],
                 ],
               ),

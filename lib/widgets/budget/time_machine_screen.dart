@@ -1830,12 +1830,12 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                         : Colors.red,
                                                   ),
                                                 ),
-                                                // Target achievement info
+                                                // Horizon achievement info
                                                 if (env.hasTarget && env.targetAchievedDate != null) ...[
                                                   const SizedBox(height: 2),
                                                   if (env.daysBeforeTargetDate != null && env.achievedEarly)
                                                     Text(
-                                                      '🎯 Target reached ${env.daysBeforeTargetDate} days early',
+                                                      '🌅 Horizon reached ${env.daysBeforeTargetDate} days early',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.green.shade700,
@@ -1844,7 +1844,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                     )
                                                   else if (env.daysBeforeTargetDate != null && env.achievedLate)
                                                     Text(
-                                                      '⚠️ Target reached ${-env.daysBeforeTargetDate!} days late',
+                                                      '⚠️ Horizon reached ${-env.daysBeforeTargetDate!} days late',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.orange.shade700,
@@ -1853,7 +1853,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                     )
                                                   else if (env.achievedOnTime)
                                                     Text(
-                                                      '🎯 Target reached on time',
+                                                      '🌅 Horizon reached on time',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.green.shade700,
@@ -1862,7 +1862,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                     )
                                                   else
                                                     Text(
-                                                      '🎯 Target reached on ${DateFormat('MMM d').format(env.targetAchievedDate!)}',
+                                                      '🌅 Horizon reached on ${DateFormat('MMM d').format(env.targetAchievedDate!)}',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.green.shade700,
@@ -1871,7 +1871,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                     ),
                                                   if (env.overachievementAmount != null && env.overachievementAmount! > 0)
                                                     Text(
-                                                      'Exceeds target by ${currency.format(env.overachievementAmount)}',
+                                                      'Exceeds horizon by ${currency.format(env.overachievementAmount)}',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.blue.shade700,
@@ -1880,7 +1880,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                                 ] else if (env.hasTarget && !env.willMeetTarget) ...[
                                                   const SizedBox(height: 2),
                                                   Text(
-                                                    '❌ Won\'t reach target of ${currency.format(env.targetAmount)}',
+                                                    '❌ Won\'t reach horizon of ${currency.format(env.targetAmount)}',
                                                     style: TextStyle(
                                                       fontSize: 11,
                                                       color: Colors.red.shade700,
@@ -2075,6 +2075,8 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(width: 4),
             Tooltip(
               message: tooltip!,
+              triggerMode: TooltipTriggerMode.tap,
+              showDuration: const Duration(seconds: 3),
               child: Icon(
                 Icons.info_outline,
                 size: 16,
