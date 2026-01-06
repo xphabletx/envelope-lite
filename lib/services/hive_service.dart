@@ -48,6 +48,10 @@ class HiveService {
         Hive.registerAdapter(TransactionAdapter());
         Hive.registerAdapter(TransactionTypeAdapter());
         Hive.registerAdapter(TransferDirectionAdapter());
+        // NEW: Register EXTERNAL/INTERNAL philosophy enum adapters
+        Hive.registerAdapter(TransactionImpactAdapter());
+        Hive.registerAdapter(TransactionDirectionAdapter());
+        Hive.registerAdapter(SourceTypeAdapter());
         Hive.registerAdapter(ScheduledPaymentAdapter());
         Hive.registerAdapter(PaymentFrequencyUnitAdapter());
         Hive.registerAdapter(ScheduledPaymentTypeAdapter());
