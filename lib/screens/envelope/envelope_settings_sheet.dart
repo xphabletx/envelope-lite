@@ -835,38 +835,70 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                               );
                             },
                           ),
-                          RadioListTile<TargetStartDateType>(
-                            title: Text(
-                              'Custom Date',
-                              style: fontProvider.getTextStyle(fontSize: 16),
-                            ),
-                            subtitle: Text(
-                              _customTargetStartDate != null
-                                  ? 'Progress from ${DateFormat('MMM dd, yyyy').format(_customTargetStartDate!)}'
-                                  : 'Choose a specific start date',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 14,
-                                color: theme.hintColor,
-                              ),
-                            ),
-                            value: TargetStartDateType.customDate,
-                            groupValue: _targetStartDateType,
-                            onChanged: (value) async {
-                              final date = await showDatePicker(
-                                context: context,
-                                initialDate: _customTargetStartDate ?? DateTime.now(),
-                                firstDate: DateTime(2000),
-                                lastDate: _selectedTargetDate ?? DateTime.now(),
-                                helpText: 'Select Start Date',
-                              );
+                          Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<TargetStartDateType>(
+                                  title: Text(
+                                    'Custom Date',
+                                    style: fontProvider.getTextStyle(fontSize: 16),
+                                  ),
+                                  subtitle: Text(
+                                    _customTargetStartDate != null
+                                        ? 'Progress from ${DateFormat('MMM dd, yyyy').format(_customTargetStartDate!)}'
+                                        : 'Choose a specific start date',
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 14,
+                                      color: theme.hintColor,
+                                    ),
+                                  ),
+                                  value: TargetStartDateType.customDate,
+                                  groupValue: _targetStartDateType,
+                                  onChanged: (value) async {
+                                    setState(() {
+                                      _targetStartDateType = value;
+                                    });
 
-                              if (date != null) {
-                                setState(() {
-                                  _targetStartDateType = value;
-                                  _customTargetStartDate = date;
-                                });
-                              }
-                            },
+                                    // If no custom date set yet, open picker
+                                    if (_customTargetStartDate == null) {
+                                      if (!mounted) return;
+                                      final date = await showDatePicker(
+                                        context: context,
+                                        initialDate: DateTime.now(),
+                                        firstDate: DateTime(2000),
+                                        lastDate: _selectedTargetDate ?? DateTime.now(),
+                                        helpText: 'Select Start Date',
+                                      );
+                                      if (date != null && mounted) {
+                                        setState(() {
+                                          _customTargetStartDate = date;
+                                        });
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                              // Calendar icon button
+                              if (_targetStartDateType == TargetStartDateType.customDate)
+                                IconButton(
+                                  icon: const Icon(Icons.calendar_today),
+                                  tooltip: 'Change date',
+                                  onPressed: () async {
+                                    final date = await showDatePicker(
+                                      context: context,
+                                      initialDate: _customTargetStartDate ?? DateTime.now(),
+                                      firstDate: DateTime(2000),
+                                      lastDate: _selectedTargetDate ?? DateTime.now(),
+                                      helpText: 'Select Start Date',
+                                    );
+                                    if (date != null && mounted) {
+                                      setState(() {
+                                        _customTargetStartDate = date;
+                                      });
+                                    }
+                                  },
+                                ),
+                            ],
                           ),
                         ],
                       ),
