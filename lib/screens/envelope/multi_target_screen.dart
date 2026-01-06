@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
+import '../../models/transaction.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
@@ -67,6 +68,13 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   final Map<String, DateTime> _virtualReachDates = {};
   final Map<String, bool> _onTrackStatus = {}; // Track if envelope is on track
 
+  // NEW: Smart Baseline Engine state
+  final Map<String, double> _envelopeBaselines = {}; // envelopeId -> detected monthly baseline
+  double _baselineTotal = 0.0; // Total detected baseline (monthly)
+  double _velocityMultiplier = 1.0; // Slider multiplier (0.0 to 2.0)
+  bool _manualOverride = false; // True when user types manually
+  bool _baselineCalculated = false; // Track if baseline has been calculated
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +88,104 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   void dispose() {
     _totalContributionController.dispose();
     super.dispose();
+  }
+
+  /// Smart Baseline Engine: Auto-detect contribution speed for each envelope
+  /// Priority:
+  /// 1. Cash Flow amount (if enabled)
+  /// 2. Most recent EXTERNAL inflow transaction
+  /// 3. Zero (stalled)
+  void _calculateBaseline(List<Envelope> selectedEnvelopes) {
+    if (_baselineCalculated) return; // Only calculate once
+
+    _envelopeBaselines.clear();
+    double total = 0.0;
+
+    for (var envelope in selectedEnvelopes) {
+      double speed = 0.0;
+
+      // Priority 1: Cash Flow
+      if (envelope.cashFlowEnabled && (envelope.cashFlowAmount ?? 0) > 0) {
+        speed = envelope.cashFlowAmount!;
+      } else {
+        // Priority 2: Transaction history (most recent external inflow)
+        final transactions = widget.envelopeRepo.getTransactionsForEnvelopeSync(envelope.id);
+
+        // Sort by date descending (most recent first)
+        transactions.sort((a, b) => b.date.compareTo(a.date));
+
+        // Find most recent external inflow
+        for (var tx in transactions) {
+          if (tx.impact == TransactionImpact.external &&
+              tx.direction == TransactionDirection.inflow) {
+            speed = tx.amount;
+            break;
+          }
+        }
+      }
+
+      // Normalize to monthly frequency
+      final monthlySpeed = _normalizeToMonthly(speed, _defaultFrequency);
+      _envelopeBaselines[envelope.id] = monthlySpeed;
+      total += monthlySpeed;
+    }
+
+    _baselineTotal = total;
+    _baselineCalculated = true;
+
+    // Pre-fill the total contribution controller with baseline
+    if (total > 0) {
+      _totalContributionController.text = total.toStringAsFixed(2);
+    }
+  }
+
+  /// Normalize any amount to monthly based on frequency
+  double _normalizeToMonthly(double amount, String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return amount * 30; // Approximate month
+      case 'weekly':
+        return amount * 4.33; // Average weeks per month
+      case 'biweekly':
+        return amount * 2.16; // Average fortnights per month
+      case 'monthly':
+        return amount;
+      default:
+        return amount;
+    }
+  }
+
+  /// Calculate time saved between baseline and current strategy
+  Map<String, int> _calculateTimeSaved(List<Envelope> envelopes) {
+    int totalDaysSaved = 0;
+    final Map<String, int> perEnvelopeDaysSaved = {};
+
+    for (var envelope in envelopes) {
+      if (!_selectedEnvelopeIds.contains(envelope.id)) continue;
+
+      final baselineSpeed = _envelopeBaselines[envelope.id] ?? 0.0;
+      final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
+      final allocation = _contributionAllocations[envelope.id] ?? 0;
+      final newSpeed = totalContribution * (allocation / 100);
+
+      final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
+      if (remaining <= 0 || baselineSpeed <= 0 || newSpeed <= 0) continue;
+
+      // Calculate days with baseline speed
+      final baselineDays = (remaining / baselineSpeed * 30).ceil();
+
+      // Calculate days with new speed
+      final newDays = (remaining / newSpeed * 30).ceil();
+
+      final daysSaved = baselineDays - newDays;
+      perEnvelopeDaysSaved[envelope.id] = daysSaved;
+      totalDaysSaved += daysSaved;
+    }
+
+    return {
+      'total': totalDaysSaved,
+      ...perEnvelopeDaysSaved,
+    };
   }
 
   String _getScreenTitle(List<Envelope> allEnvelopes) {
@@ -281,6 +387,20 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
             _initializeAllocations(targetEnvelopes);
 
+            // Calculate baseline on first render with selected envelopes
+            if (_selectedEnvelopeIds.isNotEmpty && !_baselineCalculated) {
+              final selectedEnvelopes = targetEnvelopes
+                  .where((e) => _selectedEnvelopeIds.contains(e.id))
+                  .toList();
+              if (selectedEnvelopes.isNotEmpty) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  setState(() {
+                    _calculateBaseline(selectedEnvelopes);
+                  });
+                });
+              }
+            }
+
             return Scaffold(
               appBar: AppBar(
                 title: Text(
@@ -394,6 +514,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     );
   }
 
+  /// ZONE A: Strategy Dashboard - The Vision
+  /// High-contrast card showing current strategy status and impact
   Widget _buildProgressSummary(
     List<Envelope> targetEnvelopes,
     ThemeData theme,
@@ -455,13 +577,36 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       daysRemaining = (totalDaysRemaining / envelopesWithDates.length).round();
     }
 
-    // Find earliest target date for display
+    // Find both earliest (next deadline) and latest (financial freedom) target dates
     DateTime? earliestTargetDate;
+    DateTime? latestTargetDate;
     for (var envelope in envelopesWithDates) {
       if (envelope.targetDate != null) {
+        // Earliest (next deadline)
         if (earliestTargetDate == null ||
             envelope.targetDate!.isBefore(earliestTargetDate)) {
           earliestTargetDate = envelope.targetDate;
+        }
+        // Latest (financial freedom date)
+        if (latestTargetDate == null ||
+            envelope.targetDate!.isAfter(latestTargetDate)) {
+          latestTargetDate = envelope.targetDate;
+        }
+      }
+    }
+
+    // Calculate time saved with current strategy
+    final timeSaved = _calculateTimeSaved(envelopesToShow);
+    final totalDaysSaved = timeSaved['total'] ?? 0;
+
+    // Determine if on track (all envelopes meeting their targets)
+    bool allOnTrack = true;
+    if (envelopesWithDates.isNotEmpty) {
+      for (var envelope in envelopesWithDates) {
+        final isOnTrack = _onTrackStatus[envelope.id] ?? true;
+        if (!isOnTrack) {
+          allOnTrack = false;
+          break;
         }
       }
     }
@@ -667,9 +812,156 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               ],
             ),
           ],
+
+          // NEW: Financial Freedom Date & Strategy Status
+          if (latestTargetDate != null || totalDaysSaved != 0) ...[
+            const SizedBox(height: 16),
+
+            // Strategy Status Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Financial Freedom Date (if multiple targets)
+                if (latestTargetDate != null && envelopesWithDates.length > 1)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.celebration_outlined,
+                              size: 14,
+                              color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Financial Freedom',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${latestTargetDate.day}/${latestTargetDate.month}/${latestTargetDate.year}',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // On Track / Behind Status
+                if (envelopesWithDates.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: allOnTrack
+                          ? theme.colorScheme.secondary.withAlpha(51)
+                          : theme.colorScheme.error.withAlpha(51),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: allOnTrack
+                            ? theme.colorScheme.secondary.withAlpha(128)
+                            : theme.colorScheme.error.withAlpha(128),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          allOnTrack ? Icons.check_circle : Icons.warning_amber_rounded,
+                          size: 16,
+                          color: allOnTrack
+                              ? theme.colorScheme.secondary
+                              : theme.colorScheme.error,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          allOnTrack ? 'On Track' : 'Behind Schedule',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: allOnTrack
+                                ? theme.colorScheme.secondary
+                                : theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+
+            // Strategy Delta (Time Saved)
+            if (totalDaysSaved != 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: totalDaysSaved > 0
+                      ? theme.colorScheme.secondary.withAlpha(26)
+                      : theme.colorScheme.error.withAlpha(26),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      totalDaysSaved > 0
+                          ? Icons.trending_up
+                          : Icons.trending_down,
+                      size: 18,
+                      color: totalDaysSaved > 0
+                          ? theme.colorScheme.secondary
+                          : theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        totalDaysSaved > 0
+                            ? 'Strategy saves ${_formatDays(totalDaysSaved)}'
+                            : 'Strategy adds ${_formatDays(totalDaysSaved.abs())}',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: totalDaysSaved > 0
+                              ? theme.colorScheme.secondary
+                              : theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  /// Format days into human-readable time periods
+  String _formatDays(int days) {
+    if (days == 0) return 'today';
+    if (days == 1) return '1 day';
+    if (days < 7) return '$days days';
+    if (days < 30) {
+      final weeks = (days / 7).round();
+      return weeks == 1 ? '1 week' : '$weeks weeks';
+    }
+    if (days < 365) {
+      final months = (days / 30).round();
+      return months == 1 ? '1 month' : '$months months';
+    }
+    final years = (days / 365).round();
+    return years == 1 ? '1 year' : '$years years';
   }
 
   Widget _buildEnvelopeList(
@@ -1233,12 +1525,20 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   },
                   onChanged: (value) {
                     setState(() {
+                      // Mark as manual override when user types directly
+                      _manualOverride = true;
+
                       // Auto-expand all envelope projections when a valid amount is entered
                       final amount = double.tryParse(value);
                       if (amount != null && amount > 0) {
                         _expandedEnvelopeProjections.addAll(
                           _selectedEnvelopeIds,
                         );
+
+                        // Update velocity multiplier to match manual input
+                        if (_baselineTotal > 0) {
+                          _velocityMultiplier = amount / _baselineTotal;
+                        }
                       }
                       // Run sandbox simulation
                       _simulateHorizon(targetEnvelopes);
@@ -1281,6 +1581,142 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 ),
                 const SizedBox(height: 24),
 
+                // NEW: Velocity Slider - Quick Strategy Booster
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        theme.colorScheme.secondaryContainer.withAlpha(51),
+                        theme.colorScheme.secondaryContainer.withAlpha(26),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.secondary.withAlpha(77),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.speed,
+                            size: 20,
+                            color: theme.colorScheme.secondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Strategy Booster',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Current baseline display
+                      if (_baselineTotal > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.analytics_outlined,
+                                size: 14,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Current Baseline: ${locale.formatCurrency(_baselineTotal)}/mo detected',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface.withAlpha(179),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+
+                      // Velocity Multiplier Slider
+                      Row(
+                        children: [
+                          Text(
+                            '0%',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withAlpha(128),
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _velocityMultiplier,
+                              min: 0.0,
+                              max: 2.0,
+                              divisions: 8,
+                              label: '+${((_velocityMultiplier - 1.0) * 100).round()}%',
+                              onChanged: _baselineTotal > 0 ? (value) {
+                                setState(() {
+                                  _velocityMultiplier = value;
+                                  _manualOverride = false;
+
+                                  // Calculate new total based on multiplier
+                                  final newTotal = _baselineTotal * value;
+                                  _totalContributionController.text = newTotal.toStringAsFixed(2);
+
+                                  // Re-run simulation
+                                  _simulateHorizon(targetEnvelopes);
+                                });
+                              } : null,
+                            ),
+                          ),
+                          Text(
+                            '+100%',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withAlpha(128),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Multiplier display
+                      Center(
+                        child: Text(
+                          _velocityMultiplier == 1.0
+                              ? 'Baseline Strategy'
+                              : _velocityMultiplier < 1.0
+                                  ? '${((_velocityMultiplier - 1.0) * 100).round()}% slower'
+                                  : '+${((_velocityMultiplier - 1.0) * 100).round()}% faster',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _velocityMultiplier == 1.0
+                                ? theme.colorScheme.onSurface
+                                : _velocityMultiplier < 1.0
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.secondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // Per-Envelope Allocation
                 Text(
                   'Horizon Velocity',
@@ -1310,12 +1746,179 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     totalAmount,
                   );
                 }),
+
+                // NEW: Commit Strategy Button
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => _commitStrategy(selectedEnvelopes, theme, fontProvider),
+                  icon: const Icon(Icons.save),
+                  label: Text(
+                    'Commit Strategy to Cash Flow',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                    backgroundColor: theme.colorScheme.secondary,
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Saves your strategy to each envelope\'s Cash Flow settings',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withAlpha(128),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Commit the simulated strategy to actual Cash Flow settings
+  Future<void> _commitStrategy(
+    List<Envelope> selectedEnvelopes,
+    ThemeData theme,
+    FontProvider fontProvider,
+  ) async {
+    final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
+
+    if (totalContribution <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter a valid contribution amount'),
+          backgroundColor: theme.colorScheme.error,
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Commit Strategy?',
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will update Cash Flow settings for all selected envelopes:',
+            ),
+            const SizedBox(height: 12),
+            ...selectedEnvelopes.map((envelope) {
+              final allocation = _contributionAllocations[envelope.id] ?? 0;
+              final amount = totalContribution * (allocation / 100);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    envelope.getIconWidget(theme, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        envelope.name,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    Text(
+                      Provider.of<LocaleProvider>(context, listen: false)
+                          .formatCurrency(amount),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer.withAlpha(51),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: theme.colorScheme.secondary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Cash Flow will be enabled and set to these monthly amounts',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.secondary,
+            ),
+            child: const Text('Commit'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Apply changes to all selected envelopes
+    for (var envelope in selectedEnvelopes) {
+      final allocation = _contributionAllocations[envelope.id] ?? 0;
+      final amount = totalContribution * (allocation / 100);
+
+      // Update envelope with new Cash Flow settings
+      await widget.envelopeRepo.updateEnvelope(
+        envelopeId: envelope.id,
+        cashFlowEnabled: true,
+        cashFlowAmount: amount,
+      );
+    }
+
+    // Show success message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Strategy committed! ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'} updated.',
+          ),
+          backgroundColor: theme.colorScheme.secondary,
+          action: SnackBarAction(
+            label: 'Done',
+            textColor: theme.colorScheme.onSecondary,
+            onPressed: () {},
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildEnvelopeAllocationTile(
