@@ -459,6 +459,7 @@ class AccountRepo {
     );
 
     // Create transaction
+    // By default, deposits are EXTERNAL (money coming from outside)
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: '', // Account transactions have empty envelopeId
@@ -470,6 +471,13 @@ class AccountRepo {
       description: finalDescription,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - default to EXTERNAL
+      impact: models.TransactionImpact.external,
+      direction: models.TransactionDirection.inflow,
+      sourceId: null, // From outside the system
+      sourceType: models.SourceType.external,
+      destinationId: accountId,
+      destinationType: models.SourceType.account,
     );
 
     await _accountBox.put(accountId, updatedAccount);
@@ -491,6 +499,7 @@ class AccountRepo {
     );
 
     // Create transaction
+    // By default, withdrawals are EXTERNAL (money leaving the system)
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: '', // Account transactions have empty envelopeId
@@ -502,6 +511,13 @@ class AccountRepo {
       description: description ?? 'Withdrawal',
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - default to EXTERNAL
+      impact: models.TransactionImpact.external,
+      direction: models.TransactionDirection.outflow,
+      sourceId: accountId,
+      sourceType: models.SourceType.account,
+      destinationId: null, // To outside the system
+      destinationType: models.SourceType.external,
     );
 
     await _accountBox.put(accountId, updatedAccount);
@@ -511,10 +527,80 @@ class AccountRepo {
     _syncManager.pushAccount(updatedAccount, _userId);
   }
 
-  /// Transfer between accounts
+  /// Transfer between accounts (INTERNAL - money staying inside system)
   Future<void> transfer(String fromId, String toId, double amount, {String? description}) async {
-    await withdraw(fromId, amount, description: description ?? 'Transfer out');
-    await deposit(toId, amount, description: description ?? 'Transfer in');
+    final fromAccount = await getAccount(fromId);
+    final toAccount = await getAccount(toId);
+    if (fromAccount == null || toAccount == null) {
+      throw Exception('Account not found');
+    }
+
+    final now = DateTime.now();
+
+    // Update both accounts
+    final updatedFrom = fromAccount.copyWith(
+      currentBalance: fromAccount.currentBalance - amount,
+      lastUpdated: now,
+    );
+    final updatedTo = toAccount.copyWith(
+      currentBalance: toAccount.currentBalance + amount,
+      lastUpdated: now,
+    );
+
+    // Create INTERNAL transfer transactions
+    final transferLinkId = _firestore.collection('_temp').doc().id;
+
+    final outTransaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: '',
+      accountId: fromId,
+      userId: _userId,
+      type: models.TransactionType.transfer,
+      amount: amount,
+      date: now,
+      description: description ?? 'Transfer',
+      transferDirection: models.TransferDirection.out_,
+      transferLinkId: transferLinkId,
+      isSynced: false,
+      lastUpdated: now,
+      // INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: fromId,
+      sourceType: models.SourceType.account,
+      destinationId: toId,
+      destinationType: models.SourceType.account,
+    );
+
+    final inTransaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: '',
+      accountId: toId,
+      userId: _userId,
+      type: models.TransactionType.transfer,
+      amount: amount,
+      date: now,
+      description: description ?? 'Transfer',
+      transferDirection: models.TransferDirection.in_,
+      transferLinkId: transferLinkId,
+      isSynced: false,
+      lastUpdated: now,
+      // INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: fromId,
+      sourceType: models.SourceType.account,
+      destinationId: toId,
+      destinationType: models.SourceType.account,
+    );
+
+    await _accountBox.put(fromId, updatedFrom);
+    await _accountBox.put(toId, updatedTo);
+    await _transactionBox.put(outTransaction.id, outTransaction);
+    await _transactionBox.put(inTransaction.id, inTransaction);
+
+    _syncManager.pushAccount(updatedFrom, _userId);
+    _syncManager.pushAccount(updatedTo, _userId);
   }
 
   /// Transfer from account to envelope (creates linked transfer transactions)
@@ -558,6 +644,7 @@ class AccountRepo {
     await envelopeBox.put(envelopeId, updatedEnvelope);
 
     // 3. Create linked transfer transactions
+    // Account to Envelope transfers are INTERNAL (money staying inside system)
     final transferLinkId = _firestore.collection('_temp').doc().id;
 
     // Account transaction (outgoing transfer)
@@ -579,6 +666,13 @@ class AccountRepo {
       targetEnvelopeName: envelope.name,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: accountId,
+      sourceType: models.SourceType.account,
+      destinationId: envelopeId,
+      destinationType: models.SourceType.envelope,
     );
 
     // Envelope transaction (incoming transfer)
@@ -599,6 +693,13 @@ class AccountRepo {
       targetEnvelopeName: envelope.name,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: accountId,
+      sourceType: models.SourceType.account,
+      destinationId: envelopeId,
+      destinationType: models.SourceType.envelope,
     );
 
     // Save both transactions to Hive

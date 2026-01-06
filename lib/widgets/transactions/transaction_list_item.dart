@@ -140,15 +140,42 @@ class TransactionListItem extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
 
-                  // DATE/TIME (subtle)
-                  Text(
-                    _formatDateTime(transaction.date),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
+                  // DATE/TIME with EXTERNAL/INTERNAL badge
+                  Row(
+                    children: [
+                      Text(
+                        _formatDateTime(transaction.date),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      if (transaction.impact != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: transaction.isExternal
+                                ? Colors.orange.shade700.withValues(alpha: 0.2)
+                                : Colors.blue.shade700.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            transaction.getImpactBadge(),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: transaction.isExternal
+                                  ? Colors.orange.shade700
+                                  : Colors.blue.shade700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

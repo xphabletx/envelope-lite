@@ -4,6 +4,38 @@ import 'package:hive/hive.dart';
 
 part 'transaction.g.dart';
 
+/// Transaction Impact: Does this cross the wall?
+@HiveType(typeId: 105)
+enum TransactionImpact {
+  @HiveField(0)
+  external, // Crosses the wall (changes net worth)
+  @HiveField(1)
+  internal, // Stays inside (just moves location)
+}
+
+/// Transaction Direction: Which way is money flowing?
+@HiveType(typeId: 106)
+enum TransactionDirection {
+  @HiveField(0)
+  inflow, // Money coming in (income, pay day)
+  @HiveField(1)
+  outflow, // Money going out (spending, bills)
+  @HiveField(2)
+  move, // Money moving between locations (internal only)
+}
+
+/// Source/Destination Type
+@HiveType(typeId: 107)
+enum SourceType {
+  @HiveField(0)
+  envelope,
+  @HiveField(1)
+  account,
+  @HiveField(2)
+  external, // Money from/to outside the system
+}
+
+// LEGACY ENUMS - Keep for backwards compatibility
 @HiveType(typeId: 100)
 enum TransactionType {
   @HiveField(0)
@@ -93,6 +125,27 @@ class Transaction {
   @HiveField(20)
   final String? accountId;
 
+  // NEW PHILOSOPHY FIELDS: Define the EXTERNAL/INTERNAL nature
+  @HiveField(21)
+  final TransactionImpact? impact; // external or internal (nullable for backwards compatibility)
+
+  @HiveField(22)
+  final TransactionDirection? direction; // inflow, outflow, or move (nullable for backwards compatibility)
+
+  // Source (where money came FROM)
+  @HiveField(23)
+  final String? sourceId; // Envelope/Account ID or null if external
+
+  @HiveField(24)
+  final SourceType? sourceType; // envelope, account, or external
+
+  // Destination (where money went TO)
+  @HiveField(25)
+  final String? destinationId; // Envelope/Account ID or null if external
+
+  @HiveField(26)
+  final SourceType? destinationType; // envelope, account, or external
+
   Transaction({
     required this.id,
     required this.envelopeId,
@@ -115,7 +168,45 @@ class Transaction {
     this.isSynced,
     this.lastUpdated,
     this.accountId,
+    this.impact,
+    this.direction,
+    this.sourceId,
+    this.sourceType,
+    this.destinationId,
+    this.destinationType,
   });
+
+  // Convenience getters
+  bool get isExternal => impact == TransactionImpact.external;
+  bool get isInternal => impact == TransactionImpact.internal;
+  bool get isInflow => direction == TransactionDirection.inflow;
+  bool get isOutflow => direction == TransactionDirection.outflow;
+  bool get isMove => direction == TransactionDirection.move;
+
+  // Get human-readable action text
+  String getActionText() {
+    if (isExternal && isInflow) {
+      return description.contains('Pay Day') ? 'Pay Day Deposit' : 'Income';
+    } else if (isExternal && isOutflow) {
+      return description.contains('Autopilot') ? 'Autopilot Payment' : 'Spent';
+    } else if (isInternal && isMove) {
+      if (description.contains('Cash Flow')) {
+        return 'Cash Flow';
+      } else if (description.contains('Autopilot')) {
+        return 'Autopilot Transfer';
+      } else {
+        return 'Transfer';
+      }
+    }
+    // Fallback for legacy transactions without impact/direction
+    return description;
+  }
+
+  // Get impact badge text
+  String getImpactBadge() {
+    if (impact == null) return 'LEGACY'; // For old transactions
+    return isExternal ? 'EXTERNAL' : 'INTERNAL';
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -138,6 +229,13 @@ class Transaction {
       'targetOwnerDisplayName': targetOwnerDisplayName,
       'isSynced': isSynced ?? true, // Default to synced for Firebase data
       'lastUpdated': Timestamp.fromDate(lastUpdated ?? DateTime.now()),
+      // New philosophy fields
+      'impact': impact?.name,
+      'direction': direction?.name,
+      'sourceId': sourceId,
+      'sourceType': sourceType?.name,
+      'destinationId': destinationId,
+      'destinationType': destinationType?.name,
       // Note: isFuture is not saved to Firestore (used only for UI projections)
     };
   }
@@ -168,6 +266,12 @@ class Transaction {
       isFuture: false, // Real transactions from Firestore are never future
       isSynced: (data['isSynced'] as bool?) ?? true, // Firestore data is already synced
       lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      impact: _parseImpact(data['impact']),
+      direction: _parseTransactionDirection(data['direction']),
+      sourceId: data['sourceId'] as String?,
+      sourceType: _parseSourceType(data['sourceType']),
+      destinationId: data['destinationId'] as String?,
+      destinationType: _parseSourceType(data['destinationType']),
     );
   }
 
@@ -184,6 +288,36 @@ class Transaction {
     final s = v.toString();
     try {
       return TransferDirection.values.firstWhere((e) => e.name == s);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static TransactionImpact? _parseImpact(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString();
+    try {
+      return TransactionImpact.values.firstWhere((e) => e.name == s);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static TransactionDirection? _parseTransactionDirection(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString();
+    try {
+      return TransactionDirection.values.firstWhere((e) => e.name == s);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static SourceType? _parseSourceType(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString();
+    try {
+      return SourceType.values.firstWhere((e) => e.name == s);
     } catch (_) {
       return null;
     }

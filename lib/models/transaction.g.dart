@@ -38,13 +38,19 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       isSynced: fields[18] as bool?,
       lastUpdated: fields[19] as DateTime?,
       accountId: fields[20] as String?,
+      impact: fields[21] as TransactionImpact?,
+      direction: fields[22] as TransactionDirection?,
+      sourceId: fields[23] as String?,
+      sourceType: fields[24] as SourceType?,
+      destinationId: fields[25] as String?,
+      destinationType: fields[26] as SourceType?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Transaction obj) {
     writer
-      ..writeByte(21)
+      ..writeByte(27)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -86,7 +92,19 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
       ..writeByte(19)
       ..write(obj.lastUpdated)
       ..writeByte(20)
-      ..write(obj.accountId);
+      ..write(obj.accountId)
+      ..writeByte(21)
+      ..write(obj.impact)
+      ..writeByte(22)
+      ..write(obj.direction)
+      ..writeByte(23)
+      ..write(obj.sourceId)
+      ..writeByte(24)
+      ..write(obj.sourceType)
+      ..writeByte(25)
+      ..write(obj.destinationId)
+      ..writeByte(26)
+      ..write(obj.destinationType);
   }
 
   @override
@@ -96,6 +114,133 @@ class TransactionAdapter extends TypeAdapter<Transaction> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TransactionAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class TransactionImpactAdapter extends TypeAdapter<TransactionImpact> {
+  @override
+  final int typeId = 105;
+
+  @override
+  TransactionImpact read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return TransactionImpact.external;
+      case 1:
+        return TransactionImpact.internal;
+      default:
+        return TransactionImpact.external;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, TransactionImpact obj) {
+    switch (obj) {
+      case TransactionImpact.external:
+        writer.writeByte(0);
+        break;
+      case TransactionImpact.internal:
+        writer.writeByte(1);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransactionImpactAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class TransactionDirectionAdapter extends TypeAdapter<TransactionDirection> {
+  @override
+  final int typeId = 106;
+
+  @override
+  TransactionDirection read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return TransactionDirection.inflow;
+      case 1:
+        return TransactionDirection.outflow;
+      case 2:
+        return TransactionDirection.move;
+      default:
+        return TransactionDirection.inflow;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, TransactionDirection obj) {
+    switch (obj) {
+      case TransactionDirection.inflow:
+        writer.writeByte(0);
+        break;
+      case TransactionDirection.outflow:
+        writer.writeByte(1);
+        break;
+      case TransactionDirection.move:
+        writer.writeByte(2);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransactionDirectionAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class SourceTypeAdapter extends TypeAdapter<SourceType> {
+  @override
+  final int typeId = 107;
+
+  @override
+  SourceType read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return SourceType.envelope;
+      case 1:
+        return SourceType.account;
+      case 2:
+        return SourceType.external;
+      default:
+        return SourceType.envelope;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, SourceType obj) {
+    switch (obj) {
+      case SourceType.envelope:
+        writer.writeByte(0);
+        break;
+      case SourceType.account:
+        writer.writeByte(1);
+        break;
+      case SourceType.external:
+        writer.writeByte(2);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SourceTypeAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

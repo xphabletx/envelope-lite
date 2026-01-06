@@ -642,6 +642,8 @@ class EnvelopeRepo {
     );
 
     // 2. Create transaction in Hive
+    // By default, deposits are EXTERNAL (money coming from outside)
+    // The caller can override this by calling the new methods directly
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: envelopeId,
@@ -652,6 +654,13 @@ class EnvelopeRepo {
       description: finalDescription,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - default to EXTERNAL
+      impact: models.TransactionImpact.external,
+      direction: models.TransactionDirection.inflow,
+      sourceId: null, // From outside the system
+      sourceType: models.SourceType.external,
+      destinationId: envelopeId,
+      destinationType: models.SourceType.envelope,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
@@ -714,6 +723,8 @@ class EnvelopeRepo {
     );
 
     // 2. Create transaction in Hive
+    // By default, withdrawals are EXTERNAL (money leaving the system)
+    // The caller can override this by calling the new methods directly
     final transaction = models.Transaction(
       id: _firestore.collection('_temp').doc().id,
       envelopeId: envelopeId,
@@ -726,6 +737,13 @@ class EnvelopeRepo {
       description: description,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - default to EXTERNAL
+      impact: models.TransactionImpact.external,
+      direction: models.TransactionDirection.outflow,
+      sourceId: envelopeId,
+      sourceType: models.SourceType.envelope,
+      destinationId: null, // To outside the system
+      destinationType: models.SourceType.external,
     );
 
     await _envelopeBox.put(envelopeId, updatedEnvelope);
@@ -822,6 +840,7 @@ class EnvelopeRepo {
     await _envelopeBox.put(toEnvelopeId, updatedTarget);
 
     // 2. Create linked transactions in Hive
+    // Transfers are INTERNAL (money staying inside the system)
     final transferLinkId = _firestore.collection('_temp').doc().id;
 
     final outTransaction = models.Transaction(
@@ -841,6 +860,13 @@ class EnvelopeRepo {
       targetEnvelopeName: targetEnv.name,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: fromEnvelopeId,
+      sourceType: models.SourceType.envelope,
+      destinationId: toEnvelopeId,
+      destinationType: models.SourceType.envelope,
     );
 
     final inTransaction = models.Transaction(
@@ -860,6 +886,13 @@ class EnvelopeRepo {
       targetEnvelopeName: targetEnv.name,
       isSynced: false,
       lastUpdated: now,
+      // New philosophy fields - INTERNAL transfer
+      impact: models.TransactionImpact.internal,
+      direction: models.TransactionDirection.move,
+      sourceId: fromEnvelopeId,
+      sourceType: models.SourceType.envelope,
+      destinationId: toEnvelopeId,
+      destinationType: models.SourceType.envelope,
     );
 
     await _createTransaction(outTransaction);
