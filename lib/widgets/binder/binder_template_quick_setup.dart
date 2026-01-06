@@ -573,7 +573,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
   bool _showTargetAmountTip = false;
   bool _showRecurringBillTip = false;
   bool _showPayDayTip = false;
-  bool _showAutoExecuteTip = false;
 
   @override
   void initState() {
@@ -669,13 +668,11 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           bottom: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-            return Column(
-              children: [
-                // Fixed Header with title centered, skip and progress on right
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
+          child: Column(
+            children: [
+            // Fixed Header with title centered, skip and progress on right
+            Padding(
+              padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
               child: Row(
                 children: [
                   // Title with emoji (centered)
@@ -716,21 +713,21 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                     ],
                   ),
                 ],
-                ),
               ),
+            ),
 
-                const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                // Scrollable Form fields
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Current Amount
-                        SmartTextField(
+            // Scrollable Form fields
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                      // Current Amount
+                      SmartTextField(
                         controller: _currentAmountController,
                         focusNode: _currentAmountFocus,
                         nextFocusNode: _targetAmountFocus,
@@ -790,7 +787,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                         nextFocusNode: widget.data.recurringBillEnabled ? _recurringAmountFocus : null,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
-                          labelText: 'Horizon Goal (optional)',
+                          labelText: 'Target Amount (optional)',
                           prefixText: localeProvider.currencySymbol,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -831,14 +828,124 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (_showTargetAmountTip)
                         _buildProTip(
-                          'Set a savings goal for this envelope. You can adjust visual settings and milestones later in the Horizon Navigator.',
+                          'Set a savings goal for this envelope. When you reach 100%, it will show your celebration icon instead of the pie chart!',
                         ),
 
                       const SizedBox(height: 24),
                       const Divider(),
                       const SizedBox(height: 24),
 
-                      // Autopilot
+                      // Envelope Cash Flow
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Envelope Cash Flow?',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Switch(
+                            value: widget.data.payDayDepositEnabled,
+                            onChanged: (enabled) {
+                              setState(() {
+                                widget.data.payDayDepositEnabled = enabled;
+
+                                // Show pro tip when toggled on
+                                if (enabled && !_showPayDayTip) {
+                                  _showPayDayTip = true;
+                                }
+                              });
+
+                              // Scroll to bottom when expanded
+                              if (enabled) {
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  if (mounted && _scrollController.hasClients) {
+                                    _scrollController.animateTo(
+                                      _scrollController.position.maxScrollExtent,
+                                      duration: const Duration(milliseconds: 400),
+                                      curve: Curves.easeOut,
+                                    );
+                                  }
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+
+                      if (widget.data.payDayDepositEnabled && _showPayDayTip)
+                        _buildProTip(
+                          'Envelope Cash Flow fuels this Horizon automatically every pay day from your Master Cash Flow—the total amount you allocate to all envelopes. This is "The Engine" of your strategy. Tip: For monthly bills paid weekly/bi-weekly, divide the total by pay periods. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button to help!',
+                        ),
+
+                      if (widget.data.payDayDepositEnabled) ...[
+                        const SizedBox(height: 16),
+
+                        SmartTextField(
+                          controller: _payDayAmountController,
+                          focusNode: _payDayAmountFocus,
+                          isLastField: true,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: 'Envelope Cash Flow Amount',
+                            hintText: 'How much of your Master Cash Flow fuels this Horizon?',
+                            prefixText: localeProvider.currencySymbol,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            helperText: widget.data.recurringBillEnabled
+                                ? 'Auto-suggested from autopilot'
+                                : null,
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.calculate,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                                onPressed: () async {
+                                  final result = await CalculatorHelper.showCalculator(context);
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _payDayAmountController.text = result;
+                                      widget.data.payDayDepositAmount = double.tryParse(result) ?? 0.0;
+                                    });
+                                  }
+                                },
+                                tooltip: 'Open Calculator',
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            widget.data.payDayDepositAmount = double.tryParse(value) ?? 0.0;
+                          },
+                        ),
+
+                        if (widget.isAccountMode) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.link,
+                                  size: 20,
+                                  color: theme.colorScheme.primary,
+                                ),
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 24),
+                      // Recurring Bill
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -999,134 +1106,10 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           onChanged: (enabled) {
                             setState(() {
                               widget.data.autoExecute = enabled;
-
-                              // Show pro tip when toggled
-                              if (!_showAutoExecuteTip) {
-                                _showAutoExecuteTip = true;
-                              }
                             });
                           },
                         ),
-
-                        if (_showAutoExecuteTip)
-                          _buildProTip(
-                            widget.data.autoExecute
-                                ? 'Payment will execute automatically on the due date. No notification needed—it just happens!'
-                                : 'You\'ll receive a notification when this payment is due. Perfect for bills that vary or need manual review.',
-                          ),
                       ],
-
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 24),
-
-                      // Envelope Cash Flow
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Envelope Cash Flow?',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Switch(
-                            value: widget.data.payDayDepositEnabled,
-                            onChanged: (enabled) {
-                              setState(() {
-                                widget.data.payDayDepositEnabled = enabled;
-
-                                // Show pro tip when toggled on
-                                if (enabled && !_showPayDayTip) {
-                                  _showPayDayTip = true;
-                                }
-                              });
-
-                              // Scroll to bottom when expanded
-                              if (enabled) {
-                                Future.delayed(const Duration(milliseconds: 300), () {
-                                  if (mounted && _scrollController.hasClients) {
-                                    _scrollController.animateTo(
-                                      _scrollController.position.maxScrollExtent,
-                                      duration: const Duration(milliseconds: 400),
-                                      curve: Curves.easeOut,
-                                    );
-                                  }
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-
-                      if (widget.data.payDayDepositEnabled && _showPayDayTip)
-                        _buildProTip(
-                          'Envelope Cash Flow fuels this Horizon automatically every pay day from your Master Cash Flow—the total amount you allocate to all envelopes. This is "The Engine" of your strategy. Tip: For monthly bills paid weekly/bi-weekly, divide the total by pay periods. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button to help!',
-                        ),
-
-                      if (widget.data.payDayDepositEnabled) ...[
-                        const SizedBox(height: 16),
-
-                        SmartTextField(
-                          controller: _payDayAmountController,
-                          focusNode: _payDayAmountFocus,
-                          isLastField: true,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: 'Envelope Cash Flow Amount',
-                            hintText: 'How much of your Master Cash Flow fuels this Horizon?',
-                            prefixText: localeProvider.currencySymbol,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            helperText: widget.data.recurringBillEnabled
-                                ? 'Auto-suggested from autopilot'
-                                : null,
-                            suffixIcon: Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.calculate,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                                onPressed: () async {
-                                  final result = await CalculatorHelper.showCalculator(context);
-                                  if (result != null && mounted) {
-                                    setState(() {
-                                      _payDayAmountController.text = result;
-                                      widget.data.payDayDepositAmount = double.tryParse(result) ?? 0.0;
-                                    });
-                                  }
-                                },
-                                tooltip: 'Open Calculator',
-                              ),
-                            ),
-                          ),
-                          onChanged: (value) {
-                            widget.data.payDayDepositAmount = double.tryParse(value) ?? 0.0;
-                          },
-                        ),
-
-                        if (widget.isAccountMode) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.link,
-                                  size: 20,
-                                  color: theme.colorScheme.primary,
-                                ),
                                 const SizedBox(width: 12),
                                 Text(
                                   'Will be linked to Main Account',
@@ -1155,10 +1138,9 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                     ],
                   ),
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ],
+          ),
         ),
       ),
     );
