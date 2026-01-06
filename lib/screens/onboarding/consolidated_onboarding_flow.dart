@@ -2280,18 +2280,17 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
+              // Header - fixed position
               Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
+                padding: const EdgeInsets.only(top: 40),
                 child: Column(
                   children: [
-                    // Main headline
                     Text(
                       'Welcome to Envelope Thinking',
                       style: fontProvider.getTextStyle(
@@ -2301,10 +2300,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                       ),
                       textAlign: TextAlign.center,
                     ),
-
                     const SizedBox(height: 16),
-
-                    // Tagline - dynamic currency
                     Text(
                       '"Give every $currencyName a purpose"',
                       style: fontProvider.getTextStyle(
@@ -2318,119 +2314,136 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                 ),
               ),
 
-              const Spacer(flex: 1),
-
-              // Animated envelope icon
-              TweenAnimationBuilder(
-                tween: Tween<double>(begin: 0.8, end: 1.0),
-                duration: const Duration(milliseconds: 1000),
-                curve: Curves.elasticOut,
-                builder: (context, double scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.3,
-                            ),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.mail,
-                        size: 50,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  );
-                },
+              // Flexible spacer that shrinks when keyboard appears
+              const Flexible(
+                flex: 2,
+                child: SizedBox(height: 20),
               ),
 
-              const SizedBox(height: 24),
-
-              // Animated examples
-              SizedBox(
-                height: 160,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List.generate(_examples.length, (index) {
-                    if (index > _currentExampleIndex) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final example = _examples[index];
-                    final formattedAmount = _formatSimpleCurrency(
-                      example['amount'] as double,
-                      localeProvider.currencySymbol,
-                    );
-                    return FadeTransition(
-                      opacity: index == _currentExampleIndex
-                          ? _fadeAnimation
-                          : const AlwaysStoppedAnimation(1.0),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          '→ ${example['text']} $formattedAmount ${example['emoji']}',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w500,
-                          ),
+              // Icon - shrinks when needed
+              Flexible(
+                flex: 0,
+                child: TweenAnimationBuilder(
+                  tween: Tween<double>(begin: 0.8, end: 1.0),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Curves.elasticOut,
+                  builder: (context, double scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.3,
+                              ),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.mail,
+                          size: 40,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                     );
-                  }),
+                  },
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // Value propositions
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.5,
+              // Examples - flexible height
+              Flexible(
+                flex: 0,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(_examples.length, (index) {
+                      if (index > _currentExampleIndex) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final example = _examples[index];
+                      final formattedAmount = _formatSimpleCurrency(
+                        example['amount'] as double,
+                        localeProvider.currencySymbol,
+                      );
+                      return FadeTransition(
+                        opacity: index == _currentExampleIndex
+                            ? _fadeAnimation
+                            : const AlwaysStoppedAnimation(1.0),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            '→ ${example['text']} $formattedAmount ${example['emoji']}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.colorScheme.onSurface,
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.colorScheme.primary,
-                        height: 1.4,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
                 ),
               ),
 
-              const Spacer(flex: 1),
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 16),
+              // Value propositions - shrinkable
+              Flexible(
+                flex: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.primary,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Flexible spacer that shrinks when keyboard appears
+              const Flexible(
+                flex: 2,
+                child: SizedBox(height: 20),
+              ),
 
               // CTA button with fade-in animation
               if (_showButton)
