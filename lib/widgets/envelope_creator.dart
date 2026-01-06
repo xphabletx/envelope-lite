@@ -182,8 +182,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         _hasAccounts = allAccounts.isNotEmpty;
         _accountsLoaded = true;
 
-        // Pre-select default account if Cash Flow is enabled and accounts exist
-        if (_cashFlowEnabled && _hasAccounts) {
+        // ACCOUNT MODE: Pre-select default account if accounts exist
+        // If only one account, it's auto-selected
+        // If multiple accounts, default account is pre-selected
+        if (_hasAccounts) {
           final defaultAccount = allAccounts.firstWhere(
             (a) => a.isDefault,
             orElse: () => allAccounts.first,
@@ -353,6 +355,45 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       return;
     }
 
+    // CRITICAL VALIDATION: Account Mode enforcement
+    // If user has accounts, they MUST link the envelope to an account (regardless of Cash Flow)
+    if (_hasAccounts && _selectedAccountId == null) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (context) {
+          final fontProvider = Provider.of<FontProvider>(context, listen: false);
+          return AlertDialog(
+            title: Text(
+              'Account Link Required',
+              style: fontProvider.getTextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              'You have accounts configured, so all envelopes must be linked to an account.\n\n'
+              'Please select an account from the dropdown above, or delete all accounts to use Budget Mode.',
+              style: fontProvider.getTextStyle(fontSize: 16),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Go Back',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     // Cash flow amount
     double? cashFlowAmount;
     if (_cashFlowEnabled) {
@@ -383,48 +424,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         return;
       }
       cashFlowAmount = parsed;
-
-      // CRITICAL VALIDATION: Account Mode enforcement
-      // If user has accounts, they MUST link the envelope to an account
-      if (_hasAccounts && _selectedAccountId == null) {
-        if (!mounted) return;
-        await showDialog(
-          context: context,
-          builder: (context) {
-            final fontProvider = Provider.of<FontProvider>(context, listen: false);
-            return AlertDialog(
-              title: Text(
-                'Link Required',
-                style: fontProvider.getTextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: Text(
-                'You need to link this envelope to an account.\n\n'
-                'Options:\n'
-                '• Select an account from the dropdown\n'
-                '• Disable Cash Flow\n'
-                '• Delete all accounts to use Budget Mode',
-                style: fontProvider.getTextStyle(fontSize: 16),
-              ),
-              actions: [
-                FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Go Back',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-        return;
-      }
     }
 
     setState(() => _saving = true);
@@ -840,10 +839,30 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // ACCOUNT MODE ENFORCEMENT: Only show account dropdown when Cash Flow is enabled
-                        if (_cashFlowEnabled && _accountsLoaded && _hasAccounts) ...[
+                        // ACCOUNT MODE ENFORCEMENT: Always show account dropdown when accounts exist
+                        if (_accountsLoaded && _hasAccounts) ...[
                           Divider(color: theme.colorScheme.outline),
                           const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                color: theme.colorScheme.primary,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Account link is required when you have accounts',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 14,
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             'Linked Account',
                             style: fontProvider.getTextStyle(
@@ -1035,15 +1054,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           onChanged: (value) {
                             setState(() {
                               _cashFlowEnabled = value;
-
-                              // Pre-select default account when Cash Flow is enabled
-                              if (value && _hasAccounts && _selectedAccountId == null) {
-                                final defaultAccount = _accounts.firstWhere(
-                                  (a) => a.isDefault,
-                                  orElse: () => _accounts.first,
-                                );
-                                _selectedAccountId = defaultAccount.id;
-                              }
                             });
                           },
                           title: Text(
