@@ -19,11 +19,11 @@ import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
 import 'envelope/omni_icon_picker_modal.dart';
-import '../models/envelope.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
 import '../utils/calculator_helper.dart';
 import 'common/smart_text_field.dart';
+import '../models/creation_context.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -32,6 +32,7 @@ Future<void> showEnvelopeCreator(
   required GroupRepo groupRepo,
   required AccountRepo accountRepo,
   String? preselectedBinderId,
+  CreationContext? creationContext,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute(
@@ -41,6 +42,7 @@ Future<void> showEnvelopeCreator(
         groupRepo: groupRepo,
         accountRepo: accountRepo,
         preselectedBinderId: preselectedBinderId,
+        creationContext: creationContext,
       ),
     ),
   );
@@ -52,11 +54,13 @@ class _EnvelopeCreatorScreen extends StatefulWidget {
     required this.groupRepo,
     required this.accountRepo,
     this.preselectedBinderId,
+    this.creationContext,
   });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
   final String? preselectedBinderId;
+  final CreationContext? creationContext;
 
   @override
   State<_EnvelopeCreatorScreen> createState() => _EnvelopeCreatorScreenState();
@@ -64,6 +68,9 @@ class _EnvelopeCreatorScreen extends StatefulWidget {
 
 class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  // Constant for pending binder draft logic
+  static const String _pendingBinderId = 'PENDING_NEW_BINDER';
 
   // Controllers
   final _nameCtrl = TextEditingController();
@@ -106,7 +113,16 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedBinderId = widget.preselectedBinderId;
+    // Priority: explicit preselectedBinderId > creationContext.preselectedBinderId
+    _selectedBinderId = widget.preselectedBinderId ??
+                        widget.creationContext?.preselectedBinderId;
+
+    // If we have a pending binder name (creating envelope inside a new binder),
+    // select the pending binder option
+    if (widget.creationContext?.hasPendingBinder == true) {
+      _selectedBinderId = _pendingBinderId;
+    }
+
     _loadBinders();
     _loadAccounts();
 
@@ -182,13 +198,18 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   }
 
   Future<void> _createNewBinder() async {
-    // Pass draft name so user can select the envelope they are currently creating
+    // Create context for creating a binder inside an envelope creator
+    // This will show the current envelope name as a selectable option in the binder
+    final context = _nameCtrl.text.isNotEmpty
+        ? CreationContext.forBinderInsideEnvelope(_nameCtrl.text)
+        : null;
+
     // Capture the newBinderId returned by the editor
     final newBinderId = await editor.showGroupEditor(
-      context: context,
+      context: this.context,
       groupRepo: widget.groupRepo,
       envelopeRepo: widget.repo,
-      draftEnvelopeName: _nameCtrl.text.isNotEmpty ? _nameCtrl.text : null,
+      creationContext: context,
     );
 
     // Reload binders after creation to ensure the list is up to date
@@ -409,6 +430,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     setState(() => _saving = true);
 
     try {
+      // If the pending binder is selected, don't assign a groupId yet
+      // The binder creator will handle adding this envelope after it's created
+      final actualBinderId = _selectedBinderId == _pendingBinderId
+          ? null
+          : _selectedBinderId;
+
       final envelopeId = await widget.repo.createEnvelope(
         name: name,
         startingAmount: start,
@@ -420,7 +447,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         iconValue: _iconValue,
         cashFlowEnabled: _cashFlowEnabled,
         cashFlowAmount: cashFlowAmount,
-        groupId: _selectedBinderId,
+        groupId: actualBinderId,
         linkedAccountId: _selectedAccountId,
       );
 
@@ -560,7 +587,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.emoji_emotions),
+                                Image.asset(
+                                  'assets/default/stufficon.png',
+                                  width: 24,
+                                  height: 24,
+                                ),
                                 const SizedBox(width: 16),
                                 Text(
                                   tr('Icon'),
@@ -569,16 +600,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                   ),
                                 ),
                                 const Spacer(),
-                                if (_iconValue != null)
-                                  Envelope(
-                                    id: '',
-                                    name: '',
-                                    userId: '',
-                                    iconType: _iconType,
-                                    iconValue: _iconValue,
-                                  ).getIconWidget(theme, size: 32)
-                                else
-                                  const Icon(Icons.add_photo_alternate_outlined),
+                                const Icon(Icons.add_photo_alternate_outlined),
                               ],
                             ),
                           ),
@@ -922,6 +944,29 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                         ),
                                       ),
                                     ),
+                                    // Add pending binder option if we're creating envelope inside a new binder
+                                    if (widget.creationContext?.hasPendingBinder == true)
+                                      DropdownMenuItem(
+                                        value: _pendingBinderId,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.folder, size: 20),
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                '${widget.creationContext!.pendingBinderName} (New)',
+                                                style: fontProvider.getTextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: theme.colorScheme.primary,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ..._binders.map((binder) {
                                       final binderColorOption =
                                           ThemeBinderColors.getColorsForTheme(

@@ -19,4 +19,16 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- Custom theme for UCrop to handle status bar properly -->
+    <style name="UCropTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Enable drawing behind system bars -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Make status bar transparent so toolbar can handle it -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- Fit system windows to add proper padding -->
+        <item name="android:fitsSystemWindows">true</item>
+        <!-- Use light status bar icons for dark toolbars -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

@@ -1683,6 +1683,8 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
   }
 
   void _continueToNext() {
+    // Dismiss keyboard before continuing
+    FocusManager.instance.primaryFocus?.unfocus();
     final balance = double.tryParse(_balanceController.text) ?? 0.0;
     widget.onContinue(
       _nameController.text.trim(),
@@ -1935,6 +1937,8 @@ class _PayDaySetupStepState extends State<_PayDaySetupStep> {
   }
 
   void _continueToNext() {
+    // Dismiss keyboard before continuing
+    FocusManager.instance.primaryFocus?.unfocus();
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     widget.onContinue(amount, _frequency, _nextPayDate);
   }

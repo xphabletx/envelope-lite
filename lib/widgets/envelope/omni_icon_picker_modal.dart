@@ -479,11 +479,13 @@ class _IconTile extends StatelessWidget {
           ),
         ),
         child: Center(
-          child: Icon(
-            (icon.preview as Icon).icon,
-            color: isSelected ? theme.colorScheme.onPrimaryContainer : color,
-            size: 32,
-          ),
+          child: icon.type == IconType.assetImage
+              ? icon.preview
+              : Icon(
+                  (icon.preview as Icon).icon,
+                  color: isSelected ? theme.colorScheme.onPrimaryContainer : color,
+                  size: 32,
+                ),
         ),
       ),
     );

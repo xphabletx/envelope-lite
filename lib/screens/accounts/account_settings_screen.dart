@@ -91,24 +91,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
-  Widget _buildIconPreview() {
-    final theme = Theme.of(context);
-    final account = Account(
-      id: '',
-      name: '',
-      userId: '',
-      currentBalance: 0,
-      createdAt: DateTime.now(),
-      lastUpdated: DateTime.now(),
-      iconType: _iconType,
-      iconValue: _iconValue,
-      iconColor: _iconColor,
-      emoji: widget.account.emoji,
-    );
-
-    return account.getIconWidget(theme, size: 32);
-  }
-
   Future<void> _openCalculator() async {
     final result = await CalculatorHelper.showCalculator(context);
     if (result != null && mounted) {
@@ -926,14 +908,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.emoji_emotions),
+                      Image.asset(
+                        'assets/default/stufficon.png',
+                        width: 24,
+                        height: 24,
+                      ),
                       const SizedBox(width: 16),
                       Text(
                         'Icon',
                         style: fontProvider.getTextStyle(fontSize: 18),
                       ),
                       const Spacer(),
-                      _buildIconPreview(),
+                      const Icon(Icons.add_photo_alternate_outlined),
                     ],
                   ),
                 ),

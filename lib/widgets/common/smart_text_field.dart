@@ -86,6 +86,26 @@ class _SmartTextFieldState extends State<SmartTextField> {
   }
 
   @override
+  void didUpdateWidget(SmartTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Handle focus node changes
+    if (widget.focusNode != oldWidget.focusNode) {
+      // Remove listener from old focus node
+      _internalFocusNode.removeListener(_onFocusChange);
+
+      // Dispose old internal focus node if we created it
+      if (oldWidget.focusNode == null) {
+        _internalFocusNode.dispose();
+      }
+
+      // Set up new focus node
+      _internalFocusNode = widget.focusNode ?? FocusNode();
+      _internalFocusNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
   void dispose() {
     _internalFocusNode.removeListener(_onFocusChange);
     if (widget.focusNode == null) {
@@ -95,6 +115,9 @@ class _SmartTextFieldState extends State<SmartTextField> {
   }
 
   void _onFocusChange() {
+    // Safety check: don't proceed if widget is no longer mounted
+    if (!mounted) return;
+
     if (_internalFocusNode.hasFocus != _hasFocus) {
       setState(() {
         _hasFocus = _internalFocusNode.hasFocus;

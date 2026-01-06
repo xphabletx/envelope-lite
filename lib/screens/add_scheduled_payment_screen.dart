@@ -325,7 +325,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
         ),
         title: FittedBox(
           child: Text(
-            _isEditing ? 'Edit Schedule' : 'Schedule Payment',
+            _isEditing ? 'Edit Autopilot' : 'Autopilot',
             style: fontProvider.getTextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -927,7 +927,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
                           ),
                         ),
                         Text(
-                          'Automatically process on due date',
+                          'Automatically process on due date, or notify if disabled',
                           style: TextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.onSurface.withValues(

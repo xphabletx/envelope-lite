@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/group_repo.dart';
 import '../services/envelope_repo.dart';
@@ -13,7 +12,6 @@ import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_themes.dart';
-import '../data/material_icons_database.dart';
 import '../data/binder_templates.dart';
 import 'binder_template_selector.dart';
 import 'envelope_creator.dart';
@@ -21,6 +19,7 @@ import 'binder/binder_template_quick_setup.dart';
 import 'binder/template_envelope_selector.dart';
 import '../utils/responsive_helper.dart';
 import '../widgets/common/smart_text_field.dart';
+import '../models/creation_context.dart';
 
 // CHANGED: Returns String? (the group ID) instead of void
 Future<String?> showGroupEditor({
@@ -29,6 +28,7 @@ Future<String?> showGroupEditor({
   required EnvelopeRepo envelopeRepo,
   EnvelopeGroup? group,
   String? draftEnvelopeName,
+  CreationContext? creationContext,
 }) async {
   // If creating a new binder (not editing), show template selector first
   BinderTemplate? selectedTemplate;
@@ -72,6 +72,7 @@ Future<String?> showGroupEditor({
         envelopeRepo: envelopeRepo,
         group: group,
         draftEnvelopeName: draftEnvelopeName,
+        creationContext: creationContext,
         initialTemplate: selectedTemplate,
       ),
     ),
@@ -84,6 +85,7 @@ class _GroupEditorScreen extends StatefulWidget {
     required this.envelopeRepo,
     this.group,
     this.draftEnvelopeName,
+    this.creationContext,
     this.initialTemplate,
   });
 
@@ -91,6 +93,7 @@ class _GroupEditorScreen extends StatefulWidget {
   final EnvelopeRepo envelopeRepo;
   final EnvelopeGroup? group;
   final String? draftEnvelopeName;
+  final CreationContext? creationContext;
   final BinderTemplate? initialTemplate;
 
   @override
@@ -139,7 +142,13 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     editingGroupId = widget.group?.id;
     selectedColorIndex = widget.group?.colorIndex ?? 0;
 
+    // Handle draft envelope from direct parameter (legacy support)
     if (widget.draftEnvelopeName != null) {
+      selectedEnvelopeIds.add(_draftId);
+    }
+
+    // Handle draft envelope from creation context (new nested flow)
+    if (widget.creationContext?.hasPendingEnvelope == true) {
       selectedEnvelopeIds.add(_draftId);
     }
 
@@ -538,12 +547,22 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     final beforeIds = await widget.envelopeRepo.envelopesStream().first;
     final beforeIdSet = beforeIds.map((e) => e.id).toSet();
 
+    // Create context for creating an envelope inside a binder creator
+    // If we're editing an existing binder, use its ID for preselection
+    // If we're creating a new binder, pass the binder name from the text field
+    final creationContext = editingGroupId != null
+        ? CreationContext.withPreselectedBinder(editingGroupId!)
+        : (_nameCtrl.text.isNotEmpty
+            ? CreationContext.forEnvelopeInsideBinder(_nameCtrl.text)
+            : null);
+
     await showEnvelopeCreator(
       context, // ignore: use_build_context_synchronously
       repo: widget.envelopeRepo,
       groupRepo: widget.groupRepo,
       accountRepo: accountRepo,
       preselectedBinderId: editingGroupId,
+      creationContext: creationContext,
     );
 
     // Check for newly created envelope
@@ -671,109 +690,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         }
       });
     }
-  }
-
-  Widget _buildIconDisplay(ThemeData theme, {double? size}) {
-    final iconSize = size ?? 36;
-
-    // Use new icon system if available
-    if (selectedIconType != null && selectedIconValue != null) {
-      switch (selectedIconType) {
-        case 'emoji':
-          return FittedBox(
-            fit: BoxFit.contain,
-            child: Text(
-              selectedIconValue!,
-              style: TextStyle(fontSize: iconSize),
-            ),
-          );
-
-        case 'materialIcon':
-          final iconData = materialIconsDatabase[selectedIconValue!]?['icon'] as IconData? ?? Icons.circle;
-          return Icon(
-            iconData,
-            size: iconSize,
-            color: selectedIconColor != null
-                ? Color(selectedIconColor!)
-                : theme.colorScheme.primary,
-          );
-
-        case 'companyLogo':
-          final logoUrl =
-              'https://www.google.com/s2/favicons?sz=128&domain=$selectedIconValue';
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: CachedNetworkImage(
-              imageUrl: logoUrl,
-              width: iconSize,
-              height: iconSize,
-              fit: BoxFit.contain,
-              placeholder: (context, url) => SizedBox(
-                width: iconSize,
-                height: iconSize,
-                child: Center(
-                  child: SizedBox(
-                    width: iconSize / 2,
-                    height: iconSize / 2,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-              ),
-              errorWidget: (context, url, error) {
-                if (selectedEmoji != null) {
-                  return FittedBox(
-                    fit: BoxFit.contain,
-                    child: Text(
-                      selectedEmoji!,
-                      style: TextStyle(fontSize: iconSize),
-                    ),
-                  );
-                }
-                return Image.asset(
-                  'assets/default/stufficon.png',
-                  width: iconSize * 1.4,
-                  height: iconSize * 1.4,
-                );
-              },
-            ),
-          );
-
-        default:
-          if (selectedEmoji != null) {
-            return FittedBox(
-              fit: BoxFit.contain,
-              child: Text(
-                selectedEmoji!,
-                style: TextStyle(fontSize: iconSize),
-              ),
-            );
-          }
-          return Image.asset(
-            'assets/default/stufficon.png',
-            width: iconSize * 1.4,
-            height: iconSize * 1.4,
-          );
-      }
-    }
-
-    // Fallback to emoji or stufficon
-    if (selectedEmoji != null) {
-      return FittedBox(
-        fit: BoxFit.contain,
-        child: Text(
-          selectedEmoji!,
-          style: TextStyle(fontSize: iconSize),
-        ),
-      );
-    }
-    return Image.asset(
-      'assets/default/stufficon.png',
-      width: iconSize * 1.4,
-      height: iconSize * 1.4,
-    );
   }
 
   @override
@@ -966,7 +882,11 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        Icon(Icons.emoji_emotions, size: isLandscape ? 20.0 : 24.0),
+                                        Image.asset(
+                                          'assets/default/stufficon.png',
+                                          width: isLandscape ? 20.0 : 24.0,
+                                          height: isLandscape ? 20.0 : 24.0,
+                                        ),
                                         SizedBox(width: isLandscape ? 12.0 : 16.0),
                                         Text(
                                           tr('Icon'),
@@ -975,21 +895,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                           ),
                                         ),
                                         const Spacer(),
-                                        if (selectedIconType != null &&
-                                            selectedIconValue != null)
-                                          SizedBox(
-                                            width: isLandscape ? 28.0 : 32.0,
-                                            height: isLandscape ? 28.0 : 32.0,
-                                            child: _buildIconDisplay(
-                                              theme,
-                                              size: isLandscape ? 28.0 : 32.0,
-                                            ),
-                                          )
-                                        else
-                                          Icon(
-                                            Icons.add_photo_alternate_outlined,
-                                            size: isLandscape ? 20.0 : 24.0,
-                                          ),
+                                        Icon(
+                                          Icons.add_photo_alternate_outlined,
+                                          size: isLandscape ? 20.0 : 24.0,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1279,11 +1188,13 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                               ..sort((a, b) => a.name.compareTo(b.name));
 
                             // Add draft envelope from envelope creator (if any)
-                            if (widget.draftEnvelopeName != null &&
-                                widget.draftEnvelopeName!.isNotEmpty) {
+                            // Support both legacy draftEnvelopeName and new creationContext
+                            final draftName = widget.draftEnvelopeName ??
+                                             widget.creationContext?.pendingEnvelopeName;
+                            if (draftName != null && draftName.isNotEmpty) {
                               final draftEnv = Envelope(
                                 id: _draftId,
-                                name: "${widget.draftEnvelopeName} (New)",
+                                name: "$draftName (New)",
                                 userId: widget.envelopeRepo.currentUserId,
                                 emoji: '📁',
                                 currentAmount: 0,

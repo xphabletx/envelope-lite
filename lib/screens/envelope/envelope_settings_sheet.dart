@@ -580,20 +580,18 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.emoji_emotions),
+                            Image.asset(
+                              'assets/default/stufficon.png',
+                              width: 24,
+                              height: 24,
+                            ),
                             const SizedBox(width: 16),
                             Text(
                               'Icon',
                               style: fontProvider.getTextStyle(fontSize: 18),
                             ),
                             const Spacer(),
-                            envelope
-                                .copyWith(
-                                  iconType: _iconType,
-                                  iconValue: _iconValue,
-                                  emoji: _selectedEmoji,
-                                )
-                                .getIconWidget(theme, size: 32),
+                            const Icon(Icons.add_photo_alternate_outlined),
                           ],
                         ),
                       ),

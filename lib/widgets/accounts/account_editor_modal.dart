@@ -128,24 +128,6 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     }
   }
 
-  Widget _buildIconPreview() {
-    final theme = Theme.of(context);
-    final account = Account(
-      id: '',
-      name: '',
-      userId: '',
-      currentBalance: 0,
-      createdAt: DateTime.now(),
-      lastUpdated: DateTime.now(),
-      iconType: _iconType,
-      iconValue: _iconValue,
-      iconColor: _iconColor,
-      emoji: _isEditMode ? widget.account?.emoji : null,
-    );
-
-    return account.getIconWidget(theme, size: 32);
-  }
-
   Future<void> _handleSave() async {
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
@@ -630,14 +612,18 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.emoji_emotions),
+                            Image.asset(
+                              'assets/default/stufficon.png',
+                              width: 24,
+                              height: 24,
+                            ),
                             const SizedBox(width: 16),
                             Text(
                               'Icon',
                               style: fontProvider.getTextStyle(fontSize: 18),
                             ),
                             const Spacer(),
-                            _buildIconPreview(),
+                            const Icon(Icons.add_photo_alternate_outlined),
                           ],
                         ),
                       ),

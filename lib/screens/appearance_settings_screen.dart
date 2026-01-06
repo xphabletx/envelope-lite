@@ -204,16 +204,22 @@ class AppearanceSettingsScreen extends StatelessWidget {
                   final baseFontSize = isLandscape ? 16.0 : 18.0;
                   switch (font.id) {
                     case FontProvider.caveatId:
-                      sampleStyle = GoogleFonts.caveat(fontSize: baseFontSize + 4);
+                      sampleStyle = GoogleFonts.caveat(
+                        fontSize: baseFontSize + 4,
+                      );
                       break;
                     case FontProvider.indieFlowerId:
-                      sampleStyle = GoogleFonts.indieFlower(fontSize: baseFontSize + 2);
+                      sampleStyle = GoogleFonts.indieFlower(
+                        fontSize: baseFontSize + 2,
+                      );
                       break;
                     case FontProvider.robotoId:
                       sampleStyle = GoogleFonts.roboto(fontSize: baseFontSize);
                       break;
                     case FontProvider.openSansId:
-                      sampleStyle = GoogleFonts.openSans(fontSize: baseFontSize);
+                      sampleStyle = GoogleFonts.openSans(
+                        fontSize: baseFontSize,
+                      );
                       break;
                     default:
                       sampleStyle = TextStyle(fontSize: baseFontSize);

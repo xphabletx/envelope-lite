@@ -842,6 +842,17 @@ class SettingsScreen extends StatelessWidget {
           aspectRatioPresets: [
             CropAspectRatioPreset.square,
           ],
+          // Fix status bar - use light/dark mode instead of color
+          statusBarLight: onPrimaryColor.computeLuminance() > 0.5,
+          activeControlsWidgetColor: primaryColor,
+          // Move controls to bottom to avoid status bar overlap
+          hideBottomControls: false,
+          // Proper padding and layout
+          cropFrameColor: primaryColor,
+          cropGridColor: primaryColor.withValues(alpha: 0.3),
+          dimmedLayerColor: Colors.black.withValues(alpha: 0.6),
+          // Show crop frame to make it clearer
+          showCropGrid: true,
         ),
         IOSUiSettings(
           title: 'Crop Profile Photo',
