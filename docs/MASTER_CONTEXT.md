@@ -1,7 +1,7 @@
 # Stuffrite - Comprehensive Master Context Documentation
 
 **Last Updated:** 2026-01-06
-**Version:** 2.5 (EXTERNAL/INTERNAL Transaction Philosophy)
+**Version:** 2.6 (Pay Day Cockpit - Rising Sun Refactor)
 **Purpose:** Complete reference for all functions, features, code architecture, and inter-dependencies
 
 ---
@@ -93,6 +93,7 @@ lib/
 **Total Lines of Code:** ~16,500+ [UPDATED]
 
 **Recent Additions (Jan 2026):**
+- **Pay Day Cockpit - Rising Sun Refactor (Jan 6):** Complete consolidation of 3-screen pay day flow into single cohesive cockpit with real-time Rising Sun progress, temporal delta feedback, and animated waterfall drainage
 - **EXTERNAL/INTERNAL Transaction Philosophy (Jan 6):** Complete architectural refactor to distinguish transactions that cross "the wall" (external - income/spending) from internal transfers
 - RevenueCat subscription integration (5 new files)
 - OnboardingProvider for improved state management
@@ -1646,15 +1647,119 @@ StreamBuilder<double>(
 
 ### Pay Day Screens
 
-**3-Step Flow:**
+**NEW: Pay Day Cockpit (Jan 6, 2026)** ⭐
 
-1. **PayDayAmountScreen** - Enter amount, select account
-2. **PayDayAllocationScreen** - Auto-fill envelopes, manual adjustments
-3. **PayDayStuffingScreen** - Animated execution with progress tracking
+The 3-screen pay day flow has been **completely refactored** into a single cohesive cockpit:
+
+**Legacy (Removed):**
+- ❌ PayDayAmountScreen (deleted)
+- ❌ PayDayAllocationScreen (deleted)
+- ❌ PayDayStuffingScreen (deleted)
+
+**New Implementation:**
+- ✅ **PayDayCockpit** - Single-screen 4-phase flow with unified state management
 
 ---
 
-**PayDayStuffingScreen** (CRITICAL - Pay Day Execution)
+**PayDayCockpit Architecture**
+**File:** `lib/screens/pay_day/pay_day_cockpit.dart` (~900 lines)
+**Provider:** `lib/providers/pay_day_cockpit_provider.dart` (~520 lines)
+
+**The 4 Phases:**
+
+**Phase 1: External Inflow (The Source)**
+- FittedBox-wrapped SmartTextField for scalable amount entry
+- Auto-detects mode from `PayDaySettings.defaultAccountId`:
+  - **Account Mode:** Money flows to account card → envelopes
+  - **Simple Mode:** Money flows directly to Horizon Pool
+- "OUTSIDE THE WALL" visual branding
+- Calculator integration for complex amounts
+
+**Phase 2: Strategy Review (The Filter)**
+- **Waterfall Header** (Sticky):
+  ```
+  Total Inflow: £1,000 | Reserved for Autopilot: £200 | Available Fuel: £800
+  ```
+- Shows autopilot reserves calculated from cash flow enabled envelopes
+- **Red Warning** when over-allocating: "⚠️ Using Reserved Funds / Buffer"
+  - Blocks dipping into autopilot reserves
+  - Allows dipping into buffer (with warning)
+- "Add Horizon Boosts" button for temporary envelope additions
+- Review all allocations before execution
+
+**Phase 3: Rising Sun Execution (The Waterfall)** ⭐
+- **Animated Waterfall Drainage Header:**
+  - Shows "Unallocated Fuel" draining in real-time
+  - Progress bar fills as envelopes are stuffed
+  - Turns red when over-budget
+- **StuffingEnvelopeRowCockpit** for each envelope:
+  - **HorizonProgress Widget** - Rising Sun shows percentage to target
+  - **Real-time updates** - Sun rises on every keystroke (50ms debounce)
+  - **Temporal Delta** - "🔥 5 days closer" below amount
+  - **Pulsing animation** - Current envelope glows
+  - **Animated balance** - Smooth number transitions
+- For envelopes without velocity: "First fueling: Time Machine initializing..."
+- All calculations use envelope.cashFlowAmount as monthly velocity
+
+**Phase 4: Success (Future Recalibrated)**
+- Time Machine icon celebration (⏰)
+- "Your Horizons are now closer" message
+- **Top 3 Horizons Advanced** with days saved display
+- Complete transaction summary
+- Done button to exit
+
+**Key Provider Methods:**
+
+```dart
+// Mode detection
+bool isAccountMode = defaultAccountId != null
+
+// Autopilot calculation
+_calculateAutopilotAllocations()
+// Calculates _autopilotReserve from cashFlowEnabled envelopes
+
+// Organization for stuffing
+_organizeEnvelopesForStuffing()
+// Groups envelopes into BinderStuffingGroup for display
+
+// Real-time calculations
+calculateRealTimeProgress(envelope, stuffing)
+// Returns 0.0 to 1.0 for HorizonProgress widget
+
+calculateDaysSaved(envelope, stuffing)
+// Returns "🔥 X days closer" using velocity calculation:
+// oldDays = (targetAmount - currentAmount) / (velocity / 30.44)
+// newDays = (targetAmount - (currentAmount + stuffing)) / (velocity / 30.44)
+// difference = (oldDays - newDays).round()
+
+// Top horizons tracking
+_calculateTopHorizons()
+// Identifies top 3 envelopes with most days saved
+```
+
+**The Waterfall Metaphor:**
+1. **External money arrives** (Outside the Wall → Total Inflow)
+2. **Filters through autopilot** (Reserved Funds locked)
+3. **Available fuel** ready for manual stuffing
+4. **Horizons get closer** with every allocation (Rising Sun rises)
+5. **Future recalibrated** when complete
+
+**Supporting Widgets:**
+- `lib/screens/pay_day/widgets/stuffing_envelope_row_cockpit.dart` (~220 lines)
+  - HorizonProgress integration
+  - Temporal delta display
+  - Pulsing current indicator
+  - Animated balance updates
+
+**Navigation Integration:**
+- `lib/screens/home_screen.dart:832` - Updated to use PayDayCockpit
+- `lib/screens/groups_home_screen.dart` - Updated at 3 locations (lines 197, 314, 373)
+
+---
+
+**LEGACY DOCUMENTATION (PRE-COCKPIT):**
+
+**PayDayStuffingScreen** (REMOVED - Pay Day Execution)
 **File:** `lib/screens/pay_day/pay_day_stuffing_screen.dart` (~300 lines)
 
 **Purpose:** Executes pay day auto-fill with animated progress display

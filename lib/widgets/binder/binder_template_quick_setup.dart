@@ -725,7 +725,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1140,31 +1140,26 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           ),
                         ],
                       ],
-                      ],
-                    ),
-                  ),
-                ),
 
-                // Navigation button
-                SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                    child: FilledButton(
-                      onPressed: widget.onNext,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size.fromHeight(56),
+                      // Navigation button (moved inside scroll view)
+                      const SizedBox(height: 32),
+                      FilledButton(
+                        onPressed: widget.onNext,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size.fromHeight(56),
+                        ),
+                        child: Text(widget.isLast ? 'Finish' : 'Next →'),
                       ),
-                      child: Text(widget.isLast ? 'Finish' : 'Next →'),
-                    ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
               ],
             );
           },
         ),
-      ),
+        ),
       ),
     );
   }

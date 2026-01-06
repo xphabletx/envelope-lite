@@ -17,7 +17,7 @@ import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../theme/app_themes.dart';
-import '../screens/pay_day/pay_day_amount_screen.dart';
+import '../screens/pay_day/pay_day_cockpit.dart';
 import '../services/account_repo.dart';
 import '../widgets/tutorial_wrapper.dart';
 import '../widgets/time_machine_indicator.dart';
@@ -194,7 +194,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PayDayAmountScreen(
+                              builder: (_) => PayDayCockpit(
                                 repo: widget.repo,
                                 groupRepo: widget.groupRepo,
                                 accountRepo: accountRepo,
@@ -311,7 +311,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => PayDayAmountScreen(
+                                  builder: (_) => PayDayCockpit(
                                     repo: widget.repo,
                                     groupRepo: widget.groupRepo,
                                     accountRepo: accountRepo,
@@ -370,7 +370,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => PayDayAmountScreen(
+                                builder: (_) => PayDayCockpit(
                                   repo: widget.repo,
                                   groupRepo: widget.groupRepo,
                                   accountRepo: accountRepo,

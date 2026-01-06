@@ -43,7 +43,7 @@ import 'settings_screen.dart';
 import 'calendar_screen.dart';
 import 'budget_screen.dart';
 import 'groups_home_screen.dart';
-import 'pay_day/pay_day_amount_screen.dart';
+import 'pay_day/pay_day_cockpit.dart';
 
 // Themed SpeedDial child style
 SpeedDialChild sdChild({
@@ -829,7 +829,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   void _openPayDayScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PayDayAmountScreen(
+        builder: (_) => PayDayCockpit(
           repo: widget.repo,
           groupRepo: widget.groupRepo,
           accountRepo: widget.accountRepo,
