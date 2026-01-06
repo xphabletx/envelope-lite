@@ -2310,7 +2310,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
 
                   const SizedBox(height: 32),
 
-                  // Icon
+                  // Currency symbol icon
                   Center(
                     child: TweenAnimationBuilder(
                       tween: Tween<double>(begin: 0.8, end: 1.0),
@@ -2320,8 +2320,8 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                         return Transform.scale(
                           scale: scale,
                           child: Container(
-                            width: 80,
-                            height: 80,
+                            width: 100,
+                            height: 100,
                             decoration: BoxDecoration(
                               color: theme.colorScheme.primaryContainer,
                               shape: BoxShape.circle,
@@ -2335,10 +2335,15 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                                 ),
                               ],
                             ),
-                            child: Icon(
-                              Icons.mail,
-                              size: 40,
-                              color: theme.colorScheme.primary,
+                            child: Center(
+                              child: Text(
+                                localeProvider.currencySymbol,
+                                style: TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
                             ),
                           ),
                         );
