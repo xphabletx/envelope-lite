@@ -1,16 +1,20 @@
 // lib/screens/pay_day/pay_day_stuffing_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:hive/hive.dart';
 import '../../models/envelope.dart';
+import '../../models/envelope_group.dart';
 import '../../models/account.dart';
 import '../../models/pay_day_settings.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/account_repo.dart';
+import '../../services/group_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
-import '../../utils/responsive_helper.dart';
+import '../../providers/theme_provider.dart';
+import '../../theme/app_themes.dart';
+import '../../widgets/binder/stuffing_binder_card.dart';
 
 class PayDayStuffingScreen extends StatefulWidget {
   const PayDayStuffingScreen({
@@ -40,13 +44,27 @@ class PayDayStuffingScreen extends StatefulWidget {
 
 class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
     with SingleTickerProviderStateMixin {
-  int currentIndex = 0;
-  double currentProgress = 0.0;
-  bool stuffingComplete = false;
-  String? errorMessage;
+
+  // Binder groups
+  final List<_BinderGroup> _binderGroups = [];
+  final List<Envelope> _ungroupedEnvelopes = [];
+
+  // Stuffing state
+  int _currentBinderIndex = -1;
+  int _currentEnvelopeIndex = -1;
+
+  // Account balance animation
+  double _accountBalance = 0.0;
+  double _accountStartBalance = 0.0;
+  double _accountEndBalance = 0.0;
+  bool _showingDeposit = false;
+
+  // Completion state
+  bool _isComplete = false;
+  double _totalEnvelopeStuffed = 0.0;
+  double _totalAccountStuffed = 0.0;
 
   late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
@@ -57,11 +75,7 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
       vsync: this,
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    _startStuffing();
+    _loadData();
   }
 
   @override
@@ -70,80 +84,145 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
     super.dispose();
   }
 
-  Future<void> _startStuffing() async {
-    // Calculate total amounts
-    final totalEnvelopeAutoFill = widget.allocations.values.fold(0.0, (a, b) => a + b);
-    final totalAccountAutoFill = widget.accountAllocations.values.fold(0.0, (a, b) => a + b);
-
-    debugPrint('[PayDay] ═══════════════════════════════════════');
-    debugPrint('[PayDay] Starting Pay Day Processing');
-    debugPrint('[PayDay] Pay Amount: ${widget.totalAmount}');
-    debugPrint('[PayDay] Envelope Auto-Fill: $totalEnvelopeAutoFill');
-    debugPrint('[PayDay] Account Auto-Fill: $totalAccountAutoFill');
-    debugPrint('[PayDay] ═══════════════════════════════════════');
-
-    // 0. Pay Day deposit to default account
-    // Note: Account balance is updated at the end (step 3), no need to record separately
-    debugPrint('[PayDay] 💰 Pay Day deposit: ${widget.totalAmount} (will update account balance after auto-fills)');
-
-    // 1. Stuff envelopes
-    for (int i = 0; i < widget.envelopes.length; i++) {
-      if (!mounted) return;
-
-      setState(() {
-        currentIndex = i;
-        currentProgress = 0.0;
-      });
-
-      final env = widget.envelopes[i];
-      final amount = widget.allocations[env.id] ?? 0.0;
-
-      for (double progress = 0.0; progress <= 1.0; progress += 0.05) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        if (mounted) {
-          setState(() => currentProgress = progress);
-        }
+  Future<void> _loadData() async {
+    // Get default account if specified
+    if (widget.accountId != null) {
+      final account = await widget.accountRepo.getAccount(widget.accountId!);
+      if (account != null) {
+        setState(() {
+          _accountStartBalance = account.currentBalance;
+          _accountBalance = account.currentBalance;
+        });
       }
-
-      try {
-        // Deposit to envelope
-        await widget.repo.deposit(
-          envelopeId: env.id,
-          amount: amount,
-          description: 'Auto-fill to ${env.name}',
-          date: DateTime.now(),
-        );
-
-        debugPrint('[PayDay] ✅ Auto-filled envelope: ${env.name} = $amount');
-      } catch (e) {
-        debugPrint('Error depositing to ${env.name}: $e');
-        if (mounted) {
-          setState(() => errorMessage = 'Error filling ${env.name}');
-        }
-        await Future.delayed(const Duration(seconds: 1));
-      }
-
-      await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // 2. Process account auto-fills (transfers to other accounts)
-    for (int i = 0; i < widget.accounts.length; i++) {
-      if (!mounted) return;
+    // Get all groups
+    final groupRepo = GroupRepo(widget.repo);
+    final allGroups = groupRepo.getAllGroups();
 
+    // Group envelopes by binder
+    if (!mounted) return;
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+
+    for (final group in allGroups) {
+      final binderEnvelopes = widget.envelopes
+          .where((e) => e.groupId == group.id)
+          .toList();
+
+      if (binderEnvelopes.isNotEmpty) {
+        // Get binder colors
+        final binderColors = ThemeBinderColors.getColorsForTheme(
+          themeProvider.currentThemeId,
+        )[group.colorIndex.clamp(0, ThemeBinderColors.getColorsForTheme(themeProvider.currentThemeId).length - 1)];
+
+        _binderGroups.add(_BinderGroup(
+          group: group,
+          envelopes: binderEnvelopes,
+          binderColors: binderColors,
+        ));
+      }
+    }
+
+    // Get ungrouped envelopes
+    _ungroupedEnvelopes.addAll(
+      widget.envelopes.where((e) => e.groupId == null).toList()
+    );
+
+    // Calculate totals
+    _totalEnvelopeStuffed = widget.allocations.values.fold(0.0, (a, b) => a + b);
+    _totalAccountStuffed = widget.accountAllocations.values.fold(0.0, (a, b) => a + b);
+
+    _accountEndBalance = _accountStartBalance + widget.totalAmount - _totalEnvelopeStuffed - _totalAccountStuffed;
+
+    setState(() {});
+
+    // Start stuffing animation after a brief delay
+    await Future.delayed(const Duration(milliseconds: 800));
+    _startStuffing();
+  }
+
+  Future<void> _startStuffing() async {
+    // STEP 1: Show the Pay Day Source (EXTERNAL → INTERNAL boundary)
+    if (widget.accountId != null) {
+      // WITH ACCOUNT: Show deposit animation
+      setState(() => _showingDeposit = true);
+
+      // Animate deposit into account
+      await Future.delayed(const Duration(milliseconds: 600));
       setState(() {
-        currentIndex = widget.envelopes.length + i;
-        currentProgress = 0.0;
+        _accountBalance = _accountStartBalance + widget.totalAmount;
       });
 
+      HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(milliseconds: 1200));
+      setState(() => _showingDeposit = false);
+      await Future.delayed(const Duration(milliseconds: 400));
+    } else {
+      // WITHOUT ACCOUNT: Show Cash Rack animation
+      setState(() => _showingDeposit = true);
+      await Future.delayed(const Duration(milliseconds: 1200));
+      setState(() => _showingDeposit = false);
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    // STEP 2: Process each binder
+    for (int i = 0; i < _binderGroups.length; i++) {
+      setState(() {
+        _currentBinderIndex = i;
+        _currentEnvelopeIndex = -1;
+      });
+
+      // Open binder (animation handled by widget)
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Stuff each envelope in this binder
+      for (int j = 0; j < _binderGroups[i].envelopes.length; j++) {
+        setState(() {
+          _currentEnvelopeIndex = j;
+        });
+
+        await _stuffEnvelope(_binderGroups[i].envelopes[j]);
+
+        // Play haptic feedback
+        HapticFeedback.mediumImpact();
+
+        // Pause between envelopes (longer for satisfying effect)
+        await Future.delayed(const Duration(milliseconds: 700));
+      }
+
+      // Close binder
+      setState(() {
+        _currentBinderIndex = -1;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    // Process ungrouped envelopes
+    if (_ungroupedEnvelopes.isNotEmpty) {
+      setState(() {
+        _currentBinderIndex = -2; // Special index for "Other Envelopes"
+        _currentEnvelopeIndex = -1;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      for (int i = 0; i < _ungroupedEnvelopes.length; i++) {
+        setState(() {
+          _currentEnvelopeIndex = i;
+        });
+
+        await _stuffEnvelope(_ungroupedEnvelopes[i]);
+
+        HapticFeedback.mediumImpact();
+        await Future.delayed(const Duration(milliseconds: 700));
+      }
+    }
+
+    // Process account auto-fills (transfers to other accounts)
+    for (int i = 0; i < widget.accounts.length; i++) {
       final targetAccount = widget.accounts[i];
       final amount = widget.accountAllocations[targetAccount.id] ?? 0.0;
-
-      for (double progress = 0.0; progress <= 1.0; progress += 0.05) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        if (mounted) {
-          setState(() => currentProgress = progress);
-        }
-      }
 
       try {
         // Update target account balance (transfer from default account)
@@ -152,70 +231,55 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
           amount: amount,
         );
 
-        debugPrint('[PayDay] ✅ Auto-filled account: ${targetAccount.name} = $amount');
+        debugPrint('[PayDay] ✅ Cash Flow to account: ${targetAccount.name} = $amount');
+
+        // Update animated balance
+        setState(() {
+          _accountBalance -= amount;
+        });
+
+        await Future.delayed(const Duration(milliseconds: 300));
       } catch (e) {
         debugPrint('Error auto-filling account ${targetAccount.name}: $e');
-        if (mounted) {
-          setState(() => errorMessage = 'Error filling ${targetAccount.name}');
-        }
-        await Future.delayed(const Duration(seconds: 1));
       }
-
-      await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    // 3. Update Default Account Balance (if account is specified)
+    // Update Default Account Balance (if account is specified)
     if (widget.accountId != null) {
       try {
-        // Step 1: Deposit pay amount to account (creates deposit transaction)
+        // Step 1: Deposit pay amount to account (EXTERNAL income)
         await widget.accountRepo.deposit(
           widget.accountId!,
           widget.totalAmount,
           description: 'Pay Day Deposit',
         );
 
-        debugPrint('[PayDay] ✅ Deposited pay amount to account:');
-        debugPrint('  Pay Amount: +${widget.totalAmount}');
+        debugPrint('[PayDay] ✅ Deposited pay amount: ${widget.totalAmount}');
 
-        // Step 2: Withdraw envelope auto-fills from account (creates withdrawal transactions)
-        if (totalEnvelopeAutoFill > 0) {
+        // Note: Envelope cash flows are handled by transferToEnvelope() in _stuffEnvelope()
+        // which creates paired transactions on both account and envelope sides.
+        // No need for separate withdrawals here.
+
+        // Step 2: Withdraw account cash flows from account (account-to-account transfers)
+        if (_totalAccountStuffed > 0) {
           await widget.accountRepo.withdraw(
             widget.accountId!,
-            totalEnvelopeAutoFill,
-            description: 'Envelope Auto-Fill',
+            _totalAccountStuffed,
+            description: 'Cash Flow to Accounts',
           );
 
-          debugPrint('[PayDay] ✅ Withdrew envelope auto-fills from account:');
-          debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
+          debugPrint('[PayDay] ✅ Withdrew account cash flows: $_totalAccountStuffed');
         }
-
-        // Step 3: Withdraw account auto-fills from account (creates withdrawal transactions)
-        if (totalAccountAutoFill > 0) {
-          await widget.accountRepo.withdraw(
-            widget.accountId!,
-            totalAccountAutoFill,
-            description: 'Account Auto-Fill',
-          );
-
-          debugPrint('[PayDay] ✅ Withdrew account auto-fills from account:');
-          debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
-        }
-
-        // Get final balance for logging
-        final finalAccount = await widget.accountRepo.getAccount(widget.accountId!);
-        debugPrint('[PayDay] ✅ Final account balance: ${finalAccount?.currentBalance}');
       } catch (e) {
         debugPrint('Error updating account balance: $e');
-        // Non-fatal error for UI, but important to log
       }
     }
 
-    // 3. Update Settings History in Hive
+    // Update Settings History in Hive
     try {
       final userId = widget.repo.currentUserId;
       final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
 
-      // Get existing settings or create new
       PayDaySettings? existingSettings;
       String? settingsKey;
       for (var key in payDayBox.keys) {
@@ -236,52 +300,446 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
         lastPayAmount: widget.totalAmount,
         lastPayDate: DateTime.now(),
         defaultAccountId: widget.accountId,
-        payFrequency: 'monthly', // Default value
+        payFrequency: 'monthly',
       );
 
-      // Use existing key or create new one
       final key = settingsKey ?? 'settings_$userId';
       await payDayBox.put(key, updatedSettings);
     } catch (e) {
       debugPrint('Error updating settings: $e');
     }
 
-    if (mounted) {
-      setState(() => stuffingComplete = true);
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        _showSuccessDialog();
+    // Show completion
+    setState(() {
+      _isComplete = true;
+    });
+  }
+
+  Future<void> _stuffEnvelope(Envelope envelope) async {
+    final amount = widget.allocations[envelope.id] ?? 0.0;
+
+    try {
+      if (widget.accountId != null) {
+        // WITH ACCOUNT: Use INTERNAL transfer
+        final account = await widget.accountRepo.getAccount(widget.accountId!);
+        final accountName = account?.name ?? 'Account';
+
+        await widget.accountRepo.transferToEnvelope(
+          accountId: widget.accountId!,
+          envelopeId: envelope.id,
+          amount: amount,
+          description: 'Cash Flow',
+          date: DateTime.now(),
+          envelopeRepo: widget.repo,
+        );
+
+        debugPrint('[PayDay] ✅ Cash Flow (INTERNAL): $accountName → ${envelope.name} = $amount');
+      } else {
+        // WITHOUT ACCOUNT: Use EXTERNAL deposit (virtual income)
+        await widget.repo.deposit(
+          envelopeId: envelope.id,
+          amount: amount,
+          description: 'Cash Flow',
+          date: DateTime.now(),
+        );
+
+        debugPrint('[PayDay] ✅ Cash Flow (EXTERNAL): Virtual → ${envelope.name} = $amount');
       }
+
+      // Update account balance animation
+      setState(() {
+        _accountBalance -= amount;
+      });
+    } catch (e) {
+      debugPrint('Error with cash flow to ${envelope.name}: $e');
     }
   }
 
-  void _showSuccessDialog() {
-    final totalStuffed = widget.allocations.values.fold(0.0, (a, b) => a + b);
-    final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context);
+    final locale = Provider.of<LocaleProvider>(context);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => ScaleTransition(
-        scale: CurvedAnimation(
-          parent: _pulseController,
-          curve: Curves.elasticOut,
-        ),
-        child: AlertDialog(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+    if (_isComplete) {
+      return _buildCompletionScreen(theme, fontProvider, locale);
+    }
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(
+            'Pay Day Stuffing',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          backgroundColor: theme.scaffoldBackgroundColor,
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
             children: [
-              const Text('🎉', style: TextStyle(fontSize: 72)),
-              const SizedBox(height: 16),
+              // Pay Day Source (top of waterfall)
+              if (widget.accountId != null)
+                // WITH ACCOUNT: Show account balance
+                _buildAccountBalance(theme, fontProvider, locale)
+              else
+                // WITHOUT ACCOUNT: Show Cash Rack
+                _buildCashRack(theme, fontProvider, locale),
+
+              const SizedBox(height: 24),
+
+              // Money flowing animation (arrow + label)
+              Center(
+                child: Column(
+                  children: [
+                    // Animated money icon
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 800),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, -20 + (20 * value)),
+                          child: Opacity(
+                            opacity: value,
+                            child: Text(
+                              '💸',
+                              style: TextStyle(fontSize: 32),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Icon(
+                      Icons.arrow_downward,
+                      size: 32,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Cash Flow',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Binder groups
+              ...List.generate(_binderGroups.length, (index) {
+                return StuffingBinderCard(
+                  binder: _binderGroups[index].group,
+                  envelopes: _binderGroups[index].envelopes,
+                  binderColors: _binderGroups[index].binderColors,
+                  isOpen: _currentBinderIndex == index,
+                  currentStuffingIndex: _currentBinderIndex == index ? _currentEnvelopeIndex : null,
+                );
+              }),
+
+              // Ungrouped envelopes section
+              if (_ungroupedEnvelopes.isNotEmpty)
+                _buildUngroupedSection(theme, fontProvider),
+
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountBalance(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+            theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+          width: 2,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('💳', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Main Account',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Text(
-                'Pay Day Complete!',
+                _showingDeposit ? 'Receiving Pay Day...' : 'Balance',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: _showingDeposit
+                      ? Colors.green.shade600
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontWeight: _showingDeposit ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+          TweenAnimationBuilder<double>(
+            duration: const Duration(milliseconds: 800),
+            tween: Tween(begin: _accountStartBalance, end: _accountBalance),
+            builder: (context, value, child) {
+              return Text(
+                locale.formatCurrency(value),
+                style: fontProvider.getTextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCashRack(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.green.shade50,
+            Colors.amber.shade50,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.green.shade300,
+          width: 3,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.shade200.withValues(alpha: 0.5),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Cloud/Atmosphere header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '☁️',
+                style: TextStyle(fontSize: 32),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pay Day',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade800,
+                    ),
+                  ),
+                  Text(
+                    _showingDeposit ? 'Money arriving...' : 'Ready to stuff!',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _showingDeposit
+                          ? Colors.green.shade600
+                          : Colors.green.shade700,
+                      fontWeight: _showingDeposit ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Cash Rack visualization
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.green.shade400,
+                width: 2,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Stack of bills emoji
+                Text('💵', style: TextStyle(fontSize: 40)),
+                const SizedBox(width: 8),
+                Text('💵', style: TextStyle(fontSize: 40)),
+                const SizedBox(width: 8),
+                Text('💵', style: TextStyle(fontSize: 40)),
+                const SizedBox(width: 16),
+
+                // Amount
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 1200),
+                  tween: Tween(begin: 0, end: widget.totalAmount),
+                  builder: (context, value, child) {
+                    return Text(
+                      locale.formatCurrency(value),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade800,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade600,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'EXTERNAL INCOME',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUngroupedSection(ThemeData theme, FontProvider fontProvider) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final defaultColors = ThemeBinderColors.getColorsForTheme(
+      themeProvider.currentThemeId,
+    ).first;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('📧', style: TextStyle(fontSize: 32)),
+              const SizedBox(width: 12),
+              Text(
+                'Individual Envelopes',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          if (_currentBinderIndex == -2) ...[
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            ...List.generate(_ungroupedEnvelopes.length, (index) {
+              final envelope = _ungroupedEnvelopes[index];
+              final isCurrent = _currentEnvelopeIndex == index;
+              return StuffingEnvelopeRow(
+                envelope: envelope,
+                binderColors: defaultColors,
+                isCurrent: isCurrent,
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletionScreen(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Celebration
+              ScaleTransition(
+                scale: _pulseController.drive(Tween(begin: 1.0, end: 1.2)),
+                child: const Text('🎉', style: TextStyle(fontSize: 80)),
+              ),
+
+              const SizedBox(height: 24),
+
+              Text(
+                'BINDERS STUFFED!',
                 style: fontProvider.getTextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -289,251 +747,209 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              Text(
-                currency.format(totalStuffed),
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.secondary,
+
+              const SizedBox(height: 40),
+
+              // Philosophy summary
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.green.shade50,
+                      Colors.blue.shade50,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                textAlign: TextAlign.center,
+                child: Column(
+                  children: [
+                    // EXTERNAL: Pay Day arrives
+                    _buildSummaryRow(
+                      icon: widget.accountId != null
+                          ? Icons.arrow_downward
+                          : Icons.cloud_download,
+                      color: Colors.green.shade600,
+                      label: widget.accountId != null
+                          ? 'Pay Day Deposit'
+                          : 'Pay Day from Cash Rack',
+                      sublabel: 'EXTERNAL',
+                      amount: widget.totalAmount,
+                      locale: locale,
+                      fontProvider: fontProvider,
+                    ),
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 16),
+
+                    // INTERNAL: Cash flow to envelopes
+                    _buildSummaryRow(
+                      icon: Icons.swap_horiz,
+                      color: Colors.blue.shade600,
+                      label: 'Cash Flow to Envelopes',
+                      sublabel: 'INTERNAL',
+                      amount: _totalEnvelopeStuffed,
+                      locale: locale,
+                      fontProvider: fontProvider,
+                    ),
+
+                    if (_totalAccountStuffed > 0) ...[
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      _buildSummaryRow(
+                        icon: Icons.swap_horiz,
+                        color: Colors.blue.shade600,
+                        label: 'Cash Flow to Accounts',
+                        sublabel: 'INTERNAL',
+                        amount: _totalAccountStuffed,
+                        locale: locale,
+                        fontProvider: fontProvider,
+                      ),
+                    ],
+
+                    if (widget.accountId != null) ...[
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      _buildSummaryRow(
+                        icon: Icons.account_balance,
+                        color: theme.colorScheme.primary,
+                        label: 'Remaining in Account',
+                        sublabel: 'Ready to use',
+                        amount: _accountEndBalance,
+                        locale: locale,
+                        fontProvider: fontProvider,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '${widget.envelopes.length} ${widget.envelopes.length == 1 ? 'envelope' : 'envelopes'} filled!',
-                style: fontProvider.getTextStyle(
-                  fontSize: 20,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+
+              const SizedBox(height: 40),
+
+              // Stats
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                  ),
                 ),
-                textAlign: TextAlign.center,
+                child: Column(
+                  children: [
+                    if (_binderGroups.isNotEmpty)
+                      Text(
+                        '✅ ${_binderGroups.length} ${_binderGroups.length == 1 ? 'binder' : 'binders'} stuffed',
+                        style: fontProvider.getTextStyle(fontSize: 16),
+                      ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '✅ ${widget.envelopes.length} ${widget.envelopes.length == 1 ? 'envelope' : 'envelopes'} filled',
+                      style: fontProvider.getTextStyle(fontSize: 16),
+                    ),
+                    if (widget.accounts.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '✅ ${widget.accounts.length} ${widget.accounts.length == 1 ? 'account' : 'accounts'} auto-filled',
+                        style: fontProvider.getTextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // Done button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Close stuffing screen
+                    Navigator.pop(context); // Close allocation screen
+                    Navigator.pop(context); // Close amount screen
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.secondary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Text(
+                    'Done!',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext); // Close dialog
-                Navigator.pop(context); // Close stuffing screen
-                Navigator.pop(context); // Close allocation screen
-                Navigator.pop(context); // Close amount screen
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: theme.colorScheme.secondary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
-              ),
-              child: Text(
-                'Done!',
-                style: fontProvider.getTextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context, listen: false);
-    final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
-
-    return PopScope(
-      canPop: stuffingComplete,
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        body: SafeArea(
-          child: Padding(
-            padding: context.responsive.safePadding,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Stuffing Envelopes... 💰',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                  textAlign: TextAlign.center,
+  Widget _buildSummaryRow({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String sublabel,
+    required double amount,
+    required LocaleProvider locale,
+    required FontProvider fontProvider,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 32),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 48),
-
-                if (errorMessage != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            errorMessage!,
-                            style: TextStyle(
-                              color: Colors.red.shade700,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: widget.envelopes.length,
-                    itemBuilder: (context, i) {
-                      final env = widget.envelopes[i];
-                      final amount = widget.allocations[env.id] ?? 0.0;
-                      final isComplete = i < currentIndex;
-                      final isCurrent = i == currentIndex;
-                      final isPending = i > currentIndex;
-                      final progress = isCurrent
-                          ? currentProgress
-                          : (isComplete ? 1.0 : 0.0);
-
-                      Widget card = Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isComplete
-                              ? theme.colorScheme.primaryContainer
-                              : (isCurrent
-                                    ? theme.colorScheme.secondaryContainer
-                                    : theme.colorScheme.surface),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isCurrent
-                                ? theme.colorScheme.secondary
-                                : (isComplete
-                                      ? theme.colorScheme.primary.withValues(
-                                          alpha: 0.3,
-                                        )
-                                      : theme.colorScheme.outline),
-                            width: isCurrent ? 3 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  env.emoji ?? '📨',
-                                  style: const TextStyle(fontSize: 24),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    env.name,
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: isPending
-                                          ? theme.colorScheme.onSurface
-                                                .withValues(alpha: 0.5)
-                                          : null,
-                                    ),
-                                  ),
-                                ),
-                                if (isComplete)
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: theme.colorScheme.primary,
-                                    size: 28,
-                                  )
-                                else if (isCurrent)
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                      color: theme.colorScheme.secondary,
-                                    ),
-                                  )
-                                else
-                                  Icon(
-                                    Icons.schedule,
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.3),
-                                    size: 24,
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                minHeight: 8,
-                                backgroundColor: Colors.grey.shade300,
-                                valueColor: AlwaysStoppedAnimation(
-                                  isCurrent
-                                      ? theme.colorScheme.secondary
-                                      : theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  currency.format(amount * progress),
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: isCurrent
-                                        ? theme.colorScheme.secondary
-                                        : theme.colorScheme.primary,
-                                  ),
-                                ),
-                                if (!isComplete)
-                                  Text(
-                                    '/ ${currency.format(amount)}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.5),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (isCurrent) {
-                        return ScaleTransition(
-                          scale: _pulseAnimation,
-                          child: card,
-                        );
-                      }
-
-                      return card;
-                    },
-                  ),
+              ),
+              Text(
+                sublabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ),
+        Text(
+          locale.formatCurrency(amount),
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
+}
+
+class _BinderGroup {
+  final EnvelopeGroup group;
+  final List<Envelope> envelopes;
+  final BinderColorOption binderColors;
+
+  _BinderGroup({
+    required this.group,
+    required this.envelopes,
+    required this.binderColors,
+  });
 }

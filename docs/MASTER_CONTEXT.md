@@ -1,7 +1,7 @@
 # Stuffrite - Comprehensive Master Context Documentation
 
-**Last Updated:** 2026-01-04
-**Version:** 2.4 (Codebase Cleanup & Optimization)
+**Last Updated:** 2026-01-06
+**Version:** 2.5 (EXTERNAL/INTERNAL Transaction Philosophy)
 **Purpose:** Complete reference for all functions, features, code architecture, and inter-dependencies
 
 ---
@@ -93,10 +93,12 @@ lib/
 **Total Lines of Code:** ~16,500+ [UPDATED]
 
 **Recent Additions (Jan 2026):**
+- **EXTERNAL/INTERNAL Transaction Philosophy (Jan 6):** Complete architectural refactor to distinguish transactions that cross "the wall" (external - income/spending) from internal transfers
 - RevenueCat subscription integration (5 new files)
 - OnboardingProvider for improved state management
 - Custom branded paywall screen
 - January 2026 Cleanup: Removed 7 orphaned files, 18 outdated docs, consolidated subscription services
+- Workspace sync improvements (binders, envelopes, UI fixes)
 
 **Codebase Optimization (Jan 4, 2026):**
 - Removed 7 orphaned/dead code files
@@ -236,19 +238,53 @@ static Envelope fromFirestore(DocumentSnapshot doc)
 
 **File:** `lib/models/transaction.dart`
 
-**Purpose:** Records all financial transactions (deposits, withdrawals, transfers).
+**Purpose:** Records all financial transactions (deposits, withdrawals, transfers) with EXTERNAL/INTERNAL philosophy distinguishing money crossing "the wall" vs internal transfers.
 
 **Key Properties:**
 ```dart
 String id, envelopeId, userId
-TransactionType type             // deposit, withdrawal, transfer
+TransactionType type             // deposit, withdrawal, transfer (LEGACY)
 double amount
 DateTime date
 String description
 bool isFuture                    // For Time Machine projections (not stored)
+String? accountId                // Account transaction belongs to
 ```
 
-**Transfer Metadata:**
+**🆕 EXTERNAL/INTERNAL Philosophy (v2.5 - Jan 2026):**
+```dart
+// NEW: Philosophy enums defining transaction nature
+TransactionImpact? impact        // external (crosses wall), internal (stays inside)
+TransactionDirection? direction  // inflow (income), outflow (spending), move (transfer)
+
+// NEW: Source/destination tracking
+SourceType? sourceType          // envelope, account, or external
+String? sourceId                // ID if internal, null if external
+SourceType? destinationType     // envelope, account, or external
+String? destinationId           // ID if internal, null if external
+
+// Convenience getters
+bool get isExternal => impact == TransactionImpact.external
+bool get isInternal => impact == TransactionImpact.internal
+bool get isInflow => direction == TransactionDirection.inflow
+bool get isOutflow => direction == TransactionDirection.outflow
+bool get isMove => direction == TransactionDirection.move
+
+String getActionText()          // Returns "Income", "Spent", "Transfer", etc.
+String getImpactBadge()         // Returns "EXTERNAL", "INTERNAL", or "LEGACY"
+```
+
+**Philosophy Principles:**
+- **EXTERNAL transactions:** Money crossing the wall (income from job, bills paid to vendors)
+  - Have `sourceType: external` OR `destinationType: external`
+  - Change net worth
+  - Shown in Stats screen for Income/Spent calculations
+- **INTERNAL transactions:** Money moving inside the system (transfers between envelopes/accounts)
+  - Have both source AND destination inside system
+  - Do NOT change net worth
+  - Visible in detail screens but excluded from global stats
+
+**Transfer Metadata (Legacy):**
 ```dart
 String? transferPeerEnvelopeId   // The other envelope in transfer
 String? transferLinkId           // Shared ID linking the pair
@@ -264,20 +300,32 @@ String? sourceEnvelopeName       // Display names for transfers
 String? targetEnvelopeName
 String? sourceOwnerDisplayName
 String? targetOwnerDisplayName
+bool? isSynced                   // Sync tracking
+DateTime? lastUpdated            // Last modification timestamp
 ```
 
 **Key Methods:**
 ```dart
 Map<String, dynamic> toMap()
-  // Firestore serialization (excludes isFuture)
+  // Firestore serialization (excludes isFuture, includes philosophy fields)
 
 static Transaction fromFirestore(DocumentSnapshot doc)
-  // Deserializes from Firestore
+  // Deserializes from Firestore with philosophy field parsing
 ```
 
-**UI/UX:** Displayed in EnvelopeTransactionList color-coded by type: green (deposits), red (withdrawals), blue (transfers). Future transactions marked with "FUTURE" badge in Time Machine mode.
+**Backwards Compatibility:**
+All philosophy fields are nullable. Legacy transactions without these fields:
+- Show "LEGACY" badge in UI
+- `getActionText()` falls back to description
+- Still work in all contexts
 
-**Used By:** EnvelopeRepo (for recording), EnvelopeTransactionList, TimeMachineProvider, ProjectionService
+**UI/UX:**
+- Color-coded by philosophy: Green ↑ (income/EXTERNAL inflow), Red ↓ (spending/EXTERNAL outflow), Blue ⇄ (INTERNAL transfers)
+- Transaction badges show "EXTERNAL" (orange) or "INTERNAL" (blue)
+- FAB buttons use philosophy-aligned labels: "Add Income", "Spend", "Transfer"
+- Quick action modals match FAB styling with color-coded icons
+
+**Used By:** EnvelopeRepo, AccountRepo, TransactionListItem, TimeMachineProvider, ProjectionService, StatsScreen
 
 ---
 
@@ -720,36 +768,37 @@ Future<void> signOut()  // ENHANCED: Now includes complete data wipe
 
 ### Utility Services
 
-#### 10. HiveService (MODIFIED - Uncommitted)
+#### 10. HiveService
 **File:** `lib/services/hive_service.dart`
 
-**Recent Changes:**
-- **NEW METHOD:** `clearAllData()` for GDPR compliance
+**Purpose:** Initializes Hive local storage and registers all TypeAdapters.
 
+**🆕 EXTERNAL/INTERNAL Philosophy Support (v2.5):**
 ```dart
-static Future<void> clearAllData() async {
-  // Clears ALL data from ALL 7 Hive boxes
-  final envelopeBox = Hive.box<Envelope>('envelopes');
-  final accountBox = Hive.box<Account>('accounts');
-  final groupBox = Hive.box<EnvelopeGroup>('groups');
-  final transactionBox = Hive.box<Transaction>('transactions');
-  final scheduledPaymentBox = Hive.box<ScheduledPayment>('scheduledPayments');
-  final payDaySettingsBox = Hive.box<PayDaySettings>('payDaySettings');
-  final notificationBox = Hive.box<AppNotification>('notifications');
-
-  await Future.wait([
-    envelopeBox.clear(),
-    accountBox.clear(),
-    groupBox.clear(),
-    transactionBox.clear(),
-    scheduledPaymentBox.clear(),
-    payDaySettingsBox.clear(),
-    notificationBox.clear(),
-  ]);
-}
+// Register philosophy enum adapters (Jan 2026)
+Hive.registerAdapter(TransactionImpactAdapter());      // typeId: 105
+Hive.registerAdapter(TransactionDirectionAdapter());   // typeId: 106
+Hive.registerAdapter(SourceTypeAdapter());             // typeId: 107
 ```
 
-**Usage:** Account deletion, sign-out, data reset
+**Key Methods:**
+```dart
+static Future<void> init() async
+  // Initialize Hive and register all model adapters
+  // Opens 7 boxes: envelopes, accounts, groups, transactions,
+  //                scheduledPayments, payDaySettings, notifications
+
+static Box<T> getBox<T>(String name)
+  // Get a typed Hive box (throws if not initialized)
+
+static Future<void> clearAllData() async
+  // Clears ALL data from ALL 7 Hive boxes for GDPR compliance
+```
+
+**Critical Fix (Jan 6, 2026):**
+Fixed HiveError on new transaction creation by registering missing TypeAdapters for philosophy enums. Without registration, Hive couldn't serialize TransactionImpact, TransactionDirection, and SourceType enums.
+
+**Usage:** App startup, account deletion, sign-out, data reset
 
 #### 11. AccountSecurityService (MODIFIED - Uncommitted)
 **File:** `lib/services/account_security_service.dart`
@@ -1923,15 +1972,22 @@ Location: `lib/widgets/`
 
 ---
 
-#### QuickActionModal
-**Purpose:** Transaction bottom sheet.
+#### QuickActionModal & AccountQuickActionModal
+**Files:** `lib/widgets/quick_action_modal.dart`, `lib/widgets/accounts/account_quick_action_modal.dart`
+
+**Purpose:** Transaction bottom sheet for envelope and account transactions with EXTERNAL/INTERNAL philosophy UI.
+
+**🆕 Philosophy-Aligned UI (v2.5):**
+- **Deposit/Income:** Green ↑ icon, "Add Income" title (EXTERNAL inflow)
+- **Withdrawal/Spend:** Red ↓ icon, "Spend"/"Withdraw" title (EXTERNAL outflow)
+- **Transfer:** Blue ⇄ icon, "Transfer" title (INTERNAL move)
+- Color-coded confirm buttons with white text
 
 **UI/UX:**
-- Colored header (green=deposit, red=withdrawal, blue=transfer)
 - Amount input with calculator button
-- Description field
+- Description field (optional)
 - Date picker
-- Transfer mode: destination envelope dropdown with partner badges
+- Transfer mode: destination dropdown with partner badges (envelopes) or accounts+envelopes (account modal)
 
 ---
 
@@ -2883,11 +2939,53 @@ Pure functional projection service for what-if scenarios.
 ### 8. Dependency Injection
 Constructor-based DI, no singletons (except Firestore, Hive).
 
+### 9. EXTERNAL/INTERNAL Transaction Philosophy (v2.5 - Jan 2026)
+
+**The Wall Metaphor:**
+```
+        THE WALL
+        ════════════════════════
+   OUTSIDE     │     INSIDE
+               │
+   💰 Income  ─┤→  Account/Envelope
+               │
+   💸 Bills   ←┤─  Account/Envelope
+               │
+               │   Transfer
+               │   Cash Flow
+```
+
+**Core Principle:**
+All transactions are classified by whether they cross "the wall" (EXTERNAL) or stay inside the system (INTERNAL).
+
+**Implementation:**
+- **Data Model:** 3 new enums (TransactionImpact, TransactionDirection, SourceType) + 4 new fields
+- **Repositories:** EnvelopeRepo and AccountRepo tag all transactions with philosophy metadata
+- **UI Teaching:** Color-coded FAB buttons and modals (Green ↑ Income, Red ↓ Spend, Blue ⇄ Transfer)
+- **Visual Feedback:** Transaction badges show "EXTERNAL" (orange) or "INTERNAL" (blue)
+- **Backwards Compatible:** All new fields nullable, legacy transactions show "LEGACY" badge
+
+**Transaction Tagging:**
+- `deposit()` → EXTERNAL inflow (money entering system)
+- `withdraw()` → EXTERNAL outflow (money leaving system)
+- `transfer()` → INTERNAL move (money relocating within system)
+- `transferToEnvelope()` → INTERNAL move (account → envelope)
+
+**Critical Bug Fix (Jan 6):**
+Pay Day Cash Flow was creating 2 EXTERNAL transactions (withdraw + deposit) instead of 1 INTERNAL transfer. Fixed by replacing withdraw/deposit pattern with `transferToEnvelope()`.
+
+**Future Work:**
+- Stats screen filtering (show only EXTERNAL for Income/Spent calculations)
+- Detail screen tabs (All / Spending / Transfers)
+- Time Machine separation (EXTERNAL events prominent, INTERNAL secondary)
+
+**Reference:** `EXTERNAL_INTERNAL_IMPLEMENTATION_GUIDE.md`
+
 ---
 
 ## Final Summary
 
-This comprehensive MASTER_CONTEXT.md documents the complete Stuffrite codebase as of **January 4, 2026**.
+This comprehensive MASTER_CONTEXT.md documents the complete Stuffrite codebase as of **January 6, 2026**.
 
 ### What's Documented
 
@@ -2922,21 +3020,29 @@ This comprehensive MASTER_CONTEXT.md documents the complete Stuffrite codebase a
 ### Recent Changes (Since v2.0 - Dec 27)
 
 **New Features:**
-1. ✅ Interactive tutorial system (9 sequences, fully functional)
-2. ✅ Weekend pay adjustment (PayDaySettings enhancement)
-3. ✅ Responsive layout system (phone/tablet/landscape support)
-4. ✅ Enhanced GDPR compliance (complete data wipe on sign-out)
+1. ✅ **EXTERNAL/INTERNAL Transaction Philosophy (Jan 6, 2026)** - Complete architectural refactor
+2. ✅ Interactive tutorial system (9 sequences, fully functional)
+3. ✅ Weekend pay adjustment (PayDaySettings enhancement)
+4. ✅ Responsive layout system (phone/tablet/landscape support)
+5. ✅ Enhanced GDPR compliance (complete data wipe on sign-out)
+6. ✅ Workspace sync improvements (binders, envelopes, UI fixes)
+7. ✅ RevenueCat subscription integration
 
 **Bug Fixes:**
-1. ✅ Critical Hive migration bug (PayDaySettings backward compatibility)
-2. ✅ 129 Flutter analyzer issues resolved
-3. ✅ All deprecated APIs updated to current Flutter version
+1. ✅ **CRITICAL: Pay Day Cash Flow double-transaction bug** (Jan 6) - Fixed INTERNAL transfer issue
+2. ✅ **CRITICAL: Hive TypeAdapter registration** (Jan 6) - Fixed new enum serialization
+3. ✅ Critical Hive migration bug (PayDaySettings backward compatibility)
+4. ✅ 129 Flutter analyzer issues resolved
+5. ✅ All deprecated APIs updated to current Flutter version
+6. ✅ Workspace management spinner fix (envelope StreamBuilder)
+7. ✅ Account deletion navigation and validation fixes
 
 **Code Quality:**
 1. ✅ Zero analyzer warnings (down from 129!)
 2. ✅ Proper async gap handling (12+ documented cases)
 3. ✅ 105 debug prints cleaned up
 4. ✅ Complete code modernization
+5. ✅ Removed 7 orphaned files and 18 outdated docs (60% reduction)
 
 **Critical Data Handling Updates (Dec 31, 2025):**
 

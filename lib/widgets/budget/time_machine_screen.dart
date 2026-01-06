@@ -1540,72 +1540,182 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                           children: [
                             Container(
                               constraints: const BoxConstraints(maxHeight: 400),
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                physics: const ClampingScrollPhysics(),
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _result!.timeline.length,
-                                separatorBuilder: (context, index) => const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final event = _result!.timeline[index];
-                                  final isIncome = event.isCredit;
+                              child: Builder(
+                                builder: (context) {
+                                  final groupedEvents = _groupEventsByMonth(_result!.timeline);
+                                  final monthKeys = groupedEvents.keys.toList();
 
-                                  return ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    leading: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: isIncome
-                                            ? Colors.green.shade50
-                                            : Colors.red.shade50,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        isIncome ? Icons.add : Icons.remove,
-                                        color: isIncome ? Colors.green : Colors.red,
-                                        size: 20,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      event.description,
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          DateFormat('MMM d, yyyy').format(event.date),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: theme.colorScheme.onSurface
-                                                .withValues(alpha: 0.6),
-                                          ),
-                                        ),
-                                        if (event.envelopeName != null)
-                                          Text(
-                                            'Envelope: ${event.envelopeName}',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: theme.colorScheme.primary
-                                                  .withValues(alpha: 0.7),
+                                  return ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const ClampingScrollPhysics(),
+                                    padding: const EdgeInsets.all(16),
+                                    itemCount: monthKeys.length,
+                                    itemBuilder: (context, monthIndex) {
+                                      final monthKey = monthKeys[monthIndex];
+                                      final monthEvents = groupedEvents[monthKey]!;
+
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Month/Year Header
+                                          if (monthIndex > 0) const SizedBox(height: 16),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.calendar_month,
+                                                  size: 16,
+                                                  color: theme.colorScheme.primary,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  monthKey,
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: theme.colorScheme.primary,
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                Text(
+                                                  '${monthEvents.length} events',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                      ],
-                                    ),
-                                    trailing: Text(
-                                      '${isIncome ? '+' : '-'}${locale.currencySymbol}${event.amount.toStringAsFixed(2)}',
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: isIncome ? Colors.green : Colors.red,
-                                      ),
-                                    ),
+                                          const SizedBox(height: 8),
+                                          // Events for this month
+                                          ...monthEvents.map((event) {
+                                            final isExternal = event.isExternalTransaction;
+                                            final isInflow = event.isInflow;
+                                            final isMove = event.isMove;
+
+                                            // Philosophy-aligned colors and icons
+                                            Color iconColor;
+                                            IconData iconData;
+                                            Color bgColor;
+
+                                            if (isMove) {
+                                              // INTERNAL transfer - Blue
+                                              iconColor = Colors.blue.shade600;
+                                              iconData = Icons.swap_horiz;
+                                              bgColor = Colors.blue.shade50;
+                                            } else if (isInflow) {
+                                              // EXTERNAL income - Green
+                                              iconColor = Colors.green.shade600;
+                                              iconData = Icons.arrow_upward;
+                                              bgColor = Colors.green.shade50;
+                                            } else {
+                                              // EXTERNAL spending - Red
+                                              iconColor = Colors.red.shade600;
+                                              iconData = Icons.arrow_downward;
+                                              bgColor = Colors.red.shade50;
+                                            }
+
+                                            return Container(
+                                              margin: const EdgeInsets.only(bottom: 8),
+                                              child: ListTile(
+                                                contentPadding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                leading: Container(
+                                                  padding: const EdgeInsets.all(8),
+                                                  decoration: BoxDecoration(
+                                                    color: bgColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Icon(
+                                                    iconData,
+                                                    color: iconColor,
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                title: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        event.description,
+                                                        style: fontProvider.getTextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    // Philosophy badge
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: isExternal
+                                                            ? Colors.orange.shade700.withValues(alpha: 0.2)
+                                                            : Colors.blue.shade700.withValues(alpha: 0.2),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        isExternal ? 'EXT' : 'INT',
+                                                        style: TextStyle(
+                                                          fontSize: 9,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: isExternal
+                                                              ? Colors.orange.shade700
+                                                              : Colors.blue.shade700,
+                                                          letterSpacing: 0.5,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                subtitle: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      DateFormat('MMM d').format(event.date),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: theme.colorScheme.onSurface
+                                                            .withValues(alpha: 0.6),
+                                                      ),
+                                                    ),
+                                                    if (event.envelopeName != null)
+                                                      Text(
+                                                        event.envelopeName!,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: theme.colorScheme.primary
+                                                              .withValues(alpha: 0.7),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                                trailing: Text(
+                                                  '${isMove ? '⇄' : (isInflow ? '+' : '-')}${locale.currencySymbol}${event.amount.toStringAsFixed(2)}',
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: iconColor,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               ),
@@ -1850,6 +1960,21 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
 
   double _calculateNetChange(List<ProjectionEvent> timeline) {
     return _calculateTotalIncome(timeline) - _calculateTotalExpenses(timeline);
+  }
+
+  // Group events by month/year
+  Map<String, List<ProjectionEvent>> _groupEventsByMonth(List<ProjectionEvent> events) {
+    final grouped = <String, List<ProjectionEvent>>{};
+
+    for (final event in events) {
+      final key = DateFormat('MMMM yyyy').format(event.date);
+      if (!grouped.containsKey(key)) {
+        grouped[key] = [];
+      }
+      grouped[key]!.add(event);
+    }
+
+    return grouped;
   }
 
   Widget _buildStatItem({

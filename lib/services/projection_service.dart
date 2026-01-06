@@ -80,6 +80,8 @@ class ProjectionService {
           isCredit: true,
           accountId: defaultAccountId,
           accountName: defaultAccountName,
+          isExternal: true, // EXTERNAL inflow - money from employer
+          direction: 'inflow',
         ),
       );
 
@@ -139,6 +141,8 @@ class ProjectionService {
             envelopeName: envelopeName,
             accountId: linkedAccountId,
             accountName: null,
+            isExternal: true, // EXTERNAL outflow - bill payment leaving system
+            direction: 'outflow',
           ),
         );
       }
@@ -165,6 +169,8 @@ class ProjectionService {
                     .where((a) => a.id == defaultAccountId)
                     .map((a) => a.name)
                     .firstOrNull ?? 'Main',
+                isExternal: true, // EXTERNAL inflow - temporary income
+                direction: 'inflow',
               ),
             );
           } else {
@@ -179,6 +185,8 @@ class ProjectionService {
                 envelopeId: null,
                 accountId: temp.linkedAccountId ?? defaultAccountId,
                 accountName: 'Temporary',
+                isExternal: true, // EXTERNAL outflow - temporary expense
+                direction: 'outflow',
               ),
             );
           }
@@ -255,13 +263,15 @@ class ProjectionService {
             ProjectionEvent(
               date: event.date,
               type: 'cash_flow',
-              description: 'Cash flow deposit from $sourceAccountName',
+              description: 'Cash flow from $sourceAccountName',
               amount: cashFlowAmount,
               isCredit: true, // Credit to envelope
               envelopeId: envelope.id,
               envelopeName: envelope.name,
               accountId: sourceAccountId,
               accountName: sourceAccountName,
+              isExternal: false, // INTERNAL move - account to envelope
+              direction: 'move',
             ),
           );
 
@@ -270,12 +280,14 @@ class ProjectionService {
             ProjectionEvent(
               date: event.date,
               type: 'envelope_cash_flow_withdrawal',
-              description: '${envelope.name} - Withdrawal cash flow',
+              description: 'Cash flow to ${envelope.name}',
               amount: cashFlowAmount,
               isCredit: false, // Debit from account
               envelopeId: '', // Account-level transaction (no envelope)
               accountId: sourceAccountId,
               accountName: sourceAccountName,
+              isExternal: false, // INTERNAL move - account to envelope
+              direction: 'move',
             ),
           );
 

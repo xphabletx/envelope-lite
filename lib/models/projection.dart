@@ -92,11 +92,15 @@ class ProjectionEvent {
   final String type; // 'pay_day', 'scheduled_payment', 'cash_flow'
   final String description;
   final double amount;
-  final bool isCredit; // true = money in, false = money out
+  final bool isCredit; // true = money in, false = money out (LEGACY - use isExternal/direction instead)
   final String? envelopeId;
   final String? envelopeName;
   final String? accountId;
   final String? accountName;
+
+  // 🆕 EXTERNAL/INTERNAL Philosophy (v2.5)
+  final bool? isExternal; // true = EXTERNAL (crosses wall), false = INTERNAL (stays inside)
+  final String? direction; // 'inflow', 'outflow', 'move'
 
   ProjectionEvent({
     required this.date,
@@ -108,13 +112,22 @@ class ProjectionEvent {
     this.envelopeName,
     this.accountId,
     this.accountName,
+    this.isExternal,
+    this.direction,
   });
+
+  // Convenience getters for philosophy
+  bool get isExternalTransaction => isExternal ?? isCredit; // Fallback to isCredit for legacy
+  bool get isInternalTransaction => isExternal == false;
+  bool get isInflow => direction == 'inflow' || (direction == null && isCredit);
+  bool get isOutflow => direction == 'outflow' || (direction == null && !isCredit);
+  bool get isMove => direction == 'move';
 
   @override
   String toString() {
     final sign = isCredit ? '+' : '-';
-    // Removed hardcoded '£' for better localization support in logs
-    return '$date: $description ($sign$amount)';
+    final impact = isExternal == true ? 'EXTERNAL' : (isExternal == false ? 'INTERNAL' : 'LEGACY');
+    return '$date: $description ($sign$amount) [$impact]';
   }
 }
 

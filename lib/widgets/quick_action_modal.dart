@@ -155,14 +155,14 @@ class _QuickActionModalState extends State<QuickActionModal> {
 
     switch (widget.type) {
       case TransactionType.deposit:
-        title = 'Add Money';
-        icon = Icons.add_circle;
-        color = theme.colorScheme.primary;
+        title = 'Add Income';
+        icon = Icons.arrow_upward;
+        color = Colors.green.shade600;
         break;
       case TransactionType.withdrawal:
-        title = 'Spend Money';
-        icon = Icons.remove_circle;
-        color = theme.colorScheme.error;
+        title = 'Spend';
+        icon = Icons.arrow_downward;
+        color = Colors.red.shade600;
         break;
       case TransactionType.scheduledPayment:
         // This shouldn't be used in quick actions, but include for completeness
@@ -171,9 +171,9 @@ class _QuickActionModalState extends State<QuickActionModal> {
         color = Colors.purple.shade700;
         break;
       case TransactionType.transfer:
-        title = 'Move Money';
+        title = 'Transfer';
         icon = Icons.swap_horiz;
-        color = theme.colorScheme.primary;
+        color = Colors.blue.shade600;
         break;
     }
 
@@ -412,22 +412,18 @@ class _QuickActionModalState extends State<QuickActionModal> {
             onPressed: _isLoading ? null : _submit,
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
-              foregroundColor: widget.type == TransactionType.withdrawal
-                  ? theme.colorScheme.onError
-                  : theme.colorScheme.onPrimary,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: _isLoading
-                ? SizedBox(
+                ? const SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                      color: widget.type == TransactionType.withdrawal
-                          ? theme.colorScheme.onError
-                          : theme.colorScheme.onPrimary,
+                      color: Colors.white,
                       strokeWidth: 2,
                     ),
                   )
@@ -437,6 +433,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
                     style: fontProvider.getTextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
           ),
