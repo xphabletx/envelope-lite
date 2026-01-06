@@ -75,9 +75,9 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
     final children = <SpeedDialChild>[
       SpeedDialChild(
-        child: Icon(Icons.add_circle, color: iconColor),
+        child: Icon(Icons.arrow_upward, color: Colors.green.shade600),
         backgroundColor: theme.colorScheme.primaryContainer,
-        label: tr('action_add_money'),
+        label: 'Add Income', // EXTERNAL INFLOW
         labelStyle: fontProvider.getTextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -86,9 +86,9 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         onTap: () => _showQuickAction(TransactionType.deposit, account),
       ),
       SpeedDialChild(
-        child: Icon(Icons.remove_circle, color: iconColor),
+        child: Icon(Icons.arrow_downward, color: Colors.red.shade600),
         backgroundColor: theme.colorScheme.primaryContainer,
-        label: 'Take Money',
+        label: 'Withdraw', // EXTERNAL OUTFLOW
         labelStyle: fontProvider.getTextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -97,9 +97,9 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         onTap: () => _showQuickAction(TransactionType.withdrawal, account),
       ),
       SpeedDialChild(
-        child: Icon(Icons.swap_horiz, color: iconColor),
+        child: Icon(Icons.swap_horiz, color: Colors.blue.shade600),
         backgroundColor: theme.colorScheme.primaryContainer,
-        label: tr('action_move_money'),
+        label: 'Transfer', // INTERNAL MOVE
         labelStyle: fontProvider.getTextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,

@@ -696,9 +696,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     final children = <SpeedDialChild>[
       if (isOwner) ...[
         SpeedDialChild(
-          child: Icon(Icons.add_circle, color: iconColor),
+          child: Icon(Icons.arrow_upward, color: Colors.green.shade600),
           backgroundColor: theme.colorScheme.primaryContainer,
-          label: tr('action_add_money'),
+          label: 'Add Income', // EXTERNAL INFLOW
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -707,9 +707,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           onTap: () => _showDepositModal(context, envelope),
         ),
         SpeedDialChild(
-          child: Icon(Icons.remove_circle, color: iconColor),
+          child: Icon(Icons.arrow_downward, color: Colors.red.shade600),
           backgroundColor: theme.colorScheme.primaryContainer,
-          label: tr('action_take_money'),
+          label: 'Spend', // EXTERNAL OUTFLOW
           labelStyle: fontProvider.getTextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -719,9 +719,9 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
         ),
       ],
       SpeedDialChild(
-        child: Icon(Icons.swap_horiz, color: iconColor),
+        child: Icon(Icons.swap_horiz, color: Colors.blue.shade600),
         backgroundColor: theme.colorScheme.primaryContainer,
-        label: tr('action_move_money'),
+        label: 'Transfer', // INTERNAL MOVE
         labelStyle: fontProvider.getTextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,

@@ -52,6 +52,7 @@ class PayDayProcessor {
     debugPrint('[PayDay] Budget: £$budgetAmount, Cash Flow: £$totalCashFlow');
 
     // Process cash flows (magic money appears!)
+    // In Budget Mode, this is still EXTERNAL (virtual income from outside)
     int successCount = 0;
     for (final envelope in cashFlowEnvelopes) {
       try {
@@ -59,6 +60,7 @@ class PayDayProcessor {
           envelope.id,
           envelope.cashFlowAmount ?? 0.0,
           description: 'Pay Day Cash Flow',
+          // EXTERNAL because it's virtual income (no real account involved)
         );
         successCount++;
         debugPrint('[PayDay] ✅ ${envelope.name}: +£${envelope.cashFlowAmount}');
@@ -96,7 +98,7 @@ class PayDayProcessor {
     final payAmount = settings.expectedPayAmount ?? 0.0;
     final warnings = <String>[];
 
-    // 1. DEPOSIT PAY INTO DEFAULT ACCOUNT
+    // 1. DEPOSIT PAY INTO DEFAULT ACCOUNT (EXTERNAL - income from employer)
     await accountRepo.deposit(
       defaultAccount.id,
       payAmount,
@@ -116,21 +118,19 @@ class PayDayProcessor {
       final fillAmount = envelope.cashFlowAmount ?? 0.0;
 
       if (currentAccount!.currentBalance >= fillAmount) {
-        await accountRepo.withdraw(
-          defaultAccount.id,
-          fillAmount,
-          description: 'Cash Flow ${envelope.name}',
-        );
-
-        await envelopeRepo.addMoney(
-          envelope.id,
-          fillAmount,
-          description: 'Pay Day Cash Flow',
+        // INTERNAL transfer: Account → Envelope (money stays inside the system)
+        await accountRepo.transferToEnvelope(
+          accountId: defaultAccount.id,
+          envelopeId: envelope.id,
+          amount: fillAmount,
+          description: 'Cash Flow',
+          date: DateTime.now(),
+          envelopeRepo: envelopeRepo,
         );
 
         envelopesFilled++;
         totalEnvelopeFill += fillAmount;
-        debugPrint('[PayDay] ✅ ${envelope.name}: +£$fillAmount');
+        debugPrint('[PayDay] ✅ ${envelope.name}: +£$fillAmount (INTERNAL transfer)');
       } else {
         warnings.add('Skipped ${envelope.name} - insufficient funds in ${defaultAccount.name}');
         debugPrint('[PayDay] ⚠️ Skipped ${envelope.name}');
@@ -151,21 +151,19 @@ class PayDayProcessor {
         final envelopeFillAmount = envelope.cashFlowAmount ?? 0.0;
 
         if (accountBalance!.currentBalance >= envelopeFillAmount) {
-          await accountRepo.withdraw(
-            account.id,
-            envelopeFillAmount,
-            description: 'Cash Flow ${envelope.name}',
-          );
-
-          await envelopeRepo.addMoney(
-            envelope.id,
-            envelopeFillAmount,
-            description: 'Pay Day Cash Flow',
+          // INTERNAL transfer: Account → Envelope (money stays inside the system)
+          await accountRepo.transferToEnvelope(
+            accountId: account.id,
+            envelopeId: envelope.id,
+            amount: envelopeFillAmount,
+            description: 'Cash Flow',
+            date: DateTime.now(),
+            envelopeRepo: envelopeRepo,
           );
 
           envelopesFilled++;
           totalEnvelopeFill += envelopeFillAmount;
-          debugPrint('[PayDay] ✅ ${envelope.name} (from ${account.name}): +£$envelopeFillAmount');
+          debugPrint('[PayDay] ✅ ${envelope.name} (from ${account.name}): +£$envelopeFillAmount (INTERNAL transfer)');
         } else {
           warnings.add('Skipped ${envelope.name} - insufficient funds in ${account.name}');
         }
