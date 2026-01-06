@@ -573,9 +573,7 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
 
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-      );
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image == null) {
         setState(() => _isLoading = false);
@@ -599,9 +597,7 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
             cropStyle: CropStyle.circle,
-            aspectRatioPresets: [
-              CropAspectRatioPreset.square,
-            ],
+            aspectRatioPresets: [CropAspectRatioPreset.square],
             // Fix status bar - use light/dark mode instead of color
             statusBarLight: onPrimaryColor.computeLuminance() > 0.5,
             activeControlsWidgetColor: primaryColor,
@@ -619,9 +615,7 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
             aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: false,
             cropStyle: CropStyle.circle,
-            aspectRatioPresets: [
-              CropAspectRatioPreset.square,
-            ],
+            aspectRatioPresets: [CropAspectRatioPreset.square],
           ),
         ],
       );
@@ -2388,9 +2382,8 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withValues(
-                        alpha: 0.5,
-                      ),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -2406,7 +2399,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
+                          'Set recurring payments with Autopilot. Automate pay day with Cash Flow. See your future balances with Time Machine. Track your goals with Tareget Horizon. Never guess again.',
                           style: TextStyle(
                             fontSize: 13,
                             color: theme.colorScheme.primary,

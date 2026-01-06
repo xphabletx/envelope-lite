@@ -639,7 +639,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           fontWeight: FontWeight.bold,
                         ),
                         decoration: InputDecoration(
-                          labelText: 'Target Amount (${locale.currencySymbol})',
+                          labelText: 'Horizon Goal (${locale.currencySymbol})',
                           labelStyle: fontProvider.getTextStyle(fontSize: 18),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -690,14 +690,14 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             context: context,
                             builder: (context) => AlertDialog(
                               title: Text(
-                                'Target Amount Required',
+                                'Horizon Goal Required',
                                 style: fontProvider.getTextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               content: const Text(
-                                'You must set a target amount before setting a target date.\n\nPlease enter a target amount first.',
+                                'You must set a horizon goal before setting a horizon date.\n\nPlease enter a horizon goal first.',
                                 style: TextStyle(fontSize: 16),
                               ),
                               actions: [
@@ -717,13 +717,13 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           return;
                         }
 
-                        // Target amount is valid, proceed with date selection
+                        // Horizon goal is valid, proceed with date selection
                         final date = await showDatePicker(
                           context: context,
                           initialDate: _selectedTargetDate ?? DateTime.now().add(const Duration(days: 30)),
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 3650)),
-                          helpText: 'Select Target Date',
+                          helpText: 'Select Horizon Date',
                         );
 
                         if (date != null) {
@@ -734,7 +734,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       },
                       child: InputDecorator(
                         decoration: InputDecoration(
-                          labelText: 'Target Date (Optional)',
+                          labelText: 'Horizon Date (Optional)',
                           labelStyle: fontProvider.getTextStyle(fontSize: 18),
                           hintText: 'Tap to select date',
                           border: OutlineInputBorder(
@@ -1372,12 +1372,12 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           ? null
           : double.tryParse(_targetController.text);
 
-      // Validate: target date requires target amount
+      // Validate: horizon date requires horizon goal
       if (_selectedTargetDate != null && (targetAmount == null || targetAmount <= 0)) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Target date requires a target amount. Please enter a target amount to set a deadline.'),
+            content: Text('Horizon date requires a horizon goal. Please enter a horizon goal to set a deadline.'),
             duration: Duration(seconds: 4),
           ),
         );

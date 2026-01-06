@@ -813,7 +813,7 @@ class _LargeTargetTile extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Target Progress',
+                      'Horizon Progress',
                       style: fontProvider.getTextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -930,31 +930,31 @@ class _LargeTargetTile extends StatelessWidget {
                       debugPrint('[ModernHeaderCard]   Calculation: referenceDate ($referenceDate) - targetAchievedDate ($targetAchievedDate) = $daysFromNow days');
 
                       if (daysFromNow > 0) {
-                        // Target was achieved in the past (before our time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Target achieved $daysFromNow days ago');
+                        // Horizon was achieved in the past (before our time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Horizon achieved $daysFromNow days ago');
                         debugPrint('[ModernHeaderCard] ========================================');
-                        return 'Target achieved $daysFromNow days ago on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
+                        return 'Horizon achieved $daysFromNow days ago on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
                       } else if (daysFromNow < 0) {
-                        // Target will be achieved in the future (after our time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Target will be achieved in ${daysFromNow.abs()} days');
+                        // Horizon will be achieved in the future (after our time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Horizon will be achieved in ${daysFromNow.abs()} days');
                         debugPrint('[ModernHeaderCard] ========================================');
-                        return 'Target will be achieved in ${daysFromNow.abs()} days on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
+                        return 'Horizon will be achieved in ${daysFromNow.abs()} days on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
                       } else {
-                        // Target achieved today (at the time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Target achieved today!');
+                        // Horizon achieved today (at the time machine viewing date)
+                        debugPrint('[ModernHeaderCard]   Result: Horizon achieved today!');
                         debugPrint('[ModernHeaderCard] ========================================');
-                        return 'Target achieved today!';
+                        return 'Horizon achieved today!';
                       }
                     }
 
-                    // Standard display when target not yet achieved
+                    // Standard display when horizon not yet achieved
                     if (daysRemaining < 0) {
                       final daysOverdue = daysRemaining.abs();
                       return startDate != null
-                          ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • Target was $daysOverdue days ago'
-                          : 'Target was $daysOverdue days ago';
+                          ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • Horizon was $daysOverdue days ago'
+                          : 'Horizon was $daysOverdue days ago';
                     } else if (daysRemaining == 0) {
-                      return 'Target date is today!';
+                      return 'Horizon date is today!';
                     } else {
                       return startDate != null
                           ? '${DateFormat('MMM d').format(startDate!)} → ${DateFormat('MMM d, yyyy').format(envelope.targetDate!)} • $daysRemaining days remaining'

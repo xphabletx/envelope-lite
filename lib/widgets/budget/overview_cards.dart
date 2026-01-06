@@ -31,7 +31,8 @@ class BudgetOverviewCards extends StatefulWidget {
   final AccountRepo accountRepo;
   final EnvelopeRepo envelopeRepo;
   final ScheduledPaymentRepo paymentRepo;
-  final bool useVerticalLayout; // If true, displays cards vertically instead of horizontal PageView
+  final bool
+  useVerticalLayout; // If true, displays cards vertically instead of horizontal PageView
 
   @override
   State<BudgetOverviewCards> createState() => _BudgetOverviewCardsState();
@@ -66,13 +67,17 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     final isTablet = responsive.isTablet;
 
     // Calculate optimal viewport fraction
-    final newViewportFraction = (isTablet && isLandscape) ? 0.4
-        : (isLandscape || isTablet) ? 0.6
+    final newViewportFraction = (isTablet && isLandscape)
+        ? 0.4
+        : (isLandscape || isTablet)
+        ? 0.6
         : 0.85;
 
     // Recreate controller if viewport fraction changed significantly
     if ((_pageController.viewportFraction - newViewportFraction).abs() > 0.1) {
-      final currentPage = _pageController.hasClients ? (_pageController.page ?? 0) : 0;
+      final currentPage = _pageController.hasClients
+          ? (_pageController.page ?? 0)
+          : 0;
       _pageController.dispose();
       _pageController = PageController(
         viewportFraction: newViewportFraction,
@@ -150,7 +155,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
         // Calculate future range for Scheduled Payments
         // In time machine: show 30 days INTO THE FUTURE from target date
         // Outside time machine: show next 30 days from now
-        final futureStart = timeMachine.isActive && timeMachine.futureDate != null
+        final futureStart =
+            timeMachine.isActive && timeMachine.futureDate != null
             ? timeMachine.futureDate!
             : DateTime.now();
         final futureEnd = timeMachine.isActive && timeMachine.futureDate != null
@@ -164,7 +170,11 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Icon(Icons.history, size: 20, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.history,
+                    size: 20,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -172,7 +182,9 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                       style: fontProvider.getTextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
                       ),
                     ),
                   ),
@@ -205,27 +217,32 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                             stream: widget.envelopeRepo.transactionsStream,
                             builder: (context, txSnapshot) {
                               return StreamBuilder<List<ScheduledPayment>>(
-                                stream: widget.paymentRepo.scheduledPaymentsStream,
+                                stream:
+                                    widget.paymentRepo.scheduledPaymentsStream,
                                 builder: (context, paymentSnapshot) {
                                   // Handle loading states gracefully
                                   var accounts = accountSnapshot.data ?? [];
                                   final envelopes = envelopeSnapshot.data ?? [];
                                   var allTx = txSnapshot.data ?? [];
-                                  final scheduledPayments = paymentSnapshot.data ?? [];
+                                  final scheduledPayments =
+                                      paymentSnapshot.data ?? [];
 
                                   // Merge with projected data if time machine is active
                                   if (timeMachine.isActive) {
                                     // Get projected transactions
-                                    final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
-                                      historyStart,
-                                      historyEnd,
-                                      includeTransfers: true,
-                                    );
+                                    final projectedTx = timeMachine
+                                        .getProjectedTransactionsForDateRange(
+                                          historyStart,
+                                          historyEnd,
+                                          includeTransfers: true,
+                                        );
                                     allTx = [...allTx, ...projectedTx];
 
                                     // Transform accounts to use projected balances
                                     accounts = accounts.map((account) {
-                                      return timeMachine.getProjectedAccount(account);
+                                      return timeMachine.getProjectedAccount(
+                                        account,
+                                      );
                                     }).toList();
                                   }
 
@@ -237,7 +254,9 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                                           ),
                                         ) &&
                                         tx.date.isBefore(
-                                          historyEnd.add(const Duration(days: 1)),
+                                          historyEnd.add(
+                                            const Duration(days: 1),
+                                          ),
                                         );
                                   }).toList();
 
@@ -248,9 +267,17 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                                       const SizedBox(height: 12),
                                       _buildAccountsCard(accounts),
                                       const SizedBox(height: 12),
-                                      _buildIncomeCard(txInRange, historyStart, historyEnd),
+                                      _buildIncomeCard(
+                                        txInRange,
+                                        historyStart,
+                                        historyEnd,
+                                      ),
                                       const SizedBox(height: 12),
-                                      _buildSpendingCard(txInRange, historyStart, historyEnd),
+                                      _buildSpendingCard(
+                                        txInRange,
+                                        historyStart,
+                                        historyEnd,
+                                      ),
                                       const SizedBox(height: 12),
                                       // Use FUTURE range for Scheduled Payments
                                       _buildScheduledPaymentsCard(
@@ -284,27 +311,34 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                               stream: widget.envelopeRepo.transactionsStream,
                               builder: (context, txSnapshot) {
                                 return StreamBuilder<List<ScheduledPayment>>(
-                                  stream: widget.paymentRepo.scheduledPaymentsStream,
+                                  stream: widget
+                                      .paymentRepo
+                                      .scheduledPaymentsStream,
                                   builder: (context, paymentSnapshot) {
                                     // Handle loading states gracefully
                                     var accounts = accountSnapshot.data ?? [];
-                                    final envelopes = envelopeSnapshot.data ?? [];
+                                    final envelopes =
+                                        envelopeSnapshot.data ?? [];
                                     var allTx = txSnapshot.data ?? [];
-                                    final scheduledPayments = paymentSnapshot.data ?? [];
+                                    final scheduledPayments =
+                                        paymentSnapshot.data ?? [];
 
                                     // Merge with projected data if time machine is active
                                     if (timeMachine.isActive) {
                                       // Get projected transactions
-                                      final projectedTx = timeMachine.getProjectedTransactionsForDateRange(
-                                        historyStart,
-                                        historyEnd,
-                                        includeTransfers: true,
-                                      );
+                                      final projectedTx = timeMachine
+                                          .getProjectedTransactionsForDateRange(
+                                            historyStart,
+                                            historyEnd,
+                                            includeTransfers: true,
+                                          );
                                       allTx = [...allTx, ...projectedTx];
 
                                       // Transform accounts to use projected balances
                                       accounts = accounts.map((account) {
-                                        return timeMachine.getProjectedAccount(account);
+                                        return timeMachine.getProjectedAccount(
+                                          account,
+                                        );
                                       }).toList();
                                     }
 
@@ -316,7 +350,9 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                                             ),
                                           ) &&
                                           tx.date.isBefore(
-                                            historyEnd.add(const Duration(days: 1)),
+                                            historyEnd.add(
+                                              const Duration(days: 1),
+                                            ),
                                           );
                                     }).toList();
 
@@ -325,8 +361,16 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                                       children: [
                                         _buildTargetCard(envelopes),
                                         _buildAccountsCard(accounts),
-                                        _buildIncomeCard(txInRange, historyStart, historyEnd),
-                                        _buildSpendingCard(txInRange, historyStart, historyEnd),
+                                        _buildIncomeCard(
+                                          txInRange,
+                                          historyStart,
+                                          historyEnd,
+                                        ),
+                                        _buildSpendingCard(
+                                          txInRange,
+                                          historyStart,
+                                          historyEnd,
+                                        ),
                                         // Use FUTURE range for Scheduled Payments
                                         _buildScheduledPaymentsCard(
                                           scheduledPayments,
@@ -387,14 +431,16 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   Widget _buildTargetCard(List<Envelope> envelopes) {
     final theme = Theme.of(context);
 
-    final targetEnvelopes = envelopes.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
+    final targetEnvelopes = envelopes
+        .where((e) => e.targetAmount != null && e.targetAmount! > 0)
+        .toList();
     final targetCount = targetEnvelopes.length;
 
     return _OverviewCard(
       icon: Icons.track_changes,
-      title: 'Total Target Data',
+      title: 'Target Horizons',
       value: targetCount.toString(),
-      subtitle: targetCount == 1 ? 'Target' : 'Targets',
+      subtitle: targetCount == 1 ? 'Horizon' : 'Horizons',
       color: theme.colorScheme.tertiary,
       onTap: targetCount > 0
           ? () {
@@ -419,7 +465,10 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     final theme = Theme.of(context);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
-    final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
+    final timeMachine = Provider.of<TimeMachineProvider>(
+      context,
+      listen: false,
+    );
 
     final totalBalance = accounts.fold(
       0.0,
@@ -438,7 +487,9 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
         DateTime? initialStart;
         DateTime? initialEnd;
 
-        if (timeMachine.isActive && timeMachine.entryDate != null && timeMachine.futureDate != null) {
+        if (timeMachine.isActive &&
+            timeMachine.entryDate != null &&
+            timeMachine.futureDate != null) {
           initialStart = timeMachine.entryDate!;
           initialEnd = timeMachine.futureDate!;
         }
@@ -468,7 +519,11 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   }
 
   // 2. Income -> Links to StatsHistoryScreen
-  Widget _buildIncomeCard(List<Transaction> transactions, DateTime historyStart, DateTime historyEnd) {
+  Widget _buildIncomeCard(
+    List<Transaction> transactions,
+    DateTime historyStart,
+    DateTime historyEnd,
+  ) {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
@@ -483,11 +538,19 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
       subtitle: 'In selected history range',
       color: Colors.green,
       onTap: () {
-        debugPrint('[TimeMachine::OverviewCards] ========================================');
+        debugPrint(
+          '[TimeMachine::OverviewCards] ========================================',
+        );
         debugPrint('[TimeMachine::OverviewCards] Income card tapped!');
-        debugPrint('[TimeMachine::OverviewCards] Navigating to Stats & History');
-        debugPrint('[TimeMachine::OverviewCards] Will use entry → target date in time machine mode');
-        debugPrint('[TimeMachine::OverviewCards] ========================================');
+        debugPrint(
+          '[TimeMachine::OverviewCards] Navigating to Stats & History',
+        );
+        debugPrint(
+          '[TimeMachine::OverviewCards] Will use entry → target date in time machine mode',
+        );
+        debugPrint(
+          '[TimeMachine::OverviewCards] ========================================',
+        );
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -504,13 +567,21 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   }
 
   // 3. Spending -> Links to StatsHistoryScreen
-  Widget _buildSpendingCard(List<Transaction> transactions, DateTime historyStart, DateTime historyEnd) {
+  Widget _buildSpendingCard(
+    List<Transaction> transactions,
+    DateTime historyStart,
+    DateTime historyEnd,
+  ) {
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     // Include both withdrawals and scheduled payments
     final spending = transactions
-        .where((tx) => tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment)
+        .where(
+          (tx) =>
+              tx.type == TransactionType.withdrawal ||
+              tx.type == TransactionType.scheduledPayment,
+        )
         .fold(0.0, (sum, tx) => sum + tx.amount);
 
     return _OverviewCard(
@@ -527,7 +598,10 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               repo: widget.envelopeRepo,
               title: 'Envelope Spending & History',
               // Don't pass explicit dates - let screen use entry → target date in time machine
-              filterTransactionTypes: {TransactionType.withdrawal, TransactionType.scheduledPayment},
+              filterTransactionTypes: {
+                TransactionType.withdrawal,
+                TransactionType.scheduledPayment,
+              },
             ),
           ),
         );
@@ -796,7 +870,9 @@ class _OverviewCard extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 12,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                       textAlign: TextAlign.center,
                       maxLines: 1,

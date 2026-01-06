@@ -17,9 +17,9 @@ import '../../widgets/time_machine_indicator.dart';
 import '../../../widgets/common/smart_text_field.dart';
 
 enum TargetScreenMode {
-  singleEnvelope,  // From envelope detail
-  multiEnvelope,   // From budget overview or multi-selection
-  binderFiltered,  // From binder target chip
+  singleEnvelope, // From envelope detail
+  multiEnvelope, // From budget overview or multi-selection
+  binderFiltered, // From binder target chip
 }
 
 class MultiTargetScreen extends StatefulWidget {
@@ -37,10 +37,10 @@ class MultiTargetScreen extends StatefulWidget {
   final EnvelopeRepo envelopeRepo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
-  final List<String>? initialEnvelopeIds;  // Pre-selected envelope IDs
-  final String? initialGroupId;             // Filter by binder/group
+  final List<String>? initialEnvelopeIds; // Pre-selected envelope IDs
+  final String? initialGroupId; // Filter by binder/group
   final TargetScreenMode mode;
-  final String? title;                      // Custom title
+  final String? title; // Custom title
 
   @override
   State<MultiTargetScreen> createState() => _MultiTargetScreenState();
@@ -48,14 +48,19 @@ class MultiTargetScreen extends StatefulWidget {
 
 class _MultiTargetScreenState extends State<MultiTargetScreen> {
   final Set<String> _selectedEnvelopeIds = {};
-  final Map<String, double> _contributionAllocations = {}; // envelopeId -> percentage (0-100)
-  final Map<String, String> _envelopeFrequencies = {}; // envelopeId -> frequency
-  final TextEditingController _totalContributionController = TextEditingController();
+  final Map<String, double> _contributionAllocations =
+      {}; // envelopeId -> percentage (0-100)
+  final Map<String, String> _envelopeFrequencies =
+      {}; // envelopeId -> frequency
+  final TextEditingController _totalContributionController =
+      TextEditingController();
   String _defaultFrequency = 'monthly';
   bool _showCalculator = false;
   final Set<String> _expandedBinderIds = {}; // Track which binders are expanded
-  final Set<String> _expandedEnvelopeProjections = {}; // Track which envelope projections are expanded
-  List<EnvelopeGroup> _cachedGroups = []; // Cache groups to prevent "Unknown Binder" during rebuilds
+  final Set<String> _expandedEnvelopeProjections =
+      {}; // Track which envelope projections are expanded
+  List<EnvelopeGroup> _cachedGroups =
+      []; // Cache groups to prevent "Unknown Binder" during rebuilds
 
   @override
   void initState() {
@@ -82,13 +87,13 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             (e) => e.id == _selectedEnvelopeIds.first,
             orElse: () => allEnvelopes.first,
           );
-          return '${envelope.name} Target';
+          return '${envelope.name} Horizon';
         }
-        return 'Target Progress';
+        return 'Horizon Progress';
       case TargetScreenMode.binderFiltered:
-        return 'Binder Targets';
+        return 'Binder Horizons';
       case TargetScreenMode.multiEnvelope:
-        return 'All Targets';
+        return 'All Horizons';
     }
   }
 
@@ -99,11 +104,14 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         : allEnvelopes;
 
     // Only show envelopes with targets
-    return filtered.where((e) => e.targetAmount != null && e.targetAmount! > 0).toList();
+    return filtered
+        .where((e) => e.targetAmount != null && e.targetAmount! > 0)
+        .toList();
   }
 
   void _initializeAllocations(List<Envelope> targetEnvelopes) {
-    if (_selectedEnvelopeIds.isEmpty || _contributionAllocations.isNotEmpty) return;
+    if (_selectedEnvelopeIds.isEmpty || _contributionAllocations.isNotEmpty)
+      return;
 
     final count = _selectedEnvelopeIds.length;
     final equalPercentage = count > 0 ? 100.0 / count : 0.0;
@@ -125,12 +133,15 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       _contributionAllocations[envelopeId] = newPercentage;
 
       // Distribute the difference among other selected envelopes
-      final otherEnvelopes = _selectedEnvelopeIds.where((id) => id != envelopeId).toList();
+      final otherEnvelopes = _selectedEnvelopeIds
+          .where((id) => id != envelopeId)
+          .toList();
       if (otherEnvelopes.isNotEmpty) {
         final adjustmentPerEnvelope = -difference / otherEnvelopes.length;
         for (var otherId in otherEnvelopes) {
           final current = _contributionAllocations[otherId] ?? 0;
-          _contributionAllocations[otherId] = (current + adjustmentPerEnvelope).clamp(0.0, 100.0);
+          _contributionAllocations[otherId] = (current + adjustmentPerEnvelope)
+              .clamp(0.0, 100.0);
         }
       }
 
@@ -142,12 +153,16 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   void _normalizeAllocations() {
     if (_selectedEnvelopeIds.isEmpty) return;
 
-    final total = _contributionAllocations.values.fold(0.0, (sum, v) => sum + v);
+    final total = _contributionAllocations.values.fold(
+      0.0,
+      (sum, v) => sum + v,
+    );
     if (total == 0) return;
 
     final factor = 100.0 / total;
     for (var id in _selectedEnvelopeIds) {
-      _contributionAllocations[id] = (_contributionAllocations[id] ?? 0) * factor;
+      _contributionAllocations[id] =
+          (_contributionAllocations[id] ?? 0) * factor;
     }
   }
 
@@ -209,7 +224,13 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   Expanded(
                     child: targetEnvelopes.isEmpty
                         ? _buildEmptyState(theme, fontProvider)
-                        : _buildContent(targetEnvelopes, theme, fontProvider, locale, timeMachine),
+                        : _buildContent(
+                            targetEnvelopes,
+                            theme,
+                            fontProvider,
+                            locale,
+                            timeMachine,
+                          ),
                   ),
                 ],
               ),
@@ -264,16 +285,33 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       children: [
         // Contribution Calculator (if selected)
         if (_selectedEnvelopeIds.isNotEmpty) ...[
-          _buildContributionCalculator(targetEnvelopes, theme, fontProvider, locale),
+          _buildContributionCalculator(
+            targetEnvelopes,
+            theme,
+            fontProvider,
+            locale,
+          ),
           const SizedBox(height: 16),
         ],
 
         // Overall Progress Summary
-        _buildProgressSummary(targetEnvelopes, theme, fontProvider, locale, timeMachine),
+        _buildProgressSummary(
+          targetEnvelopes,
+          theme,
+          fontProvider,
+          locale,
+          timeMachine,
+        ),
         const SizedBox(height: 24),
 
         // Envelope List with Selection
-        _buildEnvelopeList(targetEnvelopes, theme, fontProvider, locale, timeMachine),
+        _buildEnvelopeList(
+          targetEnvelopes,
+          theme,
+          fontProvider,
+          locale,
+          timeMachine,
+        ),
 
         const SizedBox(height: 32),
       ],
@@ -295,9 +333,17 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         ? selectedEnvelopes
         : targetEnvelopes;
 
-    final totalTarget = envelopesToShow.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
-    final totalCurrent = envelopesToShow.fold(0.0, (sum, e) => sum + e.currentAmount);
-    final progress = totalTarget > 0 ? (totalCurrent / totalTarget).clamp(0.0, 1.0) : 0.0;
+    final totalTarget = envelopesToShow.fold(
+      0.0,
+      (sum, e) => sum + (e.targetAmount ?? 0),
+    );
+    final totalCurrent = envelopesToShow.fold(
+      0.0,
+      (sum, e) => sum + e.currentAmount,
+    );
+    final progress = totalTarget > 0
+        ? (totalCurrent / totalTarget).clamp(0.0, 1.0)
+        : 0.0;
     final remaining = totalTarget - totalCurrent;
 
     // Calculate if exceeded in time machine mode
@@ -307,7 +353,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     DateTime? earliestTargetDate;
     for (var envelope in envelopesToShow) {
       if (envelope.targetDate != null) {
-        if (earliestTargetDate == null || envelope.targetDate!.isBefore(earliestTargetDate)) {
+        if (earliestTargetDate == null ||
+            envelope.targetDate!.isBefore(earliestTargetDate)) {
           earliestTargetDate = envelope.targetDate;
         }
       }
@@ -317,11 +364,17 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     double? timeProgress;
     int? daysRemaining;
     if (earliestTargetDate != null) {
-      final referenceDate = timeMachine.isActive ? timeMachine.futureDate! : DateTime.now();
-      final startDate = DateTime.now(); // Assume targets started today (could be improved)
-      final totalDays = earliestTargetDate.difference(startDate).inDays;
-      final daysPassed = referenceDate.difference(startDate).inDays;
+      final now = DateTime.now();
+      final referenceDate = timeMachine.isActive ? timeMachine.futureDate! : now;
+
+      // Calculate time progress: from now to target date
+      // In time machine mode, show how much time has "elapsed" from today to the viewing date
+      final totalDays = earliestTargetDate.difference(now).inDays;
+      final daysPassed = timeMachine.isActive
+          ? referenceDate.difference(now).inDays
+          : 0; // In normal mode, we haven't elapsed any time yet
       daysRemaining = earliestTargetDate.difference(referenceDate).inDays;
+
       if (totalDays > 0) {
         timeProgress = (daysPassed / totalDays).clamp(0.0, 1.0);
       }
@@ -364,7 +417,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   Text(
                     selectedEnvelopes.isNotEmpty
                         ? '${selectedEnvelopes.length} Selected'
-                        : '${targetEnvelopes.length} Targets',
+                        : targetEnvelopes.length == 1
+                            ? '1 Horizon'
+                            : '${targetEnvelopes.length} Horizons',
                     style: fontProvider.getTextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -375,9 +430,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               ),
               if (daysRemaining != null && daysRemaining > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withAlpha(51),
+                    color: theme.colorScheme.secondary.withAlpha(77),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -385,7 +443,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     style: fontProvider.getTextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.onSecondaryContainer,
                     ),
                   ),
                 ),
@@ -405,7 +463,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     'Amount Progress',
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                      color: theme.colorScheme.onPrimaryContainer.withAlpha(
+                        179,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -414,7 +474,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     style: fontProvider.getTextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w900,
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.secondary,
                     ),
                   ),
                 ],
@@ -434,7 +494,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 8,
-              backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(51),
+              backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(
+                51,
+              ),
               valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
             ),
           ),
@@ -447,7 +509,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimaryContainer,
+                  color: theme.colorScheme.secondary,
                 ),
               ),
               if (exceeded > 0)
@@ -490,10 +552,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               child: LinearProgressIndicator(
                 value: timeProgress,
                 minHeight: 8,
-                backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(51),
-                valueColor: AlwaysStoppedAnimation(
-                  theme.colorScheme.secondary,
+                backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(
+                  51,
                 ),
+                valueColor: AlwaysStoppedAnimation(theme.colorScheme.secondary),
               ),
             ),
             const SizedBox(height: 4),
@@ -543,18 +605,22 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         // Group envelopes by binder
         final Map<String?, List<Envelope>> envelopesByGroup = {};
         for (var envelope in targetEnvelopes) {
-          envelopesByGroup.putIfAbsent(envelope.groupId, () => []).add(envelope);
+          envelopesByGroup
+              .putIfAbsent(envelope.groupId, () => [])
+              .add(envelope);
         }
 
         // Separate binders from ungrouped envelopes
-        final binderEntries = envelopesByGroup.entries.where((e) => e.key != null).toList();
+        final binderEntries = envelopesByGroup.entries
+            .where((e) => e.key != null)
+            .toList();
         final ungroupedEnvelopes = envelopesByGroup[null] ?? [];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Target Envelopes',
+              'Horizon Envelopes',
               style: fontProvider.getTextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -590,7 +656,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               if (binderEntries.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: theme.colorScheme.outline.withAlpha(77)),
+                  child: Divider(
+                    color: theme.colorScheme.outline.withAlpha(77),
+                  ),
                 ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -603,13 +671,15 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   ),
                 ),
               ),
-              ...ungroupedEnvelopes.map((envelope) => _buildEnvelopeTile(
-                envelope,
-                theme,
-                fontProvider,
-                locale,
-                timeMachine,
-              )),
+              ...ungroupedEnvelopes.map(
+                (envelope) => _buildEnvelopeTile(
+                  envelope,
+                  theme,
+                  fontProvider,
+                  locale,
+                  timeMachine,
+                ),
+              ),
             ],
           ],
         );
@@ -628,15 +698,21 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     final isExpanded = _expandedBinderIds.contains(group.id);
 
     // Calculate combined stats
-    final totalTarget = envelopes.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
+    final totalTarget = envelopes.fold(
+      0.0,
+      (sum, e) => sum + (e.targetAmount ?? 0),
+    );
     final totalCurrent = envelopes.fold(0.0, (sum, e) => sum + e.currentAmount);
-    final progress = totalTarget > 0 ? (totalCurrent / totalTarget).clamp(0.0, 1.0) : 0.0;
+    final progress = totalTarget > 0
+        ? (totalCurrent / totalTarget).clamp(0.0, 1.0)
+        : 0.0;
 
     // Calculate earliest target date for time progress
     DateTime? earliestTargetDate;
     for (var envelope in envelopes) {
       if (envelope.targetDate != null) {
-        if (earliestTargetDate == null || envelope.targetDate!.isBefore(earliestTargetDate)) {
+        if (earliestTargetDate == null ||
+            envelope.targetDate!.isBefore(earliestTargetDate)) {
           earliestTargetDate = envelope.targetDate;
         }
       }
@@ -651,9 +727,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           InkWell(
@@ -693,7 +767,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                               '${envelopes.length} envelope${envelopes.length == 1 ? '' : 's'}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: theme.colorScheme.onSurface.withAlpha(179),
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  179,
+                                ),
                               ),
                             ),
                           ],
@@ -736,8 +812,11 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     child: LinearProgressIndicator(
                       value: progress,
                       minHeight: 8,
-                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation(
+                        theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -762,7 +841,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                                 '${targetDates.length} dates • ',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withAlpha(179),
+                                  color: theme.colorScheme.onSurface.withAlpha(
+                                    179,
+                                  ),
                                 ),
                               ),
                             Icon(
@@ -775,7 +856,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                               '${earliestTargetDate.day}/${earliestTargetDate.month}/${earliestTargetDate.year}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: theme.colorScheme.onSurface.withAlpha(179),
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  179,
+                                ),
                               ),
                             ),
                           ],
@@ -795,16 +878,18 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 children: [
                   Divider(color: theme.colorScheme.outline.withAlpha(77)),
                   const SizedBox(height: 8),
-                  ...envelopes.map((envelope) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _buildEnvelopeTile(
-                      envelope,
-                      theme,
-                      fontProvider,
-                      locale,
-                      timeMachine,
+                  ...envelopes.map(
+                    (envelope) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _buildEnvelopeTile(
+                        envelope,
+                        theme,
+                        fontProvider,
+                        locale,
+                        timeMachine,
+                      ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -823,7 +908,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     final isSelected = _selectedEnvelopeIds.contains(envelope.id);
 
     // Use time machine projected amount if available
-    final displayAmount = envelope.currentAmount; // Already projected via getProjectedEnvelope
+    final displayAmount =
+        envelope.currentAmount; // Already projected via getProjectedEnvelope
     final progress = envelope.targetAmount! > 0
         ? (displayAmount / envelope.targetAmount!).clamp(0.0, 1.0)
         : 0.0;
@@ -890,7 +976,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                           TargetHelper.getSuggestionText(
                             envelope,
                             locale.currencySymbol,
-                            projectedAmount: timeMachine.isActive ? envelope.currentAmount : null,
+                            projectedAmount: timeMachine.isActive
+                                ? envelope.currentAmount
+                                : null,
                             projectedDate: timeMachine.futureDate,
                           ),
                           style: TextStyle(
@@ -991,18 +1079,17 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         onExpansionChanged: (expanded) {
           setState(() => _showCalculator = expanded);
         },
-        leading: Icon(
-          Icons.calculate,
-          color: theme.colorScheme.primary,
-        ),
+        leading: Icon(Icons.calculate, color: theme.colorScheme.primary),
         title: Text(
-          'Contribution Calculator',
+          'Target Horizon',
           style: fontProvider.getTextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
-        subtitle: Text('Plan contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}'),
+        subtitle: Text(
+          'Plan contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}',
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
@@ -1027,14 +1114,21 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.calculate, color: theme.colorScheme.onPrimary),
+                        icon: Icon(
+                          Icons.calculate,
+                          color: theme.colorScheme.onPrimary,
+                        ),
                         onPressed: () async {
-                          final result = await CalculatorHelper.showCalculator(context);
+                          final result = await CalculatorHelper.showCalculator(
+                            context,
+                          );
                           if (result != null) {
                             _totalContributionController.text = result;
                             setState(() {
                               // Auto-expand all envelope projections when amount is calculated
-                              _expandedEnvelopeProjections.addAll(_selectedEnvelopeIds);
+                              _expandedEnvelopeProjections.addAll(
+                                _selectedEnvelopeIds,
+                              );
                             });
                           }
                         },
@@ -1042,7 +1136,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                       ),
                     ),
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onTap: () {
                     _totalContributionController.selection = TextSelection(
                       baseOffset: 0,
@@ -1054,7 +1150,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                       // Auto-expand all envelope projections when a valid amount is entered
                       final amount = double.tryParse(value);
                       if (amount != null && amount > 0) {
-                        _expandedEnvelopeProjections.addAll(_selectedEnvelopeIds);
+                        _expandedEnvelopeProjections.addAll(
+                          _selectedEnvelopeIds,
+                        );
                       }
                     });
                   },
@@ -1075,7 +1173,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   items: const [
                     DropdownMenuItem(value: 'daily', child: Text('Daily')),
                     DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                    DropdownMenuItem(value: 'biweekly', child: Text('Every 2 weeks')),
+                    DropdownMenuItem(
+                      value: 'biweekly',
+                      child: Text('Every 2 weeks'),
+                    ),
                     DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
                   ],
                   onChanged: (value) {
@@ -1109,7 +1210,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 const SizedBox(height: 16),
 
                 ...selectedEnvelopes.map((envelope) {
-                  final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
+                  final totalAmount =
+                      double.tryParse(_totalContributionController.text) ?? 0;
                   return _buildEnvelopeAllocationTile(
                     envelope,
                     theme,
@@ -1140,7 +1242,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
     // Calculate projection
     final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
-    final contributionsNeeded = envelopeAmount > 0 ? (remaining / envelopeAmount).ceil() : 0;
+    final contributionsNeeded = envelopeAmount > 0
+        ? (remaining / envelopeAmount).ceil()
+        : 0;
     final daysPerContribution = _getDaysPerFrequency(frequency);
     final daysToTarget = contributionsNeeded * daysPerContribution;
     final targetDate = DateTime.now().add(Duration(days: daysToTarget));
@@ -1223,19 +1327,32 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                               'Amount',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: theme.colorScheme.onSurface.withAlpha(179),
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  179,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 4),
                             GestureDetector(
-                              onTap: () => _showAmountInput(envelope, theme, fontProvider, locale),
+                              onTap: () => _showAmountInput(
+                                envelope,
+                                theme,
+                                fontProvider,
+                                locale,
+                              ),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primaryContainer.withAlpha(77),
+                                  color: theme.colorScheme.primaryContainer
+                                      .withAlpha(77),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: theme.colorScheme.primary.withAlpha(77),
+                                    color: theme.colorScheme.primary.withAlpha(
+                                      77,
+                                    ),
                                   ),
                                 ),
                                 child: Row(
@@ -1273,17 +1390,25 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                               'Frequency',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: theme.colorScheme.onSurface.withAlpha(179),
+                                color: theme.colorScheme.onSurface.withAlpha(
+                                  179,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: theme.colorScheme.outline.withAlpha(77),
+                                  color: theme.colorScheme.outline.withAlpha(
+                                    77,
+                                  ),
                                 ),
                               ),
                               child: Text(
@@ -1306,14 +1431,16 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.secondaryContainer.withAlpha(51),
+                        color: theme.colorScheme.secondaryContainer.withAlpha(
+                          51,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Target in ${_getSmartTimePeriod(contributionsNeeded, frequency)}',
+                            'Horizon in ${_getSmartTimePeriod(contributionsNeeded, frequency)}',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1345,12 +1472,28 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 children: [
                   Divider(color: theme.colorScheme.outline.withAlpha(77)),
                   const SizedBox(height: 8),
-                  _buildProjectionRow('Remaining', locale.formatCurrency(remaining), fontProvider),
-                  _buildProjectionRow('Per $frequencyLabel', locale.formatCurrency(envelopeAmount), fontProvider),
-                  _buildProjectionRow('Contributions needed', '$contributionsNeeded', fontProvider),
-                  _buildProjectionRow('Days to target', '$daysToTarget days', fontProvider),
                   _buildProjectionRow(
-                    'Target reached by',
+                    'Remaining',
+                    locale.formatCurrency(remaining),
+                    fontProvider,
+                  ),
+                  _buildProjectionRow(
+                    'Per $frequencyLabel',
+                    locale.formatCurrency(envelopeAmount),
+                    fontProvider,
+                  ),
+                  _buildProjectionRow(
+                    'Contributions needed',
+                    '$contributionsNeeded',
+                    fontProvider,
+                  ),
+                  _buildProjectionRow(
+                    'Days to horizon',
+                    '$daysToTarget days',
+                    fontProvider,
+                  ),
+                  _buildProjectionRow(
+                    'Horizon reached by',
                     '${targetDate.day}/${targetDate.month}/${targetDate.year}',
                     fontProvider,
                     valueColor: theme.colorScheme.primary,
@@ -1459,7 +1602,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     }
   }
 
-  void _showAmountInput(Envelope envelope, ThemeData theme, FontProvider fontProvider, LocaleProvider locale) {
+  void _showAmountInput(
+    Envelope envelope,
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider locale,
+  ) {
     final controller = TextEditingController();
     final totalAmount = double.tryParse(_totalContributionController.text) ?? 0;
     final currentPercentage = _contributionAllocations[envelope.id] ?? 0;
@@ -1471,7 +1619,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text(
           envelope.name,
-          style: fontProvider.getTextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: fontProvider.getTextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1481,11 +1632,15 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             SmartTextField(
               controller: controller,
               autofocus: false,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: 'Amount',
                 prefixText: '${locale.currencySymbol} ',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               onTap: () {
                 // Select all text on tap
@@ -1496,7 +1651,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               },
               onSubmitted: (_) {
                 FocusScope.of(dialogContext).unfocus();
-                _applyAmountChange(dialogContext, envelope.id, controller.text, totalAmount);
+                _applyAmountChange(
+                  dialogContext,
+                  envelope.id,
+                  controller.text,
+                  totalAmount,
+                );
               },
             ),
           ],
@@ -1512,7 +1672,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           FilledButton(
             onPressed: () {
               FocusScope.of(dialogContext).unfocus();
-              _applyAmountChange(dialogContext, envelope.id, controller.text, totalAmount);
+              _applyAmountChange(
+                dialogContext,
+                envelope.id,
+                controller.text,
+                totalAmount,
+              );
             },
             child: Text('Apply'),
           ),
@@ -1521,7 +1686,12 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     );
   }
 
-  void _applyAmountChange(BuildContext dialogContext, String envelopeId, String amountText, double totalAmount) {
+  void _applyAmountChange(
+    BuildContext dialogContext,
+    String envelopeId,
+    String amountText,
+    double totalAmount,
+  ) {
     final amount = double.tryParse(amountText);
 
     // Validate amount
@@ -1535,7 +1705,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Amount cannot exceed total contribution (${Provider.of<LocaleProvider>(context, listen: false).formatCurrency(totalAmount)})'),
+          content: Text(
+            'Amount cannot exceed total contribution (${Provider.of<LocaleProvider>(context, listen: false).formatCurrency(totalAmount)})',
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
@@ -1555,15 +1727,25 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
   int _getDaysPerFrequency(String frequency) {
     switch (frequency) {
-      case 'daily': return 1;
-      case 'weekly': return 7;
-      case 'biweekly': return 14;
-      case 'monthly': return 30;
-      default: return 30;
+      case 'daily':
+        return 1;
+      case 'weekly':
+        return 7;
+      case 'biweekly':
+        return 14;
+      case 'monthly':
+        return 30;
+      default:
+        return 30;
     }
   }
 
-  Widget _buildProjectionRow(String label, String value, FontProvider fontProvider, {Color? valueColor}) {
+  Widget _buildProjectionRow(
+    String label,
+    String value,
+    FontProvider fontProvider, {
+    Color? valueColor,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(

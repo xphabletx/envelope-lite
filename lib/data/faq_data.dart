@@ -38,12 +38,12 @@ const List<FAQItem> faqItems = [
 
   // ENVELOPES
   FAQItem(
-    emoji: '🎯',
-    question: 'What are targets and how do they work?',
+    emoji: '🌅',
+    question: 'What are horizons and how do they work?',
     answer:
-        'Targets are savings goals! Set an amount and date, and we\'ll show you smart suggestions (daily/weekly/monthly) to reach your goal on time.',
-    screenshotPath: 'target_card.png',
-    tags: ['target', 'goal', 'savings', 'suggestion'],
+        'Horizons are savings goals! Set a horizon goal and date, and we\'ll show you smart suggestions (daily/weekly/monthly) to reach your goal on time. Watch the sun rise as you get closer! ✨',
+    screenshotPath: 'horizon_card.png',
+    tags: ['horizon', 'goal', 'savings', 'suggestion'],
   ),
 
   FAQItem(

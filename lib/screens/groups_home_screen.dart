@@ -845,13 +845,13 @@ class _BinderSpreadState extends State<_BinderSpread> {
       );
     }
 
-    // Target Chip
+    // Horizon Progress Chip
     if (targetEnvelopes.isNotEmpty) {
       chips.add(
         _buildStandardChip(
           context: context,
           icon: Icons.track_changes,
-          label: 'Target',
+          label: 'Horizon',
           amount: currency.format(totalTargetAmount),
           onTap: () {
             Navigator.push(
@@ -863,7 +863,7 @@ class _BinderSpreadState extends State<_BinderSpread> {
                   accountRepo: AccountRepo(widget.repo),
                   initialGroupId: widget.group.id,
                   mode: TargetScreenMode.binderFiltered,
-                  title: '${widget.group.name} Targets',
+                  title: '${widget.group.name} Horizons',
                 ),
               ),
             );

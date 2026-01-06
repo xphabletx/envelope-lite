@@ -121,11 +121,11 @@ const envelopeDetailTutorial = TutorialSequence(
       spotlightWidgetKey: 'month_selector',
     ),
     TutorialStep(
-      id: 'target_suggestions',
-      emoji: '🎯',
-      title: 'Target Suggestions',
+      id: 'horizon_suggestions',
+      emoji: '🌅',
+      title: 'Horizon Suggestions',
       description:
-          'Your target card shows smart suggestions! It calculates how much to save daily/weekly/monthly! 🤓',
+          'Your horizon card shows smart suggestions! It calculates how much to save daily/weekly/monthly! 🤓',
       spotlightWidgetKey: 'target_card',
     ),
     TutorialStep(

@@ -18,7 +18,7 @@ class TargetHelper {
     DateTime? projectedDate,
   }) {
     if (envelope.targetAmount == null || envelope.targetDate == null) {
-      return "Set a target date to see tracking.";
+      return "Set a horizon date to see tracking.";
     }
 
     // Use projected values if provided (time machine mode), otherwise use current values
@@ -38,19 +38,19 @@ class TargetHelper {
     }
 
     // REGULAR MODE: Standard target tracking
-    // Check if target is in the past
+    // Check if horizon is in the past
     if (target.isBefore(referenceDate)) {
       if (currentAmount >= envelope.targetAmount!) {
-        return "Target reached! 🎉";
+        return "Horizon reached! ✨";
       } else {
-        return "Target date passed.";
+        return "Horizon date passed.";
       }
     }
 
     final daysRemaining = target.difference(referenceDate).inDays;
     final amountNeeded = envelope.targetAmount! - currentAmount;
 
-    if (amountNeeded <= 0) return "Target reached! 🎉";
+    if (amountNeeded <= 0) return "Horizon reached! ✨";
     if (daysRemaining <= 0) return "Due today!";
 
     // Logic: If > 60 days, show Monthly. If > 14 days, show Weekly. Else Daily.
@@ -84,12 +84,12 @@ class TargetHelper {
     debugPrint('[TargetHelper]   Projected Date (viewing): $projectedDate');
     debugPrint('[TargetHelper]   Amount Met: ${projectedAmount >= targetAmount}');
 
-    // Case 1: Projected date is exactly on target date
+    // Case 1: Projected date is exactly on horizon date
     if (_isSameDay(projectedDate, targetDate)) {
       if (projectedAmount >= targetAmount) {
-        debugPrint('[TargetHelper]   Result: Will reach target on time!');
+        debugPrint('[TargetHelper]   Result: Will reach horizon on time!');
         debugPrint('[TargetHelper] ========================================');
-        return "Will reach target on time! 🎉";
+        return "Will reach horizon on time! ✨";
       } else {
         final shortfall = targetAmount - projectedAmount;
         debugPrint('[TargetHelper]   Result: Will be short by $shortfall');
@@ -98,33 +98,33 @@ class TargetHelper {
       }
     }
 
-    // Case 2: Projected date is beyond target date
+    // Case 2: Projected date is beyond horizon date
     if (projectedDate.isAfter(targetDate)) {
-      debugPrint('[TargetHelper]   Viewing date is AFTER target date');
+      debugPrint('[TargetHelper]   Viewing date is AFTER horizon date');
       if (projectedAmount >= targetAmount) {
-        // Calculate when target was/will be reached
-        // NOTE: This calculates days between viewing date and target DATE (not achievement date)
+        // Calculate when horizon was/will be reached
+        // NOTE: This calculates days between viewing date and horizon DATE (not achievement date)
         final daysAfter = projectedDate.difference(targetDate).inDays;
-        debugPrint('[TargetHelper]   Days after target DATE: $daysAfter');
+        debugPrint('[TargetHelper]   Days after horizon DATE: $daysAfter');
         debugPrint('[TargetHelper]   Calculation: projectedDate ($projectedDate) - targetDate ($targetDate) = $daysAfter days');
 
         if (daysAfter == 0) {
-          debugPrint('[TargetHelper]   Result: Target reached on due date!');
+          debugPrint('[TargetHelper]   Result: Horizon reached on due date!');
           debugPrint('[TargetHelper] ========================================');
-          return "Target reached on due date! 🎉";
+          return "Horizon reached on due date! ✨";
         } else if (daysAfter == 1) {
-          debugPrint('[TargetHelper]   Result: Target reached 1 day ago');
+          debugPrint('[TargetHelper]   Result: Horizon reached 1 day ago');
           debugPrint('[TargetHelper] ========================================');
-          return "Target reached 1 day ago 🎉";
+          return "Horizon reached 1 day ago 🌅";
         } else if (daysAfter < 30) {
-          debugPrint('[TargetHelper]   Result: Target reached $daysAfter days ago');
+          debugPrint('[TargetHelper]   Result: Horizon reached $daysAfter days ago');
           debugPrint('[TargetHelper] ========================================');
-          return "Target reached $daysAfter days ago 🎉";
+          return "Horizon reached $daysAfter days ago 🌅";
         } else {
           final monthsAfter = (daysAfter / 30).round();
-          debugPrint('[TargetHelper]   Result: Target reached ${monthsAfter}mo ago');
+          debugPrint('[TargetHelper]   Result: Horizon reached ${monthsAfter}mo ago');
           debugPrint('[TargetHelper] ========================================');
-          return "Target reached ${monthsAfter}mo ago 🎉";
+          return "Horizon reached ${monthsAfter}mo ago 🌅";
         }
       } else {
         final shortfall = targetAmount - projectedAmount;
@@ -135,21 +135,21 @@ class TargetHelper {
       }
     }
 
-    // Case 3: Projected date is before target date
+    // Case 3: Projected date is before horizon date
     if (projectedAmount >= targetAmount) {
       final daysEarly = targetDate.difference(projectedDate).inDays;
       if (daysEarly == 0) {
-        return "On track to meet target! 🎉";
+        return "On track to meet horizon! ✨";
       } else if (daysEarly == 1) {
-        return "Will reach target 1 day early! 🎉";
+        return "Will reach horizon 1 day early! ✨";
       } else if (daysEarly < 30) {
-        return "Will reach target ${daysEarly}d early! 🎉";
+        return "Will reach horizon ${daysEarly}d early! ✨";
       } else {
         final monthsEarly = (daysEarly / 30).round();
-        return "Will reach target ${monthsEarly}mo early! 🎉";
+        return "Will reach horizon ${monthsEarly}mo early! ✨";
       }
     } else {
-      // Still progressing toward target
+      // Still progressing toward horizon
       final remaining = targetAmount - projectedAmount;
       final daysUntilTarget = targetDate.difference(projectedDate).inDays;
 

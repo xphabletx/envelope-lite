@@ -98,7 +98,7 @@ class DataExportService {
   void _createEnvelopesSheet(Excel excel, List<Envelope> envelopes, Map<String?, String> groupMap, Map<String, Account> accountMap) {
     final sheet = excel['Envelopes'];
     final headers = [
-      'Name', 'Balance', 'Target Amount', 'Progress %', 'Group Name',
+      'Name', 'Balance', 'Horizon Goal', 'Progress %', 'Group Name',
       'Icon (emoji/text)', 'Is Shared', 'Cash Flow Settings', 'Linked Account Name' // Updated header
     ];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());

@@ -345,8 +345,8 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       await ErrorHandler.handle(
         context,
         AppError.medium(
-          code: 'TARGET_DATE_REQUIRES_AMOUNT',
-          userMessage: 'Target date requires a target amount. Please enter a target amount to set a deadline.',
+          code: 'HORIZON_DATE_REQUIRES_GOAL',
+          userMessage: 'Horizon date requires a horizon goal. Please enter a horizon goal to set a deadline.',
           category: ErrorCategory.validation,
         ),
       );
@@ -800,7 +800,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Target Date (Optional)',
+                                        'Horizon Date (Optional)',
                                         style: fontProvider.getTextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,

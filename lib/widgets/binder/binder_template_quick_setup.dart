@@ -774,7 +774,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                         nextFocusNode: widget.data.recurringBillEnabled ? _recurringAmountFocus : null,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
-                          labelText: 'Target Amount (optional)',
+                          labelText: 'Horizon Goal (optional)',
                           prefixText: localeProvider.currencySymbol,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),

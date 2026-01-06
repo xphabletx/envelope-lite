@@ -870,7 +870,7 @@ class _TargetStatusCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  daysLeft > 0 ? '$daysLeft days remaining' : 'Target due',
+                  daysLeft > 0 ? '$daysLeft days remaining' : 'Horizon due',
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSecondaryContainer.withAlpha(204),

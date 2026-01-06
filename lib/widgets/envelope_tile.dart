@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/envelope.dart';
 import '../services/envelope_repo.dart';
-import 'emoji_pie_chart.dart';
+import 'horizon_progress.dart';
 import 'quick_action_modal.dart';
 import '../models/transaction.dart';
 import '../services/localization_service.dart';
@@ -225,7 +225,7 @@ class _EnvelopeTileState extends State<EnvelopeTile>
                       ),
                     )
                   else
-                    EmojiPieChart(percentage: percentage, size: 60),
+                    HorizonProgress(percentage: percentage, size: 60),
                 ],
               ],
             ),
