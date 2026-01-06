@@ -19,6 +19,7 @@ import '../providers/locale_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../widgets/time_machine_indicator.dart';
 import '../widgets/analytics/analytics_section.dart';
+import '../widgets/transactions/transaction_list_item.dart';
 
 /// Categories for the new "Virtual Ledger" philosophy
 enum TransactionCategory {
@@ -35,6 +36,7 @@ class StatsHistoryScreen extends StatefulWidget {
     required this.repo,
     this.initialEnvelopeIds,
     this.initialGroupIds,
+    this.initialAccountIds,
     this.initialStart,
     this.initialEnd,
     this.myOnlyDefault = false,
@@ -45,6 +47,7 @@ class StatsHistoryScreen extends StatefulWidget {
   final EnvelopeRepo repo;
   final Set<String>? initialEnvelopeIds;
   final Set<String>? initialGroupIds;
+  final Set<String>? initialAccountIds;
   final DateTime? initialStart;
   final DateTime? initialEnd;
   final bool myOnlyDefault;
@@ -101,12 +104,14 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
     // Initialize context-aware filters
     final hasExplicit =
         (widget.initialEnvelopeIds != null && widget.initialEnvelopeIds!.isNotEmpty) ||
-        (widget.initialGroupIds != null && widget.initialGroupIds!.isNotEmpty);
+        (widget.initialGroupIds != null && widget.initialGroupIds!.isNotEmpty) ||
+        (widget.initialAccountIds != null && widget.initialAccountIds!.isNotEmpty);
 
     if (hasExplicit) {
       selectedIds
         ..clear()
         ..addAll(widget.initialEnvelopeIds ?? const <String>{})
+        ..addAll(widget.initialAccountIds ?? const <String>{})
         ..addAll(widget.initialGroupIds ?? const <String>{});
       _didApplyExplicitInitialSelection = true;
 
@@ -117,6 +122,19 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
       if (widget.initialGroupIds != null && widget.initialGroupIds!.isNotEmpty) {
         activeFilters.add(StatsFilterType.groups);
       }
+      if (widget.initialAccountIds != null && widget.initialAccountIds!.isNotEmpty) {
+        activeFilters.add(StatsFilterType.accounts);
+      }
+
+      // DEBUG: Log initial context
+      debugPrint('[StatsHistoryScreen] ===== CONTEXT INITIALIZATION =====');
+      debugPrint('[StatsHistoryScreen] Title: ${widget.title}');
+      debugPrint('[StatsHistoryScreen] Initial Envelope IDs: ${widget.initialEnvelopeIds}');
+      debugPrint('[StatsHistoryScreen] Initial Group IDs: ${widget.initialGroupIds}');
+      debugPrint('[StatsHistoryScreen] Initial Account IDs: ${widget.initialAccountIds}');
+      debugPrint('[StatsHistoryScreen] Active Filters: $activeFilters');
+      debugPrint('[StatsHistoryScreen] Selected IDs: $selectedIds');
+      debugPrint('[StatsHistoryScreen] ====================================');
     }
   }
 
@@ -160,7 +178,8 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
         return AnalyticsFilter.cashOut;
       }
     }
-    return AnalyticsFilter.cashOut;
+    // Default to NET view for general stats
+    return AnalyticsFilter.net;
   }
 
   void _showSelectionSheet<T>({
@@ -390,11 +409,21 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
   /// Categorize a transaction based on Virtual Ledger philosophy
   TransactionCategory _categorizeTransaction(Transaction t, List<Account> accounts) {
-    // External Income: Deposits to Default Account with "PAY DAY!" description
+    // External Income: Deposits to accounts (including PAY DAY!)
+    if (t.type == TransactionType.deposit && (t.accountId != null && t.accountId!.isNotEmpty)) {
+      return TransactionCategory.externalIncome;
+    }
+
+    // External Income: Deposits to Default Account with "PAY DAY!" description (legacy)
     if (t.type == TransactionType.deposit &&
         t.envelopeId.isEmpty &&
         t.description == 'PAY DAY!') {
       return TransactionCategory.externalIncome;
+    }
+
+    // External Spending: Withdrawals from accounts
+    if (t.type == TransactionType.withdrawal && (t.accountId != null && t.accountId!.isNotEmpty)) {
+      return TransactionCategory.externalSpending;
     }
 
     // External Spending: Withdrawals and Scheduled Payments from Envelopes
@@ -546,19 +575,38 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                 final chosenEnvelopeIds = chosenEnvelopes.map((e) => e.id).toSet();
 
                                 // Filter transactions by context
-                                var contextFilteredTxs = txs.where((t) {
-                                  bool inChosen = false;
+                                // DEBUG: Log filtering context
+                                debugPrint('[StatsHistoryScreen] ===== TRANSACTION FILTERING =====');
+                                debugPrint('[StatsHistoryScreen] Total transactions: ${txs.length}');
+                                debugPrint('[StatsHistoryScreen] Active filters: $activeFilters');
+                                debugPrint('[StatsHistoryScreen] Selected IDs: $selectedIds');
+                                debugPrint('[StatsHistoryScreen] Chosen Envelope IDs: ${chosenEnvelopeIds.length}');
 
+                                // Extract account IDs from selectedIds for efficient lookup
+                                final selectedAccountIds = selectedIds
+                                    .where((id) => accounts.any((a) => a.id == id))
+                                    .toSet();
+
+                                var contextFilteredTxs = txs.where((t) {
+                                  bool accountMatch = true;
+                                  bool envelopeMatch = true;
+
+                                  // Account filter: if active, transaction MUST be from selected account(s)
                                   if (activeFilters.contains(StatsFilterType.accounts)) {
-                                    if (t.envelopeId.isEmpty) {
-                                      inChosen = true;
+                                    accountMatch = false;
+                                    if (t.accountId != null && t.accountId!.isNotEmpty) {
+                                      if (selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId)) {
+                                        accountMatch = true;
+                                      }
                                     }
                                   }
 
+                                  // Envelope/Group filter: if active, transaction MUST be from selected envelope(s)
                                   if (activeFilters.contains(StatsFilterType.envelopes) ||
                                       activeFilters.contains(StatsFilterType.groups)) {
+                                    envelopeMatch = false;
                                     if (chosenEnvelopeIds.contains(t.envelopeId)) {
-                                      inChosen = true;
+                                      envelopeMatch = true;
                                     }
                                   }
 
@@ -566,8 +614,21 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                   final typeMatch = widget.filterTransactionTypes == null ||
                                       widget.filterTransactionTypes!.contains(t.type);
 
-                                  return inChosen && inRange && typeMatch;
+                                  // Transaction must match ALL active filter types (AND logic)
+                                  return accountMatch && envelopeMatch && inRange && typeMatch;
                                 }).toList();
+
+                                // DEBUG: Log sample transaction details when filtering returns 0 results
+                                if (contextFilteredTxs.isEmpty && txs.isNotEmpty) {
+                                  debugPrint('[StatsHistoryScreen] ⚠️ No transactions matched filters!');
+                                  debugPrint('[StatsHistoryScreen] Selected Account IDs: $selectedAccountIds');
+                                  debugPrint('[StatsHistoryScreen] Chosen Envelope IDs: $chosenEnvelopeIds');
+                                  debugPrint('[StatsHistoryScreen] Sample transactions (first 3):');
+                                  for (var i = 0; i < (txs.length > 3 ? 3 : txs.length); i++) {
+                                    final t = txs[i];
+                                    debugPrint('[StatsHistoryScreen]   - Tx ${i+1}: accountId=${t.accountId}, envelopeId=${t.envelopeId}, type=${t.type}, amount=${t.amount}');
+                                  }
+                                }
 
                                 // Deduplicate transfer transactions
                                 final seenTransferLinks = <String>{};
@@ -583,6 +644,56 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                                 // Sort by date descending
                                 contextFilteredTxs.sort((a, b) => b.date.compareTo(a.date));
+
+                                // DEBUG: Log filtered results with useful information
+                                debugPrint('[StatsHistoryScreen] Filtered transactions: ${contextFilteredTxs.length}');
+                                if (contextFilteredTxs.isNotEmpty) {
+                                  debugPrint('[StatsHistoryScreen] ');
+                                  debugPrint('[StatsHistoryScreen] TRANSACTION LIST:');
+                                  debugPrint('[StatsHistoryScreen] ');
+                                  for (var i = 0; i < (contextFilteredTxs.length > 10 ? 10 : contextFilteredTxs.length); i++) {
+                                    final t = contextFilteredTxs[i];
+                                    final txDate = DateFormat('MMM d, yyyy').format(t.date);
+                                    final txTime = DateFormat('h:mm a').format(t.date);
+
+                                    // Find account and envelope names
+                                    String accName = 'None';
+                                    if (t.accountId != null && t.accountId!.isNotEmpty) {
+                                      final acc = accounts.firstWhere(
+                                        (a) => a.id == t.accountId,
+                                        orElse: () => Account(id: '', name: 'Unknown', currentBalance: 0, userId: '', createdAt: DateTime.now(), lastUpdated: DateTime.now()),
+                                      );
+                                      accName = acc.name;
+                                    }
+
+                                    String envName = 'None';
+                                    if (t.envelopeId.isNotEmpty) {
+                                      final env = envelopes.firstWhere(
+                                        (e) => e.id == t.envelopeId,
+                                        orElse: () => Envelope(id: '', name: 'Unknown', userId: ''),
+                                      );
+                                      envName = env.name;
+                                    }
+
+                                    String typeStr = t.type.name.toUpperCase();
+                                    String fromTo = '';
+
+                                    if (t.type == TransactionType.transfer) {
+                                      fromTo = 'From: ${t.sourceEnvelopeName ?? 'Unknown'} → To: ${t.targetEnvelopeName ?? 'Unknown'}';
+                                    } else if (t.type == TransactionType.deposit) {
+                                      fromTo = accName != 'None' ? 'To Account: $accName' : 'To Envelope: $envName';
+                                    } else if (t.type == TransactionType.withdrawal) {
+                                      fromTo = accName != 'None' ? 'From Account: $accName' : 'From Envelope: $envName';
+                                    }
+
+                                    debugPrint('[StatsHistoryScreen] ${i + 1}. ${t.description}');
+                                    debugPrint('[StatsHistoryScreen]    Type: $typeStr | Amount: £${t.amount.toStringAsFixed(2)}');
+                                    debugPrint('[StatsHistoryScreen]    $fromTo');
+                                    debugPrint('[StatsHistoryScreen]    Date: $txDate at $txTime');
+                                    debugPrint('[StatsHistoryScreen] ');
+                                  }
+                                }
+                                debugPrint('[StatsHistoryScreen] ====================================');
 
                                 // Categorize transactions for Net Impact
                                 double totalIncome = 0;
@@ -711,23 +822,31 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                     SliverToBoxAdapter(
                                       child: AnalyticsSection(
                                         transactions: txs.where((t) {
-                                          bool inChosen = false;
+                                          bool accountMatch = true;
+                                          bool envelopeMatch = true;
 
+                                          // Account filter: if active, transaction MUST be from selected account(s)
                                           if (activeFilters.contains(StatsFilterType.accounts)) {
-                                            if (t.envelopeId.isEmpty) {
-                                              inChosen = true;
+                                            accountMatch = false;
+                                            if (t.accountId != null && t.accountId!.isNotEmpty) {
+                                              if (selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId)) {
+                                                accountMatch = true;
+                                              }
                                             }
                                           }
 
+                                          // Envelope/Group filter: if active, transaction MUST be from selected envelope(s)
                                           if (activeFilters.contains(StatsFilterType.envelopes) ||
                                               activeFilters.contains(StatsFilterType.groups)) {
+                                            envelopeMatch = false;
                                             if (chosenEnvelopeIds.contains(t.envelopeId)) {
-                                              inChosen = true;
+                                              envelopeMatch = true;
                                             }
                                           }
 
                                           final inRange = !t.date.isBefore(start) && t.date.isBefore(end);
-                                          return inChosen && inRange;
+                                          // Transaction must match ALL active filter types (AND logic)
+                                          return accountMatch && envelopeMatch && inRange;
                                         }).toList(),
                                         envelopes: envelopes,
                                         groups: groups,
@@ -809,11 +928,9 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                           delegate: SliverChildBuilderDelegate(
                                             (context, index) {
                                               final t = contextFilteredTxs[index];
-                                              final category = _categorizeTransaction(t, accounts);
 
-                                              return _TransactionTile(
+                                              return TransactionListItem(
                                                 transaction: t,
-                                                category: category,
                                                 envelopes: envelopes,
                                                 accounts: accounts,
                                               );
@@ -955,7 +1072,10 @@ class _FiltersSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (inWorkspace) ...[
+                    // Only show "Mine only" toggle when viewing envelopes/groups
+                    // (accounts are never shared in workspaces)
+                    if (inWorkspace && (activeFilters.contains(StatsFilterType.envelopes) ||
+                                        activeFilters.contains(StatsFilterType.groups))) ...[
                       const SizedBox(width: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1294,160 +1414,3 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-// TRANSACTION TILE with clearer descriptions
-class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({
-    required this.transaction,
-    required this.category,
-    required this.envelopes,
-    required this.accounts,
-  });
-
-  final Transaction transaction;
-  final TransactionCategory category;
-  final List<Envelope> envelopes;
-  final List<Account> accounts;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fontProvider = Provider.of<FontProvider>(context);
-    final locale = Provider.of<LocaleProvider>(context);
-    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
-    final t = transaction;
-
-    // Determine display based on category
-    String title;
-    String subtitle;
-    IconData iconData;
-    Color color;
-    String amountStr;
-
-    switch (category) {
-      case TransactionCategory.externalIncome:
-        final defaultAccount = accounts.firstWhere(
-          (a) => a.isDefault,
-          orElse: () => Account(
-            id: '', name: 'Main', currentBalance: 0, userId: '',
-            createdAt: DateTime.now(), lastUpdated: DateTime.now(),
-          ),
-        );
-        title = 'Income: Pay Day';
-        subtitle = 'Deposited to ${defaultAccount.name}';
-        iconData = Icons.arrow_downward;
-        color = Colors.green.shade700;
-        amountStr = '+${currency.format(t.amount)}';
-        break;
-
-      case TransactionCategory.externalSpending:
-        final envelope = envelopes.firstWhere(
-          (e) => e.id == t.envelopeId,
-          orElse: () => Envelope(id: '', name: 'Unknown', userId: ''),
-        );
-
-        if (t.type == TransactionType.scheduledPayment) {
-          title = 'Spending: ${envelope.name}';
-          subtitle = 'Autopilot';
-        } else {
-          title = 'Spending: ${envelope.name}';
-          subtitle = 'Manual withdrawal';
-        }
-        iconData = Icons.arrow_upward;
-        color = Colors.red.shade700;
-        amountStr = '-${currency.format(t.amount)}';
-        break;
-
-      case TransactionCategory.internalAllocation:
-        // Parse allocations more intelligently
-        if (t.description.contains('Auto-fill deposit from')) {
-          final envelope = envelopes.firstWhere(
-            (e) => e.id == t.envelopeId,
-            orElse: () => Envelope(id: '', name: 'Unknown', userId: ''),
-          );
-          title = 'Allocation: ${envelope.name}';
-          subtitle = 'Cash flow from default account';
-        } else if (t.description.contains('Withdrawal auto-fill')) {
-          title = 'Allocation: From Default Account';
-          subtitle = t.description;
-        } else if (t.type == TransactionType.transfer) {
-          title = 'Transfer: ${t.sourceEnvelopeName ?? 'Unknown'} → ${t.targetEnvelopeName ?? 'Unknown'}';
-          subtitle = 'Internal move';
-        } else {
-          title = 'Allocation';
-          subtitle = t.description;
-        }
-        iconData = Icons.swap_horiz;
-        color = Colors.blue.shade700;
-        amountStr = currency.format(t.amount);
-        break;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(iconData, color: color, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                amountStr,
-                style: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                DateFormat('MMM dd, h:mm a').format(t.date),
-                style: fontProvider.getTextStyle(
-                  fontSize: 11,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}

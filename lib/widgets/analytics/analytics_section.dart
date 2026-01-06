@@ -116,14 +116,22 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
 
     // Calculate totals per binder
     for (final tx in widget.transactions) {
-      final envelope = widget.envelopes.firstWhere(
-        (e) => e.id == tx.envelopeId,
-        orElse: () => Envelope(id: '', name: '', userId: ''),
-      );
+      String binderId;
 
-      if (envelope.id.isEmpty) continue;
+      // Check if this is an account transaction (no envelope)
+      if (tx.envelopeId.isEmpty && tx.accountId != null && tx.accountId!.isNotEmpty) {
+        // Group account transactions under a special category
+        binderId = 'account_transactions';
+      } else {
+        final envelope = widget.envelopes.firstWhere(
+          (e) => e.id == tx.envelopeId,
+          orElse: () => Envelope(id: '', name: '', userId: ''),
+        );
 
-      final binderId = envelope.groupId ?? 'ungrouped';
+        if (envelope.id.isEmpty) continue;
+
+        binderId = envelope.groupId ?? 'ungrouped';
+      }
 
       // Apply filter
       double amount = 0;
@@ -131,10 +139,14 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
         case AnalyticsFilter.cashIn:
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.in_) {
+            amount = tx.amount;
           }
           break;
         case AnalyticsFilter.cashOut:
           if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
+            amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.out_) {
             amount = tx.amount;
           }
           break;
@@ -142,6 +154,10 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
           } else if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
+            amount = -tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.in_) {
+            amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.out_) {
             amount = -tx.amount;
           }
           break;
@@ -168,7 +184,10 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
       String name;
       String? emoji;
 
-      if (binderId == 'ungrouped') {
+      if (binderId == 'account_transactions') {
+        name = 'Account Transactions';
+        emoji = '💳';
+      } else if (binderId == 'ungrouped') {
         name = 'Individual Envelopes';
         emoji = '📨';
       } else {
@@ -215,10 +234,14 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
         case AnalyticsFilter.cashIn:
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.in_) {
+            amount = tx.amount;
           }
           break;
         case AnalyticsFilter.cashOut:
           if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
+            amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.out_) {
             amount = tx.amount;
           }
           break;
@@ -226,6 +249,10 @@ class _AnalyticsSectionState extends State<AnalyticsSection> {
           if (tx.type == TransactionType.deposit) {
             amount = tx.amount;
           } else if (tx.type == TransactionType.withdrawal || tx.type == TransactionType.scheduledPayment) {
+            amount = -tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.in_) {
+            amount = tx.amount;
+          } else if (tx.type == TransactionType.transfer && tx.transferDirection == TransferDirection.out_) {
             amount = -tx.amount;
           }
           break;

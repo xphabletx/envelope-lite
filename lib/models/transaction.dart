@@ -89,6 +89,10 @@ class Transaction {
   @HiveField(19)
   final DateTime? lastUpdated;
 
+  // NEW: Account tracking (nullable for backward compatibility - envelope transactions won't have this)
+  @HiveField(20)
+  final String? accountId;
+
   Transaction({
     required this.id,
     required this.envelopeId,
@@ -110,11 +114,13 @@ class Transaction {
     this.isFuture = false,
     this.isSynced,
     this.lastUpdated,
+    this.accountId,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'envelopeId': envelopeId,
+      'accountId': accountId,
       'type': type.name,
       'amount': amount,
       'date': Timestamp.fromDate(date),
@@ -143,6 +149,7 @@ class Transaction {
     return Transaction(
       id: doc.id,
       envelopeId: data['envelopeId'] as String,
+      accountId: data['accountId'] as String?,
       type: _parseType(data['type']),
       amount: (data['amount'] as num).toDouble(),
       date: (data['date'] as Timestamp).toDate(),

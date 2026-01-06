@@ -165,8 +165,11 @@ class GroupRepo {
     return _groupBox.get(groupId);
   }
 
-  /// Get all groups
+  /// Get all groups (synchronous - for initial data)
   List<EnvelopeGroup> getAllGroups() {
+    // In workspace mode, groups are already filtered by the Firebase sync
+    // and cached in Hive, so we just return all groups in Hive for this user
+    // The workspace filtering happens at the Firebase collection level
     return _groupBox.values
         .where((group) => group.userId == _userId)
         .toList();
@@ -174,8 +177,53 @@ class GroupRepo {
 
   /// Get all groups as a Future
   Future<List<EnvelopeGroup>> getAllGroupsAsync() async {
-    return _groupBox.values
-        .where((group) => group.userId == _userId)
-        .toList();
+    return getAllGroups();
+  }
+
+  /// Stream of all groups (for reactive UI)
+  Stream<List<EnvelopeGroup>> groupsStream() {
+    if (_inWorkspace && _workspaceId != null) {
+      // WORKSPACE MODE: Stream from Firebase with Hive cache
+      return _db
+          .collection('workspaces')
+          .doc(_workspaceId!)
+          .collection('groups')
+          .snapshots()
+          .asyncMap((snapshot) async {
+        final groups = <EnvelopeGroup>[];
+
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final group = EnvelopeGroup.fromMap({...data, 'id': doc.id});
+
+            // Cache in Hive
+            await _groupBox.put(doc.id, group);
+            groups.add(group);
+          } catch (e) {
+            debugPrint('[GroupRepo] ERROR: Failed to parse group ${doc.id}: $e');
+          }
+        }
+
+        return groups;
+      });
+    } else {
+      // SOLO MODE: Stream from Hive only
+      final initial = getAllGroups();
+
+      return Stream<List<EnvelopeGroup>>.multi((controller) {
+        // Emit initial value
+        controller.add(initial);
+
+        // Listen to box changes
+        final subscription = _groupBox.watch().listen((_) {
+          controller.add(getAllGroups());
+        });
+
+        controller.onCancel = () {
+          subscription.cancel();
+        };
+      });
+    }
   }
 }

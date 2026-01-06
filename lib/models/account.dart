@@ -151,11 +151,11 @@ class Account {
       }
     }
 
-    // Should never reach here since iconType/iconValue have defaults
-    return Image.asset(
-      'assets/default/stufficon.png',
-      width: size * 1.3,
-      height: size * 1.3,
+    // Fallback to credit card icon
+    return Icon(
+      Icons.credit_card,
+      size: size,
+      color: effectiveIconColor,
     );
   }
 

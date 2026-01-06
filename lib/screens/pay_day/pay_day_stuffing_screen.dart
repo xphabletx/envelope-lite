@@ -167,28 +167,43 @@ class _PayDayStuffingScreenState extends State<PayDayStuffingScreen>
     // 3. Update Default Account Balance (if account is specified)
     if (widget.accountId != null) {
       try {
-        // Fetch current account state
-        final account = await widget.accountRepo
-            .accountStream(widget.accountId!)
-            .first;
-
-        // Calculate new balance:
-        // + Pay amount (income)
-        // - Envelope auto-fills (allocations to envelopes)
-        // - Account auto-fills (transfers to other accounts)
-        final newBalance = account.currentBalance + widget.totalAmount - totalEnvelopeAutoFill - totalAccountAutoFill;
-
-        await widget.accountRepo.updateAccount(
-          accountId: widget.accountId!,
-          currentBalance: newBalance,
+        // Step 1: Deposit pay amount to account (creates deposit transaction)
+        await widget.accountRepo.deposit(
+          widget.accountId!,
+          widget.totalAmount,
+          description: 'Pay Day Deposit',
         );
 
-        debugPrint('[PayDay] ✅ Default account updated:');
-        debugPrint('  Previous Balance: ${account.currentBalance}');
+        debugPrint('[PayDay] ✅ Deposited pay amount to account:');
         debugPrint('  Pay Amount: +${widget.totalAmount}');
-        debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
-        debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
-        debugPrint('  New Balance: $newBalance');
+
+        // Step 2: Withdraw envelope auto-fills from account (creates withdrawal transactions)
+        if (totalEnvelopeAutoFill > 0) {
+          await widget.accountRepo.withdraw(
+            widget.accountId!,
+            totalEnvelopeAutoFill,
+            description: 'Envelope Auto-Fill',
+          );
+
+          debugPrint('[PayDay] ✅ Withdrew envelope auto-fills from account:');
+          debugPrint('  Envelope Auto-Fill: -$totalEnvelopeAutoFill');
+        }
+
+        // Step 3: Withdraw account auto-fills from account (creates withdrawal transactions)
+        if (totalAccountAutoFill > 0) {
+          await widget.accountRepo.withdraw(
+            widget.accountId!,
+            totalAccountAutoFill,
+            description: 'Account Auto-Fill',
+          );
+
+          debugPrint('[PayDay] ✅ Withdrew account auto-fills from account:');
+          debugPrint('  Account Auto-Fill: -$totalAccountAutoFill');
+        }
+
+        // Get final balance for logging
+        final finalAccount = await widget.accountRepo.getAccount(widget.accountId!);
+        debugPrint('[PayDay] ✅ Final account balance: ${finalAccount?.currentBalance}');
       } catch (e) {
         debugPrint('Error updating account balance: $e');
         // Non-fatal error for UI, but important to log

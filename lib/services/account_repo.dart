@@ -1,5 +1,6 @@
 // lib/services/account_repo.dart
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
@@ -7,6 +8,7 @@ import 'package:rxdart/rxdart.dart';
 import '../models/account.dart';
 import '../models/envelope.dart';
 import '../models/pay_day_settings.dart';
+import '../models/transaction.dart' as models;
 import 'envelope_repo.dart';
 import 'hive_service.dart';
 import 'sync_manager.dart';
@@ -18,11 +20,14 @@ import 'sync_manager.dart';
 class AccountRepo {
   AccountRepo(this._envelopeRepo) {
     _accountBox = HiveService.getBox<Account>('accounts');
+    _transactionBox = HiveService.getBox<models.Transaction>('transactions');
   }
 
   final EnvelopeRepo _envelopeRepo;
   late final Box<Account> _accountBox;
+  late final Box<models.Transaction> _transactionBox;
   final SyncManager _syncManager = SyncManager();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _disposed = false;
 
   String get _userId => _envelopeRepo.currentUserId;
@@ -145,14 +150,33 @@ class AccountRepo {
       lastUpdated: now,
       isDefault: isDefault,
       isShared: false,
-      iconType: iconType ?? 'assetImage',
-      iconValue: iconValue ?? 'assets/default/stufficon.png',
+      iconType: iconType ?? 'materialIcon',
+      iconValue: iconValue ?? 'credit_card',
       iconColor: iconColor,
       accountType: accountType,
       creditLimit: creditLimit,
     );
 
     await _accountBox.put(id, account);
+
+    // Create initial transaction if needed
+    if (startingBalance > 0) {
+      final txId = _firestore.collection('_temp').doc().id;
+      final transaction = models.Transaction(
+        id: txId,
+        envelopeId: '', // Account transactions have empty envelopeId
+        accountId: id,
+        type: models.TransactionType.deposit,
+        amount: startingBalance,
+        date: now,
+        description: 'Initial balance',
+        userId: _userId,
+        isSynced: false,
+        lastUpdated: now,
+      );
+
+      await _transactionBox.put(txId, transaction);
+    }
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushAccount(account, _userId);
@@ -421,12 +445,35 @@ class AccountRepo {
     final account = await getAccount(accountId);
     if (account == null) return;
 
+    // Check if this is the first deposit (initial balance)
+    final isFirstDeposit = account.currentBalance == 0 &&
+        !_transactionBox.values.any((t) => t.accountId == accountId);
+
+    // Override description if this is the initial balance
+    final finalDescription = isFirstDeposit ? 'Initial balance' : (description ?? 'Deposit');
+
+    final now = DateTime.now();
     final updatedAccount = account.copyWith(
       currentBalance: account.currentBalance + amount,
-      lastUpdated: DateTime.now(),
+      lastUpdated: now,
+    );
+
+    // Create transaction
+    final transaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: '', // Account transactions have empty envelopeId
+      accountId: accountId,
+      userId: _userId,
+      type: models.TransactionType.deposit,
+      amount: amount,
+      date: now,
+      description: finalDescription,
+      isSynced: false,
+      lastUpdated: now,
     );
 
     await _accountBox.put(accountId, updatedAccount);
+    await _transactionBox.put(transaction.id, transaction);
 
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -437,12 +484,28 @@ class AccountRepo {
     final account = await getAccount(accountId);
     if (account == null) return;
 
+    final now = DateTime.now();
     final updatedAccount = account.copyWith(
       currentBalance: account.currentBalance - amount,
-      lastUpdated: DateTime.now(),
+      lastUpdated: now,
+    );
+
+    // Create transaction
+    final transaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: '', // Account transactions have empty envelopeId
+      accountId: accountId,
+      userId: _userId,
+      type: models.TransactionType.withdrawal,
+      amount: amount,
+      date: now,
+      description: description ?? 'Withdrawal',
+      isSynced: false,
+      lastUpdated: now,
     );
 
     await _accountBox.put(accountId, updatedAccount);
+    await _transactionBox.put(transaction.id, transaction);
 
     // CRITICAL: Sync to Firebase
     _syncManager.pushAccount(updatedAccount, _userId);
@@ -452,6 +515,99 @@ class AccountRepo {
   Future<void> transfer(String fromId, String toId, double amount, {String? description}) async {
     await withdraw(fromId, amount, description: description ?? 'Transfer out');
     await deposit(toId, amount, description: description ?? 'Transfer in');
+  }
+
+  /// Transfer from account to envelope (creates linked transfer transactions)
+  Future<void> transferToEnvelope({
+    required String accountId,
+    required String envelopeId,
+    required double amount,
+    required String description,
+    required DateTime date,
+    required EnvelopeRepo envelopeRepo,
+  }) async {
+    final account = _accountBox.get(accountId);
+    if (account == null) {
+      throw Exception('Account not found');
+    }
+
+    if (account.currentBalance < amount) {
+      throw Exception('Insufficient funds in account');
+    }
+
+    final envelope = envelopeRepo.getEnvelopeSync(envelopeId);
+    if (envelope == null) {
+      throw Exception('Envelope not found');
+    }
+
+    final now = DateTime.now();
+    final envelopeBox = HiveService.getBox<Envelope>('envelopes');
+
+    // 1. Update account balance
+    final updatedAccount = account.copyWith(
+      currentBalance: account.currentBalance - amount,
+      lastUpdated: now,
+    );
+    await _accountBox.put(accountId, updatedAccount);
+
+    // 2. Update envelope balance (directly in Hive)
+    final updatedEnvelope = envelope.copyWith(
+      currentAmount: envelope.currentAmount + amount,
+      lastUpdated: now,
+    );
+    await envelopeBox.put(envelopeId, updatedEnvelope);
+
+    // 3. Create linked transfer transactions
+    final transferLinkId = _firestore.collection('_temp').doc().id;
+
+    // Account transaction (outgoing transfer)
+    final accountTransaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: '', // Account transaction
+      accountId: accountId,
+      userId: _userId,
+      type: models.TransactionType.transfer,
+      amount: amount,
+      date: date,
+      description: description,
+      transferDirection: models.TransferDirection.out_,
+      transferPeerEnvelopeId: envelopeId,
+      transferLinkId: transferLinkId,
+      sourceOwnerId: account.userId,
+      targetOwnerId: envelope.userId,
+      sourceEnvelopeName: account.name,
+      targetEnvelopeName: envelope.name,
+      isSynced: false,
+      lastUpdated: now,
+    );
+
+    // Envelope transaction (incoming transfer)
+    final envelopeTransaction = models.Transaction(
+      id: _firestore.collection('_temp').doc().id,
+      envelopeId: envelopeId,
+      userId: _userId,
+      type: models.TransactionType.transfer,
+      amount: amount,
+      date: date,
+      description: description,
+      transferDirection: models.TransferDirection.in_,
+      transferPeerEnvelopeId: accountId, // Link back to account
+      transferLinkId: transferLinkId,
+      sourceOwnerId: account.userId,
+      targetOwnerId: envelope.userId,
+      sourceEnvelopeName: account.name,
+      targetEnvelopeName: envelope.name,
+      isSynced: false,
+      lastUpdated: now,
+    );
+
+    // Save both transactions to Hive
+    await _transactionBox.put(accountTransaction.id, accountTransaction);
+    await _transactionBox.put(envelopeTransaction.id, envelopeTransaction);
+
+    // 4. Sync to Firebase
+    _syncManager.pushAccount(updatedAccount, _userId);
+    _syncManager.pushEnvelope(updatedEnvelope, envelopeRepo.workspaceId, _userId);
   }
 
   /// Handle first account creation (auto-set as default)

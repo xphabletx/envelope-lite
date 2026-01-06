@@ -275,44 +275,72 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'This envelope already has ${existingPayments.length} Autopilot${existingPayments.length > 1 ? 's' : ''}:',
+                'This envelope already has ${existingPayments.length} Autopilot${existingPayments.length > 1 ? 's' : ''}. Tap any to edit:',
                 style: const TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
-              ...existingPayments.map((payment) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Color(payment.colorValue).withAlpha(51),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Color(payment.colorValue).withAlpha(128),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      payment.name,
-                      style: fontProvider.getTextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+              ...existingPayments.map((payment) => InkWell(
+                onTap: () {
+                  // Close the warning dialog first
+                  Navigator.pop(context);
+                  // Navigate to edit screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AddScheduledPaymentScreen(
+                        repo: widget.repo,
+                        paymentToEdit: payment,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Amount: ${currency.format(payment.amount)}',
-                      style: const TextStyle(fontSize: 14),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Color(payment.colorValue).withAlpha(51),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Color(payment.colorValue).withAlpha(128),
                     ),
-                    Text(
-                      'Next Due: ${DateFormat('MMM d, yyyy').format(payment.nextDueDate)}',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    Text(
-                      'Frequency: ${payment.frequencyString}',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              payment.name,
+                              style: fontProvider.getTextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Amount: ${currency.format(payment.amount)}',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            Text(
+                              'Next Due: ${DateFormat('MMM d, yyyy').format(payment.nextDueDate)}',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            Text(
+                              'Frequency: ${payment.frequencyString}',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.edit_outlined,
+                        color: Color(payment.colorValue),
+                        size: 20,
+                      ),
+                    ],
+                  ),
                 ),
               )),
               const SizedBox(height: 8),

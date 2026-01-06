@@ -603,6 +603,13 @@ class EnvelopeRepo {
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) throw Exception('Envelope not found');
 
+    // Check if this is the first deposit (initial balance)
+    final isFirstDeposit = envelope.currentAmount == 0 &&
+        !_transactionBox.values.any((t) => t.envelopeId == envelopeId);
+
+    // Override description if this is the initial balance
+    final finalDescription = isFirstDeposit ? 'Initial balance' : description;
+
     // 1. Update Hive IMMEDIATELY (instant UI update)
     final now = DateTime.now();
     final updatedEnvelope = Envelope(
@@ -642,7 +649,7 @@ class EnvelopeRepo {
       type: models.TransactionType.deposit,
       amount: amount,
       date: date ?? now,
-      description: description,
+      description: finalDescription,
       isSynced: false,
       lastUpdated: now,
     );

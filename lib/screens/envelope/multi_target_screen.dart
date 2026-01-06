@@ -1032,7 +1032,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                           final result = await CalculatorHelper.showCalculator(context);
                           if (result != null) {
                             _totalContributionController.text = result;
-                            setState(() {});
+                            setState(() {
+                              // Auto-expand all envelope projections when amount is calculated
+                              _expandedEnvelopeProjections.addAll(_selectedEnvelopeIds);
+                            });
                           }
                         },
                         tooltip: 'Calculator',
@@ -1046,7 +1049,15 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                       extentOffset: _totalContributionController.text.length,
                     );
                   },
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (value) {
+                    setState(() {
+                      // Auto-expand all envelope projections when a valid amount is entered
+                      final amount = double.tryParse(value);
+                      if (amount != null && amount > 0) {
+                        _expandedEnvelopeProjections.addAll(_selectedEnvelopeIds);
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -1191,7 +1202,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
                   // Percentage Slider
                   Slider(
-                    value: percentage,
+                    value: percentage.clamp(0.0, 100.0),
                     min: 0,
                     max: 100,
                     divisions: 100,
@@ -1457,7 +1468,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           envelope.name,
           style: fontProvider.getTextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -1476,17 +1487,33 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                 prefixText: '${locale.currencySymbol} ',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onSubmitted: (_) => _applyAmountChange(envelope.id, controller.text, totalAmount),
+              onTap: () {
+                // Select all text on tap
+                controller.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: controller.text.length,
+                );
+              },
+              onSubmitted: (_) {
+                FocusScope.of(dialogContext).unfocus();
+                _applyAmountChange(dialogContext, envelope.id, controller.text, totalAmount);
+              },
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              FocusScope.of(dialogContext).unfocus();
+              Navigator.pop(dialogContext);
+            },
             child: Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => _applyAmountChange(envelope.id, controller.text, totalAmount),
+            onPressed: () {
+              FocusScope.of(dialogContext).unfocus();
+              _applyAmountChange(dialogContext, envelope.id, controller.text, totalAmount);
+            },
             child: Text('Apply'),
           ),
         ],
@@ -1494,13 +1521,36 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     );
   }
 
-  void _applyAmountChange(String envelopeId, String amountText, double totalAmount) {
-    final amount = double.tryParse(amountText) ?? 0;
-    if (totalAmount > 0 && amount >= 0 && amount <= totalAmount) {
-      final newPercentage = (amount / totalAmount) * 100;
-      _updateAllocation(envelopeId, newPercentage);
-      Navigator.pop(context);
+  void _applyAmountChange(BuildContext dialogContext, String envelopeId, String amountText, double totalAmount) {
+    final amount = double.tryParse(amountText);
+
+    // Validate amount
+    if (amount == null || totalAmount <= 0) {
+      Navigator.pop(dialogContext);
+      return;
     }
+
+    // Check if amount exceeds total
+    if (amount > totalAmount) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Amount cannot exceed total contribution (${Provider.of<LocaleProvider>(context, listen: false).formatCurrency(totalAmount)})'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return; // Don't close dialog, let user fix the amount
+    }
+
+    // Valid amount - close dialog and apply
+    Navigator.pop(dialogContext);
+
+    final newPercentage = (amount / totalAmount) * 100;
+    setState(() {
+      _updateAllocation(envelopeId, newPercentage);
+    });
   }
 
   int _getDaysPerFrequency(String frequency) {

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../../models/account.dart';
 import '../../models/envelope.dart';
+import '../../models/transaction.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../providers/time_machine_provider.dart';
 import '../../widgets/time_machine_indicator.dart';
+import '../../widgets/accounts/account_quick_action_modal.dart';
+import '../../utils/calculator_helper.dart';
 import '../../services/localization_service.dart';
 import '../envelope/envelopes_detail_screen.dart';
 import '../stats_history_screen.dart';
@@ -39,6 +43,96 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         envelopeRepo: widget.envelopeRepo,
         account: widget.account,
       ),
+    );
+  }
+
+  void _showQuickAction(TransactionType type, Account account) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AccountQuickActionModal(
+        account: account,
+        allAccounts: widget.accountRepo.getAccountsSync(),
+        repo: widget.accountRepo,
+        type: type,
+        envelopeRepo: widget.envelopeRepo,
+      ),
+    );
+  }
+
+  void _showCalculator(BuildContext context) async {
+    await CalculatorHelper.showCalculator(context);
+  }
+
+  Widget _buildThemedFAB(
+    BuildContext context,
+    Account account,
+    ThemeData theme,
+  ) {
+    final iconColor = theme.colorScheme.onPrimaryContainer;
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    final children = <SpeedDialChild>[
+      SpeedDialChild(
+        child: Icon(Icons.add_circle, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: tr('action_add_money'),
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showQuickAction(TransactionType.deposit, account),
+      ),
+      SpeedDialChild(
+        child: Icon(Icons.remove_circle, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: 'Take Money',
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showQuickAction(TransactionType.withdrawal, account),
+      ),
+      SpeedDialChild(
+        child: Icon(Icons.swap_horiz, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: tr('action_move_money'),
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showQuickAction(TransactionType.transfer, account),
+      ),
+      SpeedDialChild(
+        child: Icon(Icons.calculate, color: iconColor),
+        backgroundColor: theme.colorScheme.primaryContainer,
+        label: tr('calculator'),
+        labelStyle: fontProvider.getTextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        labelBackgroundColor: theme.colorScheme.surface,
+        onTap: () => _showCalculator(context),
+      ),
+    ];
+
+    return SpeedDial(
+      icon: Icons.add,
+      activeIcon: Icons.close,
+      backgroundColor: theme.colorScheme.primary,
+      foregroundColor: theme.colorScheme.onPrimary,
+      overlayColor: Colors.black,
+      overlayOpacity: 0.5,
+      spacing: 12,
+      spaceBetweenChildren: 8,
+      buttonSize: const Size(56, 56),
+      childrenButtonSize: const Size(56, 56),
+      renderOverlay: true,
+      children: children,
     );
   }
 
@@ -96,6 +190,11 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
               appBar: AppBar(
                 title: FittedBox(child: Text(displayAccount.name)),
               ),
+              floatingActionButton: timeMachine.isActive
+                  ? null
+                  : _buildThemedFAB(context, account, theme),
+              floatingActionButtonLocation:
+                  FloatingActionButtonLocation.endFloat,
               body: Column(
                 children: [
                   // Time Machine Indicator at the top
@@ -181,13 +280,18 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                 color: theme.colorScheme.secondaryContainer,
                                 textColor: theme.colorScheme.onSecondaryContainer,
                                 onTap: () {
+                                  // DEBUG: Log navigation to stats
+                                  debugPrint('[AccountDetail] Opening Stats for account: ${displayAccount.name} (${displayAccount.id})');
+                                  debugPrint('[AccountDetail] Linked envelope IDs: $linkedEnvelopeIds');
+
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => StatsHistoryScreen(
                                         repo: widget.envelopeRepo,
                                         title: '${displayAccount.name} - History',
-                                        initialEnvelopeIds: linkedEnvelopeIds,
+                                        initialAccountIds: {displayAccount.id},
+                                        // Don't filter by envelopes - show ALL account transactions
                                       ),
                                     ),
                                   );

@@ -149,15 +149,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       return;
     }
 
+    final newBalance = _accountType == AccountType.creditCard
+        ? -balance.abs()
+        : balance;
+
+    // Check if balance has changed - if so, show warning
+    final balanceChanged = (newBalance - widget.account.currentBalance).abs() > 0.01;
+
+    if (balanceChanged) {
+      final confirmed = await _showBalanceEditWarning(newBalance);
+      if (confirmed != true) {
+        return; // User cancelled
+      }
+    }
+
     setState(() => _saving = true);
 
     try {
       await widget.accountRepo.updateAccount(
         accountId: widget.account.id,
         name: name,
-        currentBalance: _accountType == AccountType.creditCard
-            ? -balance.abs()
-            : balance,
+        currentBalance: newBalance,
         isDefault: _isDefault,
         iconType: _iconType,
         iconValue: _iconValue,
@@ -178,6 +190,155 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         );
       }
     }
+  }
+
+  Future<bool?> _showBalanceEditWarning(double newBalance) async {
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    final oldBalance = widget.account.currentBalance;
+    final difference = newBalance - oldBalance;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange.shade700, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Edit Account Balance?',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '⚠️ Important:',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Editing the balance directly is NOT the same as adding, taking, or transferring money.',
+              style: fontProvider.getTextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Use this only to correct mistakes or sync with your real bank balance.',
+              style: fontProvider.getTextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Current:',
+                        style: fontProvider.getTextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        '${locale.currencySymbol}${oldBalance.toStringAsFixed(2)}',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'New:',
+                        style: fontProvider.getTextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        '${locale.currencySymbol}${newBalance.toStringAsFixed(2)}',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: difference >= 0 ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Difference:',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${difference >= 0 ? '+' : ''}${locale.currencySymbol}${difference.toStringAsFixed(2)}',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: difference >= 0 ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'A "Balance Adjustment" record will be created to track this change.',
+              style: fontProvider.getTextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: fontProvider.getTextStyle(fontSize: 16)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade700),
+            child: Text(
+              'Continue',
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleDelete() async {
