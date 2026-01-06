@@ -2288,7 +2288,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
             children: [
               // Header - fixed position
               Padding(
-                padding: const EdgeInsets.only(top: 40),
+                padding: const EdgeInsets.only(top: 24),
                 child: Column(
                   children: [
                     Text(
@@ -2300,7 +2300,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Text(
                       '"Give every $currencyName a purpose"',
                       style: fontProvider.getTextStyle(
@@ -2317,7 +2317,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
               // Flexible spacer that shrinks when keyboard appears
               const Flexible(
                 flex: 2,
-                child: SizedBox(height: 20),
+                child: SizedBox(height: 12),
               ),
 
               // Icon - shrinks when needed
@@ -2357,7 +2357,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Examples - flexible height
               Flexible(
@@ -2404,7 +2404,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
               Flexible(
                 flex: 0,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.5,
@@ -2423,7 +2423,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
                         style: TextStyle(
@@ -2442,7 +2442,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
               // Flexible spacer that shrinks when keyboard appears
               const Flexible(
                 flex: 2,
-                child: SizedBox(height: 20),
+                child: SizedBox(height: 12),
               ),
 
               // CTA button with fade-in animation
