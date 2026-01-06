@@ -66,11 +66,11 @@ class CashFlowMixChart extends StatelessWidget {
 
     final total = segments.fold(0.0, (sum, s) => sum + s.amount);
 
-    // If no data, show placeholder
+    // If no data, show placeholder with empty donut
     if (total == 0 || segments.isEmpty) {
       return Container(
         margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
@@ -80,20 +80,62 @@ class CashFlowMixChart extends StatelessWidget {
           ),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.pie_chart_outline,
-              size: 64,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            // Header
+            Row(
+              children: [
+                Icon(
+                  Icons.pie_chart,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Cash Flow Mix',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No cash flow data for this period',
-              style: fontProvider.getTextStyle(
-                fontSize: 16,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            const SizedBox(height: 32),
+            // Empty donut circle
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 160,
+                    height: 160,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                        width: 32,
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.hourglass_empty,
+                        size: 48,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'No spending data for this period',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       );

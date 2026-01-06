@@ -880,32 +880,35 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                                     // TRANSACTION LIST
                                     if (contextFilteredTxs.isEmpty)
-                                      SliverFillRemaining(
-                                        hasScrollBody: false,
-                                        child: Center(
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                Icons.receipt_long_outlined,
-                                                size: 64,
-                                                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                                              ),
-                                              const SizedBox(height: 16),
-                                              Text(
-                                                'No transactions found',
-                                                style: fontProvider.getTextStyle(
-                                                  fontSize: 18,
-                                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                                      SliverPadding(
+                                        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 100),
+                                        sliver: SliverFillRemaining(
+                                          hasScrollBody: false,
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.receipt_long_outlined,
+                                                  size: 64,
+                                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 16),
+                                                Text(
+                                                  'No transactions found',
+                                                  style: fontProvider.getTextStyle(
+                                                    fontSize: 18,
+                                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       )
                                     else
                                       SliverPadding(
-                                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                                        padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).padding.bottom + 80),
                                         sliver: SliverList(
                                           delegate: SliverChildBuilderDelegate(
                                             (context, index) {
@@ -1353,6 +1356,7 @@ class _StrategyCard extends StatelessWidget {
                   label: 'Efficiency',
                   value: '${(stats.efficiency * 100).toStringAsFixed(1)}%',
                   color: feedbackColor,
+                  helpText: "The percentage of your income that stays inside 'The Wall' after bills and spending.",
                 ),
               ),
               const SizedBox(width: 12),
@@ -1362,6 +1366,7 @@ class _StrategyCard extends StatelessWidget {
                   label: 'Horizon Fuel',
                   value: currency.format(stats.horizonVelocity),
                   color: goldColor,
+                  helpText: "The speed at which you are moving money into your Horizon goals.",
                 ),
               ),
             ],
@@ -1370,31 +1375,94 @@ class _StrategyCard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Horizon Impact Message
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.flag,
-                  color: theme.colorScheme.primary,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    stats.getHorizonImpactMessage(),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+          GestureDetector(
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                builder: (ctx) {
+                  return Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.flag, color: theme.colorScheme.primary, size: 28),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Horizon Impact',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "How much of your total savings gap you closed during this period.",
+                          style: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              'Got it',
+                              style: fontProvider.getTextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.flag,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      stats.getHorizonImpactMessage(),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -1447,12 +1515,76 @@ class _MetricBox extends StatelessWidget {
     required this.label,
     required this.value,
     required this.color,
+    this.helpText,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final Color color;
+  final String? helpText;
+
+  void _showHelpDialog(BuildContext context) {
+    if (helpText == null) return;
+
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context, listen: false);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    label,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                helpText!,
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Got it',
+                    style: fontProvider.getTextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1473,12 +1605,28 @@ class _MetricBox extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: fontProvider.getTextStyle(
-              fontSize: 11,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: fontProvider.getTextStyle(
+                  fontSize: 11,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              if (helpText != null) ...[
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _showHelpDialog(context),
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 4),
           Text(

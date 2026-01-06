@@ -137,12 +137,25 @@ class HorizonStrategyStats {
 
   /// Get strategy feedback message based on efficiency
   String get strategyFeedback {
+    // No Inflow/Outflow: Ready to launch state
+    if (externalInflow == 0 && externalOutflow == 0) {
+      return "🚀 Ready to Launch: Your financial story begins with your first transaction.";
+    }
+
+    // No Inflow but has Outflow: High friction warning
+    if (externalInflow == 0 && externalOutflow > 0) {
+      return "⚠️ High Friction: You have spending recorded with no income baseline.";
+    }
+
+    // Has Inflow, assess efficiency
     if (efficiency > 0.2) {
       return "🚀 High Efficiency: You're fueling your Horizons fast!";
     }
     if (efficiency > 0) {
       return "✅ Stable: You're living within your means.";
     }
+
+    // Only show warning if we have inflow but spending exceeds it
     return "⚠️ Caution: Spending is outpacing your Inflow.";
   }
 
@@ -155,12 +168,22 @@ class HorizonStrategyStats {
 
   /// Get Horizon Impact message
   String getHorizonImpactMessage() {
-    if (totalHorizonGap <= 0) {
-      return "100% — All Horizons reached! 🎉";
+    // No horizons set (gap is 0 because there are no targets)
+    if (totalHorizonGap == 0 && horizonVelocity == 0) {
+      return "No Horizons Set: Define a goal in an envelope to track your progress.";
     }
-    if (horizonVelocity <= 0) {
-      return "N/A — Set a Horizon to track impact";
+
+    // All horizons reached
+    if (totalHorizonGap <= 0 && horizonVelocity > 0) {
+      return "🎉 All Horizons Reached!";
     }
+
+    // Has horizons but no velocity this period
+    if (horizonVelocity <= 0 && totalHorizonGap > 0) {
+      return "No progress this period — Start moving funds to close the gap";
+    }
+
+    // Normal case: show progress percentage
     return "You closed ${horizonImpact.toStringAsFixed(1)}% of your savings gap this period";
   }
 
