@@ -602,6 +602,17 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
             aspectRatioPresets: [
               CropAspectRatioPreset.square,
             ],
+            // Fix status bar - use light/dark mode instead of color
+            statusBarLight: onPrimaryColor.computeLuminance() > 0.5,
+            activeControlsWidgetColor: primaryColor,
+            // Move controls to bottom to avoid status bar overlap
+            hideBottomControls: false,
+            // Proper padding and layout
+            cropFrameColor: primaryColor,
+            cropGridColor: primaryColor.withValues(alpha: 0.3),
+            dimmedLayerColor: Colors.black.withValues(alpha: 0.6),
+            // Show crop frame to make it clearer
+            showCropGrid: true,
           ),
           IOSUiSettings(
             title: 'Crop Profile Photo',
@@ -820,68 +831,63 @@ class _ThemeSelectionStep extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
 
-              Expanded(
-                child: ListView(
-                  children: [
-                    _ThemeCard(
-                      themeId: 'latte_love',
-                      name: 'Latte Love',
-                      description: 'Warm creams & browns',
-                      emoji: '☕',
-                      isSelected: themeProvider.currentThemeId == 'latte_love',
-                      onTap: () => themeProvider.setTheme('latte_love'),
-                    ),
-                    const SizedBox(height: 12),
-                    _ThemeCard(
-                      themeId: 'mint_fresh',
-                      name: 'Mint Fresh',
-                      description: 'Soft mint & sage',
-                      emoji: '🌿',
-                      isSelected: themeProvider.currentThemeId == 'mint_fresh',
-                      onTap: () => themeProvider.setTheme('mint_fresh'),
-                    ),
-                    const SizedBox(height: 12),
-                    _ThemeCard(
-                      themeId: 'blush_gold',
-                      name: 'Blush & Gold',
-                      description: 'Rose gold elegance',
-                      emoji: '🌸',
-                      isSelected: themeProvider.currentThemeId == 'blush_gold',
-                      onTap: () => themeProvider.setTheme('blush_gold'),
-                    ),
-                    const SizedBox(height: 12),
-                    _ThemeCard(
-                      themeId: 'lavender_dreams',
-                      name: 'Lavender Dreams',
-                      description: 'Soft purples & lilacs',
-                      emoji: '💜',
-                      isSelected:
-                          themeProvider.currentThemeId == 'lavender_dreams',
-                      onTap: () => themeProvider.setTheme('lavender_dreams'),
-                    ),
-                    const SizedBox(height: 12),
-                    _ThemeCard(
-                      themeId: 'monochrome',
-                      name: 'Monochrome',
-                      description: 'Classic black & white',
-                      emoji: '⚫',
-                      isSelected: themeProvider.currentThemeId == 'monochrome',
-                      onTap: () => themeProvider.setTheme('monochrome'),
-                    ),
-                    const SizedBox(height: 12),
-                    _ThemeCard(
-                      themeId: 'singularity',
-                      name: 'Singularity',
-                      description: 'Deep space blues',
-                      emoji: '🌌',
-                      isSelected: themeProvider.currentThemeId == 'singularity',
-                      onTap: () => themeProvider.setTheme('singularity'),
-                    ),
-                  ],
-                ),
+              _ThemeCard(
+                themeId: 'latte_love',
+                name: 'Latte Love',
+                description: 'Warm creams & browns',
+                emoji: '☕',
+                isSelected: themeProvider.currentThemeId == 'latte_love',
+                onTap: () => themeProvider.setTheme('latte_love'),
               ),
+              const SizedBox(height: 8),
+              _ThemeCard(
+                themeId: 'mint_fresh',
+                name: 'Mint Fresh',
+                description: 'Soft mint & sage',
+                emoji: '🌿',
+                isSelected: themeProvider.currentThemeId == 'mint_fresh',
+                onTap: () => themeProvider.setTheme('mint_fresh'),
+              ),
+              const SizedBox(height: 8),
+              _ThemeCard(
+                themeId: 'blush_gold',
+                name: 'Blush & Gold',
+                description: 'Rose gold elegance',
+                emoji: '🌸',
+                isSelected: themeProvider.currentThemeId == 'blush_gold',
+                onTap: () => themeProvider.setTheme('blush_gold'),
+              ),
+              const SizedBox(height: 8),
+              _ThemeCard(
+                themeId: 'lavender_dreams',
+                name: 'Lavender Dreams',
+                description: 'Soft purples & lilacs',
+                emoji: '💜',
+                isSelected: themeProvider.currentThemeId == 'lavender_dreams',
+                onTap: () => themeProvider.setTheme('lavender_dreams'),
+              ),
+              const SizedBox(height: 8),
+              _ThemeCard(
+                themeId: 'monochrome',
+                name: 'Monochrome',
+                description: 'Classic black & white',
+                emoji: '⚫',
+                isSelected: themeProvider.currentThemeId == 'monochrome',
+                onTap: () => themeProvider.setTheme('monochrome'),
+              ),
+              const SizedBox(height: 8),
+              _ThemeCard(
+                themeId: 'singularity',
+                name: 'Singularity',
+                description: 'Deep space blues',
+                emoji: '🌌',
+                isSelected: themeProvider.currentThemeId == 'singularity',
+                onTap: () => themeProvider.setTheme('singularity'),
+              ),
+
+              const Spacer(flex: 1),
 
               const SizedBox(height: 16),
 
@@ -1033,68 +1039,65 @@ class _FontSelectionStep extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
 
-              Expanded(
-                child: ListView.separated(
-                  itemCount: fonts.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final font = fonts[index];
-                    final fontId = font['id']!;
-                    final isSelected = fontProvider.currentFontId == fontId;
+              ...fonts.map((font) {
+                final fontId = font['id']!;
+                final isSelected = fontProvider.currentFontId == fontId;
 
-                    return InkWell(
-                      onTap: () => fontProvider.setFont(fontId),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () => fontProvider.setFont(fontId),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.colorScheme.primaryContainer
+                            : theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
                           color: isSelected
-                              ? theme.colorScheme.primaryContainer
-                              : theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isSelected
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.outline,
-                            width: isSelected ? 3 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  font['name']!,
-                                  style: fontProvider.getTextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (isSelected)
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: theme.colorScheme.primary,
-                                    size: 24,
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              font['desc']!,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ],
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
+                          width: isSelected ? 3 : 1,
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                font['name']!,
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (isSelected)
+                                Icon(
+                                  Icons.check_circle,
+                                  color: theme.colorScheme.primary,
+                                  size: 24,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            font['desc']!,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+
+              const Spacer(flex: 1),
 
               const SizedBox(height: 16),
 
@@ -1322,46 +1325,42 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
 
-              Expanded(
-                child: ListView(
-                  children: [
-                    // Budget Mode
-                    _ModeCard(
-                      title: 'Simple Envelope Tracking',
-                      description: 'Quick & flexible budgeting',
-                      features: [
-                        'Allocate money when you want',
-                        'Track your envelopes',
-                        'Quick & flexible',
-                      ],
-                      emoji: '📊',
-                      isSelected: _isAccountMode == false,
-                      isRecommended: false,
-                      onTap: () => setState(() => _isAccountMode = false),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Account Mode
-                    _ModeCard(
-                      title: 'Complete Financial Picture',
-                      description: 'Full automation & forecasting',
-                      features: [
-                        'Add your account balance',
-                        'Automate your pay day',
-                        'See EXACT future balances',
-                        'Never overdraft again',
-                      ],
-                      emoji: '🎯',
-                      isSelected: _isAccountMode == true,
-                      isRecommended: true,
-                      onTap: () => setState(() => _isAccountMode = true),
-                    ),
-                  ],
-                ),
+              // Budget Mode
+              _ModeCard(
+                title: 'Simple Envelope Tracking',
+                description: 'Quick & flexible budgeting',
+                features: [
+                  'Allocate money when you want',
+                  'Track your envelopes',
+                  'Quick & flexible',
+                ],
+                emoji: '📊',
+                isSelected: _isAccountMode == false,
+                isRecommended: false,
+                onTap: () => setState(() => _isAccountMode = false),
               ),
+
+              const SizedBox(height: 12),
+
+              // Account Mode
+              _ModeCard(
+                title: 'Complete Financial Picture',
+                description: 'Full automation & forecasting',
+                features: [
+                  'Add your account balance',
+                  'Automate your pay day',
+                  'See EXACT future balances',
+                  'Never overdraft again',
+                ],
+                emoji: '🎯',
+                isSelected: _isAccountMode == true,
+                isRecommended: true,
+                onTap: () => setState(() => _isAccountMode = true),
+              ),
+
+              const Spacer(flex: 1),
 
               const SizedBox(height: 16),
 
@@ -2315,122 +2314,117 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
 
-              Expanded(
-                child: ListView(
-                  children: [
-                    // Animated envelope icon
-                    TweenAnimationBuilder(
-                      tween: Tween<double>(begin: 0.8, end: 1.0),
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.elasticOut,
-                      builder: (context, double scale, child) {
-                        return Transform.scale(
-                          scale: scale,
-                          child: Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.mail,
-                              size: 60,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // Animated examples
-                    SizedBox(
-                      height: 200,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: List.generate(_examples.length, (index) {
-                          if (index > _currentExampleIndex) {
-                            return const SizedBox.shrink();
-                          }
-
-                          final example = _examples[index];
-                          final formattedAmount = _formatSimpleCurrency(
-                            example['amount'] as double,
-                            localeProvider.currencySymbol,
-                          );
-                          return FadeTransition(
-                            opacity: index == _currentExampleIndex
-                                ? _fadeAnimation
-                                : const AlwaysStoppedAnimation(1.0),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Text(
-                                '→ ${example['text']} $formattedAmount ${example['emoji']}',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  color: theme.colorScheme.onSurface,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Value propositions
-                    Container(
-                      padding: const EdgeInsets.all(20),
+              // Animated envelope icon
+              TweenAnimationBuilder(
+                tween: Tween<double>(begin: 0.8, end: 1.0),
+                duration: const Duration(milliseconds: 1000),
+                curve: Curves.elasticOut,
+                builder: (context, double scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: theme.colorScheme.onSurface,
-                              height: 1.5,
+                        color: theme.colorScheme.primaryContainer,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.3,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          Text(
-                            'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: theme.colorScheme.primary,
-                              height: 1.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
+                            blurRadius: 20,
+                            spreadRadius: 5,
                           ),
                         ],
                       ),
+                      child: Icon(
+                        Icons.mail,
+                        size: 50,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // Animated examples
+              SizedBox(
+                height: 160,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(_examples.length, (index) {
+                    if (index > _currentExampleIndex) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final example = _examples[index];
+                    final formattedAmount = _formatSimpleCurrency(
+                      example['amount'] as double,
+                      localeProvider.currencySymbol,
+                    );
+                    return FadeTransition(
+                      opacity: index == _currentExampleIndex
+                          ? _fadeAnimation
+                          : const AlwaysStoppedAnimation(1.0),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          '→ ${example['text']} $formattedAmount ${example['emoji']}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Value propositions
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Set recurring payments. Automate pay day. See your future balances. Never guess again.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.primary,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
+
+              const Spacer(flex: 1),
 
               const SizedBox(height: 16),
 
@@ -2525,23 +2519,19 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 1),
 
-              Expanded(
-                child: ListView(
-                  children: [
-                    ...binderTemplates.map(
-                      (template) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _TemplateCard(
-                          template: template,
-                          onTap: () => onContinue(template),
-                        ),
-                      ),
-                    ),
-                  ],
+              ...binderTemplates.map(
+                (template) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _TemplateCard(
+                    template: template,
+                    onTap: () => onContinue(template),
+                  ),
                 ),
               ),
+
+              const Spacer(flex: 1),
 
               const SizedBox(height: 16),
 
@@ -2757,84 +2747,78 @@ class _TargetIconStepState extends State<_TargetIconStep> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const Spacer(flex: 2),
 
-              Expanded(
-                child: ListView(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          displayEmoji,
-                          style: const TextStyle(fontSize: 60),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 48),
-
-                    Text(
-                      'Quick picks:',
-                      style: fontProvider.getTextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildEmojiOption('🎯', displayEmoji),
-                        const SizedBox(width: 16),
-                        _buildEmojiOption('💯', displayEmoji),
-                        const SizedBox(width: 16),
-                        _buildEmojiOption('🥳', displayEmoji),
-                      ],
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    OutlinedButton.icon(
-                      onPressed: _openEmojiPicker,
-                      icon: const Icon(Icons.search),
-                      label: Text(
-                        'Search for emoji',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Text(
-                      'Or just type an emoji from your keyboard! 😎',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.6,
-                        ),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    displayEmoji,
+                    style: const TextStyle(fontSize: 60),
+                  ),
                 ),
               ),
+
+              const Spacer(flex: 1),
+
+              Text(
+                'Quick picks:',
+                style: fontProvider.getTextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildEmojiOption('🎯', displayEmoji),
+                  const SizedBox(width: 16),
+                  _buildEmojiOption('💯', displayEmoji),
+                  const SizedBox(width: 16),
+                  _buildEmojiOption('🥳', displayEmoji),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              OutlinedButton.icon(
+                onPressed: _openEmojiPicker,
+                icon: const Icon(Icons.search),
+                label: Text(
+                  'Search for emoji',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                'Or just type an emoji from your keyboard! 😎',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const Spacer(flex: 2),
 
               const SizedBox(height: 16),
 
