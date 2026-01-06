@@ -76,7 +76,8 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
     String? binderId = widget.existingBinderId ??
         await groupRepo.createGroup(
           name: widget.template.name,
-          emoji: widget.template.emoji,
+          iconType: 'emoji',
+          iconValue: widget.template.emoji,
         );
 
     // Step 2: Create empty envelopes in the binder
@@ -86,7 +87,8 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
       final envelopeId = await envelopeRepo.createEnvelope(
         name: templateEnvelope.name,
         startingAmount: 0.0,
-        emoji: templateEnvelope.emoji,
+        iconType: 'emoji',
+        iconValue: templateEnvelope.emoji,
         cashFlowEnabled: false,
         groupId: binderId, // Link to binder
       );
@@ -404,7 +406,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
     String? binderId = widget.existingBinderId ??
         await groupRepo.createGroup(
           name: widget.template.name,
-          emoji: widget.template.emoji,
+          iconType: 'emoji',
+          iconValue: widget.template.emoji,
         );
 
     // Step 2: Create all envelopes and assign them to the binder
@@ -416,7 +419,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
         envelopeId = await envelopeRepo.createEnvelope(
           name: data.template.name,
           startingAmount: 0.0,
-          emoji: data.template.emoji,
+          iconType: 'emoji',
+          iconValue: data.template.emoji,
           cashFlowEnabled: false,
           groupId: binderId, // Assign to the binder
         );
@@ -428,7 +432,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           name: data.template.name,
           startingAmount: data.currentAmount,
           targetAmount: data.targetAmount,
-          emoji: data.template.emoji,
+          iconType: 'emoji',
+          iconValue: data.template.emoji,
           cashFlowEnabled: data.payDayDepositEnabled,
           cashFlowAmount: data.payDayDepositEnabled ? data.payDayDepositAmount : null,
           linkedAccountId: data.payDayDepositEnabled && widget.defaultAccountId != null
