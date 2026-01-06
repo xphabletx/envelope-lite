@@ -134,24 +134,38 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
     }
   }
 
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(timeMachine.getBlockedActionMessage()),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
+      _showErrorDialog(
+        'Time Machine Active',
+        timeMachine.getBlockedActionMessage(),
       );
       return;
     }
 
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
+      _showErrorDialog(
+        'Invalid Amount',
+        'Please enter a valid amount greater than zero.',
       );
       return;
     }
@@ -159,15 +173,17 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
     if ((widget.type == TransactionType.withdrawal ||
             widget.type == TransactionType.transfer) &&
         amount > widget.account.currentBalance) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Insufficient funds')));
+      _showErrorDialog(
+        'Insufficient Funds',
+        'The account does not have enough funds for this transaction.',
+      );
       return;
     }
 
     if (widget.type == TransactionType.transfer && _selectedTargetId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a destination')),
+      _showErrorDialog(
+        'No Destination Selected',
+        'Please select a destination for the transfer.',
       );
       return;
     }
@@ -225,9 +241,10 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        _showErrorDialog(
+          'Transaction Failed',
+          'An error occurred: $e',
+        );
       }
     }
   }

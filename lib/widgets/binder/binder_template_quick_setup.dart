@@ -573,6 +573,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
   bool _showTargetAmountTip = false;
   bool _showRecurringBillTip = false;
   bool _showPayDayTip = false;
+  bool _showAutoExecuteTip = false;
 
   @override
   void initState() {
@@ -650,16 +651,31 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     final fontProvider = Provider.of<FontProvider>(context);
     final localeProvider = Provider.of<LocaleProvider>(context);
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Fixed Header with title centered, skip and progress on right
-            Padding(
-              padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        // If this is the first card, go back to selection
+        if (widget.isFirst) {
+          widget.onBackToSelection?.call();
+        } else {
+          // Otherwise, go to the previous envelope
+          widget.onBack();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+            return Column(
+              children: [
+                // Fixed Header with title centered, skip and progress on right
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
               child: Row(
                 children: [
                   // Title with emoji (centered)
@@ -700,21 +716,21 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                     ],
                   ),
                 ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Scrollable Form fields
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      // Current Amount
-                      SmartTextField(
+                // Scrollable Form fields
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Current Amount
+                        SmartTextField(
                         controller: _currentAmountController,
                         focusNode: _currentAmountFocus,
                         nextFocusNode: _targetAmountFocus,
@@ -815,14 +831,14 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (_showTargetAmountTip)
                         _buildProTip(
-                          'Set a savings goal for this envelope. When you reach 100%, it will show your celebration icon instead of the pie chart!',
+                          'Set a savings goal for this envelope. You can adjust visual settings and milestones later in the Horizon Navigator.',
                         ),
 
                       const SizedBox(height: 24),
                       const Divider(),
                       const SizedBox(height: 24),
 
-                      // Recurring Bill
+                      // Autopilot
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -870,7 +886,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (widget.data.recurringBillEnabled && _showRecurringBillTip)
                         _buildProTip(
-                          'Autopilot payments are automatically scheduled. We\'ll remind you or auto-execute the payment based on your settings!',
+                          'Autopilot handles external spending that crosses "The Wall"—money leaving your internal strategy to pay bills in the outside world. Set it up once and let it run automatically.',
                         ),
 
                       if (widget.data.recurringBillEnabled) ...[
@@ -983,21 +999,33 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           onChanged: (enabled) {
                             setState(() {
                               widget.data.autoExecute = enabled;
+
+                              // Show pro tip when toggled
+                              if (!_showAutoExecuteTip) {
+                                _showAutoExecuteTip = true;
+                              }
                             });
                           },
                         ),
+
+                        if (_showAutoExecuteTip)
+                          _buildProTip(
+                            widget.data.autoExecute
+                                ? 'Payment will execute automatically on the due date. No notification needed—it just happens!'
+                                : 'You\'ll receive a notification when this payment is due. Perfect for bills that vary or need manual review.',
+                          ),
                       ],
 
                       const SizedBox(height: 24),
                       const Divider(),
                       const SizedBox(height: 24),
 
-                      // Pay Day Deposit
+                      // Envelope Cash Flow
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Pay Day Deposit?',
+                            'Envelope Cash Flow?',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1034,7 +1062,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (widget.data.payDayDepositEnabled && _showPayDayTip)
                         _buildProTip(
-                          'This amount is added to your envelope every pay day. Tip: If you have a monthly bill but get paid weekly/bi-weekly, divide the bill amount by how many pay days occur before it\'s due. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button in the amount field to help!',
+                          'Envelope Cash Flow fuels this Horizon automatically every pay day from your Master Cash Flow—the total amount you allocate to all envelopes. This is "The Engine" of your strategy. Tip: For monthly bills paid weekly/bi-weekly, divide the total by pay periods. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button to help!',
                         ),
 
                       if (widget.data.payDayDepositEnabled) ...[
@@ -1046,7 +1074,8 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           isLastField: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
-                            labelText: 'Amount',
+                            labelText: 'Envelope Cash Flow Amount',
+                            hintText: 'How much of your Master Cash Flow fuels this Horizon?',
                             prefixText: localeProvider.currencySymbol,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -1111,29 +1140,32 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           ),
                         ],
                       ],
-                    ],
-                  ),
-                ),
-              ),
-
-              // Navigation button
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  child: FilledButton(
-                    onPressed: widget.onNext,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size.fromHeight(56),
+                      ],
                     ),
-                    child: Text(widget.isLast ? 'Finish' : 'Next →'),
                   ),
                 ),
-              ),
-            ],
-          ),
+
+                // Navigation button
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                    child: FilledButton(
+                      onPressed: widget.onNext,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        minimumSize: const Size.fromHeight(56),
+                      ),
+                      child: Text(widget.isLast ? 'Finish' : 'Next →'),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
+      ),
+      ),
     );
   }
 

@@ -18,7 +18,7 @@ import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../widgets/time_machine_indicator.dart';
-import '../widgets/analytics/analytics_section.dart';
+import '../widgets/analytics/cash_flow_mix_chart.dart';
 import '../widgets/transactions/transaction_list_item.dart';
 
 /// Categories for the new "Virtual Ledger" philosophy
@@ -161,26 +161,6 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
     }
   }
 
-  AnalyticsFilter _getInitialAnalyticsFilter() {
-    if (widget.filterTransactionTypes != null) {
-      final hasDeposits = widget.filterTransactionTypes!.contains(TransactionType.deposit);
-      final hasWithdrawals = widget.filterTransactionTypes!.contains(TransactionType.withdrawal);
-      final hasScheduledPayments = widget.filterTransactionTypes!.contains(TransactionType.scheduledPayment);
-      final hasTransfers = widget.filterTransactionTypes!.contains(TransactionType.transfer);
-
-      if (hasDeposits && hasWithdrawals && hasTransfers && !hasScheduledPayments) {
-        return AnalyticsFilter.net;
-      }
-      if (hasDeposits && !hasWithdrawals && !hasScheduledPayments) {
-        return AnalyticsFilter.cashIn;
-      }
-      if ((hasWithdrawals || hasScheduledPayments) && !hasDeposits) {
-        return AnalyticsFilter.cashOut;
-      }
-    }
-    // Default to NET view for general stats
-    return AnalyticsFilter.net;
-  }
 
   void _showSelectionSheet<T>({
     required String title,
@@ -407,35 +387,94 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
     );
   }
 
-  /// Categorize a transaction based on Virtual Ledger philosophy
-  TransactionCategory _categorizeTransaction(Transaction t, List<Account> accounts) {
-    // External Income: Deposits to accounts (including PAY DAY!)
-    if (t.type == TransactionType.deposit && (t.accountId != null && t.accountId!.isNotEmpty)) {
-      return TransactionCategory.externalIncome;
+
+  /// Calculate Horizon Strategy Stats - The "Wall" Philosophy Analytics
+  HorizonStrategyStats _calculateHorizonStats(
+    List<Transaction> transactions,
+    List<Envelope> envelopes,
+  ) {
+    // Identify Horizon envelopes (targetAmount != null && targetAmount > 0)
+    final horizonEnvelopes = envelopes
+        .where((e) => e.targetAmount != null && e.targetAmount! > 0)
+        .toList();
+    final horizonEnvelopeIds = horizonEnvelopes.map((e) => e.id).toSet();
+
+    // Calculate total remaining gap for all Horizons
+    double totalHorizonGap = 0;
+    for (final env in horizonEnvelopes) {
+      final gap = env.targetAmount! - env.currentAmount;
+      if (gap > 0) {
+        totalHorizonGap += gap;
+      }
     }
 
-    // External Income: Deposits to Default Account with "PAY DAY!" description (legacy)
-    if (t.type == TransactionType.deposit &&
-        t.envelopeId.isEmpty &&
-        t.description == 'PAY DAY!') {
-      return TransactionCategory.externalIncome;
+    // Analyze transactions
+    double externalInflow = 0;
+    double externalOutflow = 0;
+    double horizonVelocity = 0;
+    double liquidCash = 0;
+    double fixedBills = 0;
+    double discretionary = 0;
+
+    for (final t in transactions) {
+      // Use new philosophy fields if available, fallback to legacy categorization
+      final isExternal = t.impact == TransactionImpact.external;
+      final isInternal = t.impact == TransactionImpact.internal;
+      final isInflow = t.direction == TransactionDirection.inflow;
+      final isOutflow = t.direction == TransactionDirection.outflow;
+      final isMove = t.direction == TransactionDirection.move;
+
+      // EXTERNAL INFLOW (Income)
+      if (isExternal && isInflow) {
+        externalInflow += t.amount;
+      }
+
+      // EXTERNAL OUTFLOW (Spending)
+      else if (isExternal && isOutflow) {
+        externalOutflow += t.amount;
+
+        // Categorize spending: Fixed Bills vs Discretionary
+        final isDebtTransaction = t.envelopeId.isNotEmpty &&
+            envelopes.any((e) => e.id == t.envelopeId && e.isDebtEnvelope);
+        final isAutopilot = t.description.toLowerCase().contains('autopilot');
+
+        if (isDebtTransaction || isAutopilot) {
+          fixedBills += t.amount;
+        } else {
+          discretionary += t.amount;
+        }
+      }
+
+      // INTERNAL MOVES
+      else if (isInternal && isMove) {
+        // Check if destination is a Horizon envelope
+        if (t.destinationId != null && horizonEnvelopeIds.contains(t.destinationId)) {
+          horizonVelocity += t.amount;
+        } else {
+          liquidCash += t.amount;
+        }
+      }
     }
 
-    // External Spending: Withdrawals from accounts
-    if (t.type == TransactionType.withdrawal && (t.accountId != null && t.accountId!.isNotEmpty)) {
-      return TransactionCategory.externalSpending;
-    }
+    // Calculate derived metrics
+    final netImpact = externalInflow - externalOutflow;
+    final efficiency = externalInflow > 0 ? netImpact / externalInflow : 0.0;
+    final horizonImpact = totalHorizonGap > 0
+        ? (horizonVelocity / totalHorizonGap) * 100
+        : (horizonVelocity > 0 ? 100.0 : 0.0);
 
-    // External Spending: Withdrawals and Scheduled Payments from Envelopes
-    if ((t.type == TransactionType.withdrawal || t.type == TransactionType.scheduledPayment) &&
-        t.envelopeId.isNotEmpty) {
-      return TransactionCategory.externalSpending;
-    }
-
-    // Everything else is Internal Allocation:
-    // - Auto-fills (deposits to envelopes, withdrawals from default account)
-    // - Transfers (envelope-to-envelope, account-to-account)
-    return TransactionCategory.internalAllocation;
+    return HorizonStrategyStats(
+      externalInflow: externalInflow,
+      externalOutflow: externalOutflow,
+      netImpact: netImpact,
+      efficiency: efficiency,
+      horizonVelocity: horizonVelocity,
+      totalHorizonGap: totalHorizonGap,
+      horizonImpact: horizonImpact,
+      fixedBills: fixedBills,
+      discretionary: discretionary,
+      liquidCash: liquidCash,
+    );
   }
 
   @override
@@ -695,28 +734,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                 }
                                 debugPrint('[StatsHistoryScreen] ====================================');
 
-                                // Categorize transactions for Net Impact
-                                double totalIncome = 0;
-                                double totalSpending = 0;
-                                double totalAllocations = 0;
-
-                                for (final t in contextFilteredTxs) {
-                                  final category = _categorizeTransaction(t, accounts);
-
-                                  switch (category) {
-                                    case TransactionCategory.externalIncome:
-                                      totalIncome += t.amount;
-                                      break;
-                                    case TransactionCategory.externalSpending:
-                                      totalSpending += t.amount;
-                                      break;
-                                    case TransactionCategory.internalAllocation:
-                                      totalAllocations += t.amount.abs();
-                                      break;
-                                  }
-                                }
-
-                                final netSavings = totalIncome - totalSpending;
+                                // Calculate Horizon Strategy Stats
+                                final horizonStats = _calculateHorizonStats(
+                                  contextFilteredTxs,
+                                  envelopes,
+                                );
 
                                 // Calculate counts for filter chips
                                 final envSelectedCount = filteredEnvelopes
@@ -801,15 +823,12 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                                     const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                                    // NET IMPACT CARD (Data First!)
+                                    // HORIZON STRATEGY CARD (Replaces Net Impact Card)
                                     SliverToBoxAdapter(
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                                        child: _NetImpactCard(
-                                          income: totalIncome,
-                                          spending: totalSpending,
-                                          netSavings: netSavings,
-                                          allocations: totalAllocations,
+                                        child: _StrategyCard(
+                                          stats: horizonStats,
                                           start: start,
                                           end: end,
                                         ),
@@ -818,47 +837,10 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                                     const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                                    // ANALYTICS/DONUT CHART (with context filtering)
+                                    // CASH FLOW MIX CHART (Simplified 3-segment donut)
                                     SliverToBoxAdapter(
-                                      child: AnalyticsSection(
-                                        transactions: txs.where((t) {
-                                          bool accountMatch = true;
-                                          bool envelopeMatch = true;
-
-                                          // Account filter: if active, transaction MUST be from selected account(s)
-                                          if (activeFilters.contains(StatsFilterType.accounts)) {
-                                            accountMatch = false;
-                                            if (t.accountId != null && t.accountId!.isNotEmpty) {
-                                              if (selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId)) {
-                                                accountMatch = true;
-                                              }
-                                            }
-                                          }
-
-                                          // Envelope/Group filter: if active, transaction MUST be from selected envelope(s)
-                                          if (activeFilters.contains(StatsFilterType.envelopes) ||
-                                              activeFilters.contains(StatsFilterType.groups)) {
-                                            envelopeMatch = false;
-                                            if (chosenEnvelopeIds.contains(t.envelopeId)) {
-                                              envelopeMatch = true;
-                                            }
-                                          }
-
-                                          final inRange = !t.date.isBefore(start) && t.date.isBefore(end);
-                                          // Transaction must match ALL active filter types (AND logic)
-                                          return accountMatch && envelopeMatch && inRange;
-                                        }).toList(),
-                                        envelopes: envelopes,
-                                        groups: groups,
-                                        dateRange: DateTimeRange(start: start, end: end),
-                                        initialFilter: _getInitialAnalyticsFilter(),
-                                        timeMachineDate: timeMachine.isActive ? timeMachine.futureDate : null,
-                                        onDateRangeChange: (range) {
-                                          setState(() {
-                                            start = DateTime(range.start.year, range.start.month, range.start.day);
-                                            end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
-                                          });
-                                        },
+                                      child: CashFlowMixChart(
+                                        stats: horizonStats,
                                       ),
                                     ),
 
@@ -1218,21 +1200,15 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// NET IMPACT CARD (Big, Prominent, Data First!)
-class _NetImpactCard extends StatelessWidget {
-  const _NetImpactCard({
-    required this.income,
-    required this.spending,
-    required this.netSavings,
-    required this.allocations,
+// HORIZON STRATEGY CARD - The "Wall" Philosophy Dashboard
+class _StrategyCard extends StatelessWidget {
+  const _StrategyCard({
+    required this.stats,
     required this.start,
     required this.end,
   });
 
-  final double income;
-  final double spending;
-  final double netSavings;
-  final double allocations;
+  final HorizonStrategyStats stats;
   final DateTime start;
   final DateTime end;
 
@@ -1242,6 +1218,13 @@ class _NetImpactCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context);
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
+    // Color palette for feedback
+    final greenColor = Colors.green.shade700;
+    final goldColor = theme.colorScheme.secondary;
+    final redColor = Colors.red.shade700;
+
+    final feedbackColor = stats.getFeedbackColor(greenColor, goldColor, redColor);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1263,77 +1246,248 @@ class _NetImpactCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Row(
             children: [
-              Icon(Icons.account_balance_wallet, color: theme.colorScheme.primary, size: 24),
+              Icon(Icons.analytics, color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Net Impact',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Horizon Strategy',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    Text(
+                      '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d, yyyy').format(end)}',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+
+          const SizedBox(height: 24),
+
+          // Net Impact (Big Number)
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  'Net Impact',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  currency.format(stats.netImpact),
+                  style: fontProvider.getTextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: stats.netImpact >= 0 ? greenColor : redColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Strategy Feedback Message
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: feedbackColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: feedbackColor.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  stats.efficiency > 0.2
+                      ? Icons.rocket_launch
+                      : stats.efficiency > 0
+                          ? Icons.check_circle
+                          : Icons.warning,
+                  color: feedbackColor,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    stats.strategyFeedback,
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: feedbackColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Key Metrics Row
+          Row(
+            children: [
+              Expanded(
+                child: _MetricBox(
+                  icon: Icons.speed,
+                  label: 'Efficiency',
+                  value: '${(stats.efficiency * 100).toStringAsFixed(1)}%',
+                  color: feedbackColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _MetricBox(
+                  icon: Icons.trending_up,
+                  label: 'Horizon Fuel',
+                  value: currency.format(stats.horizonVelocity),
+                  color: goldColor,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Horizon Impact Message
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.flag,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stats.getHorizonImpactMessage(),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Income Allocation Progress Bar
+          _IncomeAllocationBar(stats: stats),
+
+          // Deficit Warning (if applicable)
+          if (stats.isDeficit) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: redColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: redColor.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning, color: redColor, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '⚠️ Deficit Strategy: Spending exceeded income',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: redColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// Metric Box for Efficiency and Horizon Fuel
+class _MetricBox extends StatelessWidget {
+  const _MetricBox({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
           Text(
-            '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d, yyyy').format(end)}',
+            label,
             style: fontProvider.getTextStyle(
-              fontSize: 13,
+              fontSize: 11,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Income
-          _StatRow(
-            icon: Icons.arrow_downward,
-            label: 'Income',
-            value: currency.format(income),
-            color: Colors.green.shade700,
-            isLarge: true,
-          ),
-
-          const SizedBox(height: 12),
-
-          // Spending
-          _StatRow(
-            icon: Icons.arrow_upward,
-            label: 'Spending',
-            value: currency.format(spending),
-            color: Colors.red.shade700,
-            isLarge: true,
-          ),
-
-          const SizedBox(height: 16),
-          Divider(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-
-          // Net Savings
-          _StatRow(
-            icon: netSavings >= 0 ? Icons.trending_up : Icons.trending_down,
-            label: 'Net Savings',
-            value: currency.format(netSavings),
-            color: netSavings >= 0 ? Colors.green.shade900 : Colors.red.shade900,
-            isLarge: true,
-            isBold: true,
-          ),
-
-          const SizedBox(height: 16),
-          Divider(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-
-          // Allocations (Internal Moves)
-          _StatRow(
-            icon: Icons.swap_horiz,
-            label: 'Internal Allocations',
-            value: currency.format(allocations),
-            color: Colors.blue.shade700,
-            subtitle: 'Transfers & cash flow (net zero)',
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: fontProvider.getTextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -1341,76 +1495,174 @@ class _NetImpactCard extends StatelessWidget {
   }
 }
 
-class _StatRow extends StatelessWidget {
-  const _StatRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    this.isLarge = false,
-    this.isBold = false,
-    this.subtitle,
-  });
+// Income Allocation Progress Bar - Multi-Segment
+class _IncomeAllocationBar extends StatelessWidget {
+  const _IncomeAllocationBar({required this.stats});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  final bool isLarge;
-  final bool isBold;
-  final String? subtitle;
+  final HorizonStrategyStats stats;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context);
+    final allocation = stats.getIncomeAllocation();
+
+    final spentPercent = allocation['spent']!;
+    final horizonsPercent = allocation['horizons']!;
+    final liquidPercent = allocation['liquid']!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Income Allocation',
+          style: fontProvider.getTextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Multi-segment bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 24,
+            child: Row(
+              children: [
+                // Spent segment (Red)
+                if (spentPercent > 0)
+                  Flexible(
+                    flex: (spentPercent * 100).round(),
+                    child: Container(
+                      color: Colors.red.shade700,
+                      alignment: Alignment.center,
+                      child: spentPercent > 0.15
+                          ? Text(
+                              '${(spentPercent * 100).toStringAsFixed(0)}%',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+
+                // Horizons segment (Gold)
+                if (horizonsPercent > 0)
+                  Flexible(
+                    flex: (horizonsPercent * 100).round(),
+                    child: Container(
+                      color: theme.colorScheme.secondary,
+                      alignment: Alignment.center,
+                      child: horizonsPercent > 0.15
+                          ? Text(
+                              '${(horizonsPercent * 100).toStringAsFixed(0)}%',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+
+                // Liquid segment (Grey)
+                if (liquidPercent > 0)
+                  Flexible(
+                    flex: (liquidPercent * 100).round(),
+                    child: Container(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                      alignment: Alignment.center,
+                      child: liquidPercent > 0.15
+                          ? Text(
+                              '${(liquidPercent * 100).toStringAsFixed(0)}%',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Legend
+        Wrap(
+          spacing: 16,
+          runSpacing: 4,
+          children: [
+            _LegendItem(
+              color: Colors.red.shade700,
+              label: 'Spent',
+              percent: spentPercent * 100,
+            ),
+            _LegendItem(
+              color: theme.colorScheme.secondary,
+              label: 'Horizons',
+              percent: horizonsPercent * 100,
+            ),
+            _LegendItem(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              label: 'Liquid',
+              percent: liquidPercent * 100,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// Legend Item for Progress Bar
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    required this.percent,
+  });
+
+  final Color color;
+  final String label;
+  final double percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final fontProvider = Provider.of<FontProvider>(context);
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          width: 12,
+          height: 12,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: isLarge ? 24 : 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: fontProvider.getTextStyle(
-                  fontSize: isLarge ? 16 : 14,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle!,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        Text(
-          value,
-          style: fontProvider.getTextStyle(
-            fontSize: isLarge ? 20 : 16,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
             color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label (${percent.toStringAsFixed(0)}%)',
+          style: fontProvider.getTextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
   }
 }
+
 

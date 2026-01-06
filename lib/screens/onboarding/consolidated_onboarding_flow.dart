@@ -20,7 +20,6 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../utils/onboarding_currency_converter.dart';
 import '../../widgets/binder/binder_template_quick_setup.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../widgets/common/smart_text_field.dart';
@@ -260,10 +259,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           },
         ),
 
-      // Step 12: Target Icon
-      _TargetIconStep(onContinue: _nextStep),
-
-      // Step 13: Completion
+      // Step 12: Completion
       _CompletionStep(
         isAccountMode: _isAccountMode,
         userName: _userName ?? 'there',
@@ -2120,341 +2116,198 @@ class _EnvelopeMindsetStep extends StatefulWidget {
   State<_EnvelopeMindsetStep> createState() => _EnvelopeMindsetStepState();
 }
 
-class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late AnimationController _buttonAnimationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _buttonFadeAnimation;
-  late final List<Map<String, dynamic>> _examples;
-
-  int _currentExampleIndex = 0;
-  bool _showButton = false;
-
-  /// Get singular currency name for the tagline
-  String _getCurrencySingularName(String currencyCode) {
-    switch (currencyCode) {
-      case 'GBP':
-        return 'pound';
-      case 'EUR':
-        return 'euro';
-      case 'USD':
-      case 'CAD':
-      case 'AUD':
-      case 'NZD':
-      case 'SGD':
-      case 'HKD':
-        return 'dollar';
-      case 'MXN':
-        return 'peso';
-      case 'BRL':
-        return 'real';
-      case 'ARS':
-        return 'peso';
-      case 'JPY':
-      case 'CNY':
-        return 'yen';
-      case 'INR':
-        return 'rupee';
-      case 'KRW':
-        return 'won';
-      case 'AED':
-        return 'dirham';
-      case 'SAR':
-        return 'riyal';
-      case 'ZAR':
-        return 'rand';
-      case 'CHF':
-        return 'franc';
-      case 'SEK':
-      case 'NOK':
-      case 'DKK':
-        return 'krona';
-      case 'PLN':
-        return 'złoty';
-      case 'TRY':
-        return 'lira';
-      default:
-        return 'unit'; // Generic fallback
-    }
-  }
-
-  /// Format currency for onboarding (symbol + whole number, no decimals)
-  String _formatSimpleCurrency(double amount, String symbol) {
-    return '$symbol${amount.round()}';
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Get converted amounts
-    final convertedAmounts = OnboardingCurrencyConverter.getExamples(
-      widget.selectedCurrency,
-    );
-
-    // Build examples with converted amounts
-    _examples = [
-      {
-        'text': 'Netflix gets',
-        'amount': convertedAmounts['netflix']!,
-        'emoji': '📺',
-      },
-      {
-        'text': 'Groceries get',
-        'amount': convertedAmounts['groceries']!,
-        'emoji': '🛒',
-      },
-      {
-        'text': 'Savings get',
-        'amount': convertedAmounts['savings']!,
-        'emoji': '💰',
-      },
-      {
-        'text': 'That coffee run gets',
-        'amount': convertedAmounts['coffee']!,
-        'emoji': '☕',
-      },
-    ];
-
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeIn,
-    );
-
-    _buttonAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _buttonFadeAnimation = CurvedAnimation(
-      parent: _buttonAnimationController,
-      curve: Curves.easeIn,
-    );
-
-    _animateExamples();
-  }
-
-  Future<void> _animateExamples() async {
-    for (int i = 0; i < _examples.length; i++) {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (mounted) {
-        setState(() => _currentExampleIndex = i);
-        _animationController.reset();
-        _animationController.forward();
-      }
-    }
-    // After all examples, show the button with a fade-in using separate controller
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      setState(() => _showButton = true);
-      _buttonAnimationController.forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _buttonAnimationController.dispose();
-    super.dispose();
-  }
+class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context);
-    final localeProvider = Provider.of<LocaleProvider>(context);
-
-    final currencyName = _getCurrencySingularName(widget.selectedCurrency);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  const SizedBox(height: 24),
-                  Text(
-                    'Welcome to Envelope Thinking',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '"Give every $currencyName a purpose"',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Currency symbol icon
-                  Center(
-                    child: TweenAnimationBuilder(
-                      tween: Tween<double>(begin: 0.8, end: 1.0),
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.elasticOut,
-                      builder: (context, double scale, child) {
-                        return Transform.scale(
-                          scale: scale,
-                          child: Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Text(
-                                localeProvider.currencySymbol,
-                                style: TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Examples
-                  ...List.generate(_examples.length, (index) {
-                    if (index > _currentExampleIndex) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final example = _examples[index];
-                    final formattedAmount = _formatSimpleCurrency(
-                      example['amount'] as double,
-                      localeProvider.currencySymbol,
-                    );
-                    return FadeTransition(
-                      opacity: index == _currentExampleIndex
-                          ? _fadeAnimation
-                          : const AlwaysStoppedAnimation(1.0),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          '→ ${example['text']} $formattedAmount ${example['emoji']}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-
-                  const SizedBox(height: 20),
-
-                  // Value propositions
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                     child: Column(
                       children: [
+                        // Add top padding to avoid back button overlap
+                        const SizedBox(height: 40),
+
                         Text(
-                          'When you stuff your envelopes, you know EXACTLY what you can afford for everything.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: theme.colorScheme.onSurface,
-                            height: 1.3,
+                          'Powering the Time Machine',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 8),
+
+                        const SizedBox(height: 32),
+
+                        // "Mastering the Wall" header
                         Text(
-                          'Set recurring payments with Autopilot. Automate pay day with Cash Flow. See your future balances with Time Machine. Track your goals with Tareget Horizon. Never guess again.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: theme.colorScheme.primary,
-                            height: 1.3,
-                            fontWeight: FontWeight.w600,
+                          'Mastering the Wall',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
                           ),
                           textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Money arrives from the outside (External), is organized into your strategy (Internal), and flows out to fuel your life. Cash Flow and Autopilot manage this movement automatically.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Three Pillar Cards
+                        _buildPillarCard(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '⚡',
+                          title: 'Envelope Cash Flow',
+                          subtitle: 'The Engine',
+                          description: 'Automate your savings velocity. This fuels your envelopes every time you get paid.',
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildPillarCard(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '🛡️',
+                          title: 'Autopilot',
+                          subtitle: 'The Shield',
+                          description: 'Automate your bills. This handles payments crossing "The Wall" so your strategy stays protected.',
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildPillarCard(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '🔮',
+                          title: 'Time Machine',
+                          subtitle: 'The Dashboard',
+                          description: 'The Result. Once Cash Flow and Autopilot are set, the Time Machine projects your future—showing you exactly when you\'ll reach your Horizons.',
+                        ),
+
+                        const Spacer(),
+
+                        const SizedBox(height: 20),
+
+                        FilledButton(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            widget.onContinue();
+                          },
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Initialize System',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text('🚀', style: TextStyle(fontSize: 24)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
-            ),
-
-            // Button - fixed at bottom like other screens
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: _showButton
-                  ? FadeTransition(
-                      opacity: _buttonFadeAnimation,
-                      child: FilledButton(
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          widget.onContinue();
-                        },
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 56),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'I\'m Ready!',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text('🎯', style: TextStyle(fontSize: 24)),
-                          ],
-                        ),
-                      ),
-                    )
-                  : const SizedBox(height: 56),
-            ),
-          ],
+            );
+          },
         ),
+      ),
+    );
+  }
+
+  Widget _buildPillarCard({
+    required ThemeData theme,
+    required FontProvider fontProvider,
+    required String icon,
+    required String title,
+    required String subtitle,
+    required String description,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 32)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 14,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2478,74 +2331,92 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
-                child: Text(
-                  'Let\'s create your first binder!',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: 40,
+                          ), // Add padding to avoid back button overlap
+                          child: Text(
+                            'Let\'s create your first binder!',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Choose a binder template to get started quickly, or start from scratch',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        ...binderTemplates.map(
+                          (template) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _TemplateCard(
+                              template: template,
+                              onTap: () => onContinue(template),
+                            ),
+                          ),
+                        ),
+
+                        // Start from Scratch option
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _StartFromScratchCard(
+                            onTap: () => onContinue(null),
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        const SizedBox(height: 16),
+
+                        OutlinedButton(
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            onSkip();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Skip - I\'ll create later',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              Text(
-                'Choose a binder template to get started quickly, or start from scratch',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const Spacer(flex: 1),
-
-              ...binderTemplates.map(
-                (template) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _TemplateCard(
-                    template: template,
-                    onTap: () => onContinue(template),
-                  ),
-                ),
-              ),
-
-              const Spacer(flex: 1),
-
-              const SizedBox(height: 16),
-
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  onSkip();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Skip - I\'ll create later',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -2643,223 +2514,76 @@ class _TemplateCard extends StatelessWidget {
   }
 }
 
-// _TargetIconStep
-class _TargetIconStep extends StatefulWidget {
-  final VoidCallback onContinue;
+class _StartFromScratchCard extends StatelessWidget {
+  final VoidCallback onTap;
 
-  const _TargetIconStep({required this.onContinue});
-
-  @override
-  State<_TargetIconStep> createState() => _TargetIconStepState();
-}
-
-class _TargetIconStepState extends State<_TargetIconStep> {
-  String? _selectedEmoji;
-
-  Future<void> _openEmojiPicker() async {
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const OmniIconPickerModal(initialQuery: ''),
-    );
-
-    if (!mounted) return;
-
-    if (result != null && result['type'] == 'emoji') {
-      final emoji = result['value'] as String;
-      setState(() {
-        _selectedEmoji = emoji;
-      });
-      // Save to provider
-      final localeProvider = Provider.of<LocaleProvider>(
-        context,
-        listen: false,
-      );
-      localeProvider.setCelebrationEmoji(emoji);
-    }
-  }
-
-  void _selectEmoji(String emoji) {
-    setState(() {
-      _selectedEmoji = emoji;
-    });
-    // Save to provider
-    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
-    localeProvider.setCelebrationEmoji(emoji);
-  }
+  const _StartFromScratchCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context);
-    final localeProvider = Provider.of<LocaleProvider>(context);
 
-    final displayEmoji = _selectedEmoji ?? localeProvider.celebrationEmoji;
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
-                child: Column(
-                  children: [
-                    Text(
-                      'Choose Your 100% Celebration!',
-                      style: fontProvider.getTextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Text(
-                      'When your envelopes hit their target, they\'ll show this icon instead of the pie.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.7,
-                        ),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-
-              const Spacer(flex: 2),
-
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    displayEmoji,
-                    style: const TextStyle(fontSize: 60),
-                  ),
-                ),
-              ),
-
-              const Spacer(flex: 1),
-
-              Text(
-                'Quick picks:',
-                style: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildEmojiOption('🎯', displayEmoji),
-                  const SizedBox(width: 16),
-                  _buildEmojiOption('💯', displayEmoji),
-                  const SizedBox(width: 16),
-                  _buildEmojiOption('🥳', displayEmoji),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              OutlinedButton.icon(
-                onPressed: _openEmojiPicker,
-                icon: const Icon(Icons.search),
-                label: Text(
-                  'Search for emoji',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                'Or just type an emoji from your keyboard! 😎',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const Spacer(flex: 2),
-
-              const SizedBox(height: 16),
-
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  widget.onContinue();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Continue',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmojiOption(String emoji, String currentEmoji) {
-    final theme = Theme.of(context);
-    final isSelected = emoji == currentEmoji;
-
-    return GestureDetector(
-      onTap: () => _selectEmoji(emoji),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 80,
-        height: 80,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primaryContainer
-              : theme.colorScheme.surface,
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
-            width: isSelected ? 3 : 1,
+            color: theme.colorScheme.primary.withValues(alpha: 0.5),
+            width: 2,
           ),
         ),
-        child: Center(child: Text(emoji, style: const TextStyle(fontSize: 40))),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.edit_note,
+                  color: theme.colorScheme.primary,
+                  size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Start from Scratch',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Build your own custom binder',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: theme.colorScheme.primary,
+              size: 18,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2887,125 +2611,163 @@ class _CompletionStep extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Text('🎉', style: TextStyle(fontSize: 60)),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              Text(
-                'You\'re All Set, $userName!',
-                style: fontProvider.getTextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 32),
-
-              if (envelopeCount > 0) ...[
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(
-                      alpha: 0.3,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'You\'ve created $envelopeCount envelope${envelopeCount == 1 ? '' : 's'}',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text('🚀', style: TextStyle(fontSize: 60)),
+                          ),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      if (isAccountMode)
+
+                        const SizedBox(height: 24),
+
                         Text(
-                          'Your next pay day will use cash flow to fill your envelopes. Check Time Machine to see your future!',
-                          style: const TextStyle(fontSize: 16, height: 1.5),
-                          textAlign: TextAlign.center,
-                        )
-                      else
-                        Text(
-                          'Tap Pay Day to allocate money across your envelopes',
-                          style: const TextStyle(fontSize: 16, height: 1.5),
+                          'Systems Ready, $userName!',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
                           textAlign: TextAlign.center,
                         ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
 
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withValues(
-                    alpha: 0.3,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: theme.colorScheme.secondary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Text('💡', style: TextStyle(fontSize: 24)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Pro tip: Use Cash Flow to automate regular envelope stuffing, and Autopilot to schedule transfers and payments between your envelopes.',
-                        style: const TextStyle(fontSize: 14, height: 1.4),
-                      ),
+                        const SizedBox(height: 32),
+
+                        // System Ready Status Chips
+                        _buildStatusChip(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '✅',
+                          label: 'Cash Flow Configured',
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        _buildStatusChip(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '✅',
+                          label: 'Autopilot Ready',
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        _buildStatusChip(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '✅',
+                          label: 'Time Machine Initialized',
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Pro-Tip
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondaryContainer.withValues(
+                              alpha: 0.3,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('💡', style: TextStyle(fontSize: 24)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Pro-Tip: Your current strategy is now being projected. Head to any Horizon Visual to see the Time Machine in action and look into your financial future.',
+                                  style: const TextStyle(fontSize: 14, height: 1.4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        const SizedBox(height: 20),
+
+                        FilledButton(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            onComplete();
+                          },
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 56),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Enter the Cockpit →',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-
-              const Spacer(),
-
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  onComplete();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Start Budgeting →',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
                   ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip({
+    required ThemeData theme,
+    required FontProvider fontProvider,
+    required String icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: fontProvider.getTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

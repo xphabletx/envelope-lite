@@ -2,11 +2,101 @@
 
 **Last Updated:** January 6, 2026
 **Branch:** main
-**Latest Commit:** 7bbccfc - Transform Multi Target Screen into Horizon Navigator Strategy Dashboard
+**Latest Commit:** [Pending] - Onboarding & Strategy Overhaul with Adaptive Layouts
 
 ---
 
 ## Recent Major Changes
+
+### Onboarding & Strategy Overhaul (January 6, 2026)
+Complete transformation of the onboarding experience from passive tutorial into strategic briefing, with adaptive layouts and updated terminology aligned with Time Machine philosophy.
+
+**New Onboarding Flow - Strategic Briefing:**
+
+1. **Simulation Briefing (Step 0 - "Powering the Time Machine")**
+   - Replaced animated currency examples with static 3-card briefing
+   - Explains "Mastering the Wall" concept (External → Internal → External)
+   - Three Pillar Cards:
+     - ⚡ **Envelope Cash Flow** - "The Engine": Automates savings velocity
+     - 🛡️ **Autopilot** - "The Shield": Automates bills crossing The Wall
+     - 🔮 **Time Machine** - "The Dashboard": Projects future balances
+   - "Initialize System" CTA button with rocket emoji
+   - Adaptive layout prevents overflow on all screen sizes
+
+2. **Binder Template Selection**
+   - Added **"Start from Scratch"** option as selectable card
+   - Changed "Skip" button from FilledButton to OutlinedButton (de-emphasized)
+   - Fixed RenderFlex overflow with adaptive layout pattern
+   - Scrollable when needed, button always visible
+
+3. **Envelope Detail Entry (Binder Template Quick Setup)**
+   - Updated all pro-tips to explain new concepts:
+     - **Horizon Goal**: References Horizon Navigator for visual settings
+     - **Autopilot**: Explains external spending crossing "The Wall"
+     - **Auto-execute**: Dynamic tip changes based on toggle state
+     - **Envelope Cash Flow**: Explains Master Cash Flow and "The Engine"
+   - Fixed back button navigation to go to previous envelope (not selection)
+   - Applied adaptive layout to prevent "20-pixel scroll" issue
+
+4. **Completion Screen ("Systems Ready")**
+   - Changed from "You're All Set 🎉" to "Systems Ready, [Name]! 🚀"
+   - Status chips showing configured systems:
+     - ✅ Cash Flow Configured
+     - ✅ Autopilot Ready
+     - ✅ Time Machine Initialized
+   - Pro-tip directs to Horizon Visuals and Time Machine
+   - "Enter the Cockpit →" CTA button
+
+5. **Removed Steps**
+   - **Target Emoji Picker** (Step 12) - removed entirely
+   - Users configure celebration visuals later in Horizon Navigator
+
+**Terminology Alignment (Complete Scrub):**
+- "Pay Day Deposit" → **"Envelope Cash Flow"**
+- "Recurring Bill" → **"Autopilot"**
+- "Target" → **"Horizon"** (from previous commit)
+- Consistent use of "Cash Flow → Autopilot → Time Machine" pipeline
+- "Master Cash Flow" explained as total allocation to all envelopes
+
+**Adaptive Layout Pattern Applied:**
+- LayoutBuilder + SingleChildScrollView + ConstrainedBox + IntrinsicHeight
+- Spacer() widget to pin buttons to bottom viewport
+- Eliminates overflow issues on all screen sizes
+- Consistent pattern across: Simulation Briefing, Binder Template Selection, Envelope Details, Completion
+
+**Pro-Tips Updated (4 total):**
+1. **Horizon Goal**: "You can adjust visual settings and milestones later in the Horizon Navigator"
+2. **Autopilot**: "Handles external spending that crosses 'The Wall'—money leaving your internal strategy to pay bills in the outside world"
+3. **Auto-Execute**: Dynamic tip - enabled: "No notification needed—it just happens!" / disabled: "You'll receive a notification when this payment is due"
+4. **Envelope Cash Flow**: Explains Master Cash Flow concept, "The Engine" metaphor, and pay period division calculation
+
+**Navigation Improvements:**
+- **Back button in envelope details**: Now goes to previous envelope (not template selection)
+- **PopScope wrapper**: Intercepts system back button with smart routing
+  - First envelope: returns to template selection
+  - Other envelopes: goes to previous envelope details
+
+**Files Modified:**
+- [consolidated_onboarding_flow.dart](lib/screens/onboarding/consolidated_onboarding_flow.dart): ~220 lines removed (emoji picker), adaptive layouts added, terminology updated
+- [binder_template_quick_setup.dart](lib/widgets/binder/binder_template_quick_setup.dart): All pro-tips updated, back navigation fixed, adaptive layout applied
+
+**Technical Implementation:**
+- Removed `_EnvelopeMindsetStep` animation controllers and currency conversion logic
+- Created `_buildPillarCard()` helper method for 3-card briefing
+- Created `_buildStatusChip()` helper method for completion screen
+- Added `_StartFromScratchCard` widget with distinctive styling
+- Added `PopScope` with `onPopInvokedWithResult` for smart back navigation
+- Applied adaptive layout pattern to 4 screens: Simulation Briefing, Template Selection, Envelope Details, Completion
+
+**User Experience Impact:**
+- Clear value proposition: Time Machine as core feature
+- Educational flow explains "why" before "what"
+- Reduced cognitive load with static briefing vs animations
+- Consistent messaging reinforces Cash Flow → Autopilot → Time Machine pipeline
+- Better mobile UX with proper scrolling and button visibility
+- Intuitive back navigation in multi-envelope setup
+
+---
 
 ### Horizon Navigator Strategy Dashboard (Commit: 7bbccfc)
 Complete transformation of Multi Target Screen from manual calculator into intelligent strategy dashboard with auto-detection, simulation, and deployment capabilities.
@@ -139,6 +229,7 @@ Complete refactoring from "Target" terminology to "Horizon" aesthetic, aligning 
 ## Recent Development Timeline
 
 ### January 6, 2026
+- **[Pending]**: Onboarding & Strategy Overhaul (complete UX transformation)
 - **7bbccfc**: Horizon Navigator Strategy Dashboard (major UX transformation)
 - **46be4e6**: Horizon aesthetic refactor (major UI/terminology update)
 - **ff35e9a**: Calendar icon button added to date picker
@@ -170,48 +261,94 @@ Complete refactoring from "Target" terminology to "Horizon" aesthetic, aligning 
 
 ### Philosophy of the Wall
 The app follows the "Philosophy of the Wall" - a visual and conceptual metaphor where:
-- Envelopes are visualized as bricks in a wall
-- The Horizon aesthetic represents goals as sunrises on the horizon
-- Progress is visualized as the sun rising toward the horizon line
-- Latte Love theme provides warm, inviting color palette (latte brown → gold → yellow)
+- **The Wall**: Separation between external world and internal strategy
+- **External → Internal → External**: Money arrives, is organized, then flows out
+- **Envelopes**: Visualized as bricks in a wall (internal strategy)
+- **The Three Pillars**:
+  1. **Envelope Cash Flow** (The Engine): Automates savings velocity
+  2. **Autopilot** (The Shield): Automates bills crossing The Wall
+  3. **Time Machine** (The Dashboard): Projects future balances
+- **Horizon Aesthetic**: Goals represented as sunrises on the horizon
+- **Progress Visualization**: Sun rises toward horizon line
+- **Latte Love Theme**: Warm, inviting color palette (latte brown → gold → yellow)
+
+### Onboarding Philosophy
+- **Education First**: Explain "why" before "what"
+- **Strategic Briefing**: Position Time Machine as core value proposition
+- **Consistent Messaging**: Reinforce Cash Flow → Autopilot → Time Machine pipeline
+- **Adaptive Layouts**: Content fits any screen size, buttons always visible
+- **Contextual Guidance**: Pro-tips appear when relevant, explain concepts clearly
 
 ### Visual Design Language
 - **Horizon Progress**: Rising sun visualization for goal tracking
-- **Emojis**: ✨ for achievements, 🌅 for time-based completions
+- **Emojis**: ✨ for achievements, 🌅 for time-based completions, 🚀 for system initialization
 - **Color Scheme**: Warm latte browns transitioning to golds and yellows
 - **Contrast**: All text elements optimized for readability across themes
+- **Adaptive Layouts**: LayoutBuilder + SingleChildScrollView + ConstrainedBox + IntrinsicHeight pattern
 
 ---
 
 ## Important Technical Notes
 
 ### Recent Architecture Changes
-1. **EXTERNAL/INTERNAL Transaction Philosophy** (Phases 1-3 completed)
+1. **Onboarding Transformation** (January 6, 2026)
+   - Simulation Briefing replaces animated currency examples
+   - Adaptive layout pattern prevents overflow on all screens
+   - PopScope navigation for smart back button routing
+   - Pro-tips updated with new terminology and concepts
+   - Target emoji picker step removed (moved to Horizon Navigator)
+
+2. **EXTERNAL/INTERNAL Transaction Philosophy** (Phases 1-3 completed)
    - Core data model refactored to distinguish external vs internal transactions
    - New Hive enum adapters registered
    - Visual Pay Day Stuffing with binder-based animations implemented
 
-2. **Horizon Widget System**
+3. **Horizon Widget System**
    - New [horizon_progress.dart](lib/widgets/horizon_progress.dart) replaces EmojiPieChart
    - Time Machine integration for accurate progress tracking
    - Gradient-based sun visualization
 
-3. **Horizon Navigator Dashboard**
+4. **Horizon Navigator Dashboard**
    - Smart Baseline Engine for auto-detecting contribution speeds
    - Three-zone UI: Strategy Dashboard + Velocity Slider + Horizon List
    - Sandbox simulation with real-time what-if analysis
    - One-click strategy deployment to Cash Flow settings
    - Transaction history integration for behavioral analysis
 
-4. **Workspace Sync**
+5. **Workspace Sync**
    - Binders (groups) now sync across workspaces
    - Improved StreamBuilder initialization to prevent loading spinners
+
+### Adaptive Layout Pattern (Standard across onboarding)
+```dart
+LayoutBuilder(
+  builder: (context, constraints) {
+    return SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: IntrinsicHeight(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Content here
+                const Spacer(), // Pushes button to bottom
+                // Button here
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  },
+)
+```
 
 ---
 
 ## Next Context Update
 When updating this file next time, include:
-- New commits since 7bbccfc
+- New commits after the onboarding overhaul
 - Any new features or bug fixes
 - Architecture changes or refactors
 - Breaking changes or migrations

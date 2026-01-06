@@ -89,3 +89,98 @@ class ChartSegment {
     return (amount / total) * 100;
   }
 }
+
+/// Horizon Strategy Stats - The "Wall" Philosophy Metrics
+class HorizonStrategyStats {
+  /// Total external inflow (money entering the system)
+  final double externalInflow;
+
+  /// Total external outflow (money leaving the system)
+  final double externalOutflow;
+
+  /// Net Impact (Income - Spending)
+  final double netImpact;
+
+  /// Efficiency ratio (what % of income was saved)
+  final double efficiency;
+
+  /// Total internal moves to Horizon envelopes (targetAmount != null)
+  final double horizonVelocity;
+
+  /// Total remaining gap across all Horizon envelopes
+  final double totalHorizonGap;
+
+  /// Horizon Impact: % of gap closed this period
+  final double horizonImpact;
+
+  /// Fixed Bills (external outflow from debt envelopes or autopilot)
+  final double fixedBills;
+
+  /// Discretionary spending (external outflow, non-fixed)
+  final double discretionary;
+
+  /// Internal moves to non-Horizon envelopes
+  final double liquidCash;
+
+  HorizonStrategyStats({
+    required this.externalInflow,
+    required this.externalOutflow,
+    required this.netImpact,
+    required this.efficiency,
+    required this.horizonVelocity,
+    required this.totalHorizonGap,
+    required this.horizonImpact,
+    required this.fixedBills,
+    required this.discretionary,
+    required this.liquidCash,
+  });
+
+  /// Get strategy feedback message based on efficiency
+  String get strategyFeedback {
+    if (efficiency > 0.2) {
+      return "🚀 High Efficiency: You're fueling your Horizons fast!";
+    }
+    if (efficiency > 0) {
+      return "✅ Stable: You're living within your means.";
+    }
+    return "⚠️ Caution: Spending is outpacing your Inflow.";
+  }
+
+  /// Get feedback color based on efficiency
+  Color getFeedbackColor(Color greenColor, Color goldColor, Color redColor) {
+    if (efficiency > 0.2) return greenColor;
+    if (efficiency > 0) return goldColor;
+    return redColor;
+  }
+
+  /// Get Horizon Impact message
+  String getHorizonImpactMessage() {
+    if (totalHorizonGap <= 0) {
+      return "100% — All Horizons reached! 🎉";
+    }
+    if (horizonVelocity <= 0) {
+      return "N/A — Set a Horizon to track impact";
+    }
+    return "You closed ${horizonImpact.toStringAsFixed(1)}% of your savings gap this period";
+  }
+
+  /// Check if spending exceeded income (deficit)
+  bool get isDeficit => externalOutflow > externalInflow;
+
+  /// Calculate income allocation percentages for progress bar
+  Map<String, double> getIncomeAllocation() {
+    if (externalInflow <= 0) {
+      return {'spent': 0, 'horizons': 0, 'liquid': 0};
+    }
+
+    double spentPercent = (externalOutflow / externalInflow).clamp(0.0, 1.0);
+    double horizonsPercent = (horizonVelocity / externalInflow).clamp(0.0, 1.0 - spentPercent);
+    double liquidPercent = (liquidCash / externalInflow).clamp(0.0, 1.0 - spentPercent - horizonsPercent);
+
+    return {
+      'spent': spentPercent,
+      'horizons': horizonsPercent,
+      'liquid': liquidPercent,
+    };
+  }
+}

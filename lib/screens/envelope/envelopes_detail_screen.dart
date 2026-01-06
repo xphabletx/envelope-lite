@@ -13,10 +13,8 @@ import '../../../services/account_repo.dart';
 import '../../../services/scheduled_payment_repo.dart'; // NEW IMPORT
 import '../../../utils/target_helper.dart';
 import 'envelope_transaction_list.dart';
-import 'modals/deposit_modal.dart';
-import 'modals/withdraw_modal.dart';
-import 'modals/transfer_modal.dart';
 import '../../../services/localization_service.dart';
+import '../../widgets/quick_action_modal.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
 import '../../../providers/time_machine_provider.dart';
@@ -704,7 +702,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             fontWeight: FontWeight.bold,
           ),
           labelBackgroundColor: theme.colorScheme.surface,
-          onTap: () => _showDepositModal(context, envelope),
+          onTap: () => _showQuickAction(TransactionType.deposit, envelope),
         ),
         SpeedDialChild(
           child: Icon(Icons.arrow_downward, color: Colors.red.shade600),
@@ -715,7 +713,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             fontWeight: FontWeight.bold,
           ),
           labelBackgroundColor: theme.colorScheme.surface,
-          onTap: () => _showWithdrawModal(context, envelope),
+          onTap: () => _showQuickAction(TransactionType.withdrawal, envelope),
         ),
       ],
       SpeedDialChild(
@@ -727,7 +725,7 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           fontWeight: FontWeight.bold,
         ),
         labelBackgroundColor: theme.colorScheme.surface,
-        onTap: () => _showTransferModal(context, envelope),
+        onTap: () => _showQuickAction(TransactionType.transfer, envelope),
       ),
       SpeedDialChild(
         child: Icon(Icons.calculate, color: iconColor),
@@ -759,61 +757,16 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     );
   }
 
-  void _showDepositModal(BuildContext context, Envelope envelope) {
+  void _showQuickAction(TransactionType type, Envelope envelope) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: DepositModal(
-          repo: widget.repo,
-          envelopeId: envelope.id,
-          envelopeName: envelope.name,
-        ),
-      ),
-    );
-  }
-
-  void _showWithdrawModal(BuildContext context, Envelope envelope) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: WithdrawModal(
-          repo: widget.repo,
-          envelopeId: envelope.id,
-          envelopeName: envelope.name,
-          currentAmount: envelope.currentAmount,
-        ),
-      ),
-    );
-  }
-
-  void _showTransferModal(BuildContext context, Envelope envelope) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: TransferModal(
-          repo: widget.repo,
-          sourceEnvelopeId: envelope.id,
-          sourceEnvelopeName: envelope.name,
-          currentAmount: envelope.currentAmount,
-        ),
+      builder: (ctx) => QuickActionModal(
+        envelope: envelope,
+        allEnvelopes: widget.repo.getEnvelopesSync(),
+        repo: widget.repo,
+        type: type,
       ),
     );
   }
