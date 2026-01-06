@@ -1013,17 +1013,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     SizedBox(
+                                      width: 24,
                                       height: 24,
-                                      child: Align(
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          account.emoji ?? '💳',
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            height: 1.2,
-                                          ),
-                                        ),
-                                      ),
+                                      child: account.getIconWidget(theme, size: 20),
                                     ),
                                     const SizedBox(width: 8),
                                     Flexible(

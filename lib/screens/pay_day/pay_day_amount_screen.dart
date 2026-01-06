@@ -317,9 +317,10 @@ class _PayDayAmountScreenState extends State<PayDayAmountScreen> {
                             value: account.id,
                             child: Row(
                               children: [
-                                Text(
-                                  account.emoji ?? '💳',
-                                  style: const TextStyle(fontSize: 24),
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: account.getIconWidget(theme, size: 24),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
