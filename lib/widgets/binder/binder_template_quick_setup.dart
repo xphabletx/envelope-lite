@@ -17,7 +17,8 @@ class BinderTemplateQuickSetup extends StatefulWidget {
   final String? defaultAccountId; // For Account Mode linking
   final String? existingBinderId; // If adding to existing binder
   final Function(int)? onComplete; // Optional callback for onboarding flow
-  final bool returnEnvelopeIds; // If true, pops with List<String> of created envelope IDs
+  final bool
+  returnEnvelopeIds; // If true, pops with List<String> of created envelope IDs
 
   const BinderTemplateQuickSetup({
     super.key,
@@ -30,7 +31,8 @@ class BinderTemplateQuickSetup extends StatefulWidget {
   });
 
   @override
-  State<BinderTemplateQuickSetup> createState() => _BinderTemplateQuickSetupState();
+  State<BinderTemplateQuickSetup> createState() =>
+      _BinderTemplateQuickSetupState();
 }
 
 class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
@@ -41,9 +43,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
   void initState() {
     super.initState();
     // Select all envelopes by default
-    _selectedEnvelopeIds.addAll(
-      widget.template.envelopes.map((e) => e.id),
-    );
+    _selectedEnvelopeIds.addAll(widget.template.envelopes.map((e) => e.id));
   }
 
   void _toggleAll(bool select) {
@@ -73,7 +73,8 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
 
     // Step 1: Determine the binder ID
     // Only create a new binder if we're NOT adding to an existing one
-    String? binderId = widget.existingBinderId ??
+    String? binderId =
+        widget.existingBinderId ??
         await groupRepo.createGroup(
           name: widget.template.name,
           iconType: 'emoji',
@@ -102,10 +103,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
           : 'Created ${widget.template.name} binder with $createdCount envelopes!';
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
       );
 
       if (widget.returnEnvelopeIds) {
@@ -164,10 +162,10 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                border: Border(
-                  bottom: BorderSide(color: theme.dividerColor),
+                color: theme.colorScheme.primaryContainer.withValues(
+                  alpha: 0.3,
                 ),
+                border: Border(bottom: BorderSide(color: theme.dividerColor)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,127 +177,20 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _toggleAll(true),
-                        child: const Text('Select All'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _toggleAll(false),
-                        child: const Text('Deselect All'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Envelope list
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: widget.template.envelopes.length,
-              itemBuilder: (context, index) {
-                final envelope = widget.template.envelopes[index];
-                final isSelected = _selectedEnvelopeIds.contains(envelope.id);
-
-                return CheckboxListTile(
-                  value: isSelected,
-                  onChanged: (checked) {
-                    setState(() {
-                      if (checked == true) {
-                        _selectedEnvelopeIds.add(envelope.id);
-                      } else {
-                        _selectedEnvelopeIds.remove(envelope.id);
-                      }
-                    });
-                  },
-                  secondary: Text(envelope.emoji, style: const TextStyle(fontSize: 32)),
-                  title: Text(
-                    envelope.name,
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: envelope.defaultAmount != null
-                      ? Text('Suggested: £${envelope.defaultAmount!.toStringAsFixed(2)}')
-                      : null,
-                );
-              },
-            ),
-          ),
-
-          // Bottom actions
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.scaffoldBackgroundColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${_selectedEnvelopeIds.length} envelope(s) selected',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Want to add details now?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    '(Current amounts, autopilot, etc.)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _selectedEnvelopeIds.isEmpty
-                              ? null
-                              : _createEnvelopesEmpty,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: const Text('Create Empty'),
+                          onPressed: () => _toggleAll(true),
+                          child: const Text('Select All'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: FilledButton(
-                          onPressed: _selectedEnvelopeIds.isEmpty
-                              ? null
-                              : _startQuickEntry,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: const Text('Add Details Now'),
+                        child: OutlinedButton(
+                          onPressed: () => _toggleAll(false),
+                          child: const Text('Deselect All'),
                         ),
                       ),
                     ],
@@ -307,8 +198,124 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
                 ],
               ),
             ),
-          ),
-        ],
+
+            // Envelope list
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: widget.template.envelopes.length,
+                itemBuilder: (context, index) {
+                  final envelope = widget.template.envelopes[index];
+                  final isSelected = _selectedEnvelopeIds.contains(envelope.id);
+
+                  return CheckboxListTile(
+                    value: isSelected,
+                    onChanged: (checked) {
+                      setState(() {
+                        if (checked == true) {
+                          _selectedEnvelopeIds.add(envelope.id);
+                        } else {
+                          _selectedEnvelopeIds.remove(envelope.id);
+                        }
+                      });
+                    },
+                    secondary: Text(
+                      envelope.emoji,
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                    title: Text(
+                      envelope.name,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: envelope.defaultAmount != null
+                        ? Text(
+                            'Suggested: £${envelope.defaultAmount!.toStringAsFixed(2)}',
+                          )
+                        : null,
+                  );
+                },
+              ),
+            ),
+
+            // Bottom actions
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_selectedEnvelopeIds.length} envelope(s) selected',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Want to add details now?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '(Current amounts, autopilot, etc.)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _selectedEnvelopeIds.isEmpty
+                                ? null
+                                : _createEnvelopesEmpty,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('Create Empty'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _selectedEnvelopeIds.isEmpty
+                                ? null
+                                : _startQuickEntry,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('Add Details Now'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -326,7 +333,8 @@ class _QuickEntryFlow extends StatefulWidget {
   final String? defaultAccountId;
   final String? existingBinderId;
   final bool returnEnvelopeIds;
-  final Function(int, List<String>) onComplete; // Returns count and envelope IDs
+  final Function(int, List<String>)
+  onComplete; // Returns count and envelope IDs
   final VoidCallback onBack;
 
   const _QuickEntryFlow({
@@ -403,7 +411,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
 
     // Step 1: Determine the binder ID
     // Only create a new binder if we're NOT adding to an existing one
-    String? binderId = widget.existingBinderId ??
+    String? binderId =
+        widget.existingBinderId ??
         await groupRepo.createGroup(
           name: widget.template.name,
           iconType: 'emoji',
@@ -435,8 +444,11 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           iconType: 'emoji',
           iconValue: data.template.emoji,
           cashFlowEnabled: data.payDayDepositEnabled,
-          cashFlowAmount: data.payDayDepositEnabled ? data.payDayDepositAmount : null,
-          linkedAccountId: data.payDayDepositEnabled && widget.defaultAccountId != null
+          cashFlowAmount: data.payDayDepositEnabled
+              ? data.payDayDepositAmount
+              : null,
+          linkedAccountId:
+              data.payDayDepositEnabled && widget.defaultAccountId != null
               ? widget.defaultAccountId
               : null,
           groupId: binderId, // Assign to the binder
@@ -468,10 +480,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           : 'Created ${widget.template.name} binder with $createdCount envelopes!';
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
       );
       widget.onComplete(createdCount, createdIds);
     }
@@ -514,7 +523,8 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
             onSkip: _skipCard,
             isFirst: index == 0,
             isLast: index == _selectedEnvelopes.length - 1,
-            onBackToSelection: widget.onBack, // Pass the callback to return to selection
+            onBackToSelection:
+                widget.onBack, // Pass the callback to return to selection
           );
         },
       ),
@@ -537,7 +547,8 @@ class _QuickEntryCard extends StatefulWidget {
   final VoidCallback onSkip;
   final bool isFirst;
   final bool isLast;
-  final VoidCallback? onBackToSelection; // Callback to return to envelope selection
+  final VoidCallback?
+  onBackToSelection; // Callback to return to envelope selection
 
   const _QuickEntryCard({
     required this.template,
@@ -579,10 +590,14 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     super.initState();
 
     _currentAmountController = TextEditingController(
-      text: widget.data.currentAmount > 0 ? widget.data.currentAmount.toString() : '',
+      text: widget.data.currentAmount > 0
+          ? widget.data.currentAmount.toString()
+          : '',
     );
     _targetAmountController = TextEditingController(
-      text: widget.data.targetAmount != null ? widget.data.targetAmount.toString() : '',
+      text: widget.data.targetAmount != null
+          ? widget.data.targetAmount.toString()
+          : '',
     );
     _recurringAmountController = TextEditingController(
       text: widget.template.defaultAmount?.toString() ?? '',
@@ -590,6 +605,32 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     _payDayAmountController = TextEditingController(
       text: widget.template.defaultAmount?.toString() ?? '',
     );
+
+    // Add focus listeners to show pro tips when fields receive focus
+    _currentAmountFocus.addListener(() {
+      if (_currentAmountFocus.hasFocus && !_showCurrentAmountTip) {
+        setState(() => _showCurrentAmountTip = true);
+      }
+    });
+    _targetAmountFocus.addListener(() {
+      if (_targetAmountFocus.hasFocus && !_showTargetAmountTip) {
+        setState(() => _showTargetAmountTip = true);
+      }
+    });
+    _recurringAmountFocus.addListener(() {
+      if (_recurringAmountFocus.hasFocus &&
+          !_showRecurringBillTip &&
+          widget.data.recurringBillEnabled) {
+        setState(() => _showRecurringBillTip = true);
+      }
+    });
+    _payDayAmountFocus.addListener(() {
+      if (_payDayAmountFocus.hasFocus &&
+          !_showPayDayTip &&
+          widget.data.payDayDepositEnabled) {
+        setState(() => _showPayDayTip = true);
+      }
+    });
   }
 
   Future<void> _showDayPicker(BuildContext context) async {
@@ -633,10 +674,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.4,
-              ),
+              style: const TextStyle(fontSize: 13, height: 1.4),
             ),
           ),
         ],
@@ -670,105 +708,124 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
           bottom: false,
           child: Column(
             children: [
-            // Fixed Header with title centered, skip and progress on right
-            Padding(
-              padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
-              child: Row(
-                children: [
-                  // Title with emoji (centered)
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(widget.template.emoji, style: const TextStyle(fontSize: 32)),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Text(
-                            widget.template.name,
-                            style: fontProvider.getTextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+              // Fixed Header with title centered, skip and progress on right
+              Padding(
+                padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
+                child: Row(
+                  children: [
+                    // Title with emoji (centered)
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            widget.template.emoji,
+                            style: const TextStyle(fontSize: 32),
+                          ),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              widget.template.name,
+                              style: fontProvider.getTextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Skip button and progress
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: widget.onSkip,
+                          child: const Text('Skip'),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${widget.currentIndex}/${widget.totalCount}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  // Skip button and progress
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: widget.onSkip,
-                        child: const Text('Skip'),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${widget.currentIndex}/${widget.totalCount}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Scrollable Form fields
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      // Current Amount
-                      SmartTextField(
-                        controller: _currentAmountController,
-                        focusNode: _currentAmountFocus,
-                        nextFocusNode: _targetAmountFocus,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          labelText: 'Current Amount (optional)',
-                          prefixText: localeProvider.currencySymbol,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          suffixIcon: Container(
-                            margin: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.calculate,
-                                color: theme.colorScheme.onPrimary,
+              // Scrollable Form fields
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Current Amount
+                            SmartTextField(
+                              controller: _currentAmountController,
+                              focusNode: _currentAmountFocus,
+                              nextFocusNode: _targetAmountFocus,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
                               ),
-                              onPressed: () async {
-                                final result = await CalculatorHelper.showCalculator(context);
-                                if (result != null && mounted) {
-                                  setState(() {
-                                    _currentAmountController.text = result;
-                                    widget.data.currentAmount = double.tryParse(result) ?? 0.0;
-                                  });
+                              decoration: InputDecoration(
+                                labelText: 'Current Amount (optional)',
+                                prefixText: localeProvider.currencySymbol,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                suffixIcon: Container(
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.calculate,
+                                      color: theme.colorScheme.onPrimary,
+                                    ),
+                                    onPressed: () async {
+                                      final result =
+                                          await CalculatorHelper.showCalculator(
+                                            context,
+                                          );
+                                      if (result != null && mounted) {
+                                        setState(() {
+                                          _currentAmountController.text = result;
+                                          widget.data.currentAmount =
+                                              double.tryParse(result) ?? 0.0;
+                                        });
+                                      }
+                                    },
+                                    tooltip: 'Open Calculator',
+                                  ),
+                                ),
+                              ),
+                              onTap: () {
+                                if (!_showCurrentAmountTip) {
+                                  setState(() => _showCurrentAmountTip = true);
                                 }
                               },
-                              tooltip: 'Open Calculator',
-                            ),
-                          ),
-                        ),
-                        onTap: () {
-                          if (!_showCurrentAmountTip) {
-                            setState(() => _showCurrentAmountTip = true);
-                          }
-                        },
-                        onChanged: (value) {
-                          widget.data.currentAmount = double.tryParse(value) ?? 0.0;
+                              onChanged: (value) {
+                          widget.data.currentAmount =
+                              double.tryParse(value) ?? 0.0;
                         },
                       ),
 
@@ -784,10 +841,14 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                         controller: _targetAmountController,
                         focusNode: _targetAmountFocus,
                         isLastField: !widget.data.recurringBillEnabled,
-                        nextFocusNode: widget.data.recurringBillEnabled ? _recurringAmountFocus : null,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        nextFocusNode: widget.data.recurringBillEnabled
+                            ? _recurringAmountFocus
+                            : null,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: InputDecoration(
-                          labelText: 'Target Amount (optional)',
+                          labelText: 'Horizon (optional)',
                           prefixText: localeProvider.currencySymbol,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -804,11 +865,16 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                 color: theme.colorScheme.onPrimary,
                               ),
                               onPressed: () async {
-                                final result = await CalculatorHelper.showCalculator(context);
+                                final result =
+                                    await CalculatorHelper.showCalculator(
+                                      context,
+                                    );
                                 if (result != null && mounted) {
                                   setState(() {
                                     _targetAmountController.text = result;
-                                    widget.data.targetAmount = double.tryParse(result);
+                                    widget.data.targetAmount = double.tryParse(
+                                      result,
+                                    );
                                   });
                                 }
                               },
@@ -828,7 +894,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (_showTargetAmountTip)
                         _buildProTip(
-                          'Set a savings goal for this envelope. When you reach 100%, it will show your celebration icon instead of the pie chart!',
+                          'Set a Horizon for this envelope. You can fine-tune this target later using the Horizon Navigator.',
                         ),
 
                       const SizedBox(height: 24),
@@ -860,15 +926,23 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                               // Scroll to bottom when expanded
                               if (enabled) {
-                                Future.delayed(const Duration(milliseconds: 300), () {
-                                  if (mounted && _scrollController.hasClients) {
-                                    _scrollController.animateTo(
-                                      _scrollController.position.maxScrollExtent,
-                                      duration: const Duration(milliseconds: 400),
-                                      curve: Curves.easeOut,
-                                    );
-                                  }
-                                });
+                                Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                  () {
+                                    if (mounted &&
+                                        _scrollController.hasClients) {
+                                      _scrollController.animateTo(
+                                        _scrollController
+                                            .position
+                                            .maxScrollExtent,
+                                        duration: const Duration(
+                                          milliseconds: 400,
+                                        ),
+                                        curve: Curves.easeOut,
+                                      );
+                                    }
+                                  },
+                                );
                               }
                             },
                           ),
@@ -877,7 +951,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 
                       if (widget.data.payDayDepositEnabled && _showPayDayTip)
                         _buildProTip(
-                          'Envelope Cash Flow fuels this Horizon automatically every pay day from your Master Cash Flow—the total amount you allocate to all envelopes. This is "The Engine" of your strategy. Tip: For monthly bills paid weekly/bi-weekly, divide the total by pay periods. E.g., ${localeProvider.currencySymbol}500 ÷ 4 = ${localeProvider.currencySymbol}125 per pay day. Use the calculator button to help!',
+                          'Cash Flow automatically deposits every pay day. This is "The Engine" of the time machine. How much of your Cash Flow fuels this Horizon?',
                         ),
 
                       if (widget.data.payDayDepositEnabled) ...[
@@ -887,10 +961,12 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           controller: _payDayAmountController,
                           focusNode: _payDayAmountFocus,
                           isLastField: true,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           decoration: InputDecoration(
                             labelText: 'Envelope Cash Flow Amount',
-                            hintText: 'How much of your Master Cash Flow fuels this Horizon?',
+
                             prefixText: localeProvider.currencySymbol,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -910,11 +986,15 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                   color: theme.colorScheme.onPrimary,
                                 ),
                                 onPressed: () async {
-                                  final result = await CalculatorHelper.showCalculator(context);
+                                  final result =
+                                      await CalculatorHelper.showCalculator(
+                                        context,
+                                      );
                                   if (result != null && mounted) {
                                     setState(() {
                                       _payDayAmountController.text = result;
-                                      widget.data.payDayDepositAmount = double.tryParse(result) ?? 0.0;
+                                      widget.data.payDayDepositAmount =
+                                          double.tryParse(result) ?? 0.0;
                                     });
                                   }
                                 },
@@ -923,7 +1003,8 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                             ),
                           ),
                           onChanged: (value) {
-                            widget.data.payDayDepositAmount = double.tryParse(value) ?? 0.0;
+                            widget.data.payDayDepositAmount =
+                                double.tryParse(value) ?? 0.0;
                           },
                         ),
 
@@ -932,7 +1013,8 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                              color: theme.colorScheme.primaryContainer
+                                  .withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -942,10 +1024,25 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                   size: 20,
                                   color: theme.colorScheme.primary,
                                 ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Will be linked to Main Account',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+
                       const SizedBox(height: 24),
                       const Divider(),
                       const SizedBox(height: 24),
-                      // Recurring Bill
+
+                      // Autopilot
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -968,30 +1065,42 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                 }
 
                                 // Auto-suggest for pay day deposit
-                                if (enabled && widget.data.recurringBillAmount > 0) {
-                                  widget.data.payDayDepositAmount = widget.data.recurringBillAmount;
-                                  _payDayAmountController.text = widget.data.recurringBillAmount.toString();
+                                if (enabled &&
+                                    widget.data.recurringBillAmount > 0) {
+                                  widget.data.payDayDepositAmount =
+                                      widget.data.recurringBillAmount;
+                                  _payDayAmountController.text = widget
+                                      .data
+                                      .recurringBillAmount
+                                      .toString();
                                 }
                               });
 
                               // Scroll down when expanded to show the fields
                               if (enabled) {
-                                Future.delayed(const Duration(milliseconds: 300), () {
-                                  if (mounted && _scrollController.hasClients) {
-                                    _scrollController.animateTo(
-                                      _scrollController.position.pixels + 200,
-                                      duration: const Duration(milliseconds: 400),
-                                      curve: Curves.easeOut,
-                                    );
-                                  }
-                                });
+                                Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                  () {
+                                    if (mounted &&
+                                        _scrollController.hasClients) {
+                                      _scrollController.animateTo(
+                                        _scrollController.position.pixels + 200,
+                                        duration: const Duration(
+                                          milliseconds: 400,
+                                        ),
+                                        curve: Curves.easeOut,
+                                      );
+                                    }
+                                  },
+                                );
                               }
                             },
                           ),
                         ],
                       ),
 
-                      if (widget.data.recurringBillEnabled && _showRecurringBillTip)
+                      if (widget.data.recurringBillEnabled &&
+                          _showRecurringBillTip)
                         _buildProTip(
                           'Autopilot handles external spending that crosses "The Wall"—money leaving your internal strategy to pay bills in the outside world. Set it up once and let it run automatically.',
                         ),
@@ -1003,7 +1112,9 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           controller: _recurringAmountController,
                           focusNode: _recurringAmountFocus,
                           isLastField: true,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           decoration: InputDecoration(
                             labelText: 'Amount',
                             prefixText: localeProvider.currencySymbol,
@@ -1022,16 +1133,21 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                   color: theme.colorScheme.onPrimary,
                                 ),
                                 onPressed: () async {
-                                  final result = await CalculatorHelper.showCalculator(context);
+                                  final result =
+                                      await CalculatorHelper.showCalculator(
+                                        context,
+                                      );
                                   if (result != null && mounted) {
                                     setState(() {
                                       _recurringAmountController.text = result;
-                                      final amount = double.tryParse(result) ?? 0.0;
+                                      final amount =
+                                          double.tryParse(result) ?? 0.0;
                                       widget.data.recurringBillAmount = amount;
 
                                       // Auto-update pay day deposit
                                       widget.data.payDayDepositAmount = amount;
-                                      _payDayAmountController.text = amount.toString();
+                                      _payDayAmountController.text = amount
+                                          .toString();
                                     });
                                   }
                                 },
@@ -1061,7 +1177,8 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           ),
                           items: Frequency.values.map((freq) {
                             final name = freq.toString().split('.').last;
-                            final capitalized = name[0].toUpperCase() + name.substring(1);
+                            final capitalized =
+                                name[0].toUpperCase() + name.substring(1);
                             return DropdownMenuItem(
                               value: freq,
                               child: Text(capitalized),
@@ -1110,19 +1227,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           },
                         ),
                       ],
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Will be linked to Main Account',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
 
                       // Navigation button (moved inside scroll view)
                       const SizedBox(height: 32),
@@ -1136,6 +1240,9 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       ),
                       const SizedBox(height: 24),
                     ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1165,11 +1272,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
 // DATA CLASSES
 // ============================================================================
 
-enum Frequency {
-  weekly,
-  monthly,
-  yearly,
-}
+enum Frequency { weekly, monthly, yearly }
 
 class EnvelopeData {
   final EnvelopeTemplate template;

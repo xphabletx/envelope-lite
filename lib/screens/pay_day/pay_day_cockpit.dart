@@ -238,18 +238,24 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
               height: 120,
               child: FittedBox(
                 fit: BoxFit.contain,
-                child: SmartTextField(
-                  controller: _amountController,
-                  focusNode: _amountFocus,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.center,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 56,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  onChanged: _onAmountChanged,
-                  decoration: InputDecoration(
+                child: IntrinsicWidth(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 200,
+                      maxWidth: 600,
+                    ),
+                    child: SmartTextField(
+                      controller: _amountController,
+                      focusNode: _amountFocus,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.center,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 56,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.secondary,
+                      ),
+                      onChanged: _onAmountChanged,
+                      decoration: InputDecoration(
                     prefixText: '${locale.currencySymbol} ',
                     prefixStyle: fontProvider.getTextStyle(
                       fontSize: 56,
@@ -297,6 +303,8 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                       extentOffset: _amountController.text.length,
                     );
                   },
+                    ),
+                  ),
                 ),
               ),
             ),
