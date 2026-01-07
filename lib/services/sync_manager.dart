@@ -307,6 +307,9 @@ class SyncManager {
 
       // SOLO MODE: Sync to private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
+        debugPrint('[SyncManager] 📤 Writing to: users/$userId/envelopes/${envelope.id}');
+        debugPrint('[SyncManager] 📦 Envelope data: name="${envelope.name}", amount=${envelope.currentAmount}');
+
         await _firestore
             .collection('users')
             .doc(userId)
@@ -317,6 +320,8 @@ class SyncManager {
         debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name} to private collection');
       } else {
         // WORKSPACE MODE: Sync to workspace collection
+        debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/envelopes/${envelope.id}');
+
         await _firestore
             .collection('workspaces')
             .doc(workspaceId)
@@ -328,6 +333,7 @@ class SyncManager {
       }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to sync envelope ${envelope.id}: $e');
+      debugPrint('[SyncManager] ✗ Error type: ${e.runtimeType}');
       // Could implement retry logic here
     }
   }
@@ -356,6 +362,9 @@ class SyncManager {
 
       // SOLO MODE: Sync to private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
+        debugPrint('[SyncManager] 📤 Writing to: users/$userId/transactions/${transaction.id}');
+        debugPrint('[SyncManager] 📦 Transaction data: type=${transaction.type}, amount=${transaction.amount}, envelopeId=${transaction.envelopeId}');
+
         await _firestore
             .collection('users')
             .doc(userId)
@@ -366,6 +375,8 @@ class SyncManager {
         debugPrint('[SyncManager] ✓ Synced transaction ${transaction.id} to private collection');
       } else {
         // WORKSPACE MODE: Sync to workspace transfers collection (partner transfers only)
+        debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/transfers/${transaction.id}');
+
         await _firestore
             .collection('workspaces')
             .doc(workspaceId)
@@ -377,6 +388,7 @@ class SyncManager {
       }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to sync transaction ${transaction.id}: $e');
+      debugPrint('[SyncManager] ✗ Error type: ${e.runtimeType}');
     }
   }
 
