@@ -139,24 +139,53 @@ class HorizonStrategyStats {
   String get strategyFeedback {
     // No Inflow/Outflow: Ready to launch state
     if (externalInflow == 0 && externalOutflow == 0) {
-      return "🚀 Ready to Launch: Your financial story begins with your first transaction.";
+      return "Ready to Launch: Your financial story begins with your first transaction.";
     }
 
     // No Inflow but has Outflow: High friction warning
     if (externalInflow == 0 && externalOutflow > 0) {
-      return "⚠️ High Friction: You have spending recorded with no income baseline.";
+      return "High Friction: You have spending recorded with no income baseline.";
     }
 
     // Has Inflow, assess efficiency
     if (efficiency > 0.2) {
-      return "🚀 High Efficiency: You're fueling your Horizons fast!";
+      return "High Efficiency: You're fueling your Horizons fast!";
     }
     if (efficiency > 0) {
-      return "✅ Stable: You're living within your means.";
+      return "Stable: You're living within your means.";
     }
 
     // Only show warning if we have inflow but spending exceeds it
-    return "⚠️ Caution: Spending is outpacing your Inflow.";
+    return "Caution: Spending is outpacing your Inflow.";
+  }
+
+  /// Get account-specific feedback based on assignment rate
+  String getAccountFeedback() {
+    // No income yet
+    if (externalInflow == 0) {
+      return "Ready to Start: Deposit income to begin assigning funds to envelopes.";
+    }
+
+    // Calculate assignment rate (how much income has been assigned)
+    final assignmentRate = liquidCash / externalInflow;
+
+    // High assignment rate (>90%) - most income assigned
+    if (assignmentRate > 0.9) {
+      return "Excellent Assignment: Almost all your income has a purpose!";
+    }
+
+    // Good assignment rate (>70%)
+    if (assignmentRate > 0.7) {
+      return "Strong Assignment: Most of your income is working for you.";
+    }
+
+    // Moderate assignment rate (>40%)
+    if (assignmentRate > 0.4) {
+      return "Room to Optimize: Consider assigning more income to envelopes.";
+    }
+
+    // Low assignment rate - lots of unassigned money
+    return "Unassigned Income: Give your remaining balance a job in your envelopes!";
   }
 
   /// Get feedback color based on efficiency
@@ -204,6 +233,21 @@ class HorizonStrategyStats {
       'spent': spentPercent,
       'horizons': horizonsPercent,
       'liquid': liquidPercent,
+    };
+  }
+
+  /// Calculate account-specific allocation (Distributed vs Unassigned)
+  Map<String, double> getAccountAllocation() {
+    if (externalInflow <= 0) {
+      return {'distributed': 0, 'unassigned': 0};
+    }
+
+    double distributedPercent = (liquidCash / externalInflow).clamp(0.0, 1.0);
+    double unassignedPercent = (1.0 - distributedPercent).clamp(0.0, 1.0);
+
+    return {
+      'distributed': distributedPercent,
+      'unassigned': unassignedPercent,
     };
   }
 }

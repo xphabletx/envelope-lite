@@ -45,6 +45,9 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   // Temporary allocations (edits for this pay day only)
   final Map<String, double> _tempAllocations = {}; // envelopeId -> amount
 
+  // Calculated boosts to pass to Phase 3 (both implicit and explicit)
+  final Map<String, double> _calculatedBoosts = {}; // envelopeId -> absolute boost amount
+
   // Collapsible binders
   final Set<String> _expandedBinderIds = {};
 
@@ -53,6 +56,10 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 
   // Animation state for waterfall (Phase 3)
   final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _envelopeKeys = {}; // index -> GlobalKey for auto-scroll
+  bool _hasScrolledToTopForGold = false; // Track if we've scrolled to top for gold stage
+  double _initialAccountBalance = 0.0; // Store the account balance before Phase 3 starts
+  bool _hasStartedExecution = false; // Track if we've started the stuffing execution to prevent duplicates
 
   @override
   void initState() {
@@ -81,6 +88,11 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     if (_provider.currentPhase == CockpitPhase.strategyReview) {
       _syncTempAllocations();
     }
+
+    // Reset execution flag when phase changes away from stuffingExecution
+    if (_provider.currentPhase != CockpitPhase.stuffingExecution) {
+      _hasStartedExecution = false;
+    }
   }
 
   @override
@@ -89,6 +101,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     _amountFocus.dispose();
     _debounceTimer?.cancel();
     _scrollController.dispose();
+    _envelopeKeys.clear();
     _provider.removeListener(_onProviderUpdate);
     _provider.dispose();
     super.dispose();
@@ -116,6 +129,19 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   // ============================================================================
   // CALCULATION HELPERS
   // ============================================================================
+
+  double _calculateRemainingSource(PayDayCockpitProvider provider) {
+    if (provider.isAccountMode && provider.defaultAccount != null) {
+      // In account mode: use visual animation progress for account deposit
+      final accountDepositProgress = provider.accountDepositProgress;
+      final envelopesStuffed = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
+      return provider.externalInflow - accountDepositProgress - envelopesStuffed;
+    } else {
+      // In non-account mode, source decreases as envelopes fill
+      final totalStuffedSoFar = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
+      return provider.externalInflow - totalStuffedSoFar;
+    }
+  }
 
   double _calculateTotalCashFlow() {
     return _tempAllocations.values.fold(0.0, (sum, amount) => sum + amount);
@@ -375,7 +401,11 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   Widget _buildEnvelopeCard(Envelope envelope, ThemeData theme, FontProvider fontProvider, NumberFormat currency, {bool inBinder = false}) {
     final isIncluded = _tempAllocations.containsKey(envelope.id);
     final currentAmount = _tempAllocations[envelope.id] ?? envelope.cashFlowAmount ?? 0.0;
-    final boostPercentage = _horizonBoosts[envelope.id] ?? 0.0;
+    final baselineAmount = envelope.cashFlowAmount ?? 0.0;
+    final isDecreasedAmount = currentAmount < baselineAmount;
+
+    // Disable boost slider if amount was decreased
+    final boostPercentage = isDecreasedAmount ? 0.0 : (_horizonBoosts[envelope.id] ?? 0.0);
     final hasBoost = boostPercentage > 0;
     final isExpanded = _expandedEnvelopeIds[envelope.id] ?? false;
 
@@ -564,7 +594,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                       children: [
                         Checkbox(
                           value: hasBoost,
-                          onChanged: (value) {
+                          onChanged: isDecreasedAmount ? null : (value) {
                             setState(() {
                               if (value == true) {
                                 _horizonBoosts[envelope.id] = 0.5; // Start at 50%
@@ -574,18 +604,34 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                             });
                           },
                         ),
-                        Text(
-                          '🚀 Boost',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '🚀 Boost',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDecreasedAmount ? Colors.grey : null,
+                                ),
+                              ),
+                              if (isDecreasedAmount)
+                                Text(
+                                  'Disabled (amount reduced)',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ],
                     ),
 
                     // Boost controls (when active)
-                    if (hasBoost) ...[
+                    if (hasBoost && !isDecreasedAmount) ...[
                       const SizedBox(height: 8),
                       _buildBoostSlider(envelope, theme, fontProvider, currency),
                     ],
@@ -786,6 +832,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currentAmount = _tempAllocations[envelope.id] ?? envelope.cashFlowAmount ?? 0.0;
+    final baselineAmount = envelope.cashFlowAmount ?? 0.0;
     final amountController = TextEditingController(text: currentAmount.toStringAsFixed(2));
 
     await showDialog(
@@ -793,6 +840,11 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final inputAmount = double.tryParse(amountController.text.replaceAll(',', '')) ?? 0.0;
+            final isIncrease = inputAmount > baselineAmount;
+            final isDecrease = inputAmount < baselineAmount;
+            final difference = inputAmount - baselineAmount;
+
             return AlertDialog(
               title: Row(
                 children: [
@@ -818,6 +870,35 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                     style: fontProvider.getTextStyle(
                       fontSize: 14,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Baseline reference
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Standard Cash Flow:',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        Text(
+                          currency.format(baselineAmount),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -851,7 +932,9 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                           onPressed: () async {
                             final result = await CalculatorHelper.showCalculator(context);
                             if (result != null) {
-                              amountController.text = result;
+                              setModalState(() {
+                                amountController.text = result;
+                              });
                             }
                           },
                           tooltip: 'Open Calculator',
@@ -865,8 +948,87 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                         ),
                       ),
                     ),
+                    onChanged: (value) {
+                      setModalState(() {}); // Rebuild to update boost indicator
+                    },
+                    onTap: () {
+                      // Select all text on tap
+                      amountController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: amountController.text.length,
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
+                  // Boost indicator (if increase)
+                  if (isIncrease) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.amber.shade50, Colors.orange.shade50],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('🚀', style: TextStyle(fontSize: 20)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'BOOST DETECTED',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                                Text(
+                                  'Extra ${currency.format(difference)} will fuel this envelope in the Gold Boost stage!',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 12,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  // Warning (if decrease)
+                  if (isDecrease) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber, size: 20, color: Colors.orange.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Reduced by ${currency.format(difference.abs())}. Boost slider disabled when reducing cash flow.',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   // Info note about temporary changes
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -1299,33 +1461,62 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
               // Fuel the Horizons button (at bottom of list)
               FilledButton(
                 onPressed: () {
-                  // Create a copy of temp allocations to avoid concurrent modification
-                  final allocationsToApply = Map<String, double>.from(_tempAllocations);
+                  // Calculate base allocations (what will be shown in silver stage)
+                  final baseAllocations = <String, double>{};
 
-                  // Apply boosts to the copy (individual boost per envelope)
-                  final boostsToApply = Map<String, double>.from(_horizonBoosts);
-                  for (final entry in boostsToApply.entries) {
+                  // Calculate boosts (both explicit slider boosts AND implicit increases)
+                  final calculatedBoosts = <String, double>{};
+
+                  for (final entry in _tempAllocations.entries) {
                     final envelopeId = entry.key;
-                    final percentage = entry.value;
-                    final currentAllocation = allocationsToApply[envelopeId] ?? 0.0;
-                    final boostAmount = currentAllocation * percentage;
+                    final tempAmount = entry.value;
+                    final envelope = _provider.allEnvelopes.firstWhere((e) => e.id == envelopeId);
+                    final baselineAmount = envelope.cashFlowAmount ?? 0.0;
 
-                    if (boostAmount > 0) {
-                      allocationsToApply[envelopeId] = currentAllocation + boostAmount;
+                    // Check if this is an increase (implicit boost)
+                    final implicitBoost = tempAmount > baselineAmount ? (tempAmount - baselineAmount) : 0.0;
+
+                    // Check if there's an explicit boost slider value
+                    final hasExplicitBoost = _horizonBoosts.containsKey(envelopeId) && (_horizonBoosts[envelopeId] ?? 0) > 0;
+
+                    if (implicitBoost > 0) {
+                      // Implicit boost: base is baseline, boost is the increase
+                      baseAllocations[envelopeId] = baselineAmount;
+                      calculatedBoosts[envelopeId] = implicitBoost;
+
+                      // If there's ALSO an explicit boost, add it on top
+                      if (hasExplicitBoost) {
+                        final sliderBoostPercentage = _horizonBoosts[envelopeId]!;
+                        final sliderBoostAmount = baselineAmount * sliderBoostPercentage;
+                        calculatedBoosts[envelopeId] = implicitBoost + sliderBoostAmount;
+                      }
+                    } else {
+                      // No implicit boost, use temp amount as base
+                      baseAllocations[envelopeId] = tempAmount;
+
+                      // Add explicit boost if exists
+                      if (hasExplicitBoost) {
+                        final sliderBoostPercentage = _horizonBoosts[envelopeId]!;
+                        final sliderBoostAmount = tempAmount * sliderBoostPercentage;
+                        calculatedBoosts[envelopeId] = sliderBoostAmount;
+                      }
                     }
                   }
 
-                  // First, clear all provider allocations to start fresh
+                  // Store calculated boosts for Phase 3 animation
+                  _calculatedBoosts.clear();
+                  _calculatedBoosts.addAll(calculatedBoosts);
+
+                  // Sync to provider: base + boost combined
                   final allEnvelopeIds = _provider.allEnvelopes.map((e) => e.id).toList();
                   for (final id in allEnvelopeIds) {
-                    if (_provider.allocations.containsKey(id) && !allocationsToApply.containsKey(id)) {
+                    if (!baseAllocations.containsKey(id)) {
                       _provider.updateEnvelopeAllocation(id, 0.0);
+                    } else {
+                      final base = baseAllocations[id] ?? 0.0;
+                      final boost = calculatedBoosts[id] ?? 0.0;
+                      _provider.updateEnvelopeAllocation(id, base + boost);
                     }
-                  }
-
-                  // Now sync allocations (with boosts) back to provider
-                  for (final entry in allocationsToApply.entries) {
-                    _provider.updateEnvelopeAllocation(entry.key, entry.value);
                   }
 
                   provider.proceedToStuffing();
@@ -1382,233 +1573,458 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     FontProvider fontProvider,
     PayDayCockpitProvider provider,
   ) {
-    // Start the execution immediately with boosts
+    // Start the execution immediately with boosts (only once!)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (provider.currentPhase == CockpitPhase.stuffingExecution &&
-          provider.stuffingProgress.isEmpty) {
-        // Calculate boost amounts
-        final boosts = <String, double>{};
-        for (final entry in _horizonBoosts.entries) {
-          final envelopeId = entry.key;
-          final percentage = entry.value;
-          if (percentage > 0 && _tempAllocations.containsKey(envelopeId)) {
-            final baseAmount = _tempAllocations[envelopeId]!;
-            boosts[envelopeId] = baseAmount * percentage;
-          }
+          !_hasStartedExecution) {
+        _hasStartedExecution = true;
+        // Store initial account balance before animation starts
+        if (provider.isAccountMode && provider.defaultAccount != null) {
+          _initialAccountBalance = provider.defaultAccount!.currentBalance;
         }
-
-        provider.executeStuffing(boosts: boosts);
+        // Use the pre-calculated boosts (both implicit and explicit)
+        provider.executeStuffing(boosts: _calculatedBoosts);
       }
     });
 
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Get all envelopes being stuffed
-    final envelopesBeingStuffed = provider.allocations.entries
-        .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
-        .toList();
+    // Get current stage
+    final isGoldStage = provider.stuffingStage == StuffingStage.gold;
+    final isComplete = provider.stuffingStage == StuffingStage.complete;
+
+    // Get envelopes to display based on stage
+    List<Envelope> envelopesBeingStuffed;
+
+    if (isGoldStage || isComplete) {
+      // GOLD STAGE or COMPLETE: Show ONLY boosted envelopes
+      // Keep showing gold list during complete stage to avoid visual glitch
+      envelopesBeingStuffed = provider.allocations.entries
+          .where((e) => _calculatedBoosts.containsKey(e.key) && (_calculatedBoosts[e.key] ?? 0) > 0)
+          .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
+          .toList();
+
+      // If no boosts, show all envelopes (fallback for complete stage)
+      if (envelopesBeingStuffed.isEmpty) {
+        envelopesBeingStuffed = provider.allocations.entries
+            .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
+            .toList();
+      }
+    } else {
+      // SILVER STAGE: Show all envelopes in normal order
+      envelopesBeingStuffed = provider.allocations.entries
+          .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
+          .toList();
+    }
 
     // Calculate overall progress (how many envelopes completed)
     final totalEnvelopes = envelopesBeingStuffed.length;
     final completedEnvelopes = provider.currentEnvelopeAnimationIndex + 1;
     final overallProgress = totalEnvelopes > 0 ? (completedEnvelopes / totalEnvelopes).clamp(0.0, 1.0) : 0.0;
 
-    // Get current stage
-    final isGoldStage = provider.stuffingStage == StuffingStage.gold;
+    // Scroll to top when gold stage starts
+    if (isGoldStage && !_hasScrolledToTopForGold && _scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeInOut,
+          );
+          _hasScrolledToTopForGold = true;
+        }
+      });
+    }
 
-    return Column(
-      children: [
-        // Glowing Sun Header
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 32),
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              colors: [
-                Colors.amber.shade100,
-                Colors.yellow.shade50,
-                theme.colorScheme.surface,
-              ],
+    // Reset scroll flag only when returning to silver stage (not during complete)
+    if (!isGoldStage && !isComplete) {
+      _hasScrolledToTopForGold = false;
+    }
+
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Column(
+          children: [
+            // Glowing Sun Header - Redesigned (smaller, shows decreasing amount)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  // Smaller custom painted sun that gets brighter
+                  _GlowingSun(brightness: overallProgress, size: 60),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Source of Income',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // AnimatedSwitcher for smooth number updates (decreasing amount)
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+                    child: Text(
+                      currency.format(_calculateRemainingSource(provider)),
+                      key: ValueKey<double>(_calculateRemainingSource(provider)),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Column(
-            children: [
-              // Custom painted sun that gets brighter
-              _GlowingSun(brightness: overallProgress),
-              const SizedBox(height: 16),
-              Text(
-                provider.isAccountMode
-                    ? provider.defaultAccount?.name ?? 'Account'
-                    : 'Horizon Pool',
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amber.shade900,
+
+            // Account tier (if hasAccount)
+            if (provider.isAccountMode && provider.defaultAccount != null) ...[
+              // Waterfall connector from sun to account
+              Center(
+                child: Container(
+                  height: 40,
+                  width: 4,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.amber.shade300.withValues(alpha: overallProgress),
+                        Colors.amber.shade500.withValues(alpha: overallProgress * 0.5),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                currency.format(provider.externalInflow),
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+
+              // Account container - Redesigned to look like account cards with increasing balance
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Account icon from provider
+                    provider.defaultAccount!.getIconWidget(theme, size: 32),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          provider.defaultAccount!.name,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // AnimatedSwitcher for smooth number updates (increasing balance)
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return FadeTransition(opacity: animation, child: child);
+                          },
+                          child: Text(
+                            currency.format(_initialAccountBalance + provider.accountDepositProgress),
+                            key: ValueKey<double>(_initialAccountBalance + provider.accountDepositProgress),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Waterfall connector from account to envelopes
+              Center(
+                child: Container(
+                  height: 40,
+                  width: 4,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.blue.shade400.withValues(alpha: overallProgress),
+                        Colors.amber.shade500.withValues(alpha: overallProgress * 0.5),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ] else ...[
+              // Direct waterfall from source to envelopes (no account)
+              Center(
+                child: Container(
+                  height: 40,
+                  width: 4,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.amber.shade300.withValues(alpha: overallProgress),
+                        Colors.amber.shade500.withValues(alpha: overallProgress * 0.5),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
-          ),
-        ),
 
-        // Stage indicator
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            isGoldStage ? '✨ Gold Boost Active' : '⚡ Filling Envelopes',
-            style: fontProvider.getTextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: isGoldStage ? Colors.amber.shade700 : theme.colorScheme.primary,
-            ),
-          ),
-        ),
-
-        // Envelope list with waterfall animation
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: envelopesBeingStuffed.length,
-            itemBuilder: (context, index) {
-              final envelope = envelopesBeingStuffed[index];
-              final stuffedAmount = provider.stuffingProgress[envelope.id] ?? 0.0;
-              final targetAmount = provider.allocations[envelope.id] ?? 0.0;
-              final isActive = provider.currentEnvelopeAnimationIndex == index;
-              final fillProgress = targetAmount > 0 ? (stuffedAmount / targetAmount).clamp(0.0, 1.0) : 0.0;
-              final horizonProgress = envelope.targetAmount != null && envelope.targetAmount! > 0
-                  ? ((envelope.currentAmount + stuffedAmount) / envelope.targetAmount!).clamp(0.0, 1.0)
-                  : 0.0;
-
-              // Check if this envelope is getting gold boost
-              final hasBoost = _horizonBoosts.containsKey(envelope.id) && (_horizonBoosts[envelope.id] ?? 0) > 0;
-              final isGoldActive = isGoldStage && isActive && hasBoost;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isGoldActive
-                      ? Colors.amber.shade100.withValues(alpha: 0.5)
-                      : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isActive
-                        ? (isGoldStage ? Colors.amber.shade700 : theme.colorScheme.primary)
-                        : Colors.grey.shade300,
-                    width: isActive ? 3 : 1,
-                  ),
-                  boxShadow: isGoldActive
-                      ? [
-                          BoxShadow(
-                            color: Colors.amber.shade400.withValues(alpha: 0.6),
-                            blurRadius: 20,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : null,
+            // Stage indicator
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                isGoldStage ? '✨ Gold Boost Active' : '⚡ Filling Envelopes',
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: isGoldStage ? Colors.amber.shade700 : theme.colorScheme.primary,
                 ),
-                child: Row(
-                  children: [
-                    envelope.getIconWidget(theme, size: 40),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            envelope.name,
-                            style: fontProvider.getTextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          // Animated stuffing progress bar with light gradient
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Stack(
-                              children: [
-                                LinearProgressIndicator(
-                                  value: fillProgress,
-                                  minHeight: 12,
-                                  backgroundColor: Colors.grey.shade200,
-                                  valueColor: const AlwaysStoppedAnimation(Colors.transparent),
+              ),
+            ),
+
+            // All envelopes in a column with padding
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                // Generate all envelope widgets
+                ...List.generate(envelopesBeingStuffed.length, (index) {
+                  final envelope = envelopesBeingStuffed[index];
+                  final stuffedAmount = provider.stuffingProgress[envelope.id] ?? 0.0;
+                  final targetAmount = provider.allocations[envelope.id] ?? 0.0;
+                  final isActive = provider.currentEnvelopeAnimationIndex == index;
+                  final fillProgress = targetAmount > 0 ? (stuffedAmount / targetAmount).clamp(0.0, 1.0) : 0.0;
+                  final horizonProgress = envelope.targetAmount != null && envelope.targetAmount! > 0
+                      ? ((envelope.currentAmount + stuffedAmount) / envelope.targetAmount!).clamp(0.0, 1.0)
+                      : 0.0;
+
+                  // Check if this envelope is getting gold boost (from calculated boosts)
+                  final hasBoost = _calculatedBoosts.containsKey(envelope.id) && (_calculatedBoosts[envelope.id] ?? 0) > 0;
+                  final isGoldActive = isGoldStage && isActive && hasBoost;
+
+                  // Determine if this envelope has completed or is ahead of current animation
+                  final isCompleted = index < provider.currentEnvelopeAnimationIndex;
+                  final isPending = index > provider.currentEnvelopeAnimationIndex;
+
+                  // Create or get GlobalKey for this envelope
+                  _envelopeKeys.putIfAbsent(index, () => GlobalKey());
+
+                  // Auto-scroll to active envelope
+                  if (isActive) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final keyContext = _envelopeKeys[index]?.currentContext;
+                      if (keyContext != null && _scrollController.hasClients) {
+                        Scrollable.ensureVisible(
+                          keyContext,
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeInOut,
+                          alignment: 0.3, // Position at 30% from top of viewport
+                        );
+                      }
+                    });
+                  }
+
+                  return AnimatedContainer(
+                    key: _envelopeKeys[index],
+                    duration: const Duration(milliseconds: 400),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: isGoldActive
+                          ? LinearGradient(
+                              colors: [
+                                Colors.amber.shade50,
+                                Colors.orange.shade100,
+                              ],
+                            )
+                          : (isActive && !isGoldStage
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.blue.shade50,
+                                    Colors.cyan.shade50,
+                                  ],
+                                )
+                              : null),
+                      color: isGoldActive || (isActive && !isGoldStage)
+                          ? null
+                          : (isCompleted
+                              ? theme.colorScheme.surfaceContainerHigh
+                              : (isPending
+                                  ? theme.colorScheme.surface.withValues(alpha: 0.5)
+                                  : theme.colorScheme.surfaceContainerHighest)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isGoldActive
+                            ? Colors.amber.shade700
+                            : (isActive && !isGoldStage
+                                ? Colors.blue.shade600
+                                : (isCompleted
+                                    ? Colors.green.shade400
+                                    : Colors.grey.shade300)),
+                        width: isActive ? 3 : 1,
+                      ),
+                      boxShadow: isGoldActive
+                          ? [
+                              BoxShadow(
+                                color: Colors.amber.shade400.withValues(alpha: 0.6),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : (isActive && !isGoldStage
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.blue.shade400.withValues(alpha: 0.4),
+                                    blurRadius: 15,
+                                    spreadRadius: 1,
+                                  ),
+                                ]
+                              : null),
+                    ),
+                    child: Row(
+                      children: [
+                        envelope.getIconWidget(theme, size: 40),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                envelope.name,
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                // Light-filled progress
-                                FractionallySizedBox(
-                                  widthFactor: fillProgress,
-                                  child: Container(
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: isGoldActive
-                                            ? [
-                                                Colors.amber.shade200,
-                                                Colors.amber.shade400,
-                                                Colors.orange.shade500,
-                                              ]
-                                            : [
-                                                Colors.amber.shade300,
-                                                Colors.yellow.shade400,
-                                                Colors.amber.shade500,
+                              ),
+                              const SizedBox(height: 8),
+                              // Animated stuffing progress bar with gradual filling animation
+                              TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                                tween: Tween<double>(
+                                  begin: 0.0,
+                                  end: fillProgress,
+                                ),
+                                builder: (context, animatedProgress, child) {
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Stack(
+                                      children: [
+                                        LinearProgressIndicator(
+                                          value: animatedProgress,
+                                          minHeight: 12,
+                                          backgroundColor: Colors.grey.shade200,
+                                          valueColor: const AlwaysStoppedAnimation(Colors.transparent),
+                                        ),
+                                        // Light-filled progress
+                                        FractionallySizedBox(
+                                          widthFactor: animatedProgress,
+                                          child: Container(
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: isGoldActive
+                                                    ? [
+                                                        Colors.amber.shade200,
+                                                        Colors.amber.shade400,
+                                                        Colors.orange.shade500,
+                                                      ]
+                                                    : [
+                                                        Colors.amber.shade300,
+                                                        Colors.yellow.shade400,
+                                                        Colors.amber.shade500,
+                                                      ],
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: isGoldActive
+                                                      ? Colors.amber.withValues(alpha: 0.8)
+                                                      : Colors.amber.withValues(alpha: 0.5),
+                                                  blurRadius: isGoldActive ? 12 : 8,
+                                                ),
                                               ],
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: isGoldActive
-                                              ? Colors.amber.withValues(alpha: 0.8)
-                                              : Colors.amber.withValues(alpha: 0.5),
-                                          blurRadius: isGoldActive ? 12 : 8,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
+                                  );
+                                },
+                              ),
+                              if (isGoldActive)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    '✨ GOLD BOOST',
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber.shade900,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          if (isGoldActive)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                '✨ GOLD BOOST',
+                              const SizedBox(height: 4),
+                              Text(
+                                '${currency.format(stuffedAmount)} / ${currency.format(targetAmount)}',
                                 style: fontProvider.getTextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.amber.shade900,
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                                 ),
                               ),
-                            ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${currency.format(stuffedAmount)} / ${currency.format(targetAmount)}',
-                            style: fontProvider.getTextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        if (envelope.targetAmount != null)
+                          AnimatedOpacity(
+                            opacity: isActive ? 1.0 : (isCompleted ? 0.9 : 0.6),
+                            duration: const Duration(milliseconds: 300),
+                            child: Transform.scale(
+                              scale: isActive ? 1.1 : 1.0,
+                              child: TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeInOut,
+                                tween: Tween<double>(
+                                  begin: 0.0,
+                                  end: horizonProgress,
+                                ),
+                                builder: (context, animatedHorizonProgress, child) {
+                                  return HorizonProgress(percentage: animatedHorizonProgress, size: 50);
+                                },
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    if (envelope.targetAmount != null)
-                      HorizonProgress(percentage: horizonProgress, size: 50),
-                  ],
-                ),
-              );
-            },
+                  );
+                }),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1624,103 +2040,281 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
+    // Calculate mission statistics
+    final totalDistributed = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
+    final envelopesFunded = provider.stuffingProgress.length;
+    final totalDaysSaved = provider.topHorizons.fold(0, (sum, impact) => sum + impact.daysSaved);
+
+    // Count envelopes with horizons
+    final envelopesWithHorizons = provider.stuffingProgress.keys.where((id) {
+      final env = provider.allEnvelopes.firstWhere((e) => e.id == id);
+      return env.targetAmount != null;
+    }).length;
+
+    // Calculate average days saved per horizon
+    final avgDaysSaved = envelopesWithHorizons > 0
+        ? (totalDaysSaved / envelopesWithHorizons).round()
+        : 0;
+
+    // Count how many envelopes got boost (from calculated boosts)
+    final boostedCount = _calculatedBoosts.entries.where((e) => e.value > 0).length;
+
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Time Machine Icon
+            const SizedBox(height: 20),
+
+            // Mission Accomplished Header
             Container(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    theme.colorScheme.primary.withValues(alpha: 0.2),
-                    theme.colorScheme.secondary.withValues(alpha: 0.2),
+                    Colors.green.shade50,
+                    Colors.green.shade100,
                   ],
                 ),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.green.shade400, width: 2),
               ),
-              child: const Text(
-                '⏰',
-                style: TextStyle(fontSize: 80),
+              child: Column(
+                children: [
+                  const Text(
+                    '🎯',
+                    style: TextStyle(fontSize: 60),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'MISSION ACCOMPLISHED',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade900,
+                    ).copyWith(letterSpacing: 1.2),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Future Successfully Recalibrated',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      color: Colors.green.shade700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 32),
 
-            // Success message
+            // Key Statistics Grid
             Text(
-              'Future Recalibrated',
+              'Mission Statistics',
               style: fontProvider.getTextStyle(
-                fontSize: 36,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
-              textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 16),
 
-            Text(
-              'Your Horizons are now closer',
-              style: fontProvider.getTextStyle(
-                fontSize: 20,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
+            // 2x2 Grid of stats
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    '💰',
+                    'Total Distributed',
+                    currency.format(totalDistributed),
+                    Colors.green,
+                    theme,
+                    fontProvider,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    '📨',
+                    'Envelopes Funded',
+                    '$envelopesFunded',
+                    Colors.blue,
+                    theme,
+                    fontProvider,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    '🔥',
+                    'Total Days Saved',
+                    '$totalDaysSaved days',
+                    Colors.orange,
+                    theme,
+                    fontProvider,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    '🚀',
+                    'Boosted Horizons',
+                    '$boostedCount',
+                    Colors.amber,
+                    theme,
+                    fontProvider,
+                  ),
+                ),
+              ],
             ),
 
-            const SizedBox(height: 40),
+            if (avgDaysSaved > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.purple.shade50, Colors.indigo.shade50],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.purple.shade300),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('⚡', style: TextStyle(fontSize: 24)),
+                    const SizedBox(width: 12),
+                    Column(
+                      children: [
+                        Text(
+                          'Average Acceleration',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 12,
+                            color: Colors.purple.shade700,
+                          ),
+                        ),
+                        Text(
+                          '$avgDaysSaved days per horizon',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 32),
 
             // Top 3 horizons moved forward
             if (provider.topHorizons.isNotEmpty) ...[
               Text(
-                'Top Horizons Advanced',
+                'Top Horizon Impacts',
                 style: fontProvider.getTextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 16),
-              ...provider.topHorizons.map((impact) => _buildHorizonImpactCard(
-                theme,
-                fontProvider,
-                currency,
-                impact,
-              )),
+              ...provider.topHorizons.asMap().entries.map((entry) {
+                final index = entry.key;
+                final impact = entry.value;
+                return _buildHorizonImpactCard(
+                  theme,
+                  fontProvider,
+                  currency,
+                  impact,
+                  rank: index + 1,
+                );
+              }),
             ],
 
-            const Spacer(),
+            const SizedBox(height: 32),
 
             // Done button
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: theme.colorScheme.secondary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.secondary,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text(
-                  'Done!',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+              ),
+              child: Text(
+                'Return to Base',
+                style: fontProvider.getTextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ),
+
+            const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+    String emoji,
+    String label,
+    String value,
+    MaterialColor color,
+    ThemeData theme,
+    FontProvider fontProvider,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color.shade50,
+            color.shade100,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.shade300),
+      ),
+      child: Column(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 32)),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: fontProvider.getTextStyle(
+              fontSize: 11,
+              color: color.shade700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: fontProvider.getTextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color.shade900,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -1729,20 +2323,57 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     ThemeData theme,
     FontProvider fontProvider,
     NumberFormat currency,
-    EnvelopeHorizonImpact impact,
-  ) {
+    EnvelopeHorizonImpact impact, {
+    int? rank,
+  }) {
+    // Medal colors based on rank
+    Color? medalColor;
+    String? medal;
+    if (rank != null) {
+      switch (rank) {
+        case 1:
+          medalColor = Colors.amber.shade700;
+          medal = '🥇';
+          break;
+        case 2:
+          medalColor = Colors.grey.shade600;
+          medal = '🥈';
+          break;
+        case 3:
+          medalColor = Colors.brown.shade600;
+          medal = '🥉';
+          break;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        gradient: rank != null && rank <= 3
+            ? LinearGradient(
+                colors: [
+                  medalColor?.withValues(alpha: 0.1) ?? theme.colorScheme.surfaceContainerHighest,
+                  theme.colorScheme.surfaceContainerHighest,
+                ],
+              )
+            : null,
+        color: rank == null ? theme.colorScheme.surfaceContainerHighest : null,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+          color: medalColor ?? theme.colorScheme.primary.withValues(alpha: 0.3),
+          width: rank != null && rank <= 3 ? 2 : 1,
         ),
       ),
       child: Row(
         children: [
+          if (medal != null) ...[
+            Text(
+              medal,
+              style: const TextStyle(fontSize: 28),
+            ),
+            const SizedBox(width: 8),
+          ],
           Text(
             impact.envelope.emoji ?? '📨',
             style: const TextStyle(fontSize: 32),
@@ -1759,23 +2390,29 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  '🔥 ${impact.daysSaved} days closer',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.orange.shade700,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      '🔥 ${impact.daysSaved} days closer',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      currency.format(impact.stuffedAmount),
+                      style: fontProvider.getTextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ),
-          Text(
-            currency.format(impact.stuffedAmount),
-            style: fontProvider.getTextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
             ),
           ),
         ],
@@ -1791,8 +2428,9 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 /// Animated glowing sun that gets brighter as stuffing progresses
 class _GlowingSun extends StatefulWidget {
   final double brightness; // 0.0 to 1.0
+  final double size; // Size of the sun
 
-  const _GlowingSun({required this.brightness});
+  const _GlowingSun({required this.brightness, this.size = 120});
 
   @override
   State<_GlowingSun> createState() => _GlowingSunState();
@@ -1825,7 +2463,7 @@ class _GlowingSunState extends State<_GlowingSun> with SingleTickerProviderState
         final brightness = widget.brightness.clamp(0.3, 1.0); // Minimum 30% brightness
 
         return CustomPaint(
-          size: const Size(120, 120),
+          size: Size(widget.size, widget.size),
           painter: _SunPainter(
             brightness: brightness,
             pulse: pulseValue,

@@ -329,7 +329,28 @@ class TransactionListItem extends StatelessWidget {
         }
 
       case TransactionType.transfer:
-        // Determine target name
+        // Check for Pay Day Cash Flow transfers
+        if (t.description == 'Cash Flow') {
+          // Pay Day Cash Flow - show in purple like the cash flow card
+          String targetName = t.targetEnvelopeName ?? 'Unknown';
+          String sourceTransferName = t.sourceEnvelopeName ?? 'Unknown';
+          bool isOutgoing = t.transferDirection == TransferDirection.out_;
+
+          return TransactionDisplayInfo(
+            type: TransactionDisplayType.cashFlow,
+            actionText: isOutgoing
+                ? 'Cash Flow to $targetName'
+                : 'Cash Flow from $sourceTransferName',
+            icon: icon,
+            arrowIcon: Icons.arrow_upward,
+            amountColor: Colors.purple,
+            amountPrefix: '+',
+            sourceName: sourceName,
+            isEnvelope: isEnvelope,
+          );
+        }
+
+        // Regular transfers
         String targetName = t.targetEnvelopeName ?? 'Unknown';
         String sourceTransferName = t.sourceEnvelopeName ?? 'Unknown';
 

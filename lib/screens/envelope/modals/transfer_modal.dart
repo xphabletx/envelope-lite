@@ -385,7 +385,7 @@ class _TransferModalState extends State<TransferModal> {
               return DropdownButtonFormField<String>(
                 key: ValueKey(_selectedTargetId),
                 decoration: InputDecoration(
-                  labelText: 'To Envelope or Account',
+                  labelText: 'Transfer To',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

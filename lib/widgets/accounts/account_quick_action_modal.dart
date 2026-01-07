@@ -394,7 +394,7 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
               key: ValueKey(_selectedTargetId),
               initialValue: _selectedTargetId,
               decoration: InputDecoration(
-                labelText: 'To Account or Envelope',
+                labelText: 'Transfer To',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

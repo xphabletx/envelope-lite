@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart'; // NEW IMPORT
 import '../models/envelope.dart';
+import '../models/account.dart';
 import '../models/transaction.dart';
 import '../services/envelope_repo.dart';
+import '../services/account_repo.dart';
 import '../services/workspace_helper.dart';
 import '../providers/font_provider.dart'; // NEW IMPORT
 import '../providers/locale_provider.dart';
@@ -15,6 +17,25 @@ import '../utils/calculator_helper.dart';
 import '../widgets/partner_badge.dart';
 import '../utils/responsive_helper.dart';
 import '../widgets/common/smart_text_field.dart';
+
+// Helper class to represent transfer destinations (envelope or account)
+class _TransferDestination {
+  final String id;
+  final String name;
+  final double balance;
+  final bool isAccount;
+  final Widget icon;
+  final String? userId; // For partner badges
+
+  _TransferDestination({
+    required this.id,
+    required this.name,
+    required this.balance,
+    required this.isAccount,
+    required this.icon,
+    this.userId,
+  });
+}
 
 class QuickActionModal extends StatefulWidget {
   const QuickActionModal({
@@ -41,12 +62,73 @@ class _QuickActionModalState extends State<QuickActionModal> {
   DateTime _selectedDate = DateTime.now();
   String? _selectedTargetId; // For transfers only
   bool _isLoading = false;
+  List<Account> _availableAccounts = [];
+  late AccountRepo _accountRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    _accountRepo = AccountRepo(widget.repo);
+    _loadAccounts();
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     _descController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAccounts() async {
+    // Load accounts for transfer destinations
+    final accountSubscription = _accountRepo.accountsStream().listen((accounts) {
+      if (mounted) {
+        setState(() {
+          _availableAccounts = accounts;
+        });
+      }
+    });
+
+    // Clean up subscription
+    Future.delayed(const Duration(seconds: 1), () {
+      accountSubscription.cancel();
+    });
+  }
+
+  // Get combined list of transfer destinations (envelopes + accounts), alphabetized
+  List<_TransferDestination> _getTransferDestinations(ThemeData theme) {
+    final destinations = <_TransferDestination>[];
+
+    // Add envelopes (excluding source envelope)
+    for (final envelope in widget.allEnvelopes) {
+      if (envelope.id != widget.envelope.id) {
+        destinations.add(_TransferDestination(
+          id: 'envelope_${envelope.id}',
+          name: envelope.name,
+          balance: envelope.currentAmount,
+          isAccount: false,
+          icon: envelope.getIconWidget(theme, size: 20),
+          userId: envelope.userId,
+        ));
+      }
+    }
+
+    // Add accounts
+    for (final account in _availableAccounts) {
+      destinations.add(_TransferDestination(
+        id: 'account_${account.id}',
+        name: account.name,
+        balance: account.currentBalance,
+        isAccount: true,
+        icon: account.getIconWidget(theme, size: 20),
+        userId: account.userId,
+      ));
+    }
+
+    // Sort alphabetically by name
+    destinations.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    return destinations;
   }
 
   void _showCalculator() async {
@@ -108,7 +190,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
     if (widget.type == TransactionType.transfer && _selectedTargetId == null) {
       _showErrorDialog(
         'No Destination Selected',
-        'Please select a destination envelope for the transfer.',
+        'Please select a destination for the transfer.',
       );
       return;
     }
@@ -131,13 +213,36 @@ class _QuickActionModalState extends State<QuickActionModal> {
           date: _selectedDate,
         );
       } else if (widget.type == TransactionType.transfer) {
-        await widget.repo.transfer(
-          fromEnvelopeId: widget.envelope.id,
-          toEnvelopeId: _selectedTargetId!,
-          amount: amount,
-          description: _descController.text.trim(),
-          date: _selectedDate,
-        );
+        // Determine if transferring to envelope or account
+        if (_selectedTargetId!.startsWith('envelope_')) {
+          // Envelope-to-envelope transfer
+          final targetEnvelopeId = _selectedTargetId!.substring('envelope_'.length);
+          await widget.repo.transfer(
+            fromEnvelopeId: widget.envelope.id,
+            toEnvelopeId: targetEnvelopeId,
+            amount: amount,
+            description: _descController.text.trim(),
+            date: _selectedDate,
+          );
+        } else if (_selectedTargetId!.startsWith('account_')) {
+          // Envelope-to-account transfer
+          final targetAccountId = _selectedTargetId!.substring('account_'.length);
+
+          // Withdraw from envelope
+          await widget.repo.withdraw(
+            envelopeId: widget.envelope.id,
+            amount: amount,
+            description: _descController.text.trim(),
+            date: _selectedDate,
+          );
+
+          // Deposit to account
+          await _accountRepo.deposit(
+            targetAccountId,
+            amount,
+            description: _descController.text.trim(),
+          );
+        }
       }
 
       if (mounted) {
@@ -306,61 +411,73 @@ class _QuickActionModalState extends State<QuickActionModal> {
               key: ValueKey(_selectedTargetId),
               initialValue: _selectedTargetId,
               decoration: InputDecoration(
-                labelText: 'To Envelope',
+                labelText: 'Transfer To',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              items: widget.allEnvelopes
-                  .where((e) => e.id != widget.envelope.id)
-                  .map(
-                    (e) {
-                      final isPartner = e.userId != widget.repo.currentUserId;
-                      return DropdownMenuItem(
-                        value: e.id,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            e.getIconWidget(Theme.of(context), size: 20),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                e.name,
-                                overflow: TextOverflow.ellipsis,
-                                // UPDATED: FontProvider
-                                style: fontProvider.getTextStyle(fontSize: 16),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Balance
-                            Text(
-                              '${locale.currencySymbol}${e.currentAmount.toStringAsFixed(2)}',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 14,
-                                color: theme.colorScheme.onSurface.withAlpha(153),
-                              ),
-                            ),
-                            if (isPartner) ...[
-                              const SizedBox(width: 8),
-                              FutureBuilder<String>(
-                                future: WorkspaceHelper.getUserDisplayName(
-                                  e.userId,
-                                  widget.repo.currentUserId,
-                                ),
-                                builder: (context, snapshot) {
-                                  return PartnerBadge(
-                                    partnerName: snapshot.data ?? 'Partner',
-                                    size: PartnerBadgeSize.small,
-                                  );
-                                },
-                              ),
-                            ],
-                          ],
+              items: _getTransferDestinations(theme).map((dest) {
+                final isPartner = dest.userId != null && dest.userId != widget.repo.currentUserId;
+                return DropdownMenuItem(
+                  value: dest.id,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      dest.icon,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          dest.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: fontProvider.getTextStyle(fontSize: 16),
                         ),
-                      );
-                    },
-                  )
-                  .toList(),
+                      ),
+                      const SizedBox(width: 8),
+                      // Balance
+                      Text(
+                        '${locale.currencySymbol}${dest.balance.toStringAsFixed(2)}',
+                        style: fontProvider.getTextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurface.withAlpha(153),
+                        ),
+                      ),
+                      if (dest.isAccount) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Account',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 10,
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (isPartner) ...[
+                        const SizedBox(width: 8),
+                        FutureBuilder<String>(
+                          future: WorkspaceHelper.getUserDisplayName(
+                            dest.userId!,
+                            widget.repo.currentUserId,
+                          ),
+                          builder: (context, snapshot) {
+                            return PartnerBadge(
+                              partnerName: snapshot.data ?? 'Partner',
+                              size: PartnerBadgeSize.small,
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
               onChanged: (v) => setState(() => _selectedTargetId = v),
             ),
           ],

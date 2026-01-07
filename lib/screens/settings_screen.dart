@@ -21,7 +21,11 @@ import '../services/account_repo.dart';
 import '../services/bug_report_service.dart';
 import '../services/subscription_service.dart';
 import '../services/app_update_service.dart';
+import '../services/hive_service.dart';
 import '../providers/workspace_provider.dart';
+import '../models/envelope.dart';
+import '../models/account.dart';
+import '../models/transaction.dart' as models;
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
@@ -507,6 +511,12 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
+                  _SettingsTile(
+                    title: 'Reset Transactions & Balances',
+                    subtitle: 'Clear all transactions and reset envelope balances to zero',
+                    leading: const Icon(Icons.restore_outlined, color: Colors.red),
+                    onTap: () => _resetTransactionsAndBalances(context),
                   ),
                 ],
               ),
@@ -1152,6 +1162,113 @@ class SettingsScreen extends StatelessWidget {
 
   // Removed - DataCleanupService no longer exists
   // Future<void> _cleanupOrphanedData(BuildContext context) async { ... }
+
+  Future<void> _resetTransactionsAndBalances(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Reset Transactions & Balances?'),
+        content: const Text(
+          'This will:\n'
+          '• Clear ALL transaction history\n'
+          '• Reset ALL envelope balances to \$0.00\n'
+          '• Reset ALL account balances to \$0.00\n'
+          '\n'
+          'This will NOT affect:\n'
+          '• Cash flow amounts\n'
+          '• Autopilot settings\n'
+          '• Envelope/account structure\n'
+          '\n'
+          'This action cannot be undone!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+            ),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Access Hive boxes directly to reset balances
+      final envelopeBox = HiveService.getBox<Envelope>('envelopes');
+      final accountBox = HiveService.getBox<Account>('accounts');
+      final transactionBox = HiveService.getBox<models.Transaction>('transactions');
+
+      // Reset all envelope balances
+      final envelopes = repo.getEnvelopesSync();
+      for (final envelope in envelopes) {
+        final resetEnvelope = envelope.copyWith(currentAmount: 0.0);
+        await envelopeBox.put(envelope.id, resetEnvelope);
+      }
+
+      // Reset all account balances
+      final accountRepo = AccountRepo(repo);
+      final accounts = accountRepo.getAccountsSync();
+      for (final account in accounts) {
+        final resetAccount = account.copyWith(currentBalance: 0.0);
+        await accountBox.put(account.id, resetAccount);
+      }
+
+      // Clear all transactions from Hive
+      await transactionBox.clear();
+
+      // Clear all transactions from Firestore
+      final transactionsSnapshot = await repo.db
+          .collection('users')
+          .doc(repo.currentUserId)
+          .collection('transactions')
+          .get();
+
+      // Delete all transaction documents
+      for (final doc in transactionsSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Dismiss loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ All transactions and balances have been reset'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Dismiss loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reset failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }
 
 class _SettingsSection extends StatelessWidget {

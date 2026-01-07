@@ -81,12 +81,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
   final Map<String, double> _stuffingProgress = {}; // envelopeId -> stuffed amount
   int _currentEnvelopeAnimationIndex = -1; // Current envelope being animated
   StuffingStage _stuffingStage = StuffingStage.silver;
+  double _accountDepositProgress = 0.0; // Track visual progress of account deposit animation
 
   int get currentStuffingBinderIndex => _currentStuffingBinderIndex;
   int get currentStuffingEnvelopeIndex => _currentStuffingEnvelopeIndex;
   Map<String, double> get stuffingProgress => _stuffingProgress;
   int get currentEnvelopeAnimationIndex => _currentEnvelopeAnimationIndex;
   StuffingStage get stuffingStage => _stuffingStage;
+  double get accountDepositProgress => _accountDepositProgress;
 
   // Success (Phase 4)
   List<EnvelopeHorizonImpact> _topHorizons = [];
@@ -325,13 +327,32 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
   Future<void> executeStuffing({Map<String, double>? boosts}) async {
     try {
-      // Step 1: Deposit to account if in account mode
+      // Step 0: INITIAL PAUSE - Show the money flow hierarchy clearly
+      await Future.delayed(const Duration(milliseconds: 4000));
+
+      // Step 1: Animate deposit to account if in account mode (source → account)
       if (_isAccountMode && _defaultAccountId != null) {
+        // VISUAL ONLY: Animate the transfer over 3 seconds with incremental updates
+        final steps = 30; // 30 updates over 3 seconds = 100ms per step
+        final incrementPerStep = _externalInflow / steps;
+
+        _accountDepositProgress = 0.0;
+        for (var i = 0; i < steps; i++) {
+          _accountDepositProgress += incrementPerStep;
+          notifyListeners(); // Trigger UI update to show visual progress
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+
+        // ACTUAL TRANSACTION: Make the real deposit once after animation
         await accountRepo.deposit(
           _defaultAccountId!,
           _externalInflow,
           description: 'Pay Day Deposit',
         );
+        notifyListeners();
+
+        // Small pause after account fill
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       // Step 2: SILVER STAGE - Animate cash flow allocations
@@ -342,10 +363,10 @@ class PayDayCockpitProvider extends ChangeNotifier {
       final totalEnvelopes = allocationEntries.length;
 
       if (totalEnvelopes > 0) {
-        // Calculate delay per envelope to total ~4.5 seconds for silver
-        final delayPerEnvelope = 4500 ~/ totalEnvelopes; // in milliseconds
-        final minDelay = 400; // minimum 400ms per envelope
-        final maxDelay = 1000; // maximum 1000ms per envelope
+        // Calculate delay per envelope to total ~9 seconds for silver (60% of 15s)
+        final delayPerEnvelope = 9000 ~/ totalEnvelopes; // in milliseconds
+        final minDelay = 600; // minimum 600ms per envelope
+        final maxDelay = 1500; // maximum 1500ms per envelope
         final effectiveDelay = delayPerEnvelope.clamp(minDelay, maxDelay);
 
         for (var i = 0; i < allocationEntries.length; i++) {
@@ -369,23 +390,25 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
       // Step 3: GOLD STAGE - Animate boost allocations (if any)
       if (boosts != null && boosts.isNotEmpty) {
-        await Future.delayed(const Duration(milliseconds: 800));
+        await Future.delayed(const Duration(milliseconds: 1000));
 
         _stuffingStage = StuffingStage.gold;
         notifyListeners();
 
+        // Sort boost entries so we animate them in the order they appear in the UI
         final boostEntries = boosts.entries.toList();
         final totalBoosts = boostEntries.length;
-        final boostDelay = (2000 ~/ totalBoosts).clamp(500, 1200);
+        // Calculate delay for gold stage to total ~8 seconds with more deliberate pacing
+        final boostDelay = (8000 ~/ totalBoosts).clamp(1200, 3000);
 
+        // Create a new animation index counter for gold stage (0-based within boosted items)
         for (var i = 0; i < boostEntries.length; i++) {
           final entry = boostEntries[i];
           final envelopeId = entry.key;
           final boostAmount = entry.value;
 
-          // Find index in original allocations list for highlighting
-          final envelopeIndex = allocationEntries.indexWhere((e) => e.key == envelopeId);
-          _currentEnvelopeAnimationIndex = envelopeIndex;
+          // Set current envelope index to match the position in the gold stage list (0, 1, 2, ...)
+          _currentEnvelopeAnimationIndex = i;
 
           // Add boost to existing stuffing
           final currentAmount = _stuffingProgress[envelopeId] ?? 0.0;
@@ -396,6 +419,9 @@ class PayDayCockpitProvider extends ChangeNotifier {
             await Future.delayed(Duration(milliseconds: boostDelay));
           }
         }
+
+        // Pause after last gold envelope to let users appreciate the final boost
+        await Future.delayed(Duration(milliseconds: boostDelay));
       }
 
       // Step 4: Actually perform the allocations to envelopes

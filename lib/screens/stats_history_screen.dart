@@ -417,6 +417,23 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
     double discretionary = 0;
 
     for (final t in transactions) {
+      // PAY DAY CASH FLOW DETECTION
+      // Treat Pay Day "Cash Flow" transfers differently based on direction
+      final isPayDayCashFlow = t.type == TransactionType.transfer &&
+          t.description == 'Cash Flow';
+
+      if (isPayDayCashFlow) {
+        // Check direction to determine perspective
+        if (t.transferDirection == TransferDirection.in_) {
+          // Money coming INTO this envelope = income
+          externalInflow += t.amount;
+        } else if (t.transferDirection == TransferDirection.out_) {
+          // Money going OUT of this account = distributed to envelopes
+          liquidCash += t.amount;
+        }
+        continue; // Skip other processing for this transaction
+      }
+
       // Use new philosophy fields if available, fallback to legacy categorization
       final isExternal = t.impact == TransactionImpact.external;
       final isInternal = t.impact == TransactionImpact.internal;
@@ -570,10 +587,13 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                       widget.filterTransactionTypes!.contains(TransactionType.transfer);
 
                                   if (isAccountView) {
+                                    // Account-specific view: only show account transactions
                                     activeFilters.add(StatsFilterType.accounts);
                                   } else {
+                                    // Default view from home screen: show ALL transaction types
                                     activeFilters.add(StatsFilterType.envelopes);
                                     activeFilters.add(StatsFilterType.groups);
+                                    activeFilters.add(StatsFilterType.accounts);
                                   }
                                 }
 
@@ -627,34 +647,45 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                     .toSet();
 
                                 var contextFilteredTxs = txs.where((t) {
-                                  bool accountMatch = true;
-                                  bool envelopeMatch = true;
-
-                                  // Account filter: if active, transaction MUST be from selected account(s)
-                                  if (activeFilters.contains(StatsFilterType.accounts)) {
-                                    accountMatch = false;
-                                    if (t.accountId != null && t.accountId!.isNotEmpty) {
-                                      if (selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId)) {
-                                        accountMatch = true;
-                                      }
-                                    }
-                                  }
-
-                                  // Envelope/Group filter: if active, transaction MUST be from selected envelope(s)
-                                  if (activeFilters.contains(StatsFilterType.envelopes) ||
-                                      activeFilters.contains(StatsFilterType.groups)) {
-                                    envelopeMatch = false;
-                                    if (chosenEnvelopeIds.contains(t.envelopeId)) {
-                                      envelopeMatch = true;
-                                    }
-                                  }
-
                                   final inRange = !t.date.isBefore(start) && t.date.isBefore(end);
                                   final typeMatch = widget.filterTransactionTypes == null ||
                                       widget.filterTransactionTypes!.contains(t.type);
 
-                                  // Transaction must match ALL active filter types (AND logic)
-                                  return accountMatch && envelopeMatch && inRange && typeMatch;
+                                  if (!inRange || !typeMatch) return false;
+
+                                  // Determine if this is an account transaction or envelope transaction
+                                  final isAccountTx = t.accountId != null && t.accountId!.isNotEmpty && t.envelopeId.isEmpty;
+                                  final isEnvelopeTx = t.envelopeId.isNotEmpty;
+
+                                  // Check active filters
+                                  final accountFilterActive = activeFilters.contains(StatsFilterType.accounts);
+                                  final envelopeFilterActive = activeFilters.contains(StatsFilterType.envelopes) ||
+                                      activeFilters.contains(StatsFilterType.groups);
+
+                                  // If both filters are active (OR logic): include if matches either
+                                  if (accountFilterActive && envelopeFilterActive) {
+                                    if (isAccountTx) {
+                                      return selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId);
+                                    } else if (isEnvelopeTx) {
+                                      return chosenEnvelopeIds.contains(t.envelopeId);
+                                    }
+                                    return false;
+                                  }
+
+                                  // If only account filter is active
+                                  if (accountFilterActive && !envelopeFilterActive) {
+                                    if (!isAccountTx) return false;
+                                    return selectedAccountIds.isEmpty || selectedAccountIds.contains(t.accountId);
+                                  }
+
+                                  // If only envelope/group filter is active
+                                  if (envelopeFilterActive && !accountFilterActive) {
+                                    if (!isEnvelopeTx) return false;
+                                    return chosenEnvelopeIds.contains(t.envelopeId);
+                                  }
+
+                                  // No filters active - include all
+                                  return true;
                                 }).toList();
 
                                 // DEBUG: Log sample transaction details when filtering returns 0 results
@@ -831,18 +862,22 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                           stats: horizonStats,
                                           start: start,
                                           end: end,
+                                          activeFilters: activeFilters,
                                         ),
                                       ),
                                     ),
 
                                     const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                                    // CASH FLOW MIX CHART (Simplified 3-segment donut)
-                                    SliverToBoxAdapter(
-                                      child: CashFlowMixChart(
-                                        stats: horizonStats,
+                                    // CASH FLOW MIX CHART (Envelope view only)
+                                    if (!activeFilters.contains(StatsFilterType.accounts) ||
+                                        activeFilters.contains(StatsFilterType.envelopes) ||
+                                        activeFilters.contains(StatsFilterType.groups))
+                                      SliverToBoxAdapter(
+                                        child: CashFlowMixChart(
+                                          stats: horizonStats,
+                                        ),
                                       ),
-                                    ),
 
                                     const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
@@ -1209,11 +1244,13 @@ class _StrategyCard extends StatelessWidget {
     required this.stats,
     required this.start,
     required this.end,
+    required this.activeFilters,
   });
 
   final HorizonStrategyStats stats;
   final DateTime start;
   final DateTime end;
+  final Set<StatsFilterType> activeFilters;
 
   @override
   Widget build(BuildContext context) {
@@ -1221,6 +1258,17 @@ class _StrategyCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context);
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
+
+    // CONTEXT DETECTION
+    final isAccountOnly = activeFilters.contains(StatsFilterType.accounts) &&
+        !activeFilters.contains(StatsFilterType.envelopes) &&
+        !activeFilters.contains(StatsFilterType.groups);
+
+    final hasHorizons = stats.totalHorizonGap > 0;
+
+    // Choose title and icon based on context
+    final cardTitle = isAccountOnly ? 'Account Performance' : 'Horizon Strategy';
+    final cardIcon = isAccountOnly ? Icons.account_balance_wallet : Icons.analytics;
 
     // Color palette for feedback
     final greenColor = Colors.green.shade700;
@@ -1252,14 +1300,14 @@ class _StrategyCard extends StatelessWidget {
           // Header
           Row(
             children: [
-              Icon(Icons.analytics, color: theme.colorScheme.primary, size: 28),
+              Icon(cardIcon, color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Horizon Strategy',
+                      cardTitle,
                       style: fontProvider.getTextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -1308,7 +1356,7 @@ class _StrategyCard extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Strategy Feedback Message
+          // Strategy Feedback Message (context-aware)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1333,7 +1381,7 @@ class _StrategyCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    stats.strategyFeedback,
+                    isAccountOnly ? stats.getAccountFeedback() : stats.strategyFeedback,
                     style: fontProvider.getTextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -1347,7 +1395,7 @@ class _StrategyCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Key Metrics Row
+          // Key Metrics Row (context-aware)
           Row(
             children: [
               Expanded(
@@ -1356,17 +1404,21 @@ class _StrategyCard extends StatelessWidget {
                   label: 'Efficiency',
                   value: '${(stats.efficiency * 100).toStringAsFixed(1)}%',
                   color: feedbackColor,
-                  helpText: "The percentage of your income that stays inside 'The Wall' after bills and spending.",
+                  helpText: isAccountOnly
+                      ? "The percentage of your income that you saved or distributed this period."
+                      : "The percentage of your income that stays inside 'The Wall' after bills and spending.",
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _MetricBox(
-                  icon: Icons.trending_up,
-                  label: 'Horizon Fuel',
-                  value: currency.format(stats.horizonVelocity),
+                  icon: isAccountOnly ? Icons.upload : Icons.trending_up,
+                  label: isAccountOnly ? 'Distributed' : 'Horizon Fuel',
+                  value: currency.format(isAccountOnly ? stats.liquidCash : stats.horizonVelocity),
                   color: goldColor,
-                  helpText: "The speed at which you are moving money into your Horizon goals.",
+                  helpText: isAccountOnly
+                      ? "Total amount sent to envelopes via Cash Flow this period."
+                      : "The speed at which you are moving money into your Horizon goals.",
                 ),
               ),
             ],
@@ -1374,8 +1426,9 @@ class _StrategyCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Horizon Impact Message
-          GestureDetector(
+          // Horizon Impact Message (only for envelope/horizon views)
+          if (!isAccountOnly && hasHorizons)
+            GestureDetector(
             onTap: () {
               showModalBottomSheet(
                 context: context,
@@ -1468,8 +1521,8 @@ class _StrategyCard extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Income Allocation Progress Bar
-          _IncomeAllocationBar(stats: stats),
+          // Income Allocation Progress Bar (context-aware)
+          _IncomeAllocationBar(stats: stats, isAccountOnly: isAccountOnly),
 
           // Deficit Warning (if applicable)
           if (stats.isDeficit) ...[
@@ -1645,19 +1698,29 @@ class _MetricBox extends StatelessWidget {
 
 // Income Allocation Progress Bar - Multi-Segment
 class _IncomeAllocationBar extends StatelessWidget {
-  const _IncomeAllocationBar({required this.stats});
+  const _IncomeAllocationBar({
+    required this.stats,
+    this.isAccountOnly = false,
+  });
 
   final HorizonStrategyStats stats;
+  final bool isAccountOnly;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context);
-    final allocation = stats.getIncomeAllocation();
 
-    final spentPercent = allocation['spent']!;
-    final horizonsPercent = allocation['horizons']!;
-    final liquidPercent = allocation['liquid']!;
+    // Use account-specific allocation for accounts, regular for envelopes
+    final allocation = isAccountOnly
+        ? stats.getAccountAllocation()
+        : stats.getIncomeAllocation();
+
+    // For accounts: distributed and unassigned
+    // For envelopes: spent, horizons, and liquid
+    final firstPercent = isAccountOnly ? allocation['distributed']! : allocation['spent']!;
+    final secondPercent = isAccountOnly ? allocation['unassigned']! : allocation['horizons']!;
+    final thirdPercent = isAccountOnly ? 0.0 : allocation['liquid']!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1679,16 +1742,16 @@ class _IncomeAllocationBar extends StatelessWidget {
             height: 24,
             child: Row(
               children: [
-                // Spent segment (Red)
-                if (spentPercent > 0)
+                // First segment (Red for spent/Purple for distributed)
+                if (firstPercent > 0)
                   Flexible(
-                    flex: (spentPercent * 100).round(),
+                    flex: (firstPercent * 100).round(),
                     child: Container(
-                      color: Colors.red.shade700,
+                      color: isAccountOnly ? Colors.purple : Colors.red.shade700,
                       alignment: Alignment.center,
-                      child: spentPercent > 0.15
+                      child: firstPercent > 0.15
                           ? Text(
-                              '${(spentPercent * 100).toStringAsFixed(0)}%',
+                              '${(firstPercent * 100).toStringAsFixed(0)}%',
                               style: fontProvider.getTextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -1699,16 +1762,18 @@ class _IncomeAllocationBar extends StatelessWidget {
                     ),
                   ),
 
-                // Horizons segment (Gold)
-                if (horizonsPercent > 0)
+                // Second segment (Gold for horizons/Grey for unassigned)
+                if (secondPercent > 0)
                   Flexible(
-                    flex: (horizonsPercent * 100).round(),
+                    flex: (secondPercent * 100).round(),
                     child: Container(
-                      color: theme.colorScheme.secondary,
+                      color: isAccountOnly
+                          ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
+                          : theme.colorScheme.secondary,
                       alignment: Alignment.center,
-                      child: horizonsPercent > 0.15
+                      child: secondPercent > 0.15
                           ? Text(
-                              '${(horizonsPercent * 100).toStringAsFixed(0)}%',
+                              '${(secondPercent * 100).toStringAsFixed(0)}%',
                               style: fontProvider.getTextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -1719,16 +1784,16 @@ class _IncomeAllocationBar extends StatelessWidget {
                     ),
                   ),
 
-                // Liquid segment (Grey)
-                if (liquidPercent > 0)
+                // Third segment (Grey for liquid - envelope view only)
+                if (!isAccountOnly && thirdPercent > 0)
                   Flexible(
-                    flex: (liquidPercent * 100).round(),
+                    flex: (thirdPercent * 100).round(),
                     child: Container(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                       alignment: Alignment.center,
-                      child: liquidPercent > 0.15
+                      child: thirdPercent > 0.15
                           ? Text(
-                              '${(liquidPercent * 100).toStringAsFixed(0)}%',
+                              '${(thirdPercent * 100).toStringAsFixed(0)}%',
                               style: fontProvider.getTextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
@@ -1745,27 +1810,40 @@ class _IncomeAllocationBar extends StatelessWidget {
 
         const SizedBox(height: 8),
 
-        // Legend
+        // Legend (context-aware)
         Wrap(
           spacing: 16,
           runSpacing: 4,
-          children: [
-            _LegendItem(
-              color: Colors.red.shade700,
-              label: 'Spent',
-              percent: spentPercent * 100,
-            ),
-            _LegendItem(
-              color: theme.colorScheme.secondary,
-              label: 'Horizons',
-              percent: horizonsPercent * 100,
-            ),
-            _LegendItem(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-              label: 'Liquid',
-              percent: liquidPercent * 100,
-            ),
-          ],
+          children: isAccountOnly
+              ? [
+                  _LegendItem(
+                    color: Colors.purple,
+                    label: 'Distributed',
+                    percent: firstPercent * 100,
+                  ),
+                  _LegendItem(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    label: 'Unassigned',
+                    percent: secondPercent * 100,
+                  ),
+                ]
+              : [
+                  _LegendItem(
+                    color: Colors.red.shade700,
+                    label: 'Spent',
+                    percent: firstPercent * 100,
+                  ),
+                  _LegendItem(
+                    color: theme.colorScheme.secondary,
+                    label: 'Horizons',
+                    percent: secondPercent * 100,
+                  ),
+                  _LegendItem(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    label: 'Liquid',
+                    percent: thirdPercent * 100,
+                  ),
+                ],
         ),
       ],
     );
