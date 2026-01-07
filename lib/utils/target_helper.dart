@@ -289,14 +289,41 @@ class TargetHelper {
       0, 0, 1,
     );
 
-    // Calculate using microseconds for granular progress
-    final totalDuration = targetWithTime.difference(startDate);
-    final elapsedDuration = reference.difference(startDate);
+    // FIXED: For date-based targets, calculate progress using whole days only
+    // Normalize reference date to start of day to avoid intra-day time affecting progress
+    final referenceDayStart = DateTime(
+      reference.year,
+      reference.month,
+      reference.day,
+      0, 0, 1,
+    );
 
-    // Progress based on actual time elapsed (not just days)
-    final progress = totalDuration.inMicroseconds > 0
-        ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
+    // Calculate using whole days (not microseconds) for date-based targets
+    final totalDuration = targetWithTime.difference(startDate);
+    final elapsedDuration = referenceDayStart.difference(startDate);
+
+    // DEBUG: Log time progress calculation with detailed breakdown
+    debugPrint('[TargetHelper-TimeProgress] ========================================');
+    debugPrint('[TargetHelper-TimeProgress] Target Start Date Type: $targetStartDateType');
+    debugPrint('[TargetHelper-TimeProgress] Start Date: $startDate');
+    debugPrint('[TargetHelper-TimeProgress] Target Date (original): ${envelope.targetDate}');
+    debugPrint('[TargetHelper-TimeProgress] Target Date (with time 00:00:01): $targetWithTime');
+    debugPrint('[TargetHelper-TimeProgress] Reference Date (viewing): $reference');
+    debugPrint('[TargetHelper-TimeProgress] Reference Day Start (normalized): $referenceDayStart');
+    debugPrint('[TargetHelper-TimeProgress] ---');
+    debugPrint('[TargetHelper-TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inHours} hours)');
+    debugPrint('[TargetHelper-TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inHours} hours)');
+    debugPrint('[TargetHelper-TimeProgress] ---');
+    debugPrint('[TargetHelper-TimeProgress] Calculation: ${elapsedDuration.inDays} / ${totalDuration.inDays} (using whole days)');
+
+    // Progress based on whole days (date-based targets should not care about time of day)
+    final progress = totalDuration.inDays > 0
+        ? (elapsedDuration.inDays / totalDuration.inDays).clamp(0.0, 1.0)
         : 0.0;
+
+    debugPrint('[TargetHelper-TimeProgress] Time Progress (raw): $progress');
+    debugPrint('[TargetHelper-TimeProgress] Time Progress (%): ${(progress * 100).toStringAsFixed(2)}%');
+    debugPrint('[TargetHelper-TimeProgress] ========================================');
 
     return progress;
   }

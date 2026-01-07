@@ -145,17 +145,29 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
       body: SafeArea(
         child: Column(
           children: [
-            // Title Header
+            // Title Header with Close button
             Padding(
-              padding: const EdgeInsets.fromLTRB(60, 16, 20, 16),
-              child: Text(
-                widget.template.name,
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-                textAlign: TextAlign.center,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Cancel',
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.template.name,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance the close button
+                ],
               ),
             ),
             // Header
@@ -966,14 +978,10 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           ),
                           decoration: InputDecoration(
                             labelText: 'Envelope Cash Flow Amount',
-
                             prefixText: localeProvider.currencySymbol,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            helperText: widget.data.recurringBillEnabled
-                                ? 'Auto-suggested from autopilot'
-                                : null,
                             suffixIcon: Container(
                               margin: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
@@ -1063,17 +1071,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                 if (enabled && !_showRecurringBillTip) {
                                   _showRecurringBillTip = true;
                                 }
-
-                                // Auto-suggest for pay day deposit
-                                if (enabled &&
-                                    widget.data.recurringBillAmount > 0) {
-                                  widget.data.payDayDepositAmount =
-                                      widget.data.recurringBillAmount;
-                                  _payDayAmountController.text = widget
-                                      .data
-                                      .recurringBillAmount
-                                      .toString();
-                                }
                               });
 
                               // Scroll down when expanded to show the fields
@@ -1143,11 +1140,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                                       final amount =
                                           double.tryParse(result) ?? 0.0;
                                       widget.data.recurringBillAmount = amount;
-
-                                      // Auto-update pay day deposit
-                                      widget.data.payDayDepositAmount = amount;
-                                      _payDayAmountController.text = amount
-                                          .toString();
                                     });
                                   }
                                 },
@@ -1158,10 +1150,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           onChanged: (value) {
                             final amount = double.tryParse(value) ?? 0.0;
                             widget.data.recurringBillAmount = amount;
-
-                            // Auto-update pay day deposit
-                            widget.data.payDayDepositAmount = amount;
-                            _payDayAmountController.text = amount.toString();
                           },
                         ),
 

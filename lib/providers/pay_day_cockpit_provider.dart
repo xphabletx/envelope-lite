@@ -16,6 +16,12 @@ enum CockpitPhase {
   success,
 }
 
+enum StuffingStage {
+  silver, // Cash flow allocations
+  gold,   // Boost allocations
+  complete,
+}
+
 class PayDayCockpitProvider extends ChangeNotifier {
   final EnvelopeRepo envelopeRepo;
   final GroupRepo groupRepo;
@@ -73,10 +79,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
   int _currentStuffingBinderIndex = -1;
   int _currentStuffingEnvelopeIndex = -1;
   final Map<String, double> _stuffingProgress = {}; // envelopeId -> stuffed amount
+  int _currentEnvelopeAnimationIndex = -1; // Current envelope being animated
+  StuffingStage _stuffingStage = StuffingStage.silver;
 
   int get currentStuffingBinderIndex => _currentStuffingBinderIndex;
   int get currentStuffingEnvelopeIndex => _currentStuffingEnvelopeIndex;
   Map<String, double> get stuffingProgress => _stuffingProgress;
+  int get currentEnvelopeAnimationIndex => _currentEnvelopeAnimationIndex;
+  StuffingStage get stuffingStage => _stuffingStage;
 
   // Success (Phase 4)
   List<EnvelopeHorizonImpact> _topHorizons = [];
@@ -313,7 +323,7 @@ class PayDayCockpitProvider extends ChangeNotifier {
   // PHASE 3: STUFFING EXECUTION
   // ============================================================================
 
-  Future<void> executeStuffing() async {
+  Future<void> executeStuffing({Map<String, double>? boosts}) async {
     try {
       // Step 1: Deposit to account if in account mode
       if (_isAccountMode && _defaultAccountId != null) {
@@ -324,8 +334,75 @@ class PayDayCockpitProvider extends ChangeNotifier {
         );
       }
 
-      // Step 2: Allocate to envelopes
-      for (final entry in _allocations.entries) {
+      // Step 2: SILVER STAGE - Animate cash flow allocations
+      _stuffingStage = StuffingStage.silver;
+      notifyListeners();
+
+      final allocationEntries = _allocations.entries.toList();
+      final totalEnvelopes = allocationEntries.length;
+
+      if (totalEnvelopes > 0) {
+        // Calculate delay per envelope to total ~4.5 seconds for silver
+        final delayPerEnvelope = 4500 ~/ totalEnvelopes; // in milliseconds
+        final minDelay = 400; // minimum 400ms per envelope
+        final maxDelay = 1000; // maximum 1000ms per envelope
+        final effectiveDelay = delayPerEnvelope.clamp(minDelay, maxDelay);
+
+        for (var i = 0; i < allocationEntries.length; i++) {
+          final entry = allocationEntries[i];
+          final envelopeId = entry.key;
+          final amount = entry.value;
+
+          // Update current envelope being animated
+          _currentEnvelopeAnimationIndex = i;
+
+          // Animate the progress for this envelope
+          _stuffingProgress[envelopeId] = amount;
+          notifyListeners();
+
+          // Wait before moving to next envelope (except for the last one)
+          if (i < allocationEntries.length - 1) {
+            await Future.delayed(Duration(milliseconds: effectiveDelay));
+          }
+        }
+      }
+
+      // Step 3: GOLD STAGE - Animate boost allocations (if any)
+      if (boosts != null && boosts.isNotEmpty) {
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        _stuffingStage = StuffingStage.gold;
+        notifyListeners();
+
+        final boostEntries = boosts.entries.toList();
+        final totalBoosts = boostEntries.length;
+        final boostDelay = (2000 ~/ totalBoosts).clamp(500, 1200);
+
+        for (var i = 0; i < boostEntries.length; i++) {
+          final entry = boostEntries[i];
+          final envelopeId = entry.key;
+          final boostAmount = entry.value;
+
+          // Find index in original allocations list for highlighting
+          final envelopeIndex = allocationEntries.indexWhere((e) => e.key == envelopeId);
+          _currentEnvelopeAnimationIndex = envelopeIndex;
+
+          // Add boost to existing stuffing
+          final currentAmount = _stuffingProgress[envelopeId] ?? 0.0;
+          _stuffingProgress[envelopeId] = currentAmount + boostAmount;
+          notifyListeners();
+
+          if (i < boostEntries.length - 1) {
+            await Future.delayed(Duration(milliseconds: boostDelay));
+          }
+        }
+      }
+
+      // Step 4: Actually perform the allocations to envelopes
+      _stuffingStage = StuffingStage.complete;
+      notifyListeners();
+
+      for (final entry in _stuffingProgress.entries) {
         final envelopeId = entry.key;
         final amount = entry.value;
 
@@ -348,8 +425,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
             date: DateTime.now(),
           );
         }
-
-        _stuffingProgress[envelopeId] = amount;
       }
 
       // Calculate top horizons impacted
@@ -357,6 +432,9 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
       // Update PayDaySettings
       await _updatePayDaySettings();
+
+      // Final pause before success screen
+      await Future.delayed(const Duration(milliseconds: 1200));
 
       _currentPhase = CockpitPhase.success;
       notifyListeners();

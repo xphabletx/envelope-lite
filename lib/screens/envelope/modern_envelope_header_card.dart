@@ -229,26 +229,42 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
         0, 0, 1, // 00:00:01
       );
 
-      // Calculate using full timestamps for granular progress (microseconds for 2 decimal precision)
+      // FIXED: For date-based targets, calculate progress using whole days only
+      // Normalize reference date to start of day to avoid intra-day time affecting progress
+      final referenceDayStart = DateTime(
+        referenceDate.year,
+        referenceDate.month,
+        referenceDate.day,
+        0, 0, 1,
+      );
+
+      // Calculate using whole days (not microseconds) for date-based targets
       final totalDuration = targetWithTime.difference(startDate);
-      final elapsedDuration = referenceDate.difference(startDate);
+      final elapsedDuration = referenceDayStart.difference(startDate);
 
-      // DEBUG: Log time progress calculation
-      debugPrint('[TimeProgress] ========================================');
-      debugPrint('[TimeProgress] Start Date: $startDate');
-      debugPrint('[TimeProgress] Target Date (with time): $targetWithTime');
-      debugPrint('[TimeProgress] Reference Date (viewing): $referenceDate');
-      debugPrint('[TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inMicroseconds} microseconds)');
-      debugPrint('[TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inMicroseconds} microseconds)');
+      // DEBUG: Log time progress calculation with detailed breakdown
+      debugPrint('[ModernHeaderCard-TimeProgress] ========================================');
+      debugPrint('[ModernHeaderCard-TimeProgress] Envelope: ${envelope.name}');
+      debugPrint('[ModernHeaderCard-TimeProgress] Target Start Date Type: ${envelope.targetStartDateType}');
+      debugPrint('[ModernHeaderCard-TimeProgress] Start Date: $startDate');
+      debugPrint('[ModernHeaderCard-TimeProgress] Target Date (original): ${envelope.targetDate}');
+      debugPrint('[ModernHeaderCard-TimeProgress] Target Date (with time 00:00:01): $targetWithTime');
+      debugPrint('[ModernHeaderCard-TimeProgress] Reference Date (viewing): $referenceDate');
+      debugPrint('[ModernHeaderCard-TimeProgress] Reference Day Start (normalized): $referenceDayStart');
+      debugPrint('[ModernHeaderCard-TimeProgress] ---');
+      debugPrint('[ModernHeaderCard-TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inHours} hours)');
+      debugPrint('[ModernHeaderCard-TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inHours} hours)');
+      debugPrint('[ModernHeaderCard-TimeProgress] ---');
+      debugPrint('[ModernHeaderCard-TimeProgress] Calculation: ${elapsedDuration.inDays} / ${totalDuration.inDays} (using whole days)');
 
-      // Progress based on actual time elapsed (not just days)
-      // Using microseconds gives us sub-second precision for accurate percentage
-      timeProgress = totalDuration.inMicroseconds > 0
-          ? (elapsedDuration.inMicroseconds / totalDuration.inMicroseconds).clamp(0.0, 1.0)
+      // Progress based on whole days (date-based targets should not care about time of day)
+      timeProgress = totalDuration.inDays > 0
+          ? (elapsedDuration.inDays / totalDuration.inDays).clamp(0.0, 1.0)
           : 0.0;
 
-      debugPrint('[TimeProgress] Time Progress: ${(timeProgress * 100).toStringAsFixed(2)}%');
-      debugPrint('[TimeProgress] ========================================');
+      debugPrint('[ModernHeaderCard-TimeProgress] Time Progress (raw): $timeProgress');
+      debugPrint('[ModernHeaderCard-TimeProgress] Time Progress (%): ${(timeProgress * 100).toStringAsFixed(2)}%');
+      debugPrint('[ModernHeaderCard-TimeProgress] ========================================');
 
       daysRemaining = targetWithTime.difference(referenceDate).inDays;
     }

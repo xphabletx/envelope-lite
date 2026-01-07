@@ -98,15 +98,20 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   void _calculateBaseline(List<Envelope> selectedEnvelopes) {
     if (_baselineCalculated) return; // Only calculate once
 
+    debugPrint('[HorizonNavigator-Baseline] ========================================');
+    debugPrint('[HorizonNavigator-Baseline] Calculating baseline for ${selectedEnvelopes.length} envelopes');
+
     _envelopeBaselines.clear();
     double total = 0.0;
 
     for (var envelope in selectedEnvelopes) {
       double speed = 0.0;
+      String source = 'None (stalled)';
 
       // Priority 1: Cash Flow
       if (envelope.cashFlowEnabled && (envelope.cashFlowAmount ?? 0) > 0) {
         speed = envelope.cashFlowAmount!;
+        source = 'Cash Flow';
       } else {
         // Priority 2: Transaction history (most recent external inflow)
         final transactions = widget.envelopeRepo.getTransactionsForEnvelopeSync(envelope.id);
@@ -119,6 +124,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           if (tx.impact == TransactionImpact.external &&
               tx.direction == TransactionDirection.inflow) {
             speed = tx.amount;
+            source = 'Recent Transaction (${tx.date})';
             break;
           }
         }
@@ -128,10 +134,19 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       final monthlySpeed = _normalizeToMonthly(speed, _defaultFrequency);
       _envelopeBaselines[envelope.id] = monthlySpeed;
       total += monthlySpeed;
+
+      debugPrint('[HorizonNavigator-Baseline] ${envelope.name}:');
+      debugPrint('[HorizonNavigator-Baseline]   Source: $source');
+      debugPrint('[HorizonNavigator-Baseline]   Raw Speed: $speed ($_defaultFrequency)');
+      debugPrint('[HorizonNavigator-Baseline]   Monthly Speed: $monthlySpeed');
     }
 
     _baselineTotal = total;
     _baselineCalculated = true;
+
+    debugPrint('[HorizonNavigator-Baseline] ---');
+    debugPrint('[HorizonNavigator-Baseline] Total Baseline: $total/month');
+    debugPrint('[HorizonNavigator-Baseline] ========================================');
 
     // Pre-fill the total contribution controller with baseline
     if (total > 0) {
@@ -140,14 +155,17 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   }
 
   /// Normalize any amount to monthly based on frequency
+  /// Uses average days per month (30.44) for more accurate conversion
   double _normalizeToMonthly(double amount, String frequency) {
+    const averageDaysPerMonth = 30.44; // 365.25 / 12 (accounting for leap years)
+
     switch (frequency) {
       case 'daily':
-        return amount * 30; // Approximate month
+        return amount * averageDaysPerMonth; // More accurate than 30
       case 'weekly':
-        return amount * 4.33; // Average weeks per month
+        return amount * (averageDaysPerMonth / 7); // ~4.35 weeks per month
       case 'biweekly':
-        return amount * 2.16; // Average fortnights per month
+        return amount * (averageDaysPerMonth / 14); // ~2.17 fortnights per month
       case 'monthly':
         return amount;
       default:
@@ -157,6 +175,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
 
   /// Calculate time saved between baseline and current strategy
   Map<String, int> _calculateTimeSaved(List<Envelope> envelopes) {
+    debugPrint('[HorizonNavigator-TimeSaved] ========================================');
+    debugPrint('[HorizonNavigator-TimeSaved] Calculating time saved for ${envelopes.where((e) => _selectedEnvelopeIds.contains(e.id)).length} envelopes');
+
     int totalDaysSaved = 0;
     final Map<String, int> perEnvelopeDaysSaved = {};
 
@@ -169,18 +190,36 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       final newSpeed = totalContribution * (allocation / 100);
 
       final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
-      if (remaining <= 0 || baselineSpeed <= 0 || newSpeed <= 0) continue;
 
-      // Calculate days with baseline speed
-      final baselineDays = (remaining / baselineSpeed * 30).ceil();
+      debugPrint('[HorizonNavigator-TimeSaved] ${envelope.name}:');
+      debugPrint('[HorizonNavigator-TimeSaved]   Remaining: $remaining');
+      debugPrint('[HorizonNavigator-TimeSaved]   Baseline Speed: $baselineSpeed/month');
+      debugPrint('[HorizonNavigator-TimeSaved]   New Speed: $newSpeed/month (${allocation.toStringAsFixed(1)}% of $totalContribution)');
 
-      // Calculate days with new speed
-      final newDays = (remaining / newSpeed * 30).ceil();
+      if (remaining <= 0 || baselineSpeed <= 0 || newSpeed <= 0) {
+        debugPrint('[HorizonNavigator-TimeSaved]   Skipped (invalid values)');
+        continue;
+      }
+
+      // Calculate days with baseline speed (using average month length)
+      const averageDaysPerMonth = 30.44; // 365.25 / 12
+      final baselineDays = (remaining / baselineSpeed * averageDaysPerMonth).ceil();
+
+      // Calculate days with new speed (using average month length)
+      final newDays = (remaining / newSpeed * averageDaysPerMonth).ceil();
 
       final daysSaved = baselineDays - newDays;
       perEnvelopeDaysSaved[envelope.id] = daysSaved;
       totalDaysSaved += daysSaved;
+
+      debugPrint('[HorizonNavigator-TimeSaved]   Baseline Days: $baselineDays');
+      debugPrint('[HorizonNavigator-TimeSaved]   New Days: $newDays');
+      debugPrint('[HorizonNavigator-TimeSaved]   Days Saved: $daysSaved');
     }
+
+    debugPrint('[HorizonNavigator-TimeSaved] ---');
+    debugPrint('[HorizonNavigator-TimeSaved] Total Days Saved: $totalDaysSaved');
+    debugPrint('[HorizonNavigator-TimeSaved] ========================================');
 
     return {
       'total': totalDaysSaved,
@@ -269,13 +308,28 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       0.0,
       (sum, v) => sum + v,
     );
-    if (total == 0) return;
+
+    debugPrint('[HorizonNavigator-Allocation] Normalizing allocations: total=$total');
+
+    if (total == 0) {
+      // Edge case: All allocations are 0, distribute equally
+      debugPrint('[HorizonNavigator-Allocation] All allocations are 0, distributing equally');
+      final equalPercentage = 100.0 / _selectedEnvelopeIds.length;
+      for (var id in _selectedEnvelopeIds) {
+        _contributionAllocations[id] = equalPercentage;
+      }
+      return;
+    }
 
     final factor = 100.0 / total;
     for (var id in _selectedEnvelopeIds) {
       _contributionAllocations[id] =
           (_contributionAllocations[id] ?? 0) * factor;
     }
+
+    // Verify total is exactly 100%
+    final newTotal = _contributionAllocations.values.fold(0.0, (sum, v) => sum + v);
+    debugPrint('[HorizonNavigator-Allocation] Normalized total: $newTotal%');
   }
 
   /// Sandbox Engine: Simulate horizon reach dates based on contribution inputs
@@ -2465,6 +2519,8 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     });
   }
 
+  /// Get approximate days per frequency for horizon calculations
+  /// Monthly uses average to account for varying month lengths
   int _getDaysPerFrequency(String frequency) {
     switch (frequency) {
       case 'daily':
@@ -2474,7 +2530,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       case 'biweekly':
         return 14;
       case 'monthly':
-        return 30;
+        return 30; // Keep as 30 for UI simplicity (average 30.44 used in financial calcs)
       default:
         return 30;
     }

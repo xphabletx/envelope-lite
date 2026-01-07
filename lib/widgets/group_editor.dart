@@ -168,12 +168,8 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     // Store template for later (will create envelopes when binder is saved)
     _selectedTemplate = template;
 
-    // Create draft IDs for each template envelope and add to selection
-    for (int i = 0; i < template.envelopes.length; i++) {
-      final draftId = 'DRAFT_TEMPLATE_${template.id}_$i';
-      selectedEnvelopeIds.add(draftId);
-      newlyCreatedEnvelopeIds.add(draftId); // Mark as NEW
-    }
+    // DON'T add draft IDs here - they'll be added when displaying the UI
+    // This prevents duplication when quick setup is launched
   }
 
   @override
@@ -236,24 +232,23 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       }
 
       // Create envelopes from template NOW (if a template was selected)
+      List<String> createdFromTemplate = [];
       if (_selectedTemplate != null && currentGroupId != null) {
         debugPrint('[GroupEditor] Creating envelopes from template...');
-        final createdIds = await _createEnvelopesFromTemplateNow(
+        createdFromTemplate = await _createEnvelopesFromTemplateNow(
           _selectedTemplate!,
           currentGroupId,
         );
-
-        debugPrint('[GroupEditor] Adding ${createdIds.length} created IDs to selectedEnvelopeIds');
-        debugPrint('[GroupEditor] selectedEnvelopeIds before: ${selectedEnvelopeIds.length}');
-        selectedEnvelopeIds.addAll(createdIds);
-        debugPrint('[GroupEditor] selectedEnvelopeIds after: ${selectedEnvelopeIds.length}');
-        debugPrint('[GroupEditor] All selected IDs: $selectedEnvelopeIds');
+        debugPrint('[GroupEditor] Created ${createdFromTemplate.length} envelopes from template');
       }
 
-      // FILTER OUT DRAFT IDs before saving relationships
+      // FILTER OUT DRAFT IDs and use real created IDs instead
       final realIdsToSave = selectedEnvelopeIds
           .where((id) => id != _draftId && !id.startsWith('DRAFT_TEMPLATE_'))
           .toSet();
+
+      // Add the envelopes created from template
+      realIdsToSave.addAll(createdFromTemplate);
 
       debugPrint('[GroupEditor] ========================================');
       debugPrint('[GroupEditor] Updating group membership for binder: $currentGroupId');
@@ -594,9 +589,12 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
   Future<void> _launchQuickSetup() async {
     if (_selectedTemplate == null) return;
 
+    // Dismiss keyboard before showing modal
+    FocusScope.of(context).unfocus();
+
     // Launch quick setup for the selected template
     // This will create the binder AND the envelopes with full details
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -604,20 +602,26 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           template: _selectedTemplate!,
           userId: widget.envelopeRepo.currentUserId,
           onComplete: (count) {
-            // Quick setup creates its own binder, so we can close this editor
+            // Quick setup creates its own binder, so we need to close both screens
             if (mounted) {
-              Navigator.of(context).pop(); // Close the group editor
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Created ${_selectedTemplate!.name} binder with $count envelopes!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+              // Pop the quick setup screen first
+              Navigator.of(context).pop(true); // Return true to indicate completion
             }
           },
         ),
       ),
     );
+
+    // If quick setup completed successfully, close this editor too
+    if (result == true && mounted) {
+      Navigator.of(context).pop(); // Close the group editor
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Created ${_selectedTemplate!.name} binder with envelopes!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Future<void> _addTemplateEnvelopes() async {
@@ -1228,11 +1232,22 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                               );
                             }
 
+                            // Initialize selection for existing binder
                             if (isEdit && !didInitSelection) {
                               for (final e in allEnvelopes) {
                                 if (e.groupId == editingGroupId) {
                                   selectedEnvelopeIds.add(e.id);
                                 }
+                              }
+                              didInitSelection = true;
+                            }
+
+                            // Auto-select template draft envelopes (only once)
+                            if (!isEdit && !didInitSelection && _selectedTemplate != null) {
+                              for (int i = 0; i < _selectedTemplate!.envelopes.length; i++) {
+                                final draftId = 'DRAFT_TEMPLATE_${_selectedTemplate!.id}_$i';
+                                selectedEnvelopeIds.add(draftId);
+                                newlyCreatedEnvelopeIds.add(draftId);
                               }
                               didInitSelection = true;
                             }

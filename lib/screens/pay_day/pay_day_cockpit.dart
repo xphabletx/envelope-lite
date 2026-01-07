@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import '../../providers/pay_day_cockpit_provider.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
@@ -50,6 +51,9 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   // Collapsible envelopes within binders (envelopeId -> isExpanded)
   final Map<String, bool> _expandedEnvelopeIds = {};
 
+  // Animation state for waterfall (Phase 3)
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +88,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     _amountController.dispose();
     _amountFocus.dispose();
     _debounceTimer?.cancel();
+    _scrollController.dispose();
     _provider.removeListener(_onProviderUpdate);
     _provider.dispose();
     super.dispose();
@@ -1377,27 +1382,46 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     FontProvider fontProvider,
     PayDayCockpitProvider provider,
   ) {
-    // Start the execution immediately
+    // Start the execution immediately with boosts
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (provider.currentPhase == CockpitPhase.stuffingExecution) {
-        provider.executeStuffing();
+      if (provider.currentPhase == CockpitPhase.stuffingExecution &&
+          provider.stuffingProgress.isEmpty) {
+        // Calculate boost amounts
+        final boosts = <String, double>{};
+        for (final entry in _horizonBoosts.entries) {
+          final envelopeId = entry.key;
+          final percentage = entry.value;
+          if (percentage > 0 && _tempAllocations.containsKey(envelopeId)) {
+            final baseAmount = _tempAllocations[envelopeId]!;
+            boosts[envelopeId] = baseAmount * percentage;
+          }
+        }
+
+        provider.executeStuffing(boosts: boosts);
       }
     });
 
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Get envelopes being stuffed (from allocations)
+    // Get all envelopes being stuffed
     final envelopesBeingStuffed = provider.allocations.entries
         .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
-        .where((env) => env.targetAmount != null) // Only horizons
         .toList();
+
+    // Calculate overall progress (how many envelopes completed)
+    final totalEnvelopes = envelopesBeingStuffed.length;
+    final completedEnvelopes = provider.currentEnvelopeAnimationIndex + 1;
+    final overallProgress = totalEnvelopes > 0 ? (completedEnvelopes / totalEnvelopes).clamp(0.0, 1.0) : 0.0;
+
+    // Get current stage
+    final isGoldStage = provider.stuffingStage == StuffingStage.gold;
 
     return Column(
       children: [
-        // Light Source (The Account/Pool) at the top
+        // Glowing Sun Header
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(vertical: 32),
           decoration: BoxDecoration(
             gradient: RadialGradient(
               colors: [
@@ -1409,39 +1433,13 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
           ),
           child: Column(
             children: [
-              // Animated glowing money icon
-              TweenAnimationBuilder<double>(
-                duration: const Duration(milliseconds: 1500),
-                tween: Tween(begin: 0.8, end: 1.0),
-                curve: Curves.easeInOut,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.amber.withValues(alpha: 0.5),
-                            blurRadius: 40 * scale,
-                            spreadRadius: 10 * scale,
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        '💡',
-                        style: TextStyle(fontSize: 60),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
+              // Custom painted sun that gets brighter
+              _GlowingSun(brightness: overallProgress),
+              const SizedBox(height: 16),
               Text(
                 provider.isAccountMode
-                    ? 'Light from ${provider.defaultAccount?.name ?? "Account"}'
-                    : 'Light from Horizon Pool',
+                    ? provider.defaultAccount?.name ?? 'Account'
+                    : 'Horizon Pool',
                 style: fontProvider.getTextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1461,130 +1459,151 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
           ),
         ),
 
-        // Waterfall effect - light flowing down to horizons
+        // Stage indicator
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            isGoldStage ? '✨ Gold Boost Active' : '⚡ Filling Envelopes',
+            style: fontProvider.getTextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: isGoldStage ? Colors.amber.shade700 : theme.colorScheme.primary,
+            ),
+          ),
+        ),
+
+        // Envelope list with waterfall animation
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: envelopesBeingStuffed.length,
             itemBuilder: (context, index) {
               final envelope = envelopesBeingStuffed[index];
               final stuffedAmount = provider.stuffingProgress[envelope.id] ?? 0.0;
               final targetAmount = provider.allocations[envelope.id] ?? 0.0;
-              final isStuffed = stuffedAmount >= targetAmount;
+              final isActive = provider.currentEnvelopeAnimationIndex == index;
+              final fillProgress = targetAmount > 0 ? (stuffedAmount / targetAmount).clamp(0.0, 1.0) : 0.0;
+              final horizonProgress = envelope.targetAmount != null && envelope.targetAmount! > 0
+                  ? ((envelope.currentAmount + stuffedAmount) / envelope.targetAmount!).clamp(0.0, 1.0)
+                  : 0.0;
 
-              return TweenAnimationBuilder<double>(
-                key: ValueKey(envelope.id),
-                duration: Duration(milliseconds: 500 + (index * 200)),
-                tween: Tween(begin: 0.0, end: isStuffed ? 1.0 : 0.0),
-                curve: Curves.easeInOut,
-                builder: (context, progress, child) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      children: [
-                        // Light beam flowing down
-                        if (progress > 0)
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            height: 40,
-                            width: 4,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.amber.shade300.withValues(alpha: 0.8),
-                                  Colors.amber.shade500.withValues(alpha: progress),
-                                ],
-                              ),
+              // Check if this envelope is getting gold boost
+              final hasBoost = _horizonBoosts.containsKey(envelope.id) && (_horizonBoosts[envelope.id] ?? 0) > 0;
+              final isGoldActive = isGoldStage && isActive && hasBoost;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isGoldActive
+                      ? Colors.amber.shade100.withValues(alpha: 0.5)
+                      : theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isActive
+                        ? (isGoldStage ? Colors.amber.shade700 : theme.colorScheme.primary)
+                        : Colors.grey.shade300,
+                    width: isActive ? 3 : 1,
+                  ),
+                  boxShadow: isGoldActive
+                      ? [
+                          BoxShadow(
+                            color: Colors.amber.shade400.withValues(alpha: 0.6),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    envelope.getIconWidget(theme, size: 40),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            envelope.name,
+                            style: fontProvider.getTextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-
-                        // Horizon being filled
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 500),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isStuffed
-                                ? theme.colorScheme.primaryContainer
-                                : theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isStuffed
-                                  ? Colors.amber.shade700
-                                  : theme.colorScheme.outlineVariant,
-                              width: isStuffed ? 2 : 1,
-                            ),
-                            boxShadow: isStuffed
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.amber.shade300.withValues(alpha: 0.5),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Row(
-                            children: [
-                              envelope.getIconWidget(theme, size: 40),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      envelope.name,
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    // Filling progress bar
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: LinearProgressIndicator(
-                                        value: (stuffedAmount / targetAmount).clamp(0.0, 1.0),
-                                        minHeight: 6,
-                                        backgroundColor: Colors.grey.shade200,
-                                        valueColor: AlwaysStoppedAnimation(
-                                          Colors.amber.shade600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                          const SizedBox(height: 8),
+                          // Animated stuffing progress bar with light gradient
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Stack(
+                              children: [
+                                LinearProgressIndicator(
+                                  value: fillProgress,
+                                  minHeight: 12,
+                                  backgroundColor: Colors.grey.shade200,
+                                  valueColor: const AlwaysStoppedAnimation(Colors.transparent),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    currency.format(stuffedAmount),
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: isStuffed
-                                          ? Colors.green.shade700
-                                          : theme.colorScheme.primary,
+                                // Light-filled progress
+                                FractionallySizedBox(
+                                  widthFactor: fillProgress,
+                                  child: Container(
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isGoldActive
+                                            ? [
+                                                Colors.amber.shade200,
+                                                Colors.amber.shade400,
+                                                Colors.orange.shade500,
+                                              ]
+                                            : [
+                                                Colors.amber.shade300,
+                                                Colors.yellow.shade400,
+                                                Colors.amber.shade500,
+                                              ],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: isGoldActive
+                                              ? Colors.amber.withValues(alpha: 0.8)
+                                              : Colors.amber.withValues(alpha: 0.5),
+                                          blurRadius: isGoldActive ? 12 : 8,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (isStuffed)
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green,
-                                      size: 24,
-                                    ),
-                                ],
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          if (isGoldActive)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '✨ GOLD BOOST',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${currency.format(stuffedAmount)} / ${currency.format(targetAmount)}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                },
+                    const SizedBox(width: 16),
+                    if (envelope.targetAmount != null)
+                      HorizonProgress(percentage: horizonProgress, size: 50),
+                  ],
+                ),
               );
             },
           ),
@@ -1762,5 +1781,136 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
         ],
       ),
     );
+  }
+}
+
+// ============================================================================
+// CUSTOM WIDGETS
+// ============================================================================
+
+/// Animated glowing sun that gets brighter as stuffing progresses
+class _GlowingSun extends StatefulWidget {
+  final double brightness; // 0.0 to 1.0
+
+  const _GlowingSun({required this.brightness});
+
+  @override
+  State<_GlowingSun> createState() => _GlowingSunState();
+}
+
+class _GlowingSunState extends State<_GlowingSun> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final pulseValue = _pulseController.value;
+        final brightness = widget.brightness.clamp(0.3, 1.0); // Minimum 30% brightness
+
+        return CustomPaint(
+          size: const Size(120, 120),
+          painter: _SunPainter(
+            brightness: brightness,
+            pulse: pulseValue,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SunPainter extends CustomPainter {
+  final double brightness; // 0.0 to 1.0
+  final double pulse; // 0.0 to 1.0 for animation
+
+  _SunPainter({required this.brightness, required this.pulse});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseRadius = size.width / 3;
+
+    // Outer glow (multiple layers for intense brightness)
+    for (int i = 5; i > 0; i--) {
+      final glowRadius = baseRadius + (i * 15 * brightness) + (pulse * 5);
+      final glowPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Color.lerp(Colors.yellow.shade200, Colors.white, brightness * 0.8)!.withValues(alpha: 0.1 * brightness),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: glowRadius));
+
+      canvas.drawCircle(center, glowRadius, glowPaint);
+    }
+
+    // Core sun with gradient
+    final sunPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Color.lerp(Colors.yellow.shade100, Colors.white, brightness * 0.9)!,
+          Color.lerp(Colors.yellow.shade400, Colors.amber.shade200, brightness * 0.5)!,
+          Color.lerp(Colors.orange.shade500, Colors.amber.shade600, brightness * 0.3)!,
+        ],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: baseRadius));
+
+    canvas.drawCircle(center, baseRadius, sunPaint);
+
+    // Sun rays (more prominent with higher brightness)
+    final rayCount = 12;
+    final rayPaint = Paint()
+      ..color = Color.lerp(Colors.yellow.shade300, Colors.white, brightness * 0.7)!.withValues(alpha: 0.6 * brightness)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    for (int i = 0; i < rayCount; i++) {
+      final angle = (i * 2 * math.pi / rayCount) + (pulse * math.pi / 6);
+      final rayStart = baseRadius + 5;
+      final rayEnd = baseRadius + 15 + (brightness * 10);
+
+      final startX = center.dx + rayStart * math.cos(angle);
+      final startY = center.dy + rayStart * math.sin(angle);
+      final endX = center.dx + rayEnd * math.cos(angle);
+      final endY = center.dy + rayEnd * math.sin(angle);
+
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), rayPaint);
+    }
+
+    // Inner bright core (gets brighter)
+    final corePaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: brightness * 0.9),
+          Colors.white.withValues(alpha: brightness * 0.3),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 0.5));
+
+    canvas.drawCircle(center, baseRadius * 0.5, corePaint);
+  }
+
+  @override
+  bool shouldRepaint(_SunPainter oldDelegate) {
+    return oldDelegate.brightness != brightness || oldDelegate.pulse != pulse;
   }
 }
