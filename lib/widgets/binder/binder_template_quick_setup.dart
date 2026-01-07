@@ -10,6 +10,8 @@ import '../../providers/locale_provider.dart';
 import '../../utils/calculator_helper.dart';
 import '../common/smart_text_field.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/insight_data.dart';
+import '../insight_tile.dart';
 
 class BinderTemplateQuickSetup extends StatefulWidget {
   final BinderTemplate template;
@@ -527,6 +529,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           return _QuickEntryCard(
             template: _selectedEnvelopes[index],
             data: _collectedData[index],
+            userId: widget.userId,
             isAccountMode: widget.defaultAccountId != null,
             currentIndex: index + 1,
             totalCount: _selectedEnvelopes.length,
@@ -551,6 +554,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
 class _QuickEntryCard extends StatefulWidget {
   final EnvelopeTemplate template;
   final EnvelopeData data;
+  final String userId;
   final bool isAccountMode;
   final int currentIndex;
   final int totalCount;
@@ -565,6 +569,7 @@ class _QuickEntryCard extends StatefulWidget {
   const _QuickEntryCard({
     required this.template,
     required this.data,
+    required this.userId,
     required this.isAccountMode,
     required this.currentIndex,
     required this.totalCount,
@@ -846,373 +851,86 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           'If you have cash in your account now that you\'ve already set aside for this envelope, add it here. This gives you an accurate starting point.',
                         ),
 
-                      const SizedBox(height: 16),
-
-                      // Target Amount
-                      SmartTextField(
-                        controller: _targetAmountController,
-                        focusNode: _targetAmountFocus,
-                        isLastField: !widget.data.recurringBillEnabled,
-                        nextFocusNode: widget.data.recurringBillEnabled
-                            ? _recurringAmountFocus
-                            : null,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: 'Horizon (optional)',
-                          prefixText: localeProvider.currencySymbol,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          suffixIcon: Container(
-                            margin: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.calculate,
-                                color: theme.colorScheme.onPrimary,
-                              ),
-                              onPressed: () async {
-                                final result =
-                                    await CalculatorHelper.showCalculator(
-                                      context,
-                                    );
-                                if (result != null && mounted) {
-                                  setState(() {
-                                    _targetAmountController.text = result;
-                                    widget.data.targetAmount = double.tryParse(
-                                      result,
-                                    );
-                                  });
-                                }
-                              },
-                              tooltip: 'Open Calculator',
-                            ),
-                          ),
-                        ),
-                        onTap: () {
-                          if (!_showTargetAmountTip) {
-                            setState(() => _showTargetAmountTip = true);
-                          }
-                        },
-                        onChanged: (value) {
-                          widget.data.targetAmount = double.tryParse(value);
-                        },
-                      ),
-
-                      if (_showTargetAmountTip)
-                        _buildProTip(
-                          'Set a Horizon for this envelope. You can fine-tune this target later using the Horizon Navigator.',
-                        ),
-
-                      const SizedBox(height: 24),
-                      const Divider(),
                       const SizedBox(height: 24),
 
-                      // Envelope Cash Flow
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Envelope Cash Flow?',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Switch(
-                            value: widget.data.payDayDepositEnabled,
-                            onChanged: (enabled) {
-                              setState(() {
-                                widget.data.payDayDepositEnabled = enabled;
+                      // 👁️‍🗨️ INSIGHT TILE - Financial Planning
+                      InsightTile(
+                        userId: widget.userId,
+                        initiallyExpanded: true, // Auto-expand for onboarding
+                        onInsightChanged: (InsightData data) {
+                          setState(() {
+                            // Update Horizon (target)
+                            widget.data.targetAmount = data.horizonAmount;
+                            if (data.horizonAmount != null) {
+                              _targetAmountController.text = data.horizonAmount.toString();
+                            }
 
-                                // Show pro tip when toggled on
-                                if (enabled && !_showPayDayTip) {
-                                  _showPayDayTip = true;
-                                }
-                              });
+                            // Update Cash Flow
+                            widget.data.payDayDepositEnabled = data.cashFlowEnabled;
+                            final cashFlow = data.effectiveCashFlow;
+                            if (cashFlow != null && cashFlow > 0) {
+                              widget.data.payDayDepositAmount = cashFlow;
+                              _payDayAmountController.text = cashFlow.toString();
+                            }
 
-                              // Scroll to bottom when expanded
-                              if (enabled) {
-                                Future.delayed(
-                                  const Duration(milliseconds: 300),
-                                  () {
-                                    if (mounted &&
-                                        _scrollController.hasClients) {
-                                      _scrollController.animateTo(
-                                        _scrollController
-                                            .position
-                                            .maxScrollExtent,
-                                        duration: const Duration(
-                                          milliseconds: 400,
-                                        ),
-                                        curve: Curves.easeOut,
-                                      );
-                                    }
-                                  },
-                                );
+                            // Update Autopilot
+                            widget.data.recurringBillEnabled = data.autopilotEnabled;
+                            if (data.autopilotEnabled && data.autopilotAmount != null) {
+                              widget.data.recurringBillAmount = data.autopilotAmount!;
+                              _recurringAmountController.text = data.autopilotAmount.toString();
+
+                              // Map frequency
+                              widget.data.recurringFrequency = _mapAutopilotFrequency(data.autopilotFrequency);
+
+                              // Set first payment date
+                              if (data.autopilotFirstDate != null) {
+                                widget.data.firstPaymentDate = data.autopilotFirstDate;
+                                widget.data.recurringDay = data.autopilotFirstDate!.day;
                               }
-                            },
-                          ),
-                        ],
+
+                              // Set auto-execute
+                              widget.data.autoExecute = data.autopilotAutoExecute;
+                            }
+                          });
+                        },
+                        initialData: InsightData(
+                          horizonAmount: widget.data.targetAmount,
+                          cashFlowEnabled: widget.data.payDayDepositEnabled,
+                          calculatedCashFlow: widget.data.payDayDepositAmount,
+                          autopilotEnabled: widget.data.recurringBillEnabled,
+                          autopilotAmount: widget.data.recurringBillAmount,
+                          autopilotFrequency: _mapFrequencyToString(widget.data.recurringFrequency),
+                          autopilotFirstDate: widget.data.firstPaymentDate,
+                          autopilotAutoExecute: widget.data.autoExecute,
+                        ),
                       ),
 
-                      if (widget.data.payDayDepositEnabled && _showPayDayTip)
-                        _buildProTip(
-                          'Cash Flow automatically deposits every pay day. This is "The Engine" of the time machine. How much of your Cash Flow fuels this Horizon?',
-                        ),
-
-                      if (widget.data.payDayDepositEnabled) ...[
-                        const SizedBox(height: 16),
-
-                        SmartTextField(
-                          controller: _payDayAmountController,
-                          focusNode: _payDayAmountFocus,
-                          isLastField: true,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
+                      if (widget.isAccountMode && widget.data.payDayDepositEnabled) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer
+                                .withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          decoration: InputDecoration(
-                            labelText: 'Envelope Cash Flow Amount',
-                            prefixText: localeProvider.currencySymbol,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            suffixIcon: Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.link,
+                                size: 20,
                                 color: theme.colorScheme.primary,
-                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.calculate,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                                onPressed: () async {
-                                  final result =
-                                      await CalculatorHelper.showCalculator(
-                                        context,
-                                      );
-                                  if (result != null && mounted) {
-                                    setState(() {
-                                      _payDayAmountController.text = result;
-                                      widget.data.payDayDepositAmount =
-                                          double.tryParse(result) ?? 0.0;
-                                    });
-                                  }
-                                },
-                                tooltip: 'Open Calculator',
-                              ),
-                            ),
-                          ),
-                          onChanged: (value) {
-                            widget.data.payDayDepositAmount =
-                                double.tryParse(value) ?? 0.0;
-                          },
-                        ),
-
-                        if (widget.isAccountMode) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer
-                                  .withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.link,
-                                  size: 20,
+                              const SizedBox(width: 12),
+                              Text(
+                                'Will be linked to Main Account',
+                                style: TextStyle(
+                                  fontSize: 13,
                                   color: theme.colorScheme.primary,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Will be linked to Main Account',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 24),
-
-                      // Autopilot
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Autopilot?',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Switch(
-                            value: widget.data.recurringBillEnabled,
-                            onChanged: (enabled) {
-                              setState(() {
-                                widget.data.recurringBillEnabled = enabled;
-
-                                // Show pro tip when toggled on
-                                if (enabled && !_showRecurringBillTip) {
-                                  _showRecurringBillTip = true;
-                                }
-                              });
-
-                              // Scroll down when expanded to show the fields
-                              if (enabled) {
-                                Future.delayed(
-                                  const Duration(milliseconds: 300),
-                                  () {
-                                    if (mounted &&
-                                        _scrollController.hasClients) {
-                                      _scrollController.animateTo(
-                                        _scrollController.position.pixels + 200,
-                                        duration: const Duration(
-                                          milliseconds: 400,
-                                        ),
-                                        curve: Curves.easeOut,
-                                      );
-                                    }
-                                  },
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-
-                      if (widget.data.recurringBillEnabled &&
-                          _showRecurringBillTip)
-                        _buildProTip(
-                          'Autopilot handles external spending that crosses "The Wall"—money leaving your internal strategy to pay bills in the outside world. Set it up once and let it run automatically.',
-                        ),
-
-                      if (widget.data.recurringBillEnabled) ...[
-                        const SizedBox(height: 16),
-
-                        SmartTextField(
-                          controller: _recurringAmountController,
-                          focusNode: _recurringAmountFocus,
-                          isLastField: true,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: 'Amount',
-                            prefixText: localeProvider.currencySymbol,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            suffixIcon: Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
-                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.calculate,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                                onPressed: () async {
-                                  final result =
-                                      await CalculatorHelper.showCalculator(
-                                        context,
-                                      );
-                                  if (result != null && mounted) {
-                                    setState(() {
-                                      _recurringAmountController.text = result;
-                                      final amount =
-                                          double.tryParse(result) ?? 0.0;
-                                      widget.data.recurringBillAmount = amount;
-                                    });
-                                  }
-                                },
-                                tooltip: 'Open Calculator',
-                              ),
-                            ),
+                            ],
                           ),
-                          onChanged: (value) {
-                            final amount = double.tryParse(value) ?? 0.0;
-                            widget.data.recurringBillAmount = amount;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<Frequency>(
-                          initialValue: widget.data.recurringFrequency,
-                          decoration: InputDecoration(
-                            labelText: 'Frequency',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: Frequency.values.map((freq) {
-                            final name = freq.toString().split('.').last;
-                            final capitalized =
-                                name[0].toUpperCase() + name.substring(1);
-                            return DropdownMenuItem(
-                              value: freq,
-                              child: Text(capitalized),
-                            );
-                          }).toList(),
-                          onChanged: (freq) {
-                            if (freq != null) {
-                              setState(() {
-                                widget.data.recurringFrequency = freq;
-                              });
-                            }
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        GestureDetector(
-                          onTap: () => _showDayPicker(context),
-                          child: AbsorbPointer(
-                            child: TextFormField(
-                              decoration: InputDecoration(
-                                labelText: 'First Payment Date',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                suffixIcon: const Icon(Icons.calendar_today),
-                              ),
-                              controller: TextEditingController(
-                                text: widget.data.firstPaymentDate != null
-                                    ? '${widget.data.firstPaymentDate!.day}/${widget.data.firstPaymentDate!.month}/${widget.data.firstPaymentDate!.year}'
-                                    : 'Tap to select date',
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        SwitchListTile(
-                          title: const Text('Auto-execute payment'),
-                          value: widget.data.autoExecute,
-                          onChanged: (enabled) {
-                            setState(() {
-                              widget.data.autoExecute = enabled;
-                            });
-                          },
                         ),
                       ],
 
@@ -1239,6 +957,34 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
         ),
       ),
     );
+  }
+
+  // Helper method to map Insight autopilot frequency to local Frequency enum
+  Frequency _mapAutopilotFrequency(String autopilotFreq) {
+    switch (autopilotFreq) {
+      case 'weekly':
+        return Frequency.weekly;
+      case 'monthly':
+      case 'biweekly':
+      case 'fourweekly':
+        return Frequency.monthly; // Map all to monthly for simplicity
+      case 'yearly':
+        return Frequency.yearly;
+      default:
+        return Frequency.monthly;
+    }
+  }
+
+  // Helper method to map local Frequency enum to Insight autopilot frequency string
+  String _mapFrequencyToString(Frequency freq) {
+    switch (freq) {
+      case Frequency.weekly:
+        return 'weekly';
+      case Frequency.monthly:
+        return 'monthly';
+      case Frequency.yearly:
+        return 'yearly';
+    }
   }
 
   @override

@@ -24,6 +24,8 @@ import '../theme/app_themes.dart';
 import '../utils/calculator_helper.dart';
 import 'common/smart_text_field.dart';
 import '../models/creation_context.dart';
+import '../models/insight_data.dart';
+import 'insight_tile.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -31,6 +33,7 @@ Future<void> showEnvelopeCreator(
   required EnvelopeRepo repo,
   required GroupRepo groupRepo,
   required AccountRepo accountRepo,
+  required String userId,
   String? preselectedBinderId,
   CreationContext? creationContext,
 }) async {
@@ -41,6 +44,7 @@ Future<void> showEnvelopeCreator(
         repo: repo,
         groupRepo: groupRepo,
         accountRepo: accountRepo,
+        userId: userId,
         preselectedBinderId: preselectedBinderId,
         creationContext: creationContext,
       ),
@@ -53,12 +57,14 @@ class _EnvelopeCreatorScreen extends StatefulWidget {
     required this.repo,
     required this.groupRepo,
     required this.accountRepo,
+    required this.userId,
     this.preselectedBinderId,
     this.creationContext,
   });
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final String userId;
   final String? preselectedBinderId;
   final CreationContext? creationContext;
 
@@ -244,6 +250,33 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         _iconValue = iconValue;
       });
     }
+  }
+
+  Widget _buildIconPreview(ThemeData theme) {
+    // If no icon selected yet, show default
+    if (_iconType == null || _iconValue == null) {
+      return Image.asset(
+        'assets/default/stufficon.png',
+        width: 24,
+        height: 24,
+      );
+    }
+
+    // Create a temporary envelope to render the icon
+    final tempEnvelope = Envelope(
+      id: '',
+      name: '',
+      userId: '',
+      iconType: _iconType,
+      iconValue: _iconValue,
+      iconColor: null,
+    );
+
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: tempEnvelope.getIconWidget(theme, size: 24),
+    );
   }
 
   @override
@@ -586,11 +619,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             ),
                             child: Row(
                               children: [
-                                Image.asset(
-                                  'assets/default/stufficon.png',
-                                  width: 24,
-                                  height: 24,
-                                ),
+                                _buildIconPreview(theme),
                                 const SizedBox(width: 16),
                                 Text(
                                   tr('Icon'),
@@ -701,141 +730,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                               extentOffset: _amtCtrl.text.length,
                             );
                           },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Target field
-                        SmartTextFormField(
-                          controller: _targetCtrl,
-                          focusNode: _targetFocus,
-                          nextFocusNode: _cashFlowEnabled ? _cashFlowAmountFocus : null,
-                          isLastField: !_cashFlowEnabled,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: tr('envelope_target_amount'),
-                            labelStyle: fontProvider.getTextStyle(fontSize: 18),
-                            hintText: 'e.g. 1000.00',
-                            hintStyle: fontProvider.getTextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            prefixIcon: const Icon(Icons.flag),
-                            suffixIcon: Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.calculate,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                                onPressed: () async {
-                                  final result = await CalculatorHelper.showCalculator(context);
-                                  if (result != null && mounted) {
-                                    setState(() {
-                                      _targetCtrl.text = result;
-                                    });
-                                  }
-                                },
-                                tooltip: 'Open Calculator',
-                              ),
-                            ),
-                            // FIX 3: Added contentPadding
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 20,
-                            ),
-                          ),
-                          onTap: () => _targetCtrl.selection = TextSelection(
-                            baseOffset: 0,
-                            extentOffset: _targetCtrl.text.length,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Target Date field
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _targetDate ?? DateTime.now(),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(
-                                const Duration(days: 365 * 10),
-                              ),
-                            );
-                            if (picked != null && mounted) {
-                              setState(() {
-                                _targetDate = picked;
-                              });
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: theme.colorScheme.outline,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Horizon Date (Optional)',
-                                        style: fontProvider.getTextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _targetDate == null
-                                            ? 'Track progress by date (e.g., loan end date)'
-                                            : '${_targetDate!.day}/${_targetDate!.month}/${_targetDate!.year}',
-                                        style: fontProvider.getTextStyle(
-                                          fontSize: 14,
-                                          color: _targetDate == null
-                                              ? Colors.grey
-                                              : theme.colorScheme.secondary,
-                                          fontWeight: _targetDate == null
-                                              ? FontWeight.normal
-                                              : FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (_targetDate != null)
-                                  IconButton(
-                                    icon: const Icon(Icons.clear, size: 20),
-                                    onPressed: () {
-                                      setState(() {
-                                        _targetDate = null;
-                                      });
-                                    },
-                                    tooltip: 'Clear date',
-                                  ),
-                              ],
-                            ),
-                          ),
                         ),
                         const SizedBox(height: 24),
 
@@ -1039,146 +933,37 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           const SizedBox(height: 16),
                         ],
 
-                        // Auto-fill
-                        Text(
-                          tr('group_pay_day_auto'),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          value: _cashFlowEnabled,
-                          onChanged: (value) {
+                        // 👁️‍🗨️ INSIGHT TILE - Unified financial planning
+                        InsightTile(
+                          userId: widget.userId,
+                          onInsightChanged: (InsightData data) {
                             setState(() {
-                              _cashFlowEnabled = value;
+                              // Update target/horizon
+                              if (data.horizonAmount != null) {
+                                _targetCtrl.text = data.horizonAmount.toString();
+                              }
+                              _targetDate = data.horizonDate;
+
+                              // Update cash flow
+                              _cashFlowEnabled = data.cashFlowEnabled;
+                              final cashFlow = data.effectiveCashFlow;
+                              if (cashFlow != null) {
+                                _cashFlowAmountCtrl.text = cashFlow.toString();
+                              }
+
+                              // Update autopilot flag
+                              _addScheduledPayment = data.autopilotEnabled;
                             });
                           },
-                          title: Text(
-                            tr('envelope_enable_autofill'),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          subtitle: Text(
-                            tr('envelope_autofill_subtitle'),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: theme.colorScheme.onSurface.withAlpha(153),
-                            ),
+                          initialData: InsightData(
+                            horizonAmount: double.tryParse(_targetCtrl.text),
+                            horizonDate: _targetDate,
+                            cashFlowEnabled: _cashFlowEnabled,
+                            calculatedCashFlow: double.tryParse(_cashFlowAmountCtrl.text),
+                            autopilotEnabled: _addScheduledPayment,
                           ),
                         ),
-                        if (_cashFlowEnabled) ...[
-                          const SizedBox(height: 16),
-                          SmartTextFormField(
-                            controller: _cashFlowAmountCtrl,
-                            focusNode: _cashFlowAmountFocus,
-                            isLastField: true,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: tr('envelope_autofill_amount'),
-                              labelStyle: fontProvider.getTextStyle(
-                                fontSize: 18,
-                              ),
-                              hintText: 'e.g. 50.00',
-                              hintStyle: fontProvider.getTextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              prefixIcon: const Icon(Icons.autorenew),
-                              suffixIcon: Container(
-                                margin: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
-                                    Icons.calculate,
-                                    color: theme.colorScheme.onPrimary,
-                                  ),
-                                  onPressed: () async {
-                                    final result = await CalculatorHelper.showCalculator(context);
-                                    if (result != null && mounted) {
-                                      setState(() {
-                                        _cashFlowAmountCtrl.text = result;
-                                      });
-                                    }
-                                  },
-                                  tooltip: 'Open Calculator',
-                                ),
-                              ),
-                              helperText: tr('envelope_autofill_helper'),
-                              helperStyle: fontProvider.getTextStyle(
-                                fontSize: 14,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 20,
-                              ),
-                            ),
-                            onTap: () {
-                              _cashFlowAmountCtrl.selection = TextSelection(
-                                baseOffset: 0,
-                                extentOffset: _cashFlowAmountCtrl.text.length,
-                              );
-                            },
-                          ),
-                        ],
                         const SizedBox(height: 24),
-
-                        Divider(color: theme.colorScheme.outline),
-                        const SizedBox(height: 16),
-
-                        // Schedule Payment
-                        Text(
-                          tr('envelope_schedule_payment'),
-                          style: fontProvider.getTextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        CheckboxListTile(
-                          value: _addScheduledPayment,
-                          onChanged: (value) {
-                            setState(
-                              () => _addScheduledPayment = value ?? false,
-                            );
-                          },
-                          title: Text(
-                            tr('envelope_add_recurring_payment'),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          subtitle: Text(
-                            tr('envelope_recurring_payment_subtitle'),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: theme.colorScheme.onSurface.withAlpha(153),
-                            ),
-                          ),
-                          secondary: Icon(
-                            Icons.calendar_today,
-                            color: theme.colorScheme.secondary,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
 
                         // Create button
                         FilledButton(

@@ -556,6 +556,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       repo: widget.envelopeRepo,
       groupRepo: widget.groupRepo,
       accountRepo: accountRepo,
+      userId: widget.envelopeRepo.currentUserId,
       preselectedBinderId: editingGroupId,
       creationContext: creationContext,
     );

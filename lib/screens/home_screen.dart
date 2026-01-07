@@ -604,6 +604,7 @@ class _AllEnvelopesFAB extends StatelessWidget {
                     repo: repo,
                     groupRepo: groupRepo,
                     accountRepo: homeScreenState!._accountRepo,
+                    userId: repo.currentUserId,
                   );
                   allEnvelopesState?.refresh();
                 },

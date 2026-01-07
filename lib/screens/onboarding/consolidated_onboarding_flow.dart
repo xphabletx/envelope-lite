@@ -25,6 +25,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../widgets/binder/binder_template_quick_setup.dart';
 import '../../widgets/envelope/omni_icon_picker_modal.dart';
 import '../../widgets/common/smart_text_field.dart';
+import '../../widgets/group_editor.dart';
+import '../../services/group_repo.dart';
 
 class ConsolidatedOnboardingFlow extends StatefulWidget {
   final String userId;
@@ -232,6 +234,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
       // Step 9: Binder Template
       _BinderTemplateSelectionStep(
+        userId: widget.userId,
         onContinue: (template) {
           setState(() {
             _selectedTemplate = template;
@@ -282,6 +285,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
   void _previousStep() {
     if (_currentPageIndex > 0) {
+      // Dismiss keyboard before navigating back to prevent overflow
+      FocusManager.instance.primaryFocus?.unfocus();
       setState(() => _currentPageIndex--);
       _pageController.previousPage(
         duration: const Duration(milliseconds: 300),
@@ -2158,7 +2163,7 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
                         const SizedBox(height: 40),
 
                         Text(
-                          'Powering the Time Machine',
+                          'Your Financial Machine',
                           style: fontProvider.getTextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -2167,23 +2172,12 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
                           textAlign: TextAlign.center,
                         ),
 
-                        const SizedBox(height: 32),
-
-                        // "Mastering the Wall" header
-                        Text(
-                          'Mastering the Wall',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
                         const SizedBox(height: 12),
+
                         Text(
-                          'Money arrives from the outside (External), is organized into your strategy (Internal), and flows out to fuel your life. Cash Flow and Autopilot manage this movement automatically.',
+                          'A complete automation system for your money',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 16,
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                             height: 1.4,
                           ),
@@ -2192,17 +2186,41 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
 
                         const SizedBox(height: 32),
 
-                        // Three Pillar Cards
+                        // Core Systems Header
+                        Text(
+                          'Core Systems',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Four Core System Cards
+                        _buildPillarCard(
+                          theme: theme,
+                          fontProvider: fontProvider,
+                          icon: '👁️‍🗨️',
+                          title: 'Insight',
+                          subtitle: 'Intelligence System',
+                          description: 'Calculates exactly how much to save per paycheck to reach your goals. Target in sight.',
+                        ),
+
+                        const SizedBox(height: 12),
+
                         _buildPillarCard(
                           theme: theme,
                           fontProvider: fontProvider,
                           icon: '⚡',
-                          title: 'Envelope Cash Flow',
+                          title: 'Cash Flow',
                           subtitle: 'The Engine',
-                          description: 'Automate your savings velocity. This fuels your envelopes every time you get paid.',
+                          description: 'Powers your savings velocity. Auto-deposits into envelopes every pay day.',
                         ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
                         _buildPillarCard(
                           theme: theme,
@@ -2210,18 +2228,82 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
                           icon: '🛡️',
                           title: 'Autopilot',
                           subtitle: 'The Shield',
-                          description: 'Automate your bills. This handles payments crossing "The Wall" so your strategy stays protected.',
+                          description: 'Protects your strategy by automating bills that cross "The Wall" to the outside world.',
                         ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
                         _buildPillarCard(
                           theme: theme,
                           fontProvider: fontProvider,
-                          icon: '🔮',
-                          title: 'Time Machine',
-                          subtitle: 'The Dashboard',
-                          description: 'The Result. Once Cash Flow and Autopilot are set, the Time Machine projects your future—showing you exactly when you\'ll reach your Horizons.',
+                          icon: '🎯',
+                          title: 'Horizon Navigator',
+                          subtitle: 'Navigation System',
+                          description: 'Track your targets and adjust course. See exactly when you\'ll reach each destination.',
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Dashboard Section
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                theme.colorScheme.secondaryContainer.withValues(alpha: 0.3),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('🔮', style: TextStyle(fontSize: 32)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Time Machine',
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Your Command Center',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: theme.colorScheme.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Once your systems are running, the Time Machine projects your financial future—showing every paycheck, every bill, every goal on a single timeline.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                  height: 1.4,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
                         ),
 
                         const Spacer(),
@@ -2333,10 +2415,12 @@ class _EnvelopeMindsetStepState extends State<_EnvelopeMindsetStep> {
 
 // _BinderTemplateSelectionStep
 class _BinderTemplateSelectionStep extends StatelessWidget {
+  final String userId;
   final Function(BinderTemplate?) onContinue;
   final VoidCallback onSkip;
 
   const _BinderTemplateSelectionStep({
+    required this.userId,
     required this.onContinue,
     required this.onSkip,
   });
@@ -2401,7 +2485,11 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: _StartFromScratchCard(
-                            onTap: () => onContinue(null),
+                            userId: userId,
+                            onBinderCreated: () {
+                              // After creating a binder, skip to completion
+                              onSkip();
+                            },
                           ),
                         ),
 
@@ -2532,10 +2620,38 @@ class _TemplateCard extends StatelessWidget {
   }
 }
 
-class _StartFromScratchCard extends StatelessWidget {
-  final VoidCallback onTap;
+class _StartFromScratchCard extends StatefulWidget {
+  final String userId;
+  final VoidCallback onBinderCreated;
 
-  const _StartFromScratchCard({required this.onTap});
+  const _StartFromScratchCard({
+    required this.userId,
+    required this.onBinderCreated,
+  });
+
+  @override
+  State<_StartFromScratchCard> createState() => _StartFromScratchCardState();
+}
+
+class _StartFromScratchCardState extends State<_StartFromScratchCard> {
+  Future<void> _openGroupEditor() async {
+    final envelopeRepo = EnvelopeRepo.firebase(
+      FirebaseFirestore.instance,
+      userId: widget.userId,
+    );
+    final groupRepo = GroupRepo(envelopeRepo);
+
+    final groupId = await showGroupEditor(
+      context: context,
+      groupRepo: groupRepo,
+      envelopeRepo: envelopeRepo,
+    );
+
+    // If a binder was created, call the callback
+    if (groupId != null && mounted) {
+      widget.onBinderCreated();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2543,7 +2659,7 @@ class _StartFromScratchCard extends StatelessWidget {
     final fontProvider = Provider.of<FontProvider>(context);
 
     return InkWell(
-      onTap: onTap,
+      onTap: _openGroupEditor,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
