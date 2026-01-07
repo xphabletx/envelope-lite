@@ -53,13 +53,8 @@ class EnvelopeRepo {
         _transactionBox = HiveService.getBox<models.Transaction>('transactions') {
     // GUARD: Don't initialize if user is not authenticated
     if (FirebaseAuth.instance.currentUser == null) {
-      debugPrint('[EnvelopeRepo] WARNING: User not authenticated, skipping initialization.');
       return;
     }
-    debugPrint('[EnvelopeRepo] DEBUG: Initializing EnvelopeRepo');
-    debugPrint('[EnvelopeRepo] DEBUG: - userId: $userId');
-    debugPrint('[EnvelopeRepo] DEBUG: - workspaceId: $workspaceId');
-    debugPrint('[EnvelopeRepo] DEBUG: - inWorkspace: $_inWorkspace');
   }
 
   /// Dispose and cancel all active Firestore stream subscriptions
@@ -115,8 +110,6 @@ class EnvelopeRepo {
 
     } else {
       // WORKSPACE MODE: Firebase sync from workspace envelopes collection
-      debugPrint('[EnvelopeRepo] DEBUG: Setting up workspace envelopes stream for workspace: $_workspaceId');
-
       return _firestore
           .collection('workspaces')
           .doc(_workspaceId)
@@ -124,13 +117,11 @@ class EnvelopeRepo {
           .orderBy('createdAt', descending: false)
           .snapshots()
           .handleError((error) {
-            debugPrint('[EnvelopeRepo] ERROR: Workspace envelopes stream error: $error');
             // Handle PERMISSION_DENIED errors gracefully (happens after logout)
             // Return empty list to allow graceful degradation
             return const Stream<List<Envelope>>.empty();
           })
           .asyncMap((snapshot) async {
-            debugPrint('[EnvelopeRepo] DEBUG: Received workspace envelopes update: ${snapshot.docs.length} envelopes');
             final List<Envelope> allEnvelopes = [];
 
             for (final doc in snapshot.docs) {
@@ -138,20 +129,15 @@ class EnvelopeRepo {
 
               // Filter based on showPartnerEnvelopes flag
               if (showPartnerEnvelopes || envelope.userId == _userId) {
-                debugPrint('[EnvelopeRepo] DEBUG: - Envelope: "${envelope.name}" (${envelope.id}) - Owner: ${envelope.userId} - isShared: ${envelope.isShared}');
                 allEnvelopes.add(envelope);
                 // Cache to Hive for offline access
                 await _envelopeBox.put(envelope.id, envelope);
-              } else {
-                debugPrint('[EnvelopeRepo] DEBUG: - Filtering out partner envelope: "${envelope.name}" (${envelope.id})');
               }
             }
 
-            debugPrint('[EnvelopeRepo] DEBUG: Returning ${allEnvelopes.length} envelopes after filtering');
             return allEnvelopes;
           })
           .handleError((error) {
-            debugPrint('[EnvelopeRepo] ERROR: asyncMap error: $error');
             // Catch any errors during asyncMap as well
           });
     }
@@ -223,8 +209,6 @@ class EnvelopeRepo {
       ]);
     } else {
       // WORKSPACE MODE: Firebase sync from workspace groups collection
-      debugPrint('[EnvelopeRepo] DEBUG: Setting up workspace groups stream for workspace: $_workspaceId');
-
       return _firestore
           .collection('workspaces')
           .doc(_workspaceId!)
@@ -232,11 +216,9 @@ class EnvelopeRepo {
           .orderBy('createdAt', descending: false)
           .snapshots()
           .handleError((error) {
-            debugPrint('[EnvelopeRepo] ERROR: Workspace groups stream error: $error');
             return const Stream<List<EnvelopeGroup>>.empty();
           })
           .asyncMap((snapshot) async {
-            debugPrint('[EnvelopeRepo] DEBUG: Received workspace groups update: ${snapshot.docs.length} groups');
             final List<EnvelopeGroup> allGroups = [];
 
             for (final doc in snapshot.docs) {
@@ -244,18 +226,16 @@ class EnvelopeRepo {
               data['id'] = doc.id; // Ensure ID is set
               final group = EnvelopeGroup.fromMap(data);
 
-              debugPrint('[EnvelopeRepo] DEBUG: - Group: "${group.name}" (${group.id}) - Owner: ${group.userId} - isShared: ${group.isShared}');
               allGroups.add(group);
 
               // Cache to Hive for offline access
               await _groupBox.put(group.id, group);
             }
 
-            debugPrint('[EnvelopeRepo] DEBUG: Returning ${allGroups.length} groups');
             return allGroups;
           })
           .handleError((error) {
-            debugPrint('[EnvelopeRepo] ERROR: asyncMap error: $error');
+            // Catch any errors during asyncMap as well
           });
     }
   }
@@ -350,6 +330,7 @@ class EnvelopeRepo {
     double? cashFlowAmount,
     String? linkedAccountId,
   }) async {
+    debugPrint('[EnvelopeRepo] ➕ CREATE ENVELOPE: "$name" (starting: \$$startingAmount)');
     final id = _firestore.collection('_temp').doc().id;
     final now = DateTime.now();
 
@@ -377,10 +358,12 @@ class EnvelopeRepo {
 
     // ALWAYS write to Hive first (primary storage)
     await _envelopeBox.put(id, envelope);
+    debugPrint('[EnvelopeRepo] 💾 Saved to Hive: $name ($id)');
 
     // Background sync (fire-and-forget, non-blocking)
     // SOLO MODE: Syncs to /users/{userId}/envelopes
     // WORKSPACE MODE: Syncs to /workspaces/{workspaceId}/envelopes
+    debugPrint('[EnvelopeRepo] 🔄 Queuing Firebase sync (mode: ${_inWorkspace ? "workspace" : "solo"})');
     _syncManager.pushEnvelope(envelope, _workspaceId, _userId);
 
 
@@ -400,8 +383,10 @@ class EnvelopeRepo {
       );
 
       await _transactionBox.put(txId, transaction);
+      debugPrint('[EnvelopeRepo] 💵 Initial balance transaction created');
     }
 
+    debugPrint('[EnvelopeRepo] ✅ CREATE ENVELOPE complete: $name');
     return id;
   }
 
@@ -476,18 +461,22 @@ class EnvelopeRepo {
       );
 
       await _envelopeBox.put(envelopeId, updatedEnvelope);
+      debugPrint('[EnvelopeRepo] ✏️ UPDATE ENVELOPE: "${updatedEnvelope.name}" saved to Hive');
     } catch (e) {
       rethrow;
     }
 
     // Background sync (fire-and-forget, non-blocking)
+    debugPrint('[EnvelopeRepo] 🔄 Queuing Firebase sync for update');
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
+    debugPrint('[EnvelopeRepo] ✅ UPDATE ENVELOPE complete');
   }
 
   // ==================== DELETE ====================
 
   /// Delete envelope
   Future<void> deleteEnvelope(String id) async {
+    debugPrint('[EnvelopeRepo] 🗑️ DELETE ENVELOPE: $id');
     // Delete transactions from Hive
     final txsToDelete = _transactionBox.values
         .where((tx) => tx.envelopeId == id)
@@ -511,9 +500,12 @@ class EnvelopeRepo {
 
     // Delete envelope from Hive
     await _envelopeBox.delete(id);
+    debugPrint('[EnvelopeRepo] 💾 Deleted from Hive');
 
     // Background sync deletion (fire-and-forget, non-blocking)
+    debugPrint('[EnvelopeRepo] 🔄 Queuing Firebase delete sync');
     _syncManager.deleteEnvelope(id, _workspaceId, _userId);
+    debugPrint('[EnvelopeRepo] ✅ DELETE ENVELOPE complete');
   }
 
   Future<void> deleteEnvelopes(Iterable<String> ids) async {
@@ -557,18 +549,11 @@ class EnvelopeRepo {
   Future<void> _createTransaction(models.Transaction transaction) async {
     // CRITICAL: Never persist future/projected transactions from TimeMachine
     if (transaction.isFuture) {
-      debugPrint('[EnvelopeRepo] DEBUG: Skipping future transaction (TimeMachine projection): ${transaction.id}');
       return; // TimeMachine projections must never be saved
     }
 
-    debugPrint('[EnvelopeRepo] DEBUG: Creating transaction: ${transaction.id}');
-    debugPrint('[EnvelopeRepo] DEBUG: - Type: ${transaction.type}');
-    debugPrint('[EnvelopeRepo] DEBUG: - Amount: ${transaction.amount}');
-    debugPrint('[EnvelopeRepo] DEBUG: - EnvelopeId: ${transaction.envelopeId}');
-
     // ALWAYS save to Hive (local paper trail)
     await _transactionBox.put(transaction.id, transaction);
-    debugPrint('[EnvelopeRepo] DEBUG: Transaction saved to Hive');
 
     // Determine if this is a partner transfer (only relevant in workspace mode)
     final isPartnerTransfer = _inWorkspace &&
@@ -576,14 +561,6 @@ class EnvelopeRepo {
         transaction.sourceOwnerId != null &&
         transaction.targetOwnerId != null &&
         transaction.sourceOwnerId != transaction.targetOwnerId;
-
-    if (_inWorkspace) {
-      debugPrint('[EnvelopeRepo] DEBUG: Workspace mode - isPartnerTransfer: $isPartnerTransfer');
-      if (isPartnerTransfer) {
-        debugPrint('[EnvelopeRepo] DEBUG: - Source owner: ${transaction.sourceOwnerId}');
-        debugPrint('[EnvelopeRepo] DEBUG: - Target owner: ${transaction.targetOwnerId}');
-      }
-    }
 
     // Background sync (fire-and-forget, non-blocking)
     // SOLO MODE: Syncs ALL transactions to /users/{userId}/transactions
@@ -600,6 +577,7 @@ class EnvelopeRepo {
     required String description,
     DateTime? date,
   }) async {
+    debugPrint('[EnvelopeRepo] 💰 DEPOSIT: \$$amount to envelope $envelopeId');
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) throw Exception('Envelope not found');
 
@@ -667,7 +645,9 @@ class EnvelopeRepo {
     await _createTransaction(transaction);
 
     // 3. Background sync (fire-and-forget, non-blocking)
+    debugPrint('[EnvelopeRepo] 🔄 Syncing envelope ${envelope.name} (mode: ${_inWorkspace ? "workspace" : "solo"})');
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
+    debugPrint('[EnvelopeRepo] ✅ DEPOSIT complete');
   }
 
   /// Withdraw
@@ -678,6 +658,7 @@ class EnvelopeRepo {
     DateTime? date,
     bool isScheduledPayment = false,
   }) async {
+    debugPrint('[EnvelopeRepo] 💸 WITHDRAW: \$$amount from envelope $envelopeId');
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) {
       throw Exception('Envelope not found');
@@ -750,7 +731,9 @@ class EnvelopeRepo {
     await _createTransaction(transaction);
 
     // 3. Background sync (fire-and-forget, non-blocking)
+    debugPrint('[EnvelopeRepo] 🔄 Syncing envelope ${envelope.name} (mode: ${_inWorkspace ? "workspace" : "solo"})');
     _syncManager.pushEnvelope(updatedEnvelope, _workspaceId, _userId);
+    debugPrint('[EnvelopeRepo] ✅ WITHDRAW complete');
   }
 
   /// Transfer between envelopes
@@ -761,6 +744,7 @@ class EnvelopeRepo {
     required String description,
     DateTime? date,
   }) async {
+    debugPrint('[EnvelopeRepo] 🔁 TRANSFER: \$$amount from $fromEnvelopeId to $toEnvelopeId');
     final sourceEnv = _envelopeBox.get(fromEnvelopeId);
     final targetEnv = _envelopeBox.get(toEnvelopeId);
 
@@ -899,8 +883,10 @@ class EnvelopeRepo {
     await _createTransaction(inTransaction);
 
     // 3. Background sync (fire-and-forget, non-blocking)
+    debugPrint('[EnvelopeRepo] 🔄 Syncing both envelopes (mode: ${_inWorkspace ? "workspace" : "solo"})');
     _syncManager.pushEnvelope(updatedSource, _workspaceId, _userId);
     _syncManager.pushEnvelope(updatedTarget, _workspaceId, _userId);
+    debugPrint('[EnvelopeRepo] ✅ TRANSFER complete');
   }
 
   // ==================== GROUP MANAGEMENT ====================

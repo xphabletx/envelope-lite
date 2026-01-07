@@ -133,6 +133,7 @@ class AccountRepo {
     AccountType accountType = AccountType.bankAccount,
     double? creditLimit,
   }) async {
+    debugPrint('[AccountRepo] ➕ CREATE ACCOUNT: "$name" (balance: \$$startingBalance)');
     if (isDefault) {
       await _unsetOtherDefaults();
     }
@@ -158,6 +159,7 @@ class AccountRepo {
     );
 
     await _accountBox.put(id, account);
+    debugPrint('[AccountRepo] 💾 Saved to Hive: $name ($id)');
 
     // Create initial transaction if needed
     if (startingBalance > 0) {
@@ -176,10 +178,13 @@ class AccountRepo {
       );
 
       await _transactionBox.put(txId, transaction);
+      debugPrint('[AccountRepo] 💵 Initial balance transaction created');
     }
 
     // CRITICAL: Sync to Firebase to prevent data loss
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync');
     _syncManager.pushAccount(account, _userId);
+    debugPrint('[AccountRepo] ✅ CREATE ACCOUNT complete: $name');
 
     return id;
   }
@@ -196,6 +201,7 @@ class AccountRepo {
     String? iconValue,
     int? iconColor,
   }) async {
+    debugPrint('[AccountRepo] ✏️ UPDATE ACCOUNT: $accountId');
     if (isDefault == true) {
       await _unsetOtherDefaults(excludeAccountId: accountId);
     }
@@ -224,67 +230,43 @@ class AccountRepo {
     );
 
     await _accountBox.put(accountId, updatedAccount);
+    debugPrint('[AccountRepo] 💾 Saved to Hive: ${updatedAccount.name}');
 
     // CRITICAL: Sync to Firebase to prevent data loss
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync');
     _syncManager.pushAccount(updatedAccount, _userId);
+    debugPrint('[AccountRepo] ✅ UPDATE ACCOUNT complete');
   }
 
   /// Delete account
   Future<void> deleteAccount(String accountId) async {
-    debugPrint('[AccountRepo] ========== DELETING ACCOUNT ==========');
-    debugPrint('[AccountRepo] Account ID: $accountId');
-    debugPrint('[AccountRepo] User ID: $_userId');
-
+    debugPrint('[AccountRepo] 🗑️ DELETE ACCOUNT: $accountId');
     final account = _accountBox.get(accountId);
     if (account == null) {
-      debugPrint('[AccountRepo] ERROR: Account not found in Hive: $accountId');
       throw Exception('Account not found: $accountId');
     }
 
-    debugPrint('[AccountRepo] Found account in Hive: ${account.name} (isDefault: ${account.isDefault})');
-
     // Get linked envelopes and unlink them (don't delete them)
     final linkedEnvelopes = await getLinkedEnvelopes(accountId);
-    debugPrint('[AccountRepo] Found ${linkedEnvelopes.length} linked envelopes');
 
     if (linkedEnvelopes.isNotEmpty) {
-      debugPrint('[AccountRepo] Unlinking ${linkedEnvelopes.length} envelopes...');
+      debugPrint('[AccountRepo] Unlinking ${linkedEnvelopes.length} envelopes');
       for (final envelope in linkedEnvelopes) {
-        debugPrint('[AccountRepo]   Unlinking envelope: ${envelope.name} (${envelope.id})');
         await _envelopeRepo.updateEnvelope(
           envelopeId: envelope.id,
           linkedAccountId: null,
           updateLinkedAccountId: true,
         );
       }
-      debugPrint('[AccountRepo] All envelopes unlinked successfully');
     }
 
-    debugPrint('[AccountRepo] Deleting account from Hive...');
     await _accountBox.delete(accountId);
-    debugPrint('[AccountRepo] Account deleted from Hive');
-
-    // Verify deletion
-    final verifyDeleted = _accountBox.get(accountId);
-    if (verifyDeleted != null) {
-      debugPrint('[AccountRepo] WARNING: Account still exists in Hive after deletion!');
-    } else {
-      debugPrint('[AccountRepo] Verified: Account no longer in Hive');
-    }
+    debugPrint('[AccountRepo] 💾 Deleted from Hive');
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
-    debugPrint('[AccountRepo] Syncing deletion to Firebase...');
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase delete sync');
     _syncManager.deleteAccount(accountId, _userId);
-    debugPrint('[AccountRepo] Firebase sync initiated');
-
-    // Check remaining accounts
-    final remainingAccounts = getAccountsSync();
-    debugPrint('[AccountRepo] Remaining accounts: ${remainingAccounts.length}');
-    for (final acc in remainingAccounts) {
-      debugPrint('[AccountRepo]   - ${acc.name} (isDefault: ${acc.isDefault})');
-    }
-
-    debugPrint('[AccountRepo] ========== DELETE COMPLETE ==========');
+    debugPrint('[AccountRepo] ✅ DELETE ACCOUNT complete');
   }
 
   /// Adjust balance by a delta amount
@@ -442,6 +424,7 @@ class AccountRepo {
 
   /// Deposit into account
   Future<void> deposit(String accountId, double amount, {String? description}) async {
+    debugPrint('[AccountRepo] 💰 DEPOSIT: \$$amount to account $accountId');
     final account = await getAccount(accountId);
     if (account == null) return;
 
@@ -482,13 +465,17 @@ class AccountRepo {
 
     await _accountBox.put(accountId, updatedAccount);
     await _transactionBox.put(transaction.id, transaction);
+    debugPrint('[AccountRepo] 💾 Saved to Hive: ${account.name}');
 
     // CRITICAL: Sync to Firebase
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync');
     _syncManager.pushAccount(updatedAccount, _userId);
+    debugPrint('[AccountRepo] ✅ DEPOSIT complete');
   }
 
   /// Withdraw from account
   Future<void> withdraw(String accountId, double amount, {String? description}) async {
+    debugPrint('[AccountRepo] 💸 WITHDRAW: \$$amount from account $accountId');
     final account = await getAccount(accountId);
     if (account == null) return;
 
@@ -522,13 +509,17 @@ class AccountRepo {
 
     await _accountBox.put(accountId, updatedAccount);
     await _transactionBox.put(transaction.id, transaction);
+    debugPrint('[AccountRepo] 💾 Saved to Hive: ${account.name}');
 
     // CRITICAL: Sync to Firebase
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync');
     _syncManager.pushAccount(updatedAccount, _userId);
+    debugPrint('[AccountRepo] ✅ WITHDRAW complete');
   }
 
   /// Transfer between accounts (INTERNAL - money staying inside system)
   Future<void> transfer(String fromId, String toId, double amount, {String? description}) async {
+    debugPrint('[AccountRepo] 🔁 TRANSFER: \$$amount from $fromId to $toId');
     final fromAccount = await getAccount(fromId);
     final toAccount = await getAccount(toId);
     if (fromAccount == null || toAccount == null) {
@@ -598,9 +589,12 @@ class AccountRepo {
     await _accountBox.put(toId, updatedTo);
     await _transactionBox.put(outTransaction.id, outTransaction);
     await _transactionBox.put(inTransaction.id, inTransaction);
+    debugPrint('[AccountRepo] 💾 Saved both accounts to Hive');
 
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync for both accounts');
     _syncManager.pushAccount(updatedFrom, _userId);
     _syncManager.pushAccount(updatedTo, _userId);
+    debugPrint('[AccountRepo] ✅ TRANSFER complete');
   }
 
   /// Transfer from account to envelope (creates linked transfer transactions)
@@ -612,6 +606,7 @@ class AccountRepo {
     required DateTime date,
     required EnvelopeRepo envelopeRepo,
   }) async {
+    debugPrint('[AccountRepo] 🔁 TRANSFER TO ENVELOPE: \$$amount from account $accountId to envelope $envelopeId');
     final account = _accountBox.get(accountId);
     if (account == null) {
       throw Exception('Account not found');
@@ -705,10 +700,13 @@ class AccountRepo {
     // Save both transactions to Hive
     await _transactionBox.put(accountTransaction.id, accountTransaction);
     await _transactionBox.put(envelopeTransaction.id, envelopeTransaction);
+    debugPrint('[AccountRepo] 💾 Saved account and envelope to Hive');
 
     // 4. Sync to Firebase
+    debugPrint('[AccountRepo] 🔄 Queuing Firebase sync for account and envelope');
     _syncManager.pushAccount(updatedAccount, _userId);
     _syncManager.pushEnvelope(updatedEnvelope, envelopeRepo.workspaceId, _userId);
+    debugPrint('[AccountRepo] ✅ TRANSFER TO ENVELOPE complete');
   }
 
   /// Handle first account creation (auto-set as default)
