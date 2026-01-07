@@ -54,15 +54,15 @@ void main() async {
     debugPrint('[Main] ⚠️ Firebase App Check skipped (Debug mode)');
   }
 
-  // 🔥 NUCLEAR OPTION: Completely disable Firebase offline features
+  // 🔥 Enable Firebase persistence for offline sync
   try {
     // Configure Firestore settings BEFORE any usage
     FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: false, // Disable offline cache
+      persistenceEnabled: true, // ENABLE offline cache for sync queue
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED, // Valid cache size
     );
 
-    debugPrint('[Main] ⚠️ Firebase persistence DISABLED');
+    debugPrint('[Main] ✅ Firebase persistence ENABLED (for offline sync)');
     debugPrint('[Main] ⚠️ Firebase cache size set to unlimited');
   } catch (e) {
     debugPrint('[Main] ⚠️ Could not configure Firebase settings: $e');
