@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/account.dart';
+import '../../models/pay_day_settings.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/pay_day_settings_service.dart';
@@ -256,11 +257,15 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
       widget.envelopeRepo.currentUserId,
     );
     final settings = await payDayService.getSettings();
-    if (settings != null) {
-      await payDayService.updatePayDaySettings(
-        settings.copyWith(defaultAccountId: accountId),
+
+    // Create or update settings with default account
+    final updatedSettings = settings?.copyWith(defaultAccountId: accountId) ??
+      PayDaySettings(
+        userId: widget.envelopeRepo.currentUserId,
+        defaultAccountId: accountId,
+        payFrequency: 'monthly',
       );
-    }
+    await payDayService.updatePayDaySettings(updatedSettings);
 
     // Get account name for display
     final accounts = await widget.accountRepo.accountsStream().first;

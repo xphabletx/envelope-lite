@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:provider/provider.dart';
 
-import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/envelope_repo.dart';
 import '../services/user_service.dart';
@@ -43,10 +42,52 @@ class SettingsScreen extends StatelessWidget {
 
   final EnvelopeRepo repo;
 
+  /// Get user profile data from local sources (local-first, works offline)
+  Future<Map<String, String?>> _getLocalUserProfile() async {
+    try {
+      // 1. Get displayName from FirebaseAuth (always available offline)
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final displayName = currentUser?.displayName;
+
+      // 2. Get photoURL from SharedPreferences (local-first)
+      final prefs = await SharedPreferences.getInstance();
+      final photoURL = prefs.getString('profile_photo_path_${repo.currentUserId}');
+
+      return {
+        'displayName': displayName,
+        'photoURL': photoURL,
+      };
+    } catch (e) {
+      debugPrint('[SettingsScreen] Error loading local user profile: $e');
+      return {};
+    }
+  }
+
+  /// Update display name locally-first
+  Future<void> _updateDisplayName(String newName) async {
+    try {
+      // 1. Update FirebaseAuth user object (local-first, works offline)
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await currentUser.updateDisplayName(newName.trim());
+      }
+
+      // 2. Best-effort sync to Firestore (optional, fails silently offline)
+      try {
+        final userService = UserService(repo.db, repo.currentUserId);
+        await userService.updateUserProfile(displayName: newName.trim());
+      } catch (e) {
+        debugPrint('[SettingsScreen] ⚠️ Firestore sync failed (offline?): $e');
+      }
+    } catch (e) {
+      debugPrint('[SettingsScreen] Error updating display name: $e');
+      rethrow;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final userService = UserService(repo.db, repo.currentUserId);
     final currentUser = FirebaseAuth.instance.currentUser;
 
     return TutorialWrapper(
@@ -68,11 +109,12 @@ class SettingsScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
       ),
-      body: StreamBuilder<UserProfile?>(
-        stream: userService.userProfileStream,
+      body: FutureBuilder<Map<String, String?>>(
+        future: _getLocalUserProfile(),
         builder: (context, snapshot) {
-          final profile = snapshot.data;
-          final displayName = profile?.displayName ?? 'User';
+          final profileData = snapshot.data ?? {};
+          final displayName = profileData['displayName'] ?? 'User';
+          final photoURL = profileData['photoURL'];
           final email = currentUser?.email ?? 'No email found';
           final responsive = context.responsive;
 
@@ -86,12 +128,12 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: 'Profile Photo',
-                    subtitle: profile?.photoURL != null
+                    subtitle: photoURL != null
                         ? 'Tap to change'
                         : 'Tap to add',
-                    leading: profile?.photoURL != null
+                    leading: photoURL != null
                         ? FutureBuilder<Widget>(
-                            future: _buildProfilePhotoWidget(profile!.photoURL!),
+                            future: _buildProfilePhotoWidget(photoURL),
                             builder: (context, snapshot) {
                               if (snapshot.hasData) {
                                 return snapshot.data!;
@@ -106,8 +148,7 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () async {
                       await _showProfilePhotoOptions(
                         context,
-                        userService,
-                        profile?.photoURL,
+                        photoURL,
                       );
                     },
                   ),
@@ -155,9 +196,7 @@ class SettingsScreen extends StatelessWidget {
                         },
                       );
                       if (newName != null) {
-                        await userService.updateUserProfile(
-                          displayName: newName.trim(),
-                        );
+                        await _updateDisplayName(newName);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -692,7 +731,6 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _showProfilePhotoOptions(
     BuildContext context,
-    UserService userService,
     String? currentPhotoURL,
   ) async {
     final theme = Theme.of(context);
@@ -731,7 +769,7 @@ class SettingsScreen extends StatelessWidget {
               title: const Text('Choose from Gallery'),
               onTap: () async {
                 Navigator.pop(ctx);
-                await _pickAndUploadPhoto(context, userService);
+                await _pickAndUploadPhoto(context);
               },
             ),
             if (currentPhotoURL != null)
@@ -746,7 +784,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await _removePhoto(context, userService);
+                  await _removePhoto(context);
                 },
               ),
             ListTile(
@@ -813,7 +851,6 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _pickAndUploadPhoto(
     BuildContext context,
-    UserService userService,
   ) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
@@ -879,7 +916,7 @@ class SettingsScreen extends StatelessWidget {
 
     try {
       final imageFile = File(croppedFile.path);
-      final userId = userService.userId;
+      final userId = repo.currentUserId;
       final workspaceId = repo.workspaceId;
 
       if (workspaceId != null) {
@@ -896,8 +933,17 @@ class SettingsScreen extends StatelessWidget {
         await storageRef.putFile(imageFile);
         final downloadUrl = await storageRef.getDownloadURL();
 
-        // Save URL to user profile
-        await userService.updateUserProfile(photoURL: downloadUrl);
+        // Save URL locally first
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile_photo_path_$userId', downloadUrl);
+
+        // Best-effort sync to Firestore
+        try {
+          final userService = UserService(repo.db, userId);
+          await userService.updateUserProfile(photoURL: downloadUrl);
+        } catch (e) {
+          debugPrint('[Settings] ⚠️ Firestore sync failed (offline?): $e');
+        }
 
         debugPrint('[Settings] ✅ Photo uploaded to Firebase Storage');
       } else {
@@ -909,9 +955,9 @@ class SettingsScreen extends StatelessWidget {
 
         await imageFile.copy(localPath);
 
-        // Save path to SharedPreferences
+        // Save path to SharedPreferences (local-first)
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile_photo_path', localPath);
+        await prefs.setString('profile_photo_path_$userId', localPath);
 
         debugPrint('[Settings] ✅ Photo saved locally: $localPath');
       }
@@ -965,7 +1011,6 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _removePhoto(
     BuildContext context,
-    UserService userService,
   ) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -993,7 +1038,17 @@ class SettingsScreen extends StatelessWidget {
     if (confirm != true || !context.mounted) return;
 
     try {
-      await userService.updateUserProfile(photoURL: '');
+      // Remove from SharedPreferences (local-first)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('profile_photo_path_${repo.currentUserId}');
+
+      // Best-effort sync to Firestore
+      try {
+        final userService = UserService(repo.db, repo.currentUserId);
+        await userService.updateUserProfile(photoURL: '');
+      } catch (e) {
+        debugPrint('[Settings] ⚠️ Firestore sync failed (offline?): $e');
+      }
 
       if (context.mounted) {
         ScaffoldMessenger.of(

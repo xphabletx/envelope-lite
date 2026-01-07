@@ -10,6 +10,7 @@ import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
 import '../../widgets/common/smart_text_field.dart';
 import '../../utils/calculator_helper.dart';
+import 'cockpit_preview.dart' show CockpitPreview; // TEMPORARY: For preview access (only import the class we need)
 import 'dart:async';
 
 class PayDayCockpit extends StatefulWidget {
@@ -133,6 +134,19 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
           color: theme.colorScheme.primary,
         ),
       ),
+      actions: [
+        // TEMPORARY: Preview button for Mission Control sandbox
+        IconButton(
+          icon: const Icon(Icons.preview),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CockpitPreview()),
+            );
+          },
+          tooltip: '🚀 Preview Mission Control',
+        ),
+      ],
     );
   }
 
@@ -363,12 +377,15 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Review Strategy',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  Flexible(
+                    child: Text(
+                      'Review Strategy',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -655,12 +672,15 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             children: [
               const Icon(Icons.rocket_launch, size: 28, color: Colors.white),
               const SizedBox(width: 12),
-              Text(
-                'Fuel the Horizons!',
-                style: fontProvider.getTextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Flexible(
+                child: Text(
+                  'Fuel the Horizons!',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

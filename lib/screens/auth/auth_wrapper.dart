@@ -8,6 +8,7 @@ import '../sign_in_screen.dart';
 import '../onboarding/consolidated_onboarding_flow.dart';
 import 'stuffrite_paywall_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/user_service.dart';
 import '../../services/cloud_migration_service.dart';
 import '../../services/subscription_service.dart';
 import '../../providers/theme_provider.dart';
@@ -239,16 +240,12 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
         '[AuthWrapper] 👶 Brand new user detected - skipping restoration check',
       );
 
-      // CRITICAL: Clear any ghost data from previous accounts
-      debugPrint(
-        '[AuthWrapper] 🧹 Clearing local onboarding flags for brand new user',
-      );
-      await AuthService.clearLocalOnboardingFlags(widget.user.uid);
-
       // CRITICAL: Clear Hive data if it belongs to a different user
+      // BUT: Don't clear onboarding flags - user may have completed offline
       debugPrint('[AuthWrapper] 🧹 Checking Hive data for user changes');
       await AuthService.clearHiveIfDifferentUser(widget.user.uid);
 
+      // Check onboarding status (will use "completion wins" logic)
       final completed = await _checkOnboardingStatus(widget.user.uid);
 
       if (mounted) {
@@ -352,33 +349,59 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   }
 
   /// Check if user has completed onboarding
-  /// Checks Firebase user profile document for persistence across devices
-  /// Falls back to SharedPreferences for backwards compatibility
+  /// Check onboarding completion with "completion wins" conflict resolution
+  /// If EITHER local or cloud says completed, trust it and sync both
   Future<bool> _checkOnboardingStatus(String userId) async {
     try {
-      // Check Firebase first (cloud-persisted, survives logout/login)
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
+      final prefs = await SharedPreferences.getInstance();
 
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        final hasCompleted = data?['hasCompletedOnboarding'] as bool?;
-        if (hasCompleted != null) {
-          // Cache to SharedPreferences for faster future checks
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('hasCompletedOnboarding_$userId', hasCompleted);
-          return hasCompleted;
+      // 1. Check local first (instant, works offline)
+      final localCompleted = prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
+
+      // 2. Try to check Firestore (requires network)
+      bool? cloudCompleted;
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+
+        if (userDoc.exists) {
+          final data = userDoc.data();
+          cloudCompleted = data?['hasCompletedOnboarding'] as bool?;
         }
+      } catch (e) {
+        debugPrint('[AuthWrapper] Firestore check failed (offline?): $e');
+        // Continue with local value only
       }
 
-      // Fallback to SharedPreferences (for backwards compatibility)
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
+      // 3. CONFLICT RESOLUTION: "Completion wins"
+      // If EITHER says completed, both should say completed
+      if (localCompleted == true || cloudCompleted == true) {
+        // Sync both to completed
+        if (!localCompleted) {
+          debugPrint('[AuthWrapper] 🔄 Cloud says completed, syncing to local');
+          await prefs.setBool('hasCompletedOnboarding_$userId', true);
+        }
+
+        if (cloudCompleted != true) {
+          debugPrint('[AuthWrapper] 🔄 Local says completed, syncing to cloud');
+          // Fire-and-forget sync (don't block UI)
+          UserService(FirebaseFirestore.instance, userId)
+              .updateUserProfile(hasCompletedOnboarding: true)
+              .catchError((e) {
+            debugPrint('[AuthWrapper] ⚠️ Cloud sync failed (offline?): $e');
+          });
+        }
+
+        return true;
+      }
+
+      // 4. Both say incomplete (or no data)
+      return false;
     } catch (e) {
       debugPrint('[AuthWrapper] Error checking onboarding status: $e');
-      // Fallback to SharedPreferences on error
+      // Fallback to local only
       final prefs = await SharedPreferences.getInstance();
       return prefs.getBool('hasCompletedOnboarding_$userId') ?? false;
     }

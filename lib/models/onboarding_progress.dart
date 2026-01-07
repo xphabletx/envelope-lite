@@ -63,6 +63,32 @@ class OnboardingProgress {
     this.celebrationEmoji,
   });
 
+  /// Convert to JSON Map (for SharedPreferences)
+  Map<String, dynamic> toMap() {
+    return {
+      'userId': userId,
+      'currentStep': currentStep,
+      'lastUpdated': lastUpdated.toIso8601String(),
+      'userName': userName,
+      'photoUrl': photoUrl,
+      'selectedCurrency': selectedCurrency,
+      'selectedTheme': selectedTheme,
+      'selectedFont': selectedFont,
+      'isAccountMode': isAccountMode,
+      'accountName': accountName,
+      'bankName': bankName,
+      'accountBalance': accountBalance,
+      'accountIconType': accountIconType,
+      'accountIconValue': accountIconValue,
+      'payAmount': payAmount,
+      'payFrequency': payFrequency,
+      'nextPayDate': nextPayDate?.toIso8601String(),
+      'selectedTemplateId': selectedTemplateId,
+      'celebrationEmoji': celebrationEmoji,
+    };
+  }
+
+  /// Convert to Firestore format
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
@@ -87,6 +113,36 @@ class OnboardingProgress {
     };
   }
 
+  /// Create from JSON Map (from SharedPreferences)
+  factory OnboardingProgress.fromMap(Map<String, dynamic> data) {
+    return OnboardingProgress(
+      userId: data['userId'] as String,
+      currentStep: data['currentStep'] as int? ?? 0,
+      lastUpdated: data['lastUpdated'] != null
+          ? DateTime.parse(data['lastUpdated'] as String)
+          : DateTime.now(),
+      userName: data['userName'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      selectedCurrency: data['selectedCurrency'] as String?,
+      selectedTheme: data['selectedTheme'] as String?,
+      selectedFont: data['selectedFont'] as String?,
+      isAccountMode: data['isAccountMode'] as bool?,
+      accountName: data['accountName'] as String?,
+      bankName: data['bankName'] as String?,
+      accountBalance: (data['accountBalance'] as num?)?.toDouble(),
+      accountIconType: data['accountIconType'] as String?,
+      accountIconValue: data['accountIconValue'] as String?,
+      payAmount: (data['payAmount'] as num?)?.toDouble(),
+      payFrequency: data['payFrequency'] as String?,
+      nextPayDate: data['nextPayDate'] != null
+          ? DateTime.parse(data['nextPayDate'] as String)
+          : null,
+      selectedTemplateId: data['selectedTemplateId'] as String?,
+      celebrationEmoji: data['celebrationEmoji'] as String?,
+    );
+  }
+
+  /// Create from Firestore document
   factory OnboardingProgress.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return OnboardingProgress(
@@ -152,6 +208,31 @@ class OnboardingProgress {
       nextPayDate: nextPayDate ?? this.nextPayDate,
       selectedTemplateId: selectedTemplateId ?? this.selectedTemplateId,
       celebrationEmoji: celebrationEmoji ?? this.celebrationEmoji,
+    );
+  }
+
+  /// Copy with updates from a map (used for incremental updates)
+  OnboardingProgress copyWithMap(Map<String, dynamic> updates) {
+    return OnboardingProgress(
+      userId: userId,
+      currentStep: updates['currentStep'] as int? ?? currentStep,
+      lastUpdated: DateTime.now(), // Always update timestamp
+      userName: updates['userName'] as String? ?? userName,
+      photoUrl: updates['photoUrl'] as String? ?? photoUrl,
+      selectedCurrency: updates['selectedCurrency'] as String? ?? selectedCurrency,
+      selectedTheme: updates['selectedTheme'] as String? ?? selectedTheme,
+      selectedFont: updates['selectedFont'] as String? ?? selectedFont,
+      isAccountMode: updates['isAccountMode'] as bool? ?? isAccountMode,
+      accountName: updates['accountName'] as String? ?? accountName,
+      bankName: updates['bankName'] as String? ?? bankName,
+      accountBalance: (updates['accountBalance'] as num?)?.toDouble() ?? accountBalance,
+      accountIconType: updates['accountIconType'] as String? ?? accountIconType,
+      accountIconValue: updates['accountIconValue'] as String? ?? accountIconValue,
+      payAmount: (updates['payAmount'] as num?)?.toDouble() ?? payAmount,
+      payFrequency: updates['payFrequency'] as String? ?? payFrequency,
+      nextPayDate: updates['nextPayDate'] as DateTime? ?? nextPayDate,
+      selectedTemplateId: updates['selectedTemplateId'] as String? ?? selectedTemplateId,
+      celebrationEmoji: updates['celebrationEmoji'] as String? ?? celebrationEmoji,
     );
   }
 }

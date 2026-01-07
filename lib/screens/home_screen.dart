@@ -11,7 +11,6 @@ import '../utils/calculator_helper.dart';
 
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
-import '../services/user_service.dart';
 import '../services/pay_day_settings_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
@@ -30,7 +29,6 @@ import './accounts/account_list_screen.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/transaction.dart';
-import '../models/user_profile.dart';
 
 import '../services/workspace_helper.dart';
 import '../services/localization_service.dart';
@@ -196,6 +194,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Get user profile data from local sources (local-first, works offline)
+  Future<Map<String, String?>> _getLocalUserProfile() async {
+    try {
+      // 1. Get displayName from FirebaseAuth (always available offline)
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final displayName = currentUser?.displayName;
+
+      // 2. Get photoURL from SharedPreferences (local-first)
+      final prefs = await SharedPreferences.getInstance();
+      final photoURL = prefs.getString('profile_photo_path_${widget.repo.currentUserId}');
+
+      return {
+        'displayName': displayName,
+        'photoURL': photoURL,
+      };
+    } catch (e) {
+      debugPrint('[HomeScreen] Error loading local user profile: $e');
+      return {};
+    }
+  }
+
   // Helper to build profile avatar that supports both network URLs and local file paths
   Future<CircleAvatar> _buildProfileAvatar(String photoURL, double radius) async {
     // Check if it's a network URL (starts with http/https)
@@ -322,15 +341,12 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       elevation: 0,
       toolbarHeight: responsive.isLandscape ? 48 : kToolbarHeight,
-      title: StreamBuilder<UserProfile?>(
-        stream: UserService(
-          widget.repo.db,
-          widget.repo.currentUserId,
-        ).userProfileStream,
+      title: FutureBuilder<Map<String, String?>>(
+        future: _getLocalUserProfile(),
         builder: (context, snapshot) {
-          final profile = snapshot.data;
-          final displayName = profile?.displayName ?? tr('your_envelopes');
-          final photoURL = profile?.photoURL;
+          final profileData = snapshot.data ?? {};
+          final displayName = profileData['displayName'] ?? tr('your_envelopes');
+          final photoURL = profileData['photoURL'];
 
           return Row(
             children: [

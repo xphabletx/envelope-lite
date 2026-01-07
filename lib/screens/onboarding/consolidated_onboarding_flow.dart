@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
@@ -293,16 +295,39 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
   Future<void> _completeOnboarding() async {
     try {
-      // Save user profile and mark onboarding as complete
-      final userService = UserService(
-        FirebaseFirestore.instance,
-        widget.userId,
-      );
-      await userService.createUserProfile(
-        displayName: _userName ?? 'User',
-        photoURL: _photoUrl,
-        hasCompletedOnboarding: true, // Mark onboarding as complete
-      );
+      final prefs = await SharedPreferences.getInstance();
+
+      // 1. Mark onboarding as complete in SharedPreferences (local-first, works offline)
+      await prefs.setBool('hasCompletedOnboarding_${widget.userId}', true);
+
+      // 2. Save displayName to FirebaseAuth user object (local-first, works offline)
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null && _userName != null) {
+        await currentUser.updateDisplayName(_userName!.trim());
+      }
+
+      // 3. Save photoURL to SharedPreferences (local-first, works offline)
+      if (_photoUrl != null) {
+        await prefs.setString('profile_photo_path_${widget.userId}', _photoUrl!);
+      }
+
+      // 4. Save showTutorial flag to SharedPreferences (local-first)
+      await prefs.setBool('showTutorial_${widget.userId}', true);
+
+      // 5. Best-effort sync to Firestore (optional, fails silently offline)
+      try {
+        final userService = UserService(
+          FirebaseFirestore.instance,
+          widget.userId,
+        );
+        await userService.createUserProfile(
+          displayName: _userName ?? 'User',
+          photoURL: _photoUrl,
+          hasCompletedOnboarding: true,
+        );
+      } catch (e) {
+        debugPrint('[Onboarding] ⚠️ Firestore user profile sync failed (offline?): $e');
+      }
 
       // If in account mode, create the account and pay day settings
       if (_isAccountMode) {
