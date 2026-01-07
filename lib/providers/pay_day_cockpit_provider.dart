@@ -102,8 +102,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
       final userAccounts = accounts.where((a) => !a.id.startsWith('_')).toList();
       _isAccountMode = userAccounts.isNotEmpty;
 
-      debugPrint('[PayDayCockpit] Found ${userAccounts.length} accounts. Mode: ${_isAccountMode ? "Account" : "Simple"}');
-
       // Find default account if in account mode
       if (_isAccountMode) {
         final defaultAccount = userAccounts.firstWhere(
@@ -112,13 +110,11 @@ class PayDayCockpitProvider extends ChangeNotifier {
         );
         _defaultAccountId = defaultAccount.id;
         _defaultAccount = defaultAccount;
-        debugPrint('[PayDayCockpit] Using default account: ${defaultAccount.name} (${defaultAccount.id})');
       }
 
       // Load PayDaySettings for expected pay amount pre-fill
       final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
       final settings = payDayBox.get(userId);
-      debugPrint('[PayDayCockpit] PayDaySettings exists: ${settings != null}, defaultAccountId: ${settings?.defaultAccountId}');
 
       // Pre-fill expected pay amount if available
       if (settings?.expectedPayAmount != null && settings!.expectedPayAmount! > 0) {
@@ -156,18 +152,12 @@ class PayDayCockpitProvider extends ChangeNotifier {
     _allocations.clear();
     _autopilotReserve = 0.0;
 
-    debugPrint('[PayDayCockpit] Calculating autopilot allocations...');
-    debugPrint('[PayDayCockpit] - Total envelopes: ${_allEnvelopes.length}');
-
     for (final env in _allEnvelopes) {
       if (env.cashFlowEnabled && env.cashFlowAmount != null && env.cashFlowAmount! > 0) {
         _allocations[env.id] = env.cashFlowAmount!;
         _autopilotReserve += env.cashFlowAmount!;
-        debugPrint('[PayDayCockpit]   ✓ ${env.name}: \$${env.cashFlowAmount}');
       }
     }
-
-    debugPrint('[PayDayCockpit] ✅ Autopilot Reserve: \$$_autopilotReserve from ${_allocations.length} envelopes');
   }
 
   // ============================================================================
@@ -176,23 +166,15 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
   void updateExternalInflow(double amount) {
     _externalInflow = amount;
-    debugPrint('[PayDayCockpit] External inflow updated: \$$amount');
     notifyListeners();
   }
 
   void proceedToStrategyReview() {
     if (_externalInflow <= 0) {
       _error = 'Please enter a valid amount';
-      debugPrint('[PayDayCockpit] ❌ Cannot proceed: Invalid amount (\$$_externalInflow)');
       notifyListeners();
       return;
     }
-
-    debugPrint('[PayDayCockpit] ✅ Proceeding to Strategy Review');
-    debugPrint('[PayDayCockpit] - Inflow: \$$_externalInflow');
-    debugPrint('[PayDayCockpit] - Mode: ${_isAccountMode ? "Account" : "Simple"}');
-    debugPrint('[PayDayCockpit] - Autopilot Reserve: \$$_autopilotReserve');
-    debugPrint('[PayDayCockpit] - Allocations: ${_allocations.length} envelopes');
 
     _currentPhase = CockpitPhase.strategyReview;
     _error = null;
@@ -216,7 +198,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
       } else {
         _manualAllocations -= removedAmount;
       }
-      debugPrint('[PayDayCockpit] ➖ Removed ${envelope.name}: -\$$removedAmount');
     } else {
       final amount = cashFlowAmount ?? 0.0;
       _allocations[envelopeId] = amount;
@@ -227,10 +208,8 @@ class PayDayCockpitProvider extends ChangeNotifier {
       } else {
         _manualAllocations += amount;
       }
-      debugPrint('[PayDayCockpit] ➕ Added ${envelope.name}: +\$$amount');
     }
 
-    debugPrint('[PayDayCockpit] Current totals: Reserve=\$$_autopilotReserve, Manual=\$$_manualAllocations, Allocations=${_allocations.length}');
     notifyListeners();
   }
 
@@ -284,17 +263,9 @@ class PayDayCockpitProvider extends ChangeNotifier {
   void proceedToStuffing() {
     if (!canProceedToStuffing()) {
       _error = 'Please select at least one envelope to allocate';
-      debugPrint('[PayDayCockpit] ❌ Cannot proceed to stuffing: No allocations');
       notifyListeners();
       return;
     }
-
-    debugPrint('[PayDayCockpit] ✅ Proceeding to Stuffing Execution');
-    debugPrint('[PayDayCockpit] - Total inflow: \$$_externalInflow');
-    debugPrint('[PayDayCockpit] - Autopilot reserve: \$$_autopilotReserve');
-    debugPrint('[PayDayCockpit] - Manual allocations: \$$_manualAllocations');
-    debugPrint('[PayDayCockpit] - Unallocated fuel: \$$unallocatedFuel');
-    debugPrint('[PayDayCockpit] - Over-allocated: $isOverAllocated');
 
     _currentPhase = CockpitPhase.stuffingExecution;
     _error = null;
@@ -316,7 +287,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
     // Get envelopes that are allocated
     final envelopesToStuff = _allEnvelopes.where((e) => _allocations.containsKey(e.id)).toList();
-    debugPrint('[PayDayCockpit] Organizing ${envelopesToStuff.length} envelopes for stuffing...');
 
     // Group by binder
     final binderMap = <String, List<Envelope>>{};
@@ -335,11 +305,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
         binder: binder,
         envelopes: entry.value,
       ));
-      debugPrint('[PayDayCockpit]   📁 ${binder.name}: ${entry.value.length} envelopes');
-    }
-
-    if (_ungroupedEnvelopes.isNotEmpty) {
-      debugPrint('[PayDayCockpit]   📄 Ungrouped: ${_ungroupedEnvelopes.length} envelopes');
     }
   }
 
@@ -348,32 +313,20 @@ class PayDayCockpitProvider extends ChangeNotifier {
   // ============================================================================
 
   Future<void> executeStuffing() async {
-    debugPrint('[PayDayCockpit] 🚀 Starting stuffing execution...');
-    debugPrint('[PayDayCockpit] - Mode: ${_isAccountMode ? "Account" : "Simple"}');
-    debugPrint('[PayDayCockpit] - Total allocations: ${_allocations.length}');
-
     try {
       // Step 1: Deposit to account if in account mode
       if (_isAccountMode && _defaultAccountId != null) {
-        debugPrint('[PayDayCockpit] 💰 Step 1: Depositing \$$_externalInflow to account ${_defaultAccount?.name}');
         await accountRepo.deposit(
           _defaultAccountId!,
           _externalInflow,
           description: 'Pay Day Deposit',
         );
-        debugPrint('[PayDayCockpit] ✅ Account deposit complete');
       }
 
       // Step 2: Allocate to envelopes
-      debugPrint('[PayDayCockpit] 📨 Step 2: Allocating to ${_allocations.length} envelopes...');
-      int count = 0;
       for (final entry in _allocations.entries) {
         final envelopeId = entry.key;
         final amount = entry.value;
-        final envelope = _allEnvelopes.firstWhere((e) => e.id == envelopeId);
-        count++;
-
-        debugPrint('[PayDayCockpit]   ($count/${_allocations.length}) ${envelope.name}: \$$amount');
 
         if (_isAccountMode && _defaultAccountId != null) {
           // INTERNAL transfer: Account → Envelope
@@ -385,7 +338,6 @@ class PayDayCockpitProvider extends ChangeNotifier {
             date: DateTime.now(),
             envelopeRepo: envelopeRepo,
           );
-          debugPrint('[PayDayCockpit]     ✓ Transferred from account');
         } else {
           // EXTERNAL deposit: Virtual income
           await envelopeRepo.deposit(
@@ -394,28 +346,21 @@ class PayDayCockpitProvider extends ChangeNotifier {
             description: 'Cash Flow',
             date: DateTime.now(),
           );
-          debugPrint('[PayDayCockpit]     ✓ Direct deposit');
         }
 
         _stuffingProgress[envelopeId] = amount;
       }
 
-      debugPrint('[PayDayCockpit] ✅ All envelopes stuffed successfully');
-
       // Calculate top horizons impacted
-      debugPrint('[PayDayCockpit] 📊 Calculating horizon impacts...');
       _calculateTopHorizons();
 
       // Update PayDaySettings
-      debugPrint('[PayDayCockpit] 💾 Updating PayDay settings...');
       await _updatePayDaySettings();
 
-      debugPrint('[PayDayCockpit] 🎉 Stuffing complete! Moving to success phase.');
       _currentPhase = CockpitPhase.success;
       notifyListeners();
     } catch (e) {
       _error = 'Stuffing failed: $e';
-      debugPrint('[PayDayCockpit] ❌ ERROR during stuffing: $e');
       notifyListeners();
     }
   }
@@ -487,7 +432,7 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
       await payDayBox.put(userId, updatedSettings);
     } catch (e) {
-      debugPrint('Error updating pay day settings: $e');
+      // Error updating pay day settings
     }
   }
 

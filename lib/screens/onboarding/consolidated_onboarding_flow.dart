@@ -71,9 +71,6 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   @override
   void initState() {
     super.initState();
-    debugPrint(
-      '[ConsolidatedOnboardingFlow] 🔄 initState called for user: ${widget.userId}',
-    );
     _progressService = OnboardingProgressService(
       FirebaseFirestore.instance,
       widget.userId,
@@ -398,9 +395,6 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    debugPrint(
-      '[ConsolidatedOnboardingFlow] 🎨 build() called - currentPage: $_currentPageIndex, loading: $_isLoading',
-    );
     // Show loading indicator while pages are being built
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -661,7 +655,6 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
         }
       }
     } catch (e) {
-      debugPrint('Error picking photo: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }

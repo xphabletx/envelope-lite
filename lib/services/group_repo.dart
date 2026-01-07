@@ -1,6 +1,5 @@
 // lib/services/group_repo.dart
 import 'package:hive/hive.dart';
-import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/envelope_group.dart';
 import 'envelope_repo.dart';
@@ -55,12 +54,10 @@ class GroupRepo {
     );
 
     await _groupBox.put(id, group);
-    debugPrint('[GroupRepo] ✅ Group created in Hive: $name');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     if (_inWorkspace && _workspaceId != null) {
       // Workspace mode: sync to workspace collection
-      debugPrint('[GroupRepo] DEBUG: Syncing group to workspace: $_workspaceId');
       await _db
           .collection('workspaces')
           .doc(_workspaceId!)
@@ -109,12 +106,10 @@ class GroupRepo {
     );
 
     await _groupBox.put(groupId, updatedGroup);
-    debugPrint('[GroupRepo] ✅ Group updated in Hive: $groupId');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     if (_inWorkspace && _workspaceId != null) {
       // Workspace mode: sync to workspace collection
-      debugPrint('[GroupRepo] DEBUG: Syncing updated group to workspace: $_workspaceId');
       await _db
           .collection('workspaces')
           .doc(_workspaceId!)
@@ -135,12 +130,10 @@ class GroupRepo {
     // Scheduled payments cleanup is handled by ScheduledPaymentRepo
 
     await _groupBox.delete(groupId);
-    debugPrint('[GroupRepo] ✅ Group deleted from Hive: $groupId');
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
     if (_inWorkspace && _workspaceId != null) {
       // Workspace mode: delete from workspace collection
-      debugPrint('[GroupRepo] DEBUG: Deleting group from workspace: $_workspaceId');
       await _db
           .collection('workspaces')
           .doc(_workspaceId!)
@@ -201,7 +194,7 @@ class GroupRepo {
             await _groupBox.put(doc.id, group);
             groups.add(group);
           } catch (e) {
-            debugPrint('[GroupRepo] ERROR: Failed to parse group ${doc.id}: $e');
+            // Failed to parse group
           }
         }
 

@@ -1,5 +1,5 @@
 // lib/services/auth_service.dart
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -69,8 +69,6 @@ class AuthService {
     required String password,
     String? displayName,
   }) async {
-    debugPrint('[AuthService::createWithEmail] Creating account for: $email');
-
     final cred = await _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -91,9 +89,7 @@ class AuthService {
     if (cred.user != null) {
       try {
         await cred.user!.sendEmailVerification();
-        debugPrint('[AuthService::createWithEmail] ✅ Verification email sent to: $email');
       } catch (e) {
-        debugPrint('[AuthService::createWithEmail] ⚠️ Failed to send verification email: $e');
         // Don't throw - account creation succeeded, just log the error
       }
     }
@@ -165,16 +161,13 @@ class AuthService {
         await SubscriptionService().identifyUser(cred.user!.uid);
       }
 
-      debugPrint('[AuthService::signInWithApple] ✅ Apple Sign-In successful for user: ${cred.user?.uid}');
       return cred;
     } on SignInWithAppleAuthorizationException catch (e) {
-      debugPrint('[AuthService::signInWithApple] ❌ Apple Sign-In cancelled or failed: ${e.code} - ${e.message}');
       throw FirebaseAuthException(
         code: 'apple-signin-cancelled',
         message: 'Apple Sign-In was cancelled',
       );
     } catch (e) {
-      debugPrint('[AuthService::signInWithApple] ❌ Apple Sign-In error: $e');
       throw FirebaseAuthException(
         code: 'apple-signin-failed',
         message: 'Apple Sign-In failed: ${e.toString()}',
@@ -199,10 +192,8 @@ class AuthService {
     try {
       final cred = await _auth.signInAnonymously();
       await _touchUserDoc(cred.user, displayNameOverride: 'Guest User');
-      debugPrint('[AuthService::signInAnonymously] ✅ Anonymous sign-in successful');
       return cred;
     } catch (e) {
-      debugPrint('[AuthService::signInAnonymously] ❌ Anonymous sign-in failed: $e');
       rethrow;
     }
   }
@@ -239,16 +230,13 @@ class AuthService {
       if (linkedCred.user != null) {
         try {
           await linkedCred.user!.sendEmailVerification();
-          debugPrint('[AuthService::linkAnonymousToEmail] ✅ Verification email sent to: $email');
         } catch (e) {
-          debugPrint('[AuthService::linkAnonymousToEmail] ⚠️ Failed to send verification email: $e');
+          // Failed to send verification email
         }
       }
 
-      debugPrint('[AuthService::linkAnonymousToEmail] ✅ Successfully linked anonymous account to email');
       return linkedCred;
     } catch (e) {
-      debugPrint('[AuthService::linkAnonymousToEmail] ❌ Failed to link anonymous account: $e');
       rethrow;
     }
   }
@@ -286,10 +274,8 @@ class AuthService {
 
       final linkedCred = await user.linkWithCredential(credential);
       await _touchUserDoc(linkedCred.user);
-      debugPrint('[AuthService::linkAnonymousToGoogle] ✅ Successfully linked anonymous account to Google');
       return linkedCred;
     } catch (e) {
-      debugPrint('[AuthService::linkAnonymousToGoogle] ❌ Failed to link anonymous account: $e');
       rethrow;
     }
   }
@@ -337,10 +323,8 @@ class AuthService {
       }
 
       await _touchUserDoc(linkedCred.user);
-      debugPrint('[AuthService::linkAnonymousToApple] ✅ Successfully linked anonymous account to Apple');
       return linkedCred;
     } catch (e) {
-      debugPrint('[AuthService::linkAnonymousToApple] ❌ Failed to link anonymous account: $e');
       rethrow;
     }
   }
@@ -352,29 +336,22 @@ class AuthService {
   /// This ensures brand new users start onboarding from scratch
   static Future<void> clearLocalOnboardingFlags(String userId) async {
     try {
-      debugPrint('[AuthService::clearLocalOnboardingFlags] 🧹 Clearing onboarding flags for user: $userId');
-
       final prefs = await SharedPreferences.getInstance();
 
       // Remove onboarding completion flag
       await prefs.remove('hasCompletedOnboarding_$userId');
-      debugPrint('[AuthService::clearLocalOnboardingFlags] ✅ Cleared hasCompletedOnboarding flag');
 
       // Remove current onboarding step
       await prefs.remove('onboarding_step_$userId');
-      debugPrint('[AuthService::clearLocalOnboardingFlags] ✅ Cleared onboarding_step flag');
 
       // Clear any profile photo path from previous account
       await prefs.remove('profile_photo_path');
-      debugPrint('[AuthService::clearLocalOnboardingFlags] ✅ Cleared profile_photo_path');
 
       // Clear target icon preferences from previous account
       await prefs.remove('target_icon_type');
       await prefs.remove('target_icon_value');
-      debugPrint('[AuthService::clearLocalOnboardingFlags] ✅ Cleared target icon preferences');
 
     } catch (e) {
-      debugPrint('[AuthService::clearLocalOnboardingFlags] ❌ Error clearing onboarding flags: $e');
       // Don't rethrow - this is not critical
     }
   }
@@ -383,123 +360,90 @@ class AuthService {
   /// This prevents ghost data from appearing for new users
   static Future<void> clearHiveIfDifferentUser(String currentUserId) async {
     try {
-      debugPrint('[AuthService::clearHiveIfDifferentUser] 🔍 Checking Hive data for user: $currentUserId');
-
       final prefs = await SharedPreferences.getInstance();
       final lastUserId = prefs.getString('last_hive_user_id');
 
       if (lastUserId != null && lastUserId != currentUserId) {
-        debugPrint('[AuthService::clearHiveIfDifferentUser] 🧹 Different user detected (was: $lastUserId, now: $currentUserId) - clearing Hive');
-
         // Clear all Hive boxes
         await HiveService.clearAllData();
-        debugPrint('[AuthService::clearHiveIfDifferentUser] ✅ Cleared all Hive data');
-      } else if (lastUserId == null) {
-        debugPrint('[AuthService::clearHiveIfDifferentUser] 📝 First time user - no Hive cleanup needed');
-      } else {
-        debugPrint('[AuthService::clearHiveIfDifferentUser] ✅ Same user - no Hive cleanup needed');
       }
 
       // Update the last user ID
       await prefs.setString('last_hive_user_id', currentUserId);
 
     } catch (e) {
-      debugPrint('[AuthService::clearHiveIfDifferentUser] ❌ Error checking/clearing Hive: $e');
       // Don't rethrow - this is not critical
     }
   }
 
   static Future<void> signOut() async {
     try {
-      debugPrint('[AuthService::signOut] 🔄 Starting logout process...');
-
       // STEP 0: Clear auth wrapper initialization state
       // This allows the next user to run through initialization properly
-      debugPrint('[AuthService::signOut] Step 0: Clearing auth wrapper state...');
       AuthWrapperState.clearInitializationState();
 
       // STEP 1: Dispose all repositories FIRST to cancel Firestore streams
       // This prevents PERMISSION_DENIED errors when we sign out from Firebase
-      debugPrint('[AuthService::signOut] Step 1: Disposing repositories...');
       RepositoryManager().disposeAllRepositories();
 
       // STEP 2: HARD-KILL Firestore listeners at engine level
       // This is the ONLY way to guarantee PERMISSION_DENIED errors stop
       // before the UI finishes its transition
-      debugPrint('[AuthService::signOut] Step 2: Terminating Firestore...');
       try {
         await FirebaseFirestore.instance.terminate();
-        debugPrint('[AuthService::signOut] ✅ Firestore terminated');
       } catch (e) {
-        debugPrint('[AuthService::signOut] ⚠️ Firestore terminate error (continuing): $e');
+        // Continue on error
       }
 
       try {
         await FirebaseFirestore.instance.clearPersistence();
-        debugPrint('[AuthService::signOut] ✅ Firestore persistence cleared');
       } catch (e) {
-        debugPrint('[AuthService::signOut] ⚠️ Firestore clearPersistence error (continuing): $e');
+        // Continue on error
       }
 
       // STEP 3: Log out from RevenueCat
-      debugPrint('[AuthService::signOut] Step 3: Logging out from RevenueCat...');
       await SubscriptionService().logOut();
 
       // STEP 4: Sign out from Firebase Auth
-      debugPrint('[AuthService::signOut] Step 4: Signing out from Firebase Auth...');
       await _auth.signOut();
 
       // STEP 5: Sign out from Google if there's an active session
       try {
         final googleUser = await _google.signInSilently();
         if (googleUser != null) {
-          debugPrint('[AuthService::signOut] Step 5: Signing out from Google...');
           await _google.signOut();
         }
       } catch (e) {
         // Continue even if Google sign-out fails - Firebase sign-out is more important
-        debugPrint('[AuthService::signOut] Google sign-out error (continuing): $e');
       }
 
       // STEP 6: Clear all local data (Hive boxes)
-      debugPrint('[AuthService::signOut] Step 6: Clearing all Hive data...');
       await HiveService.clearAllData();
-      debugPrint('[AuthService::signOut] ✅ Cleared all Hive data');
 
       // STEP 7: Clear all SharedPreferences
-      debugPrint('[AuthService::signOut] Step 7: Clearing SharedPreferences...');
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      debugPrint('[AuthService::signOut] ✅ Cleared all SharedPreferences');
 
       // STEP 8: Force navigation to sign-in screen
       // This ensures UI fully resets even if StreamBuilder hasn't updated yet
-      debugPrint('[AuthService::signOut] Step 8: Forcing navigation to sign-in screen...');
       final navigator = navigatorKey.currentState;
       if (navigator != null && navigator.mounted) {
         // Use pushNamedAndRemoveUntil to clear the entire navigation stack
         // This prevents any back navigation to authenticated screens
         navigator.pushNamedAndRemoveUntil('/', (route) => false);
-        debugPrint('[AuthService::signOut] ✅ Forced navigation to root (sign-in)');
-      } else {
-        debugPrint('[AuthService::signOut] ⚠️ Navigator not available - relying on StreamBuilder');
       }
 
-      debugPrint('[AuthService::signOut] ✅ Signed out successfully');
     } catch (e) {
-      debugPrint('[AuthService::signOut] ❌ Error during sign out: $e');
       rethrow;
     } finally {
       // CRITICAL: Always reset logout state in finally block
       // This ensures the guard is lifted even if logout fails
-      debugPrint('[AuthService::signOut] Finally: Resetting logout state...');
       final context = navigatorKey.currentContext;
       if (context != null) {
         try {
           Provider.of<WorkspaceProvider>(context, listen: false).resetLogoutState();
-          debugPrint('[AuthService::signOut] ✅ Logout state reset - UI can now show SignInScreen');
         } catch (e) {
-          debugPrint('[AuthService::signOut] ⚠️ Could not reset logout state: $e');
+          // Could not reset logout state
         }
       }
     }

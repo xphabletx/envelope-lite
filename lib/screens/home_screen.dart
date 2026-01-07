@@ -210,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
         'photoURL': photoURL,
       };
     } catch (e) {
-      debugPrint('[HomeScreen] Error loading local user profile: $e');
       return {};
     }
   }
@@ -893,11 +892,6 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
     final responsive = context.responsive;
     final isWorkspace = widget.repo.inWorkspace;
-
-    debugPrint('[HomeScreen] DEBUG: build() called');
-    debugPrint('[HomeScreen] DEBUG: - widget.repo.inWorkspace: ${widget.repo.inWorkspace}');
-    debugPrint('[HomeScreen] DEBUG: - widget.repo.workspaceId: ${widget.repo.workspaceId}');
-    debugPrint('[HomeScreen] DEBUG: - isWorkspace variable: $isWorkspace');
 
     // Three-way filter logic - we filter envelopes in the UI logic below
     final showPartnerEnvelopes = _envelopeFilter == 'both' || _envelopeFilter == 'theirs';
