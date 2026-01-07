@@ -1,6 +1,8 @@
 // lib/models/insight_data.dart
 // Data model for Insight financial planning calculations
 
+import 'package:flutter/foundation.dart';
+
 class InsightData {
   // HORIZON - Savings goal / wealth building
   bool horizonEnabled;
@@ -47,7 +49,9 @@ class InsightData {
     this.availableIncome,
     this.isAffordable = true,
     this.warningMessage,
-  });
+  }) {
+    debugPrint('[InsightData] 🆕 Created new InsightData: cashFlowEnabled=$cashFlowEnabled, autopilotAutoExecute=$autopilotAutoExecute');
+  }
 
   /// Get the effective cash flow amount (manual override takes precedence)
   double? get effectiveCashFlow {
@@ -133,8 +137,18 @@ class InsightData {
     double? availableIncome,
     bool? isAffordable,
     String? warningMessage,
+    bool updateWarning = true, // Flag to indicate we're explicitly updating the warning
   }) {
-    return InsightData(
+    debugPrint('[InsightData] 📝 copyWith called:');
+    debugPrint('  horizonAmount: ${horizonAmount ?? this.horizonAmount}');
+    debugPrint('  autopilotAmount: ${autopilotAmount ?? this.autopilotAmount}');
+    debugPrint('  calculatedCashFlow: ${calculatedCashFlow ?? this.calculatedCashFlow}');
+    debugPrint('  cashFlowEnabled: ${cashFlowEnabled ?? this.cashFlowEnabled}');
+    debugPrint('  isAffordable: ${isAffordable ?? this.isAffordable}');
+    debugPrint('  warningMessage (new): $warningMessage');
+    debugPrint('  updateWarning: $updateWarning');
+
+    final newData = InsightData(
       horizonEnabled: horizonEnabled ?? this.horizonEnabled,
       horizonAmount: horizonAmount ?? this.horizonAmount,
       horizonDate: horizonDateCleared == true ? null : (horizonDate ?? this.horizonDate),
@@ -156,8 +170,11 @@ class InsightData {
       percentageOfIncome: percentageOfIncome ?? this.percentageOfIncome,
       availableIncome: availableIncome ?? this.availableIncome,
       isAffordable: isAffordable ?? this.isAffordable,
-      warningMessage: warningMessage ?? this.warningMessage,
+      // Use new warning value when explicitly updating (even if null), otherwise keep old value
+      warningMessage: updateWarning ? warningMessage : (warningMessage ?? this.warningMessage),
     );
+
+    return newData;
   }
 
   @override

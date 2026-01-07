@@ -29,6 +29,7 @@ Future<String?> showGroupEditor({
   EnvelopeGroup? group,
   String? draftEnvelopeName,
   CreationContext? creationContext,
+  String? defaultAccountId, // For Account Mode linking
 }) async {
   // If creating a new binder (not editing), show template selector first
   BinderTemplate? selectedTemplate;
@@ -74,6 +75,7 @@ Future<String?> showGroupEditor({
         draftEnvelopeName: draftEnvelopeName,
         creationContext: creationContext,
         initialTemplate: selectedTemplate,
+        defaultAccountId: defaultAccountId,
       ),
     ),
   );
@@ -87,6 +89,7 @@ class _GroupEditorScreen extends StatefulWidget {
     this.draftEnvelopeName,
     this.creationContext,
     this.initialTemplate,
+    this.defaultAccountId,
   });
 
   final GroupRepo groupRepo;
@@ -95,6 +98,7 @@ class _GroupEditorScreen extends StatefulWidget {
   final String? draftEnvelopeName;
   final CreationContext? creationContext;
   final BinderTemplate? initialTemplate;
+  final String? defaultAccountId;
 
   @override
   State<_GroupEditorScreen> createState() => _GroupEditorScreenState();
@@ -542,6 +546,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           cashFlowEnabled: false,
           cashFlowAmount: null,
           groupId: groupId, // Assign to binder immediately
+          linkedAccountId: widget.defaultAccountId, // Link to account if in account mode
         );
 
         createdIds.add(envelopeId);
@@ -628,6 +633,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         builder: (_) => BinderTemplateQuickSetup(
           template: _selectedTemplate!,
           userId: widget.envelopeRepo.currentUserId,
+          defaultAccountId: widget.defaultAccountId,
           onComplete: (count) {
             // Quick setup creates its own binder, so we need to close both screens
             if (mounted) {
@@ -695,6 +701,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           builder: (_) => BinderTemplateQuickSetup(
             template: filteredTemplate,
             userId: widget.envelopeRepo.currentUserId,
+            defaultAccountId: widget.defaultAccountId,
             existingBinderId: editingGroupId,
             returnEnvelopeIds: true,
           ),

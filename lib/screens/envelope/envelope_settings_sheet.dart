@@ -20,9 +20,12 @@ import '../../utils/calculator_helper.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../utils/responsive_helper.dart';
 import '../../../widgets/common/smart_text_field.dart';
+import '../../widgets/insight_tile.dart';
+import '../../models/insight_data.dart';
 
 enum EnvelopeSettingsSection {
   top,
+  insight,
   autofill,
   scheduledPayments,
 }
@@ -58,6 +61,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   final _scrollController = ScrollController();
 
   // Keys for scrolling to specific sections
+  final _insightKey = GlobalKey();
   final _autofillKey = GlobalKey();
   final _scheduledPaymentsKey = GlobalKey();
 
@@ -114,6 +118,22 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
       if (!mounted || !_scrollController.hasClients) return;
 
       switch (section) {
+        case EnvelopeSettingsSection.insight:
+          final targetKey = _insightKey;
+          if (targetKey.currentContext != null) {
+            final context = targetKey.currentContext!;
+            final renderBox = context.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              final offset = renderBox.localToGlobal(Offset.zero).dy;
+              final scrollOffset = _scrollController.offset + offset - 100;
+              _scrollController.animateTo(
+                scrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+          break;
         case EnvelopeSettingsSection.autofill:
           // For autofill, scroll to the bottom to ensure the section is visible above sticky buttons
           _scrollController.animateTo(
@@ -1108,6 +1128,52 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         _checkAndNavigateToScheduledPayment(envelope);
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                    Divider(color: theme.colorScheme.outline),
+                    const SizedBox(height: 16),
+
+                    // INSIGHT TILE - Financial Planning
+                    InsightTile(
+                      key: _insightKey,
+                      userId: widget.repo.currentUserId,
+                      startingAmount: envelope.currentAmount,
+                      envelopeRepo: widget.repo,
+                      initialData: InsightData(
+                        horizonAmount: envelope.targetAmount,
+                        horizonDate: envelope.targetDate,
+                        cashFlowEnabled: envelope.cashFlowEnabled,
+                        manualCashFlowOverride: envelope.cashFlowAmount,
+                      ),
+                      onInsightChanged: (InsightData data) async {
+                        // Update the envelope based on insight data
+                        try {
+                          // Update target amount and date from Horizon settings
+                          if (data.horizonEnabled) {
+                            setState(() {
+                              if (data.horizonAmount != null) {
+                                _targetController.text = data.horizonAmount!.toStringAsFixed(2);
+                              }
+                              _selectedTargetDate = data.horizonDate;
+                            });
+                          }
+
+                          // Update cash flow fields
+                          if (data.cashFlowEnabled && data.effectiveCashFlow != null) {
+                            setState(() {
+                              _cashFlowEnabled = true;
+                              _cashFlowAmountController.text = data.effectiveCashFlow!.toStringAsFixed(2);
+                            });
+                          } else if (!data.cashFlowEnabled) {
+                            setState(() {
+                              _cashFlowEnabled = false;
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Error updating from insight data: $e');
+                        }
                       },
                     ),
 

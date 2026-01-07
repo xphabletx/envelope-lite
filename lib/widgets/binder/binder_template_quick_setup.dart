@@ -94,6 +94,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
         iconValue: templateEnvelope.emoji,
         cashFlowEnabled: false,
         groupId: binderId, // Link to binder
+        linkedAccountId: widget.defaultAccountId, // Link to account if in account mode
       );
       createdIds.add(envelopeId);
       createdCount++;
@@ -446,6 +447,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           iconValue: data.template.emoji,
           cashFlowEnabled: false,
           groupId: binderId, // Assign to the binder
+          linkedAccountId: widget.defaultAccountId, // Link to account if in account mode
         );
         createdIds.add(envelopeId);
         createdCount++;
@@ -461,10 +463,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
           cashFlowAmount: data.payDayDepositEnabled
               ? data.payDayDepositAmount
               : null,
-          linkedAccountId:
-              data.payDayDepositEnabled && widget.defaultAccountId != null
-              ? widget.defaultAccountId
-              : null,
+          linkedAccountId: widget.defaultAccountId, // Always link to account if in account mode
           groupId: binderId, // Assign to the binder
         );
         createdIds.add(envelopeId);
@@ -1078,9 +1077,9 @@ class EnvelopeData {
   Frequency recurringFrequency = Frequency.monthly;
   int recurringDay = 1;
   DateTime? firstPaymentDate;
-  bool autoExecute = false;
+  bool autoExecute = true; // Default to true to match InsightData default
 
-  bool payDayDepositEnabled = false;
+  bool payDayDepositEnabled = true; // Default to true to match InsightData default
   double payDayDepositAmount = 0.0;
 
   // NEW: Store full InsightData for better autopilot integration

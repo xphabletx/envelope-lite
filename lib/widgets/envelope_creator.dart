@@ -98,7 +98,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   DateTime? _targetDate;
 
   // Cash flow state
-  bool _cashFlowEnabled = false;
+  bool _cashFlowEnabled = true; // Default to enabled to match InsightData default
   bool _addScheduledPayment = false;
 
   // Store full insight data for autopilot

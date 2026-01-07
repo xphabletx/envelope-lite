@@ -834,6 +834,9 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _showFullPhoto(BuildContext context, String photoURL) async {
+    // Determine if it's a network URL or local file
+    final isNetworkUrl = photoURL.startsWith('http://') || photoURL.startsWith('https://');
+
     await showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -843,24 +846,36 @@ class SettingsScreen extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                photoURL,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const SizedBox(
-                    height: 200,
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 200,
-                    color: Colors.grey,
-                    child: const Icon(Icons.error, color: Colors.white),
-                  );
-                },
-              ),
+              child: isNetworkUrl
+                  ? Image.network(
+                      photoURL,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: Colors.grey,
+                          child: const Icon(Icons.error, color: Colors.white),
+                        );
+                      },
+                    )
+                  : Image.file(
+                      File(photoURL),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: Colors.grey,
+                          child: const Icon(Icons.error, color: Colors.white),
+                        );
+                      },
+                    ),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -1016,6 +1031,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   // Helper to build profile photo widget that supports both network URLs and local file paths
+  // Note: photoURL parameter is actually the value from SharedPreferences (can be file path or URL)
   static Future<Widget> _buildProfilePhotoWidget(String photoURL) async {
     // Check if it's a network URL (starts with http/https)
     if (photoURL.startsWith('http://') || photoURL.startsWith('https://')) {
@@ -1024,13 +1040,10 @@ class SettingsScreen extends StatelessWidget {
         radius: 20,
       );
     } else {
-      // It's a local file path - check if photoURL is stored in SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final localPath = prefs.getString('profile_photo_path');
-
-      if (localPath != null && File(localPath).existsSync()) {
+      // It's a local file path - photoURL IS the path already from SharedPreferences
+      if (File(photoURL).existsSync()) {
         return CircleAvatar(
-          backgroundImage: FileImage(File(localPath)),
+          backgroundImage: FileImage(File(photoURL)),
           radius: 20,
         );
       } else {

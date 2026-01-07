@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../models/insight_data.dart';
 import '../models/pay_day_settings.dart';
 import '../services/pay_day_settings_service.dart';
+import '../services/envelope_repo.dart';
+import '../models/envelope.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../utils/calculator_helper.dart';
@@ -18,6 +20,7 @@ class InsightTile extends StatefulWidget {
   final InsightData? initialData;
   final bool initiallyExpanded;
   final double? startingAmount; // NEW: Starting amount to calculate gap
+  final EnvelopeRepo? envelopeRepo; // Optional: for calculating existing commitments
 
   const InsightTile({
     super.key,
@@ -26,6 +29,7 @@ class InsightTile extends StatefulWidget {
     this.initialData,
     this.initiallyExpanded = false,
     this.startingAmount,
+    this.envelopeRepo,
   });
 
   @override
@@ -38,6 +42,7 @@ class _InsightTileState extends State<InsightTile> {
   PayDaySettings? _payDaySettings;
   bool _isLoadingPayDay = true;
   bool _showManualOverride = false;
+  double _existingCommitments = 0.0; // Total cash flow from other envelopes
 
   // Controllers
   late TextEditingController _horizonAmountCtrl;
@@ -55,6 +60,12 @@ class _InsightTileState extends State<InsightTile> {
     _isExpanded = widget.initiallyExpanded;
     _data = widget.initialData ?? InsightData();
 
+    debugPrint('[InsightTile] 🚀 initState - Initial data:');
+    debugPrint('  cashFlowEnabled: ${_data.cashFlowEnabled}');
+    debugPrint('  autopilotAutoExecute: ${_data.autopilotAutoExecute}');
+    debugPrint('  horizonAmount: ${_data.horizonAmount}');
+    debugPrint('  autopilotAmount: ${_data.autopilotAmount}');
+
     // Initialize controllers
     _horizonAmountCtrl = TextEditingController(
       text: _data.horizonAmount?.toString() ?? '',
@@ -69,11 +80,43 @@ class _InsightTileState extends State<InsightTile> {
     _showManualOverride = _data.isManualOverride;
 
     _loadPayDaySettings();
+    _loadExistingCommitments();
 
     // Add listeners to recalculate on changes
     _horizonAmountCtrl.addListener(_recalculate);
     _autopilotAmountCtrl.addListener(_recalculate);
     _manualCashFlowCtrl.addListener(_updateManualOverride);
+  }
+
+  Future<void> _loadExistingCommitments() async {
+    if (widget.envelopeRepo == null) {
+      setState(() => _existingCommitments = 0.0);
+      return;
+    }
+
+    try {
+      final envelopes = await widget.envelopeRepo!.envelopesStream().first;
+      double total = 0.0;
+
+      for (final envelope in envelopes) {
+        // Only count envelopes with cash flow enabled
+        if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
+          total += envelope.cashFlowAmount!;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _existingCommitments = total;
+        });
+        _recalculate(); // Recalculate with updated commitments
+      }
+    } catch (e) {
+      debugPrint('Error loading existing commitments: $e');
+      if (mounted) {
+        setState(() => _existingCommitments = 0.0);
+      }
+    }
   }
 
   Future<void> _loadPayDaySettings() async {
@@ -101,20 +144,33 @@ class _InsightTileState extends State<InsightTile> {
     final horizonAmount = double.tryParse(_horizonAmountCtrl.text);
     final autopilotAmount = double.tryParse(_autopilotAmountCtrl.text);
 
-    // Update amounts in data
+    debugPrint('[InsightTile] 🔄 _recalculate called:');
+    debugPrint('  horizonAmount input: $horizonAmount');
+    debugPrint('  autopilotAmount input: $autopilotAmount');
+    debugPrint('  current cashFlowEnabled: ${_data.cashFlowEnabled}');
+
+    // Update amounts in data (don't update warning yet, will be set below)
     _data = _data.copyWith(
       horizonAmount: horizonAmount,
       autopilotAmount: autopilotAmount,
+      updateWarning: false,
     );
 
     // Calculate cash flow if we have pay day settings
-    if (_payDaySettings != null && (horizonAmount != null || autopilotAmount != null)) {
+    if (_payDaySettings != null &&
+        (horizonAmount != null || autopilotAmount != null)) {
+      debugPrint('[InsightTile] 💰 Calculating cash flow...');
       final calculations = _calculateCashFlow(
         horizonAmount: horizonAmount,
         horizonDate: _data.horizonDate,
         autopilotAmount: autopilotAmount,
         autopilotFrequency: _data.autopilotFrequency,
       );
+
+      debugPrint('[InsightTile] 📊 Calculation results:');
+      debugPrint('  cashFlow: ${calculations['cashFlow']}');
+      debugPrint('  affordable: ${calculations['affordable']}');
+      debugPrint('  warning: ${calculations['warning']}');
 
       setState(() {
         _data = _data.copyWith(
@@ -127,7 +183,13 @@ class _InsightTileState extends State<InsightTile> {
           warningMessage: calculations['warning'],
         );
       });
+      debugPrint(
+        '[InsightTile] ✅ After update - cashFlowEnabled: ${_data.cashFlowEnabled}',
+      );
     } else {
+      debugPrint(
+        '[InsightTile] ⚠️ Resetting calculations (no pay day settings or amounts)',
+      );
       setState(() {
         _data = _data.copyWith(
           calculatedCashFlow: 0.0,
@@ -193,23 +255,36 @@ class _InsightTileState extends State<InsightTile> {
     }
 
     // Calculate Autopilot cash flow (ONLY if enabled)
-    if (_data.autopilotEnabled && autopilotAmount != null && autopilotAmount > 0) {
+    if (_data.autopilotEnabled &&
+        autopilotAmount != null &&
+        autopilotAmount > 0) {
       // Calculate the gap: bill amount - starting amount already saved
       final startingAmount = widget.startingAmount ?? 0.0;
       final gap = autopilotAmount - startingAmount;
 
       // Only calculate if we need to save more
       if (gap > 0) {
-        // For autopilot, we need to ensure enough is saved before the bill is due
-        // Estimate based on frequency
-        final periodsPerAutopilot = _getPayPeriodsPerAutopilot(
-          _payDaySettings!.payFrequency,
-          autopilotFrequency ?? 'monthly',
-        );
+        // If autopilot has a first date set, calculate actual pay periods until that date
+        if (_data.autopilotFirstDate != null) {
+          autopilotPeriods = _calculatePayPeriods(nextPayDate, _data.autopilotFirstDate!);
+          if (autopilotPeriods > 0) {
+            totalCashFlow += gap / autopilotPeriods.toDouble();
+          } else {
+            // Bill is due before next pay day - need full amount now
+            totalCashFlow += gap;
+            autopilotPeriods = 0;
+          }
+        } else {
+          // No date set - estimate based on frequency
+          final periodsPerAutopilot = _getPayPeriodsPerAutopilot(
+            _payDaySettings!.payFrequency,
+            autopilotFrequency ?? 'monthly',
+          );
 
-        if (periodsPerAutopilot > 0) {
-          autopilotPeriods = periodsPerAutopilot;
-          totalCashFlow += gap / periodsPerAutopilot.toDouble();
+          if (periodsPerAutopilot > 0) {
+            autopilotPeriods = periodsPerAutopilot;
+            totalCashFlow += gap / periodsPerAutopilot.toDouble();
+          }
         }
       }
       // If gap <= 0, we already have enough saved for the bill
@@ -224,11 +299,13 @@ class _InsightTileState extends State<InsightTile> {
     final expectedPay = _payDaySettings!.expectedPayAmount;
     if (expectedPay != null && expectedPay > 0) {
       percentage = (totalCashFlow / expectedPay) * 100;
-      available = expectedPay; // TODO: Subtract existing commitments
+      // Subtract existing commitments from other envelopes
+      available = expectedPay - _existingCommitments;
 
       if (totalCashFlow > available) {
         affordable = false;
-        warning = 'This requires ${totalCashFlow.toStringAsFixed(2)} per paycheck but you only have ${available.toStringAsFixed(2)} available. Consider adjusting your targets.';
+        warning =
+            'This requires ${totalCashFlow.toStringAsFixed(2)} per paycheck, but you only have ${available.toStringAsFixed(2)} available after existing commitments (${_existingCommitments.toStringAsFixed(2)} already committed). Consider adjusting your targets.';
       }
     }
 
@@ -250,7 +327,8 @@ class _InsightTileState extends State<InsightTile> {
     int periods = 0;
     DateTime currentDate = startDate;
 
-    while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+    while (currentDate.isBefore(endDate) ||
+        currentDate.isAtSameMomentAs(endDate)) {
       periods++;
       currentDate = PayDaySettings.calculateNextPayDate(currentDate, frequency);
 
@@ -261,7 +339,10 @@ class _InsightTileState extends State<InsightTile> {
     return periods;
   }
 
-  int _getPayPeriodsPerAutopilot(String payFrequency, String autopilotFrequency) {
+  int _getPayPeriodsPerAutopilot(
+    String payFrequency,
+    String autopilotFrequency,
+  ) {
     // Estimate how many pay periods occur before each autopilot payment
     const daysPerWeek = 7.0;
     const daysPerMonth = 30.44; // Average
@@ -313,6 +394,8 @@ class _InsightTileState extends State<InsightTile> {
       _data = _data.copyWith(
         manualCashFlowOverride: manual,
         manualOverrideCleared: manual == null || manual <= 0,
+        updateWarning:
+            false, // Don't clear warning when updating manual override
       );
     });
     widget.onInsightChanged(_data);
@@ -336,7 +419,10 @@ class _InsightTileState extends State<InsightTile> {
 
     if (picked != null && mounted) {
       setState(() {
-        _data = _data.copyWith(horizonDate: picked);
+        _data = _data.copyWith(
+          horizonDate: picked,
+          updateWarning: false, // Warning will be updated in _recalculate
+        );
       });
       _recalculate();
     }
@@ -344,7 +430,10 @@ class _InsightTileState extends State<InsightTile> {
 
   void _clearHorizonDate() {
     setState(() {
-      _data = _data.copyWith(horizonDateCleared: true);
+      _data = _data.copyWith(
+        horizonDateCleared: true,
+        updateWarning: false, // Warning will be updated in _recalculate
+      );
     });
     _recalculate();
   }
@@ -364,6 +453,7 @@ class _InsightTileState extends State<InsightTile> {
         _data = _data.copyWith(
           autopilotFirstDate: picked,
           autopilotDayOfMonth: picked.day,
+          updateWarning: false, // Warning will be updated in _recalculate
         );
       });
       _recalculate();
@@ -426,7 +516,9 @@ class _InsightTileState extends State<InsightTile> {
                             _data.getSummary(localeProvider.currencySymbol),
                             style: fontProvider.getTextStyle(
                               fontSize: 13,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.7,
+                              ),
                             ),
                           ),
                         ],
@@ -482,12 +574,18 @@ class _InsightTileState extends State<InsightTile> {
     );
   }
 
-  Widget _buildPayDayInfo(ThemeData theme, FontProvider fontProvider, LocaleProvider localeProvider) {
+  Widget _buildPayDayInfo(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider localeProvider,
+  ) {
     if (_isLoadingPayDay) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Row(
@@ -510,14 +608,20 @@ class _InsightTileState extends State<InsightTile> {
         decoration: BoxDecoration(
           color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.colorScheme.error.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: theme.colorScheme.error.withValues(alpha: 0.3),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline, color: theme.colorScheme.error, size: 20),
+                Icon(
+                  Icons.info_outline,
+                  color: theme.colorScheme.error,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Pay Day Not Configured',
@@ -564,7 +668,9 @@ class _InsightTileState extends State<InsightTile> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,19 +691,61 @@ class _InsightTileState extends State<InsightTile> {
               fontProvider,
             ),
           _buildInfoRow('Frequency:', frequencyLabel, fontProvider),
-          if (expectedPay != null)
+          if (expectedPay != null) ...[
             _buildInfoRow(
               'Expected Income:',
               '${localeProvider.currencySymbol}${expectedPay.toStringAsFixed(2)}',
               fontProvider,
             ),
-          // TODO: Add available after commitments calculation
+            if (_existingCommitments > 0) ...[
+              _buildInfoRow(
+                'Existing Commitments:',
+                '${localeProvider.currencySymbol}${_existingCommitments.toStringAsFixed(2)}',
+                fontProvider,
+                isWarning: true,
+              ),
+              _buildInfoRow(
+                'Available:',
+                '${localeProvider.currencySymbol}${(expectedPay - _existingCommitments).toStringAsFixed(2)}',
+                fontProvider,
+                isHighlight: true,
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '💡 This calculation is a recommendation based on your Pay Day settings. '
+                  'Available = Expected Income - Existing Commitments from other envelopes. '
+                  'Adjust targets based on your actual financial situation.',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, FontProvider fontProvider) {
+  Widget _buildInfoRow(
+    String label,
+    String value,
+    FontProvider fontProvider, {
+    bool isWarning = false,
+    bool isHighlight = false,
+  }) {
+    final theme = Theme.of(context);
+    Color? valueColor;
+
+    if (isWarning) {
+      valueColor = theme.colorScheme.error;
+    } else if (isHighlight) {
+      valueColor = theme.colorScheme.secondary;
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -609,6 +757,7 @@ class _InsightTileState extends State<InsightTile> {
             style: fontProvider.getTextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
+              color: valueColor,
             ),
           ),
         ],
@@ -616,7 +765,11 @@ class _InsightTileState extends State<InsightTile> {
     );
   }
 
-  Widget _buildHorizonSection(ThemeData theme, FontProvider fontProvider, LocaleProvider localeProvider) {
+  Widget _buildHorizonSection(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider localeProvider,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -650,7 +803,11 @@ class _InsightTileState extends State<InsightTile> {
               value: _data.horizonEnabled,
               onChanged: (enabled) {
                 setState(() {
-                  _data = _data.copyWith(horizonEnabled: enabled);
+                  _data = _data.copyWith(
+                    horizonEnabled: enabled,
+                    updateWarning:
+                        false, // Warning will be updated in _recalculate
+                  );
                 });
                 _recalculate();
               },
@@ -658,90 +815,103 @@ class _InsightTileState extends State<InsightTile> {
           ],
         ),
         if (_data.horizonEnabled) ...[
-        const SizedBox(height: 12),
-        SmartTextField(
-          controller: _horizonAmountCtrl,
-          focusNode: _horizonAmountFocus,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Target Amount',
-            prefixText: localeProvider.currencySymbol,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            suffixIcon: Container(
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(8),
+          const SizedBox(height: 12),
+          SmartTextField(
+            controller: _horizonAmountCtrl,
+            focusNode: _horizonAmountFocus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Target Amount',
+              prefixText: localeProvider.currencySymbol,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: IconButton(
-                icon: Icon(Icons.calculate, color: theme.colorScheme.onPrimary),
-                onPressed: () async {
-                  final result = await CalculatorHelper.showCalculator(context);
-                  if (result != null && mounted) {
-                    _horizonAmountCtrl.text = result;
-                  }
-                },
-                tooltip: 'Open Calculator',
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        InkWell(
-          onTap: _pickHorizonDate,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outline),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Target Date (Optional)',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _data.horizonDate == null
-                            ? 'Tap to set deadline'
-                            : '${_data.horizonDate!.day}/${_data.horizonDate!.month}/${_data.horizonDate!.year}',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 13,
-                          color: _data.horizonDate == null
-                              ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
-                              : theme.colorScheme.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
+              suffixIcon: Container(
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                if (_data.horizonDate != null)
-                  IconButton(
-                    icon: const Icon(Icons.clear, size: 20),
-                    onPressed: _clearHorizonDate,
-                    tooltip: 'Clear date',
+                child: IconButton(
+                  icon: Icon(
+                    Icons.calculate,
+                    color: theme.colorScheme.onPrimary,
                   ),
-              ],
+                  onPressed: () async {
+                    final result = await CalculatorHelper.showCalculator(
+                      context,
+                    );
+                    if (result != null && mounted) {
+                      _horizonAmountCtrl.text = result;
+                    }
+                  },
+                  tooltip: 'Open Calculator',
+                ),
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _pickHorizonDate,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Target Date (Optional)',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _data.horizonDate == null
+                              ? 'Tap to set deadline'
+                              : '${_data.horizonDate!.day}/${_data.horizonDate!.month}/${_data.horizonDate!.year}',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 13,
+                            color: _data.horizonDate == null
+                                ? theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  )
+                                : theme.colorScheme.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_data.horizonDate != null)
+                    IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: _clearHorizonDate,
+                      tooltip: 'Clear date',
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ],
     );
   }
 
-  Widget _buildAutopilotSection(ThemeData theme, FontProvider fontProvider, LocaleProvider localeProvider) {
+  Widget _buildAutopilotSection(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider localeProvider,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -775,7 +945,11 @@ class _InsightTileState extends State<InsightTile> {
               value: _data.autopilotEnabled,
               onChanged: (enabled) {
                 setState(() {
-                  _data = _data.copyWith(autopilotEnabled: enabled);
+                  _data = _data.copyWith(
+                    autopilotEnabled: enabled,
+                    updateWarning:
+                        false, // Warning will be updated in _recalculate
+                  );
                 });
                 _recalculate();
               },
@@ -791,7 +965,9 @@ class _InsightTileState extends State<InsightTile> {
             decoration: InputDecoration(
               labelText: 'Bill Amount',
               prefixText: localeProvider.currencySymbol,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               suffixIcon: Container(
                 margin: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -799,9 +975,14 @@ class _InsightTileState extends State<InsightTile> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: IconButton(
-                  icon: Icon(Icons.calculate, color: theme.colorScheme.onPrimary),
+                  icon: Icon(
+                    Icons.calculate,
+                    color: theme.colorScheme.onPrimary,
+                  ),
                   onPressed: () async {
-                    final result = await CalculatorHelper.showCalculator(context);
+                    final result = await CalculatorHelper.showCalculator(
+                      context,
+                    );
                     if (result != null && mounted) {
                       _autopilotAmountCtrl.text = result;
                     }
@@ -816,19 +997,28 @@ class _InsightTileState extends State<InsightTile> {
             initialValue: _data.autopilotFrequency,
             decoration: InputDecoration(
               labelText: 'Payment Frequency',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             items: const [
               DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
               DropdownMenuItem(value: 'biweekly', child: Text('Bi-weekly')),
-              DropdownMenuItem(value: 'fourweekly', child: Text('Every 4 Weeks')),
+              DropdownMenuItem(
+                value: 'fourweekly',
+                child: Text('Every 4 Weeks'),
+              ),
               DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
               DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
             ],
             onChanged: (value) {
               if (value != null) {
                 setState(() {
-                  _data = _data.copyWith(autopilotFrequency: value);
+                  _data = _data.copyWith(
+                    autopilotFrequency: value,
+                    updateWarning:
+                        false, // Warning will be updated in _recalculate
+                  );
                 });
                 _recalculate();
               }
@@ -867,7 +1057,9 @@ class _InsightTileState extends State<InsightTile> {
                           style: fontProvider.getTextStyle(
                             fontSize: 13,
                             color: _data.autopilotFirstDate == null
-                                ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
+                                ? theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  )
                                 : theme.colorScheme.secondary,
                           ),
                         ),
@@ -883,7 +1075,11 @@ class _InsightTileState extends State<InsightTile> {
             value: _data.autopilotAutoExecute,
             onChanged: (value) {
               setState(() {
-                _data = _data.copyWith(autopilotAutoExecute: value);
+                _data = _data.copyWith(
+                  autopilotAutoExecute: value,
+                  updateWarning:
+                      false, // Don't update warning when toggling auto-execute
+                );
               });
               widget.onInsightChanged(_data);
             },
@@ -898,8 +1094,13 @@ class _InsightTileState extends State<InsightTile> {
     );
   }
 
-  Widget _buildCashFlowSection(ThemeData theme, FontProvider fontProvider, LocaleProvider localeProvider) {
-    final hasCalculation = _data.calculatedCashFlow != null && _data.calculatedCashFlow! > 0;
+  Widget _buildCashFlowSection(
+    ThemeData theme,
+    FontProvider fontProvider,
+    LocaleProvider localeProvider,
+  ) {
+    final hasCalculation =
+        _data.calculatedCashFlow != null && _data.calculatedCashFlow! > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -948,14 +1149,17 @@ class _InsightTileState extends State<InsightTile> {
                 const SizedBox(height: 12),
 
                 // Horizon calculation (ONLY if enabled)
-                if (_data.horizonEnabled && _data.horizonAmount != null && _data.horizonAmount! > 0) ...[
+                if (_data.horizonEnabled &&
+                    _data.horizonAmount != null &&
+                    _data.horizonAmount! > 0) ...[
                   _buildCalculationRow(
                     '🎯 Horizon Goal:',
                     '${localeProvider.currencySymbol}${_data.horizonAmount!.toStringAsFixed(2)}',
                     fontProvider,
                   ),
                   // Show starting amount if provided
-                  if (widget.startingAmount != null && widget.startingAmount! > 0) ...[
+                  if (widget.startingAmount != null &&
+                      widget.startingAmount! > 0) ...[
                     _buildCalculationRow(
                       '   Starting amount:',
                       '${localeProvider.currencySymbol}${widget.startingAmount!.toStringAsFixed(2)}',
@@ -969,7 +1173,8 @@ class _InsightTileState extends State<InsightTile> {
                       isSubItem: true,
                     ),
                   ],
-                  if (_data.horizonDate != null && _data.payPeriodsToHorizon != null)
+                  if (_data.horizonDate != null &&
+                      _data.payPeriodsToHorizon != null)
                     _buildCalculationRow(
                       '   Pay periods:',
                       '${_data.payPeriodsToHorizon} until ${_data.horizonDate!.day}/${_data.horizonDate!.month}/${_data.horizonDate!.year}',
@@ -982,7 +1187,9 @@ class _InsightTileState extends State<InsightTile> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                        color: theme.colorScheme.primaryContainer.withValues(
+                          alpha: 0.3,
+                        ),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Column(
@@ -990,7 +1197,11 @@ class _InsightTileState extends State<InsightTile> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.info_outline, size: 16, color: theme.colorScheme.primary),
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: theme.colorScheme.primary,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -1004,13 +1215,17 @@ class _InsightTileState extends State<InsightTile> {
                             ],
                           ),
                           // Show "periods to goal" if manual cash flow is set
-                          if (_data.manualCashFlowOverride != null && _data.manualCashFlowOverride! > 0) ...[
+                          if (_data.manualCashFlowOverride != null &&
+                              _data.manualCashFlowOverride! > 0) ...[
                             const SizedBox(height: 8),
                             () {
-                              final startingAmount = widget.startingAmount ?? 0.0;
+                              final startingAmount =
+                                  widget.startingAmount ?? 0.0;
                               final gap = _data.horizonAmount! - startingAmount;
                               if (gap > 0) {
-                                final periodsToGoal = (gap / _data.manualCashFlowOverride!).ceil();
+                                final periodsToGoal =
+                                    (gap / _data.manualCashFlowOverride!)
+                                        .ceil();
                                 return Text(
                                   '📊 At ${localeProvider.currencySymbol}${_data.manualCashFlowOverride!.toStringAsFixed(2)}/paycheck, you\'ll reach your goal in ~$periodsToGoal pay periods',
                                   style: fontProvider.getTextStyle(
@@ -1031,14 +1246,17 @@ class _InsightTileState extends State<InsightTile> {
                 ],
 
                 // Autopilot calculation
-                if (_data.autopilotEnabled && _data.autopilotAmount != null && _data.autopilotAmount! > 0) ...[
+                if (_data.autopilotEnabled &&
+                    _data.autopilotAmount != null &&
+                    _data.autopilotAmount! > 0) ...[
                   _buildCalculationRow(
                     '⚡ Autopilot Bill:',
-                    '${localeProvider.currencySymbol}${_data.autopilotAmount!.toStringAsFixed(2)}',
+                    '${localeProvider.currencySymbol}${_data.autopilotAmount!.toStringAsFixed(2)}${_data.autopilotFirstDate != null ? ' due ${_data.autopilotFirstDate!.day}/${_data.autopilotFirstDate!.month}/${_data.autopilotFirstDate!.year}' : ''}',
                     fontProvider,
                   ),
                   // Show starting amount if provided
-                  if (widget.startingAmount != null && widget.startingAmount! > 0) ...[
+                  if (widget.startingAmount != null &&
+                      widget.startingAmount! > 0) ...[
                     _buildCalculationRow(
                       '   Starting amount:',
                       '${localeProvider.currencySymbol}${widget.startingAmount!.toStringAsFixed(2)}',
@@ -1052,13 +1270,27 @@ class _InsightTileState extends State<InsightTile> {
                       isSubItem: true,
                     ),
                   ],
-                  if (_data.payPeriodsToAutopilot != null)
+                  if (_data.payPeriodsToAutopilot != null && _data.payPeriodsToAutopilot! > 0) ...[
                     _buildCalculationRow(
-                      '   Pay periods:',
-                      '${_data.payPeriodsToAutopilot} before next bill',
+                      '   Pay periods until due:',
+                      '${_data.payPeriodsToAutopilot}',
                       fontProvider,
                       isSubItem: true,
                     ),
+                    _buildCalculationRow(
+                      '   Per paycheck:',
+                      '${localeProvider.currencySymbol}${_data.calculatedCashFlow!.toStringAsFixed(2)}',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                  ] else if (_data.payPeriodsToAutopilot == 0) ...[
+                    _buildCalculationRow(
+                      '   ⚠️ Due before next payday!',
+                      'Need full amount now',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                 ],
 
@@ -1092,7 +1324,11 @@ class _InsightTileState extends State<InsightTile> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.warning, color: theme.colorScheme.error, size: 20),
+                        Icon(
+                          Icons.warning,
+                          color: theme.colorScheme.error,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1117,7 +1353,11 @@ class _InsightTileState extends State<InsightTile> {
             value: _data.cashFlowEnabled,
             onChanged: (value) {
               setState(() {
-                _data = _data.copyWith(cashFlowEnabled: value);
+                _data = _data.copyWith(
+                  cashFlowEnabled: value,
+                  updateWarning:
+                      false, // Don't update warning when toggling cash flow
+                );
               });
               widget.onInsightChanged(_data);
             },
@@ -1135,10 +1375,13 @@ class _InsightTileState extends State<InsightTile> {
             contentPadding: EdgeInsets.zero,
           ),
         ] else ...[
+          // No automatic calculation available - show info and manual input option
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -1147,7 +1390,9 @@ class _InsightTileState extends State<InsightTile> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Enter a Horizon or Autopilot amount above to calculate your savings plan',
+                    _payDaySettings == null
+                        ? 'Configure Pay Day settings for automatic calculations, or enter a manual amount below'
+                        : 'Enter a Horizon or Autopilot amount above for automatic calculations, or use manual input below',
                     style: fontProvider.getTextStyle(fontSize: 13),
                   ),
                 ),
@@ -1158,80 +1403,152 @@ class _InsightTileState extends State<InsightTile> {
 
         const SizedBox(height: 16),
 
-        // MANUAL OVERRIDE SECTION
-        if (hasCalculation || _showManualOverride) ...[
+        // MANUAL CASH FLOW INPUT - Always available
+        if (hasCalculation) ...[
+          // If we have a calculation, show it as a collapsible "override" option
           TextButton.icon(
             onPressed: () {
               setState(() {
                 _showManualOverride = !_showManualOverride;
               });
             },
-            icon: Icon(_showManualOverride ? Icons.expand_less : Icons.expand_more),
-            label: Text(_showManualOverride ? 'Hide Manual Override' : 'Manual Override'),
+            icon: Icon(
+              _showManualOverride ? Icons.expand_less : Icons.expand_more,
+            ),
+            label: Text(
+              _showManualOverride ? 'Hide Manual Override' : 'Manual Override',
+            ),
           ),
+        ],
 
-          if (_showManualOverride) ...[
+        // Show manual input if: (1) we have calculation and user toggled it, OR (2) no calculation available
+        if ((hasCalculation && _showManualOverride) || !hasCalculation) ...[
+          if (!hasCalculation) ...[
+            // Show a label for manual input when there's no calculation
+            Text(
+              'Manual Cash Flow Amount',
+              style: fontProvider.getTextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ] else ...[
             const SizedBox(height: 8),
-            SmartTextField(
-              controller: _manualCashFlowCtrl,
-              focusNode: _manualCashFlowFocus,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Custom Cash Flow Amount',
-                prefixText: localeProvider.currencySymbol,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                helperText: 'Override calculated amount with your own',
-                suffixIcon: Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(8),
+          ],
+          const SizedBox(height: 8),
+          SmartTextField(
+            controller: _manualCashFlowCtrl,
+            focusNode: _manualCashFlowFocus,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: hasCalculation
+                  ? 'Custom Cash Flow Amount'
+                  : 'Cash Flow Amount',
+              prefixText: localeProvider.currencySymbol,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              helperText: hasCalculation
+                  ? 'Override calculated amount with your own'
+                  : 'Amount to auto-fill on Pay Day',
+              suffixIcon: Container(
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    Icons.calculate,
+                    color: theme.colorScheme.onPrimary,
                   ),
-                  child: IconButton(
-                    icon: Icon(Icons.calculate, color: theme.colorScheme.onPrimary),
-                    onPressed: () async {
-                      final result = await CalculatorHelper.showCalculator(context);
-                      if (result != null && mounted) {
-                        _manualCashFlowCtrl.text = result;
-                      }
-                    },
-                    tooltip: 'Open Calculator',
-                  ),
+                  onPressed: () async {
+                    final result = await CalculatorHelper.showCalculator(
+                      context,
+                    );
+                    if (result != null && mounted) {
+                      _manualCashFlowCtrl.text = result;
+                    }
+                  },
+                  tooltip: 'Open Calculator',
                 ),
               ),
             ),
-            if (_data.isManualOverride) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
+          ),
+          if (_data.isManualOverride) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.tertiaryContainer.withValues(
+                  alpha: 0.3,
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: theme.colorScheme.tertiary, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Using manual override: ${localeProvider.currencySymbol}${_data.manualCashFlowOverride!.toStringAsFixed(2)}',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.tertiary,
-                        ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: theme.colorScheme.tertiary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasCalculation
+                          ? 'Using manual override: ${localeProvider.currencySymbol}${_data.manualCashFlowOverride!.toStringAsFixed(2)}'
+                          : 'Cash Flow: ${localeProvider.currencySymbol}${_data.manualCashFlowOverride!.toStringAsFixed(2)}',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.tertiary,
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Enable Cash Flow toggle (when no automatic calculation)
+          if (!hasCalculation && _data.isManualOverride) ...[
+            const SizedBox(height: 16),
+            SwitchListTile(
+              value: _data.cashFlowEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _data = _data.copyWith(
+                    cashFlowEnabled: value,
+                    updateWarning: false,
+                  );
+                });
+                widget.onInsightChanged(_data);
+              },
+              title: Text(
+                'Enable Cash Flow',
+                style: fontProvider.getTextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ],
+              subtitle: Text(
+                'Automatically deposit this amount on Pay Day',
+                style: fontProvider.getTextStyle(fontSize: 12),
+              ),
+              contentPadding: EdgeInsets.zero,
+            ),
           ],
         ],
       ],
     );
   }
 
-  Widget _buildCalculationRow(String label, String value, FontProvider fontProvider, {bool isBold = false, bool isSubItem = false}) {
+  Widget _buildCalculationRow(
+    String label,
+    String value,
+    FontProvider fontProvider, {
+    bool isBold = false,
+    bool isSubItem = false,
+  }) {
     return Padding(
       padding: EdgeInsets.only(bottom: 4, left: isSubItem ? 16 : 0),
       child: Row(

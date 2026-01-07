@@ -223,9 +223,9 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: radius,
       );
     } else {
-      // It's a local file path - check if photoURL is stored in SharedPreferences
+      // It's a local file path - check if photoURL is stored in SharedPreferences with user ID
       final prefs = await SharedPreferences.getInstance();
-      final localPath = prefs.getString('profile_photo_path');
+      final localPath = prefs.getString('profile_photo_path_${widget.repo.currentUserId}');
 
       if (localPath != null && File(localPath).existsSync()) {
         return CircleAvatar(

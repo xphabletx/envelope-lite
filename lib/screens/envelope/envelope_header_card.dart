@@ -20,7 +20,9 @@ class EnvelopeHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
-    final currencyFormatter = NumberFormat.currency(symbol: locale.currencySymbol);
+    final currencyFormatter = NumberFormat.currency(
+      symbol: locale.currencySymbol,
+    );
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
     // Calculate progress percentage (envelope.currentAmount is already projected if in time machine mode)
@@ -202,7 +204,10 @@ class _RealisticEnvelope extends StatelessWidget {
   final Envelope envelope;
   final Color primaryColor;
 
-  const _RealisticEnvelope({required this.envelope, required this.primaryColor});
+  const _RealisticEnvelope({
+    required this.envelope,
+    required this.primaryColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +316,10 @@ class _RealisticEnvelope extends StatelessWidget {
                   ),
                 ],
               ),
-              child: envelope.getIconWidget(Theme.of(context), size: emojiSize * 0.9),
+              child: envelope.getIconWidget(
+                Theme.of(context),
+                size: emojiSize * 0.9,
+              ),
             ),
           ),
         ],

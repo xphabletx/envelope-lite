@@ -129,6 +129,37 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     }
   }
 
+  Widget _buildIconPreview(ThemeData theme) {
+    // If no icon selected yet, show default
+    if (_iconType == null || _iconValue == null) {
+      return Image.asset(
+        'assets/default/stufficon.png',
+        width: 24,
+        height: 24,
+      );
+    }
+
+    // Create a temporary account to render the icon
+    final tempAccount = Account(
+      id: '',
+      name: '',
+      userId: '',
+      currentBalance: 0.0,
+      colorName: _selectedColor,
+      iconType: _iconType,
+      iconValue: _iconValue,
+      iconColor: _iconColor,
+      createdAt: DateTime.now(),
+      lastUpdated: DateTime.now(),
+    );
+
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: tempAccount.getIconWidget(theme, size: 24),
+    );
+  }
+
   Future<void> _handleSave() async {
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
@@ -490,6 +521,10 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         prefixIcon: const Icon(Icons.account_balance_wallet),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 20,
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -503,7 +538,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                           extentOffset: _nameController.text.length,
                         );
                       },
-                      
+
                     ),
                     const SizedBox(height: 16),
 
@@ -617,10 +652,10 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                         ),
                         child: Row(
                           children: [
-                            Image.asset(
-                              'assets/default/stufficon.png',
+                            SizedBox(
                               width: 24,
                               height: 24,
+                              child: _buildIconPreview(theme),
                             ),
                             const SizedBox(width: 16),
                             Text(

@@ -539,7 +539,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                               groupRepo: groupRepo,
                               accountRepo: accountRepo,
                               scheduledPaymentRepo: scheduledPaymentRepo,
-                              initialSection: EnvelopeSettingsSection.autofill,
+                              initialSection: EnvelopeSettingsSection.insight,
                             ),
                           ),
                         );
