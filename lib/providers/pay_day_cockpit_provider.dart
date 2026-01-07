@@ -76,6 +76,7 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
   int get currentStuffingBinderIndex => _currentStuffingBinderIndex;
   int get currentStuffingEnvelopeIndex => _currentStuffingEnvelopeIndex;
+  Map<String, double> get stuffingProgress => _stuffingProgress;
 
   // Success (Phase 4)
   List<EnvelopeHorizonImpact> _topHorizons = [];

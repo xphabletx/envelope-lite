@@ -40,7 +40,6 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 
   // Horizon boost tracking
   final Map<String, double> _horizonBoosts = {}; // envelopeId -> percentage (0.0-1.0)
-  final Map<String, bool> _boostExpanded = {}; // envelopeId -> expanded state
 
   // Temporary allocations (edits for this pay day only)
   final Map<String, double> _tempAllocations = {}; // envelopeId -> amount
@@ -269,6 +268,9 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
       sum + (_tempAllocations[env.id] ?? 0.0)
     );
     final binderHorizon = binderEnvelopes.where((e) => e.targetAmount != null).length;
+    final binderHorizonValue = binderEnvelopes.where((e) => e.targetAmount != null).fold(0.0, (sum, env) =>
+      sum + (env.targetAmount ?? 0.0)
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -307,7 +309,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                           ),
                         ),
                         Text(
-                          '${currency.format(binderCashFlow)} cash flow • $binderHorizon horizons',
+                          '${currency.format(binderCashFlow)} cash flow • $binderHorizon horizons (${currency.format(binderHorizonValue)})',
                           style: fontProvider.getTextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -368,8 +370,13 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   Widget _buildEnvelopeCard(Envelope envelope, ThemeData theme, FontProvider fontProvider, NumberFormat currency, {bool inBinder = false}) {
     final isIncluded = _tempAllocations.containsKey(envelope.id);
     final currentAmount = _tempAllocations[envelope.id] ?? envelope.cashFlowAmount ?? 0.0;
-    final hasBoost = _horizonBoosts.containsKey(envelope.id) && (_horizonBoosts[envelope.id] ?? 0) > 0;
-    final isExpanded = inBinder ? (_expandedEnvelopeIds[envelope.id] ?? false) : true;
+    final boostPercentage = _horizonBoosts[envelope.id] ?? 0.0;
+    final hasBoost = boostPercentage > 0;
+    final isExpanded = _expandedEnvelopeIds[envelope.id] ?? false;
+
+    // Calculate boost amount for THIS envelope only
+    final boostAmount = currentAmount * boostPercentage;
+    final totalAllocation = currentAmount + boostAmount;
 
     return Container(
       margin: EdgeInsets.only(
@@ -377,7 +384,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
         right: inBinder ? 16 : 0,
         bottom: inBinder ? 12 : 0,
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isIncluded
           ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
@@ -389,242 +396,222 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             : (isIncluded
               ? theme.colorScheme.primary.withValues(alpha: 0.5)
               : Colors.grey.withValues(alpha: 0.3)),
-          width: hasBoost ? 2 : 1,
+          width: 1,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row: Checkbox + Icon + Name + Cash Flow + Expand/Collapse (if in binder)
-          Row(
-            children: [
-              // Large checkbox for selection
-              Transform.scale(
-                scale: 1.3,
-                child: Checkbox(
+          // Compact header row: Checkbox + Icon + Name + Amount + Edit + Expand
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expandedEnvelopeIds[envelope.id] = !isExpanded;
+              });
+            },
+            child: Row(
+              children: [
+                // Checkbox for selection
+                Checkbox(
                   value: isIncluded,
                   onChanged: (value) {
                     setState(() {
                       if (value == true) {
-                        // Add envelope with its cash flow amount
                         _tempAllocations[envelope.id] = envelope.cashFlowAmount ?? 0.0;
                       } else {
-                        // Remove envelope
                         _tempAllocations.remove(envelope.id);
                         _horizonBoosts.remove(envelope.id);
-                        _boostExpanded.remove(envelope.id);
+                        _expandedEnvelopeIds[envelope.id] = false;
                       }
                     });
                   },
                 ),
-              ),
-              const SizedBox(width: 8),
-              envelope.getIconWidget(theme, size: 40),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      envelope.name,
-                      style: fontProvider.getTextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    // Show cash flow in collapsed state
-                    if (!isExpanded) ...[
-                      const SizedBox(height: 4),
+                const SizedBox(width: 8),
+                envelope.getIconWidget(theme, size: 36),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        currency.format(currentAmount),
+                        envelope.name,
                         style: fontProvider.getTextStyle(
-                          fontSize: 14,
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            currency.format(currentAmount),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (hasBoost) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '+ ${currency.format(boostAmount)}',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 13,
+                                color: Colors.amber.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
-                  ],
-                ),
-              ),
-              // Expand/collapse button for envelopes in binders
-              if (inBinder)
-                IconButton(
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: theme.colorScheme.primary,
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _expandedEnvelopeIds[envelope.id] = !isExpanded;
-                    });
-                  },
-                  tooltip: isExpanded ? 'Collapse' : 'Expand',
                 ),
-              // Horizon progress for non-binder envelopes or expanded state
-              if (!inBinder && envelope.targetAmount != null)
-                HorizonProgress(
-                  percentage: (envelope.currentAmount / envelope.targetAmount!).clamp(0.0, 1.0),
-                  size: 50,
-                ),
-            ],
-          ),
-
-          // Expanded details (only show when expanded)
-          if (isExpanded) ...[
-            const SizedBox(height: 16),
-
-          // Detail rows: Current, Cash Flow (with settings button), Horizon
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Current Amount
-              _buildDetailRow('💰', 'Current', currency.format(envelope.currentAmount), theme, fontProvider),
-              const SizedBox(height: 8),
-
-              // Cash Flow Amount (non-editable, with settings button)
-              Row(
-                children: [
-                  const Text('⚡', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Cash Flow',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    currency.format(currentAmount),
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
+                // Edit button
+                if (isIncluded)
                   IconButton(
-                    icon: Icon(Icons.settings, size: 20, color: theme.colorScheme.primary),
+                    icon: Icon(Icons.edit, size: 20, color: theme.colorScheme.primary),
                     onPressed: () => _showEnvelopeSettingsModal(envelope, currency),
                     tooltip: 'Edit amount',
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Horizon (if exists)
-              if (envelope.targetAmount != null)
-                _buildDetailRow('🎯', 'Horizon', currency.format(envelope.targetAmount!), theme, fontProvider),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Temporary allocation indicator
-          if (_tempAllocations.containsKey(envelope.id) &&
-              _tempAllocations[envelope.id] != (envelope.cashFlowAmount ?? 0.0))
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade300),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.edit_note, size: 16, color: Colors.blue.shade700),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Temporary: ${currency.format(_tempAllocations[envelope.id]!)}',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.blue.shade700,
+                // Horizon indicator
+                if (envelope.targetAmount != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: HorizonProgress(
+                      percentage: ((envelope.currentAmount + totalAllocation) / envelope.targetAmount!).clamp(0.0, 1.0),
+                      size: 40,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '(${_tempAllocations[envelope.id]! > (envelope.cashFlowAmount ?? 0.0) ? '+' : ''}${currency.format(_tempAllocations[envelope.id]! - (envelope.cashFlowAmount ?? 0.0))})',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 11,
-                      color: _tempAllocations[envelope.id]! > (envelope.cashFlowAmount ?? 0.0)
-                        ? Colors.green.shade700
-                        : Colors.red.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          if (_tempAllocations.containsKey(envelope.id) &&
-              _tempAllocations[envelope.id] != (envelope.cashFlowAmount ?? 0.0))
-            const SizedBox(height: 12),
-
-          // Boost checkbox (only for envelopes with horizons)
-          if (envelope.targetAmount != null) ...[
-            Row(
-              children: [
-                Checkbox(
-                  value: _boostExpanded[envelope.id] ?? false,
-                  onChanged: (value) {
-                    // Don't allow boost if amount was decreased
-                    if (value == true && _tempAllocations.containsKey(envelope.id)) {
-                      final tempAmount = _tempAllocations[envelope.id]!;
-                      final originalAmount = envelope.cashFlowAmount ?? 0.0;
-                      if (tempAmount < originalAmount) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cannot boost when decreasing cash flow amount'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        return;
-                      }
-                    }
-
-                    setState(() {
-                      _boostExpanded[envelope.id] = value ?? false;
-                      if (!value!) {
-                        _horizonBoosts.remove(envelope.id);
-                      }
-                    });
-                  },
+                // Expand/collapse indicator
+                Icon(
+                  isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: theme.colorScheme.primary,
+                  size: 20,
                 ),
-                const Text('🚀 Boost?', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               ],
             ),
+          ),
 
-            // Boost slider (inline expansion)
-            if (_boostExpanded[envelope.id] ?? false) ...[
-              const SizedBox(height: 8),
-              _buildBoostSlider(envelope, theme, fontProvider, currency),
-            ],
+          // Expanded details
+          if (isExpanded) ...[
+            const Divider(height: 16),
+
+            // Detail rows in compact format
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                children: [
+                  // Current Balance
+                  _buildCompactDetailRow(
+                    '💰',
+                    'Current',
+                    currency.format(envelope.currentAmount),
+                    theme,
+                    fontProvider,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Horizon Target (if exists)
+                  if (envelope.targetAmount != null) ...[
+                    _buildCompactDetailRow(
+                      '🎯',
+                      'Horizon',
+                      currency.format(envelope.targetAmount!),
+                      theme,
+                      fontProvider,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Temporary change indicator
+                  if (_tempAllocations[envelope.id] != (envelope.cashFlowAmount ?? 0.0))
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_note, size: 14, color: Colors.blue.shade700),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Temporary change: ${_tempAllocations[envelope.id]! > (envelope.cashFlowAmount ?? 0.0) ? '+' : ''}${currency.format(_tempAllocations[envelope.id]! - (envelope.cashFlowAmount ?? 0.0))}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (_tempAllocations[envelope.id] != (envelope.cashFlowAmount ?? 0.0))
+                    const SizedBox(height: 12),
+
+                  // Boost section (only for horizons)
+                  if (envelope.targetAmount != null) ...[
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: hasBoost,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                _horizonBoosts[envelope.id] = 0.5; // Start at 50%
+                              } else {
+                                _horizonBoosts.remove(envelope.id);
+                              }
+                            });
+                          },
+                        ),
+                        Text(
+                          '🚀 Boost',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Boost controls (when active)
+                    if (hasBoost) ...[
+                      const SizedBox(height: 8),
+                      _buildBoostSlider(envelope, theme, fontProvider, currency),
+                    ],
+                  ],
+                ],
+              ),
+            ),
           ],
-          ], // Close if (isExpanded)
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String emoji, String label, String value, ThemeData theme, FontProvider fontProvider) {
+  Widget _buildCompactDetailRow(String emoji, String label, String value, ThemeData theme, FontProvider fontProvider) {
     return Row(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
+        Text(emoji, style: const TextStyle(fontSize: 16)),
         const SizedBox(width: 8),
         Text(
           label,
           style: fontProvider.getTextStyle(
-            fontSize: 14,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            fontSize: 13,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         const Spacer(),
         Text(
           value,
           style: fontProvider.getTextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
             color: theme.colorScheme.primary,
           ),
         ),
@@ -634,19 +621,22 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 
   Widget _buildBoostSlider(Envelope envelope, ThemeData theme, FontProvider fontProvider, NumberFormat currency) {
     final boostPercent = _horizonBoosts[envelope.id] ?? 0.0;
-    final totalCashFlow = _calculateTotalCashFlow();
-    final totalBoost = _calculateTotalBoost();
-    final availableFuel = _provider.externalInflow - totalCashFlow - totalBoost;
-    final boostAmount = availableFuel * boostPercent;
+    final currentAmount = _tempAllocations[envelope.id] ?? 0.0;
+    final boostAmount = currentAmount * boostPercent;
 
-    // Calculate days saved
+    // Calculate days to target (baseline and with boost)
     final monthlyVelocity = envelope.cashFlowAmount ?? 0.0;
+    int baselineDays = 0;
+    int boostedDays = 0;
     int daysSaved = 0;
+
     if (envelope.targetAmount != null && monthlyVelocity > 0) {
-      final currentStuffed = _tempAllocations[envelope.id] ?? 0.0;
-      final oldDays = (envelope.targetAmount! - (envelope.currentAmount + currentStuffed)) / (monthlyVelocity / 30.44);
-      final newDays = (envelope.targetAmount! - (envelope.currentAmount + currentStuffed + boostAmount)) / (monthlyVelocity / 30.44);
-      daysSaved = (oldDays - newDays).round().clamp(0, 999999);
+      final remainingWithoutBoost = envelope.targetAmount! - (envelope.currentAmount + currentAmount);
+      final remainingWithBoost = envelope.targetAmount! - (envelope.currentAmount + currentAmount + boostAmount);
+
+      baselineDays = (remainingWithoutBoost / (monthlyVelocity / 30.44)).round().clamp(0, 999999);
+      boostedDays = (remainingWithBoost / (monthlyVelocity / 30.44)).round().clamp(0, 999999);
+      daysSaved = (baselineDays - boostedDays).clamp(0, 999999);
     }
 
     return Container(
@@ -695,14 +685,29 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
               });
             },
           ),
-          if (daysSaved > 0)
-            Text(
-              '🔥 $daysSaved days closer',
-              style: fontProvider.getTextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.deepOrange,
-              ),
+          // Show baseline and boosted days
+          if (baselineDays > 0)
+            Column(
+              children: [
+                Text(
+                  'Baseline: $baselineDays days',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                if (daysSaved > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '🔥 $daysSaved days closer → $boostedDays days',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepOrange,
+                    ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),
@@ -774,71 +779,135 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   Future<void> _showEnvelopeSettingsModal(Envelope envelope, NumberFormat currency) async {
     final theme = Theme.of(context);
     final fontProvider = Provider.of<FontProvider>(context, listen: false);
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
     final currentAmount = _tempAllocations[envelope.id] ?? envelope.cashFlowAmount ?? 0.0;
+    final amountController = TextEditingController(text: currentAmount.toStringAsFixed(2));
 
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              envelope.getIconWidget(theme, size: 32),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  envelope.name,
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  envelope.getIconWidget(theme, size: 32),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      envelope.name,
+                      style: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Edit Cash Flow Amount',
-                style: fontProvider.getTextStyle(
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Edit Cash Flow Amount',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Input field with calculator chip
+                  SmartTextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    decoration: InputDecoration(
+                      prefixText: '${locale.currencySymbol} ',
+                      prefixStyle: fontProvider.getTextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                      suffixIcon: Container(
+                        margin: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.calculate,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                          onPressed: () async {
+                            final result = await CalculatorHelper.showCalculator(context);
+                            if (result != null) {
+                              amountController.text = result;
+                            }
+                          },
+                          tooltip: 'Open Calculator',
+                        ),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Info note about temporary changes
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 20, color: Colors.blue.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Changes are temporary for this pay day only. Make permanent changes in envelope settings.',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Current: ${currency.format(currentAmount)}',
-                style: fontProvider.getTextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(context);
-                final result = await CalculatorHelper.showCalculator(context);
-                if (result != null && mounted) {
-                  final newAmount = double.tryParse(result) ?? 0.0;
-                  setState(() {
+                FilledButton(
+                  onPressed: () {
+                    final newAmount = double.tryParse(amountController.text.replaceAll(',', '')) ?? 0.0;
                     if (newAmount > 0) {
-                      _tempAllocations[envelope.id] = newAmount;
+                      setState(() {
+                        _tempAllocations[envelope.id] = newAmount;
+                      });
                     }
-                  });
-                }
-              },
-              icon: const Icon(Icons.calculate),
-              label: const Text('Edit Amount'),
-            ),
-          ],
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1225,31 +1294,32 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
               // Fuel the Horizons button (at bottom of list)
               FilledButton(
                 onPressed: () {
+                  // Create a copy of temp allocations to avoid concurrent modification
+                  final allocationsToApply = Map<String, double>.from(_tempAllocations);
+
+                  // Apply boosts to the copy (individual boost per envelope)
+                  final boostsToApply = Map<String, double>.from(_horizonBoosts);
+                  for (final entry in boostsToApply.entries) {
+                    final envelopeId = entry.key;
+                    final percentage = entry.value;
+                    final currentAllocation = allocationsToApply[envelopeId] ?? 0.0;
+                    final boostAmount = currentAllocation * percentage;
+
+                    if (boostAmount > 0) {
+                      allocationsToApply[envelopeId] = currentAllocation + boostAmount;
+                    }
+                  }
+
                   // First, clear all provider allocations to start fresh
                   final allEnvelopeIds = _provider.allEnvelopes.map((e) => e.id).toList();
                   for (final id in allEnvelopeIds) {
-                    if (_provider.allocations.containsKey(id) && !_tempAllocations.containsKey(id)) {
+                    if (_provider.allocations.containsKey(id) && !allocationsToApply.containsKey(id)) {
                       _provider.updateEnvelopeAllocation(id, 0.0);
                     }
                   }
 
-                  // Apply boosts to temp allocations first
-                  for (final entry in _horizonBoosts.entries) {
-                    final envelopeId = entry.key;
-                    final percentage = entry.value;
-                    final totalCashFlow = _calculateTotalCashFlow();
-                    final totalBoost = _calculateTotalBoost();
-                    final availableFuel = _provider.externalInflow - totalCashFlow - totalBoost;
-                    final boostAmount = availableFuel * percentage;
-
-                    if (boostAmount > 0) {
-                      final currentAllocation = _tempAllocations[envelopeId] ?? 0.0;
-                      _tempAllocations[envelopeId] = currentAllocation + boostAmount;
-                    }
-                  }
-
-                  // Now sync temp allocations back to provider (including boosts)
-                  for (final entry in _tempAllocations.entries) {
+                  // Now sync allocations (with boosts) back to provider
+                  for (final entry in allocationsToApply.entries) {
                     _provider.updateEnvelopeAllocation(entry.key, entry.value);
                   }
 
@@ -1317,112 +1387,206 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     final locale = Provider.of<LocaleProvider>(context);
     final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
-    // Calculate total stuffed so far
-    double totalStuffed = 0;
-    for (final entry in provider.allocations.entries) {
-      totalStuffed += entry.value;
-    }
-
-    final remaining = provider.externalInflow - totalStuffed;
-    final isOverBudget = remaining < 0;
+    // Get envelopes being stuffed (from allocations)
+    final envelopesBeingStuffed = provider.allocations.entries
+        .map((e) => provider.allEnvelopes.firstWhere((env) => env.id == e.key))
+        .where((env) => env.targetAmount != null) // Only horizons
+        .toList();
 
     return Column(
       children: [
-        // Waterfall Drainage Header (Sticky)
+        // Light Source (The Account/Pool) at the top
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isOverBudget
-                  ? [Colors.red.shade100, Colors.red.shade50]
-                  : [
-                      Colors.blue.shade50,
-                      Colors.green.shade50,
-                    ],
-            ),
-            border: Border(
-              bottom: BorderSide(
-                color: isOverBudget ? Colors.red.shade700 : Colors.blue.shade600,
-                width: 3,
-              ),
+            gradient: RadialGradient(
+              colors: [
+                Colors.amber.shade100,
+                Colors.yellow.shade50,
+                theme.colorScheme.surface,
+              ],
             ),
           ),
           child: Column(
             children: [
-              // Animated draining fuel
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.water_drop,
-                    color: isOverBudget ? Colors.red.shade700 : Colors.blue.shade600,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Unallocated Fuel',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
+              // Animated glowing money icon
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 1500),
+                tween: Tween(begin: 0.8, end: 1.0),
+                curve: Curves.easeInOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withValues(alpha: 0.5),
+                            blurRadius: 40 * scale,
+                            spreadRadius: 10 * scale,
+                          ),
+                        ],
                       ),
-                      TweenAnimationBuilder<double>(
-                        duration: const Duration(milliseconds: 600),
-                        tween: Tween(begin: provider.externalInflow, end: remaining),
-                        builder: (context, value, child) {
-                          return Text(
-                            currency.format(value),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: value < 0 ? Colors.red.shade700 : Colors.green.shade700,
-                            ),
-                          );
-                        },
+                      child: const Text(
+                        '💡',
+                        style: TextStyle(fontSize: 60),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  );
+                },
               ),
-
-              // Progress bar
               const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: (totalStuffed / provider.externalInflow).clamp(0.0, 1.0),
-                  minHeight: 8,
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation(
-                    isOverBudget ? Colors.red.shade600 : Colors.blue.shade600,
-                  ),
+              Text(
+                provider.isAccountMode
+                    ? 'Light from ${provider.defaultAccount?.name ?? "Account"}'
+                    : 'Light from Horizon Pool',
+                style: fontProvider.getTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                currency.format(provider.externalInflow),
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
                 ),
               ),
             ],
           ),
         ),
 
-        // Stuffing progress message
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Fueling your horizons...',
-            style: fontProvider.getTextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ),
+        // Waterfall effect - light flowing down to horizons
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: envelopesBeingStuffed.length,
+            itemBuilder: (context, index) {
+              final envelope = envelopesBeingStuffed[index];
+              final stuffedAmount = provider.stuffingProgress[envelope.id] ?? 0.0;
+              final targetAmount = provider.allocations[envelope.id] ?? 0.0;
+              final isStuffed = stuffedAmount >= targetAmount;
 
-        // Progress indicator
-        const Expanded(
-          child: Center(
-            child: CircularProgressIndicator(),
+              return TweenAnimationBuilder<double>(
+                key: ValueKey(envelope.id),
+                duration: Duration(milliseconds: 500 + (index * 200)),
+                tween: Tween(begin: 0.0, end: isStuffed ? 1.0 : 0.0),
+                curve: Curves.easeInOut,
+                builder: (context, progress, child) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        // Light beam flowing down
+                        if (progress > 0)
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            height: 40,
+                            width: 4,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.amber.shade300.withValues(alpha: 0.8),
+                                  Colors.amber.shade500.withValues(alpha: progress),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // Horizon being filled
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 500),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isStuffed
+                                ? theme.colorScheme.primaryContainer
+                                : theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isStuffed
+                                  ? Colors.amber.shade700
+                                  : theme.colorScheme.outlineVariant,
+                              width: isStuffed ? 2 : 1,
+                            ),
+                            boxShadow: isStuffed
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.amber.shade300.withValues(alpha: 0.5),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Row(
+                            children: [
+                              envelope.getIconWidget(theme, size: 40),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      envelope.name,
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    // Filling progress bar
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: (stuffedAmount / targetAmount).clamp(0.0, 1.0),
+                                        minHeight: 6,
+                                        backgroundColor: Colors.grey.shade200,
+                                        valueColor: AlwaysStoppedAnimation(
+                                          Colors.amber.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    currency.format(stuffedAmount),
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: isStuffed
+                                          ? Colors.green.shade700
+                                          : theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                  if (isStuffed)
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: Colors.green,
+                                      size: 24,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
           ),
         ),
       ],

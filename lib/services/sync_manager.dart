@@ -310,26 +310,48 @@ class SyncManager {
         debugPrint('[SyncManager] 📤 Writing to: users/$userId/envelopes/${envelope.id}');
         debugPrint('[SyncManager] 📦 Envelope data: name="${envelope.name}", amount=${envelope.currentAmount}');
 
-        await _firestore
+        final docRef = _firestore
             .collection('users')
             .doc(userId)
             .collection('envelopes')
-            .doc(envelope.id)
-            .set(envelope.toMap(), SetOptions(merge: true));
+            .doc(envelope.id);
 
-        debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name} to private collection');
+        await docRef.set(envelope.toMap(), SetOptions(merge: true));
+
+        // CRITICAL: Verify write actually reached server
+        try {
+          final snapshot = await docRef.get(const GetOptions(source: Source.server));
+          if (snapshot.exists) {
+            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: envelope ${envelope.name} written to Firebase');
+          } else {
+            debugPrint('[SyncManager] ⚠️ SERVER CHECK: envelope ${envelope.name} NOT FOUND on server (only local cache?)');
+          }
+        } catch (e) {
+          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
+        }
       } else {
         // WORKSPACE MODE: Sync to workspace collection
         debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/envelopes/${envelope.id}');
 
-        await _firestore
+        final docRef = _firestore
             .collection('workspaces')
             .doc(workspaceId)
             .collection('envelopes')
-            .doc(envelope.id)
-            .set(envelope.toMap(), SetOptions(merge: true));
+            .doc(envelope.id);
 
-        debugPrint('[SyncManager] ✓ Synced envelope ${envelope.name} to workspace');
+        await docRef.set(envelope.toMap(), SetOptions(merge: true));
+
+        // CRITICAL: Verify write actually reached server
+        try {
+          final snapshot = await docRef.get(const GetOptions(source: Source.server));
+          if (snapshot.exists) {
+            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: envelope ${envelope.name} written to workspace');
+          } else {
+            debugPrint('[SyncManager] ⚠️ SERVER CHECK: envelope ${envelope.name} NOT FOUND on server (only local cache?)');
+          }
+        } catch (e) {
+          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
+        }
       }
     } catch (e) {
       debugPrint('[SyncManager] ✗ Failed to sync envelope ${envelope.id}: $e');
@@ -365,24 +387,48 @@ class SyncManager {
         debugPrint('[SyncManager] 📤 Writing to: users/$userId/transactions/${transaction.id}');
         debugPrint('[SyncManager] 📦 Transaction data: type=${transaction.type}, amount=${transaction.amount}, envelopeId=${transaction.envelopeId}');
 
-        await _firestore
+        final docRef = _firestore
             .collection('users')
             .doc(userId)
             .collection('transactions')
-            .doc(transaction.id)
-            .set(transaction.toMap(), SetOptions(merge: true));
+            .doc(transaction.id);
 
-        debugPrint('[SyncManager] ✓ Synced transaction ${transaction.id} to private collection');
+        await docRef.set(transaction.toMap(), SetOptions(merge: true));
+
+        // CRITICAL: Verify write actually reached server
+        try {
+          final snapshot = await docRef.get(const GetOptions(source: Source.server));
+          if (snapshot.exists) {
+            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: transaction ${transaction.id} written to Firebase');
+          } else {
+            debugPrint('[SyncManager] ⚠️ SERVER CHECK: transaction ${transaction.id} NOT FOUND on server (only local cache?)');
+          }
+        } catch (e) {
+          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
+        }
       } else {
         // WORKSPACE MODE: Sync to workspace transfers collection (partner transfers only)
         debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/transfers/${transaction.id}');
 
-        await _firestore
+        final docRef = _firestore
             .collection('workspaces')
             .doc(workspaceId)
             .collection('transfers')
-            .doc(transaction.id)
-            .set(transaction.toMap(), SetOptions(merge: true));
+            .doc(transaction.id);
+
+        await docRef.set(transaction.toMap(), SetOptions(merge: true));
+
+        // CRITICAL: Verify write actually reached server
+        try {
+          final snapshot = await docRef.get(const GetOptions(source: Source.server));
+          if (snapshot.exists) {
+            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: transfer ${transaction.id} written to workspace');
+          } else {
+            debugPrint('[SyncManager] ⚠️ SERVER CHECK: transfer ${transaction.id} NOT FOUND on server (only local cache?)');
+          }
+        } catch (e) {
+          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
+        }
 
         debugPrint('[SyncManager] ✓ Synced partner transfer ${transaction.id} to workspace');
       }

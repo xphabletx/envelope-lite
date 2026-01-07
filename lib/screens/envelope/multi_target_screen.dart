@@ -1535,9 +1535,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                           _selectedEnvelopeIds,
                         );
 
-                        // Update velocity multiplier to match manual input
+                        // Update velocity multiplier to match manual input (clamp to slider range)
                         if (_baselineTotal > 0) {
-                          _velocityMultiplier = amount / _baselineTotal;
+                          _velocityMultiplier = (amount / _baselineTotal).clamp(0.0, 2.0);
                         }
                       }
                       // Run sandbox simulation
