@@ -11,10 +11,12 @@ import '../services/group_repo.dart';
 import '../services/account_repo.dart';
 import '../services/error_handler_service.dart';
 import '../models/envelope_group.dart';
+import '../models/envelope.dart';
 import '../models/account.dart';
 import '../models/app_error.dart';
-import '../screens/add_scheduled_payment_screen.dart';
 import '../widgets/group_editor.dart' as editor;
+import '../services/scheduled_payment_repo.dart';
+import '../models/scheduled_payment.dart';
 import '../services/localization_service.dart';
 import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
@@ -98,6 +100,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
   // Cash flow state
   bool _cashFlowEnabled = false;
   bool _addScheduledPayment = false;
+
+  // Store full insight data for autopilot
+  InsightData? _insightData;
 
   // Binder selection state
   String? _selectedBinderId;
@@ -484,17 +489,21 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       );
 
       if (!mounted) return;
+
+      // AUTO-CREATE SCHEDULED PAYMENT if autopilot is enabled
+      final shouldCreateAutopilot = _addScheduledPayment && _insightData != null && _insightData!.autopilotAmount != null;
+      if (shouldCreateAutopilot) {
+        await _createAutopilotPayment(envelopeId, _insightData!);
+      }
+
+      if (!mounted) return;
       Navigator.of(context).pop();
 
-      if (_addScheduledPayment) {
-        Navigator.push(
+      // Show success message with autopilot info if applicable
+      if (shouldCreateAutopilot) {
+        ErrorHandler.showSuccess(
           context,
-          MaterialPageRoute(
-            builder: (_) => AddScheduledPaymentScreen(
-              repo: widget.repo,
-              preselectedEnvelopeId: envelopeId,
-            ),
-          ),
+          '${tr('success_envelope_created')}\n\n⚡ Autopilot payment scheduled! You can adjust settings in the Calendar.',
         );
       } else {
         ErrorHandler.showSuccess(context, tr('success_envelope_created'));
@@ -503,6 +512,67 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       await ErrorHandler.handle(context, e);
+    }
+  }
+
+  Future<void> _createAutopilotPayment(String envelopeId, InsightData insightData) async {
+    try {
+      // Create scheduled payment repo
+      final scheduledPaymentRepo = ScheduledPaymentRepo(widget.userId);
+
+      // Map frequency from insight format to scheduled payment format
+      PaymentFrequencyUnit frequencyUnit;
+      int frequencyValue;
+
+      switch (insightData.autopilotFrequency) {
+        case 'weekly':
+          frequencyUnit = PaymentFrequencyUnit.weeks;
+          frequencyValue = 1;
+          break;
+        case 'biweekly':
+          frequencyUnit = PaymentFrequencyUnit.weeks;
+          frequencyValue = 2;
+          break;
+        case 'fourweekly':
+          frequencyUnit = PaymentFrequencyUnit.weeks;
+          frequencyValue = 4;
+          break;
+        case 'monthly':
+          frequencyUnit = PaymentFrequencyUnit.months;
+          frequencyValue = 1;
+          break;
+        case 'yearly':
+          frequencyUnit = PaymentFrequencyUnit.years;
+          frequencyValue = 1;
+          break;
+        default:
+          frequencyUnit = PaymentFrequencyUnit.months;
+          frequencyValue = 1;
+      }
+
+      // Determine start date - use first date if set, otherwise use today + frequency
+      final startDate = insightData.autopilotFirstDate ??
+        DateTime.now().add(Duration(days: frequencyValue * (frequencyUnit == PaymentFrequencyUnit.weeks ? 7 : 30)));
+
+      // Create the scheduled payment
+      await scheduledPaymentRepo.createScheduledPayment(
+        envelopeId: envelopeId,
+        name: _nameCtrl.text.trim(),
+        description: 'Autopilot payment',
+        amount: insightData.autopilotAmount!,
+        startDate: startDate,
+        frequencyValue: frequencyValue,
+        frequencyUnit: frequencyUnit,
+        colorName: 'Autopilot',
+        colorValue: 0xFF9C27B0, // Purple color for autopilot
+        isAutomatic: insightData.autopilotAutoExecute,
+        paymentType: ScheduledPaymentType.fixedAmount,
+      );
+
+      debugPrint('✅ Autopilot scheduled payment created for envelope: $envelopeId');
+    } catch (e) {
+      debugPrint('❌ Error creating autopilot payment: $e');
+      // Don't throw - we don't want to block envelope creation if autopilot fails
     }
   }
 
@@ -936,8 +1006,12 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         // 👁️‍🗨️ INSIGHT TILE - Unified financial planning
                         InsightTile(
                           userId: widget.userId,
+                          startingAmount: double.tryParse(_amtCtrl.text),
                           onInsightChanged: (InsightData data) {
                             setState(() {
+                              // Store full insight data
+                              _insightData = data;
+
                               // Update target/horizon
                               if (data.horizonAmount != null) {
                                 _targetCtrl.text = data.horizonAmount.toString();
@@ -956,6 +1030,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                             });
                           },
                           initialData: InsightData(
+                            horizonEnabled: double.tryParse(_targetCtrl.text) != null,
                             horizonAmount: double.tryParse(_targetCtrl.text),
                             horizonDate: _targetDate,
                             cashFlowEnabled: _cashFlowEnabled,

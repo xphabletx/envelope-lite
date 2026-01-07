@@ -474,12 +474,11 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     if (result != null) {
       final iconType = result['type'] as String;
       final iconValue = result['value'] as String;
-      final iconColor = result['color'] as int?;
 
       setState(() {
         selectedIconType = iconType;
         selectedIconValue = iconValue;
-        selectedIconColor = iconColor;
+        // Don't override iconColor - keep existing value or null
 
         // Keep emoji for backwards compatibility
         if (iconType == 'emoji') {
@@ -487,6 +486,33 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         }
       });
     }
+  }
+
+  Widget _buildIconPreview(ThemeData theme) {
+    // If no icon selected yet, show default
+    if (selectedIconType == null || selectedIconValue == null) {
+      return Image.asset(
+        'assets/default/stufficon.png',
+        width: 24,
+        height: 24,
+      );
+    }
+
+    // Create a temporary group to render the icon
+    final tempGroup = EnvelopeGroup(
+      id: '',
+      name: '',
+      userId: '',
+      iconType: selectedIconType,
+      iconValue: selectedIconValue,
+      iconColor: selectedIconColor,
+    );
+
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: tempGroup.getIconWidget(theme, size: 24),
+    );
   }
 
   /// Actually create envelopes from template when binder is saved
@@ -887,10 +913,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        Image.asset(
-                                          'assets/default/stufficon.png',
+                                        SizedBox(
                                           width: isLandscape ? 20.0 : 24.0,
                                           height: isLandscape ? 20.0 : 24.0,
+                                          child: _buildIconPreview(theme),
                                         ),
                                         SizedBox(width: isLandscape ? 12.0 : 16.0),
                                         Text(

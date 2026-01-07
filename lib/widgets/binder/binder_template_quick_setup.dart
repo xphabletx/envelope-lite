@@ -470,8 +470,61 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
         createdIds.add(envelopeId);
         createdCount++;
 
-        // Create scheduled payment if enabled
-        if (data.recurringBillEnabled && data.firstPaymentDate != null) {
+        // AUTO-CREATE SCHEDULED PAYMENT if autopilot is enabled
+        // Use InsightData if available for better integration
+        if (data.recurringBillEnabled && data.insightData != null && data.insightData!.autopilotAmount != null) {
+          // Use insight data for proper frequency mapping
+          final insightData = data.insightData!;
+
+          // Map frequency from insight format to scheduled payment format
+          PaymentFrequencyUnit frequencyUnit;
+          int frequencyValue;
+
+          switch (insightData.autopilotFrequency) {
+            case 'weekly':
+              frequencyUnit = PaymentFrequencyUnit.weeks;
+              frequencyValue = 1;
+              break;
+            case 'biweekly':
+              frequencyUnit = PaymentFrequencyUnit.weeks;
+              frequencyValue = 2;
+              break;
+            case 'fourweekly':
+              frequencyUnit = PaymentFrequencyUnit.weeks;
+              frequencyValue = 4;
+              break;
+            case 'monthly':
+              frequencyUnit = PaymentFrequencyUnit.months;
+              frequencyValue = 1;
+              break;
+            case 'yearly':
+              frequencyUnit = PaymentFrequencyUnit.years;
+              frequencyValue = 1;
+              break;
+            default:
+              frequencyUnit = PaymentFrequencyUnit.months;
+              frequencyValue = 1;
+          }
+
+          // Determine start date
+          final startDate = insightData.autopilotFirstDate ??
+            DateTime.now().add(Duration(days: frequencyValue * (frequencyUnit == PaymentFrequencyUnit.weeks ? 7 : 30)));
+
+          await scheduledPaymentRepo.createScheduledPayment(
+            envelopeId: envelopeId,
+            name: data.template.name,
+            description: 'Autopilot payment',
+            amount: insightData.autopilotAmount!,
+            startDate: startDate,
+            frequencyValue: frequencyValue,
+            frequencyUnit: frequencyUnit,
+            colorName: 'Autopilot',
+            colorValue: 0xFF9C27B0, // Purple color for autopilot
+            isAutomatic: insightData.autopilotAutoExecute,
+            paymentType: ScheduledPaymentType.fixedAmount,
+          );
+        } else if (data.recurringBillEnabled && data.firstPaymentDate != null) {
+          // Fallback to old method if InsightData not available
           await scheduledPaymentRepo.createScheduledPayment(
             envelopeId: envelopeId,
             name: 'Recurring: ${data.template.name}',
@@ -856,9 +909,13 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       // 👁️‍🗨️ INSIGHT TILE - Financial Planning
                       InsightTile(
                         userId: widget.userId,
+                        startingAmount: widget.data.currentAmount, // Pass starting amount for gap calculation
                         initiallyExpanded: true, // Auto-expand for onboarding
                         onInsightChanged: (InsightData data) {
                           setState(() {
+                            // Store full InsightData
+                            widget.data.insightData = data;
+
                             // Update Horizon (target)
                             widget.data.targetAmount = data.horizonAmount;
                             if (data.horizonAmount != null) {
@@ -894,6 +951,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                           });
                         },
                         initialData: InsightData(
+                          horizonEnabled: widget.data.targetAmount != null,
                           horizonAmount: widget.data.targetAmount,
                           cashFlowEnabled: widget.data.payDayDepositEnabled,
                           calculatedCashFlow: widget.data.payDayDepositAmount,
@@ -1024,6 +1082,9 @@ class EnvelopeData {
 
   bool payDayDepositEnabled = false;
   double payDayDepositAmount = 0.0;
+
+  // NEW: Store full InsightData for better autopilot integration
+  InsightData? insightData;
 
   EnvelopeData({required this.template});
 }

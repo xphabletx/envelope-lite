@@ -17,6 +17,7 @@ class InsightTile extends StatefulWidget {
   final Function(InsightData) onInsightChanged;
   final InsightData? initialData;
   final bool initiallyExpanded;
+  final double? startingAmount; // NEW: Starting amount to calculate gap
 
   const InsightTile({
     super.key,
@@ -24,6 +25,7 @@ class InsightTile extends StatefulWidget {
     required this.onInsightChanged,
     this.initialData,
     this.initiallyExpanded = false,
+    this.startingAmount,
   });
 
   @override
@@ -166,36 +168,51 @@ class _InsightTileState extends State<InsightTile> {
     final now = DateTime.now();
     final nextPayDate = _payDaySettings!.nextPayDate ?? now;
 
-    // Calculate Horizon cash flow
-    if (horizonAmount != null && horizonAmount > 0) {
-      if (horizonDate != null) {
-        // Calculate pay periods until target date
-        horizonPeriods = _calculatePayPeriods(nextPayDate, horizonDate);
-        if (horizonPeriods > 0) {
-          totalCashFlow += horizonAmount / horizonPeriods.toDouble();
+    // Calculate Horizon cash flow (ONLY if enabled)
+    if (_data.horizonEnabled && horizonAmount != null && horizonAmount > 0) {
+      // Calculate the gap: target - starting amount
+      final startingAmount = widget.startingAmount ?? 0.0;
+      final gap = horizonAmount - startingAmount;
+
+      if (gap > 0) {
+        if (horizonDate != null) {
+          // Calculate pay periods until target date
+          horizonPeriods = _calculatePayPeriods(nextPayDate, horizonDate);
+          if (horizonPeriods > 0) {
+            totalCashFlow += gap / horizonPeriods.toDouble();
+          } else {
+            // Target date is before next pay day - need full gap amount now
+            totalCashFlow += gap;
+          }
         } else {
-          // Target date is before next pay day - need full amount now
-          totalCashFlow += horizonAmount;
+          // No date set - can't calculate periods, just note we need to save the gap
+          horizonPeriods = null;
         }
-      } else {
-        // No date set - can't calculate periods, just note the amount
-        horizonPeriods = null;
       }
+      // If gap <= 0, target is already met or exceeded, no cash flow needed for horizon
     }
 
-    // Calculate Autopilot cash flow
-    if (autopilotAmount != null && autopilotAmount > 0) {
-      // For autopilot, we need to ensure enough is saved before the bill is due
-      // Estimate based on frequency
-      final periodsPerAutopilot = _getPayPeriodsPerAutopilot(
-        _payDaySettings!.payFrequency,
-        autopilotFrequency ?? 'monthly',
-      );
+    // Calculate Autopilot cash flow (ONLY if enabled)
+    if (_data.autopilotEnabled && autopilotAmount != null && autopilotAmount > 0) {
+      // Calculate the gap: bill amount - starting amount already saved
+      final startingAmount = widget.startingAmount ?? 0.0;
+      final gap = autopilotAmount - startingAmount;
 
-      if (periodsPerAutopilot > 0) {
-        autopilotPeriods = periodsPerAutopilot;
-        totalCashFlow += autopilotAmount / periodsPerAutopilot.toDouble();
+      // Only calculate if we need to save more
+      if (gap > 0) {
+        // For autopilot, we need to ensure enough is saved before the bill is due
+        // Estimate based on frequency
+        final periodsPerAutopilot = _getPayPeriodsPerAutopilot(
+          _payDaySettings!.payFrequency,
+          autopilotFrequency ?? 'monthly',
+        );
+
+        if (periodsPerAutopilot > 0) {
+          autopilotPeriods = periodsPerAutopilot;
+          totalCashFlow += gap / periodsPerAutopilot.toDouble();
+        }
       }
+      // If gap <= 0, we already have enough saved for the bill
     }
 
     // Calculate percentage of income
@@ -603,22 +620,44 @@ class _InsightTileState extends State<InsightTile> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '🎯 HORIZON - Savings Goal',
-          style: fontProvider.getTextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '🎯 HORIZON - Savings Goal',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Set a target for future savings and wealth building',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _data.horizonEnabled,
+              onChanged: (enabled) {
+                setState(() {
+                  _data = _data.copyWith(horizonEnabled: enabled);
+                });
+                _recalculate();
+              },
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Set a target for future savings and wealth building',
-          style: fontProvider.getTextStyle(
-            fontSize: 13,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
+        if (_data.horizonEnabled) ...[
         const SizedBox(height: 12),
         SmartTextField(
           controller: _horizonAmountCtrl,
@@ -697,6 +736,7 @@ class _InsightTileState extends State<InsightTile> {
             ),
           ),
         ),
+        ],
       ],
     );
   }
@@ -907,13 +947,28 @@ class _InsightTileState extends State<InsightTile> {
                 ),
                 const SizedBox(height: 12),
 
-                // Horizon calculation
-                if (_data.horizonAmount != null && _data.horizonAmount! > 0) ...[
+                // Horizon calculation (ONLY if enabled)
+                if (_data.horizonEnabled && _data.horizonAmount != null && _data.horizonAmount! > 0) ...[
                   _buildCalculationRow(
                     '🎯 Horizon Goal:',
                     '${localeProvider.currencySymbol}${_data.horizonAmount!.toStringAsFixed(2)}',
                     fontProvider,
                   ),
+                  // Show starting amount if provided
+                  if (widget.startingAmount != null && widget.startingAmount! > 0) ...[
+                    _buildCalculationRow(
+                      '   Starting amount:',
+                      '${localeProvider.currencySymbol}${widget.startingAmount!.toStringAsFixed(2)}',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                    _buildCalculationRow(
+                      '   Gap to save:',
+                      '${localeProvider.currencySymbol}${(_data.horizonAmount! - widget.startingAmount!).toStringAsFixed(2)}',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                  ],
                   if (_data.horizonDate != null && _data.payPeriodsToHorizon != null)
                     _buildCalculationRow(
                       '   Pay periods:',
@@ -921,6 +976,57 @@ class _InsightTileState extends State<InsightTile> {
                       fontProvider,
                       isSubItem: true,
                     ),
+                  // Show helpful message if no date is set
+                  if (_data.horizonDate == null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, size: 16, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '💡 Add a target date above for automatic cash flow calculation, or set manual cash flow below',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Show "periods to goal" if manual cash flow is set
+                          if (_data.manualCashFlowOverride != null && _data.manualCashFlowOverride! > 0) ...[
+                            const SizedBox(height: 8),
+                            () {
+                              final startingAmount = widget.startingAmount ?? 0.0;
+                              final gap = _data.horizonAmount! - startingAmount;
+                              if (gap > 0) {
+                                final periodsToGoal = (gap / _data.manualCashFlowOverride!).ceil();
+                                return Text(
+                                  '📊 At ${localeProvider.currencySymbol}${_data.manualCashFlowOverride!.toStringAsFixed(2)}/paycheck, you\'ll reach your goal in ~$periodsToGoal pay periods',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.secondary,
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }(),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                 ],
 
@@ -931,6 +1037,21 @@ class _InsightTileState extends State<InsightTile> {
                     '${localeProvider.currencySymbol}${_data.autopilotAmount!.toStringAsFixed(2)}',
                     fontProvider,
                   ),
+                  // Show starting amount if provided
+                  if (widget.startingAmount != null && widget.startingAmount! > 0) ...[
+                    _buildCalculationRow(
+                      '   Starting amount:',
+                      '${localeProvider.currencySymbol}${widget.startingAmount!.toStringAsFixed(2)}',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                    _buildCalculationRow(
+                      '   Gap to save:',
+                      '${localeProvider.currencySymbol}${(_data.autopilotAmount! - widget.startingAmount!).toStringAsFixed(2)}',
+                      fontProvider,
+                      isSubItem: true,
+                    ),
+                  ],
                   if (_data.payPeriodsToAutopilot != null)
                     _buildCalculationRow(
                       '   Pay periods:',
@@ -1001,7 +1122,7 @@ class _InsightTileState extends State<InsightTile> {
               widget.onInsightChanged(_data);
             },
             title: Text(
-              'Enable Cash Flow auto-fill',
+              'Enable Cash Flow',
               style: fontProvider.getTextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,

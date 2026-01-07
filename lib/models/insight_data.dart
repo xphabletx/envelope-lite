@@ -3,6 +3,7 @@
 
 class InsightData {
   // HORIZON - Savings goal / wealth building
+  bool horizonEnabled;
   double? horizonAmount;
   DateTime? horizonDate;
 
@@ -28,6 +29,7 @@ class InsightData {
   String? warningMessage;
 
   InsightData({
+    this.horizonEnabled = false,
     this.horizonAmount,
     this.horizonDate,
     this.autopilotEnabled = false,
@@ -35,8 +37,8 @@ class InsightData {
     this.autopilotFrequency = 'monthly',
     this.autopilotDayOfMonth,
     this.autopilotFirstDate,
-    this.autopilotAutoExecute = false,
-    this.cashFlowEnabled = false,
+    this.autopilotAutoExecute = true, // CHANGED: Default to true
+    this.cashFlowEnabled = true, // CHANGED: Default to true
     this.calculatedCashFlow,
     this.manualCashFlowOverride,
     this.payPeriodsToHorizon,
@@ -62,7 +64,7 @@ class InsightData {
 
   /// Check if any insight data is configured
   bool get hasAnyData {
-    return (horizonAmount != null && horizonAmount! > 0) ||
+    return (horizonEnabled && horizonAmount != null && horizonAmount! > 0) ||
         (autopilotEnabled && autopilotAmount != null && autopilotAmount! > 0);
   }
 
@@ -77,7 +79,7 @@ class InsightData {
       parts.add('💰 Cash Flow: $currencySymbol${effectiveCashFlow!.toStringAsFixed(2)}/paycheck$percentage');
     }
 
-    if (horizonAmount != null && horizonAmount! > 0) {
+    if (horizonEnabled && horizonAmount != null && horizonAmount! > 0) {
       final dateStr = horizonDate != null
           ? ' by ${horizonDate!.day}/${horizonDate!.month}/${horizonDate!.year}'
           : '';
@@ -110,6 +112,7 @@ class InsightData {
   }
 
   InsightData copyWith({
+    bool? horizonEnabled,
     double? horizonAmount,
     DateTime? horizonDate,
     bool? horizonDateCleared,
@@ -132,6 +135,7 @@ class InsightData {
     String? warningMessage,
   }) {
     return InsightData(
+      horizonEnabled: horizonEnabled ?? this.horizonEnabled,
       horizonAmount: horizonAmount ?? this.horizonAmount,
       horizonDate: horizonDateCleared == true ? null : (horizonDate ?? this.horizonDate),
       autopilotEnabled: autopilotEnabled ?? this.autopilotEnabled,

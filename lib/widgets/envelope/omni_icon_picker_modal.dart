@@ -64,8 +64,8 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
     setState(() {
       _selectedIcon = icon;
     });
-    // Automatically confirm selection (restrict to 1 emoji/icon)
-    _confirm();
+    // Small delay to ensure setState completes before confirming
+    Future.microtask(() => _confirm());
   }
 
   void _confirm() {
