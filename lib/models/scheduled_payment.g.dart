@@ -193,7 +193,7 @@ class AutopilotTypeAdapter extends TypeAdapter<AutopilotType> {
   AutopilotType read(BinaryReader reader) {
     switch (reader.readByte()) {
       case 0:
-        return AutopilotType.payment;
+        return AutopilotType.spend;
       case 1:
         return AutopilotType.envelopeToAccount;
       case 2:
@@ -203,14 +203,14 @@ class AutopilotTypeAdapter extends TypeAdapter<AutopilotType> {
       case 4:
         return AutopilotType.accountToEnvelope;
       default:
-        return AutopilotType.payment;
+        return AutopilotType.spend;
     }
   }
 
   @override
   void write(BinaryWriter writer, AutopilotType obj) {
     switch (obj) {
-      case AutopilotType.payment:
+      case AutopilotType.spend:
         writer.writeByte(0);
         break;
       case AutopilotType.envelopeToAccount:

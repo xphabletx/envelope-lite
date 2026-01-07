@@ -26,7 +26,7 @@ enum ScheduledPaymentType {
 @HiveType(typeId: 104)
 enum AutopilotType {
   @HiveField(0)
-  payment,           // Money leaves system (bill payment)
+  spend,             // Spend on the envelope itself (bill payment/purchase)
   @HiveField(1)
   envelopeToAccount, // Envelope → Account
   @HiveField(2)

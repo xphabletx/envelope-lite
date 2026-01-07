@@ -52,13 +52,13 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
   void initState() {
     super.initState();
     _selectedType = widget.sourceType == SourceType.envelope
-        ? AutopilotType.payment
+        ? AutopilotType.spend
         : AutopilotType.accountToEnvelope;
 
     // Pre-fill for editing
     if (widget.existingAutopilot != null) {
       final ap = widget.existingAutopilot!;
-      _selectedType = ap.autopilotType ?? AutopilotType.payment;
+      _selectedType = ap.autopilotType ?? AutopilotType.spend;
       _destinationId = ap.destinationId;
       _amountController.text = ap.amount.toString();
       _nameController.text = ap.name;
@@ -81,9 +81,16 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
     final accounts = await accountRepo.getAllAccounts();
 
     setState(() {
-      _availableEnvelopes = envelopes.where((e) => e.id != widget.sourceId).toList();
+      // For spend mode, include the current envelope itself
+      // For transfer modes, exclude it
+      _availableEnvelopes = envelopes;
       _availableAccounts = accounts.where((a) => a.id != widget.sourceId).toList();
       _loading = false;
+
+      // Pre-select the current envelope for spend mode
+      if (_selectedType == AutopilotType.spend && widget.sourceType == SourceType.envelope) {
+        _destinationId = widget.sourceId;
+      }
     });
   }
 
@@ -157,25 +164,28 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
             DropdownButtonFormField<AutopilotType>(
               value: _selectedType,
               decoration: const InputDecoration(
-                labelText: 'What would you like to automate?',
+                labelText: 'Autopilot Type',
                 border: OutlineInputBorder(),
               ),
               items: _buildTypeOptions(),
               onChanged: (type) {
                 setState(() {
                   _selectedType = type!;
-                  _destinationId = null; // Reset destination
+                  // Pre-select current envelope for spend mode
+                  if (type == AutopilotType.spend && widget.sourceType == SourceType.envelope) {
+                    _destinationId = widget.sourceId;
+                  } else {
+                    _destinationId = null; // Reset destination for transfer modes
+                  }
                 });
               },
             ),
 
             const SizedBox(height: 16),
 
-            // Destination selector (if not a payment)
-            if (_selectedType != AutopilotType.payment) ...[
-              _buildDestinationPicker(locale),
-              const SizedBox(height: 16),
-            ],
+            // Destination selector - always shown
+            _buildDestinationPicker(locale),
+            const SizedBox(height: 16),
 
             // Amount
             TextField(
@@ -305,31 +315,30 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
   List<DropdownMenuItem<AutopilotType>> _buildTypeOptions() {
     final options = <DropdownMenuItem<AutopilotType>>[];
 
-    options.add(const DropdownMenuItem(
-      value: AutopilotType.payment,
-      child: Text('Pay a Bill'),
-    ));
-
     if (widget.sourceType == SourceType.envelope) {
       options.addAll([
         const DropdownMenuItem(
+          value: AutopilotType.spend,
+          child: Text('Spend'),
+        ),
+        const DropdownMenuItem(
           value: AutopilotType.envelopeToAccount,
-          child: Text('Transfer to Account'),
+          child: Text('Transfer'),
         ),
         const DropdownMenuItem(
           value: AutopilotType.envelopeToEnvelope,
-          child: Text('Transfer to Another Envelope'),
+          child: Text('Transfer'),
         ),
       ]);
     } else if (widget.sourceType == SourceType.account) {
       options.addAll([
         const DropdownMenuItem(
           value: AutopilotType.accountToAccount,
-          child: Text('Transfer to Another Account'),
+          child: Text('Transfer'),
         ),
         const DropdownMenuItem(
           value: AutopilotType.accountToEnvelope,
-          child: Text('Transfer to Envelope'),
+          child: Text('Transfer'),
         ),
       ]);
     }
@@ -338,19 +347,28 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
   }
 
   Widget _buildDestinationPicker(LocaleProvider locale) {
-    final needsEnvelope = _selectedType == AutopilotType.envelopeToEnvelope ||
+    // Determine what to show based on autopilot type
+    final isSpendMode = _selectedType == AutopilotType.spend;
+    final needsEnvelope = _selectedType == AutopilotType.spend ||
+                          _selectedType == AutopilotType.envelopeToEnvelope ||
                           _selectedType == AutopilotType.accountToEnvelope;
     final needsAccount = _selectedType == AutopilotType.envelopeToAccount ||
                          _selectedType == AutopilotType.accountToAccount;
 
     if (needsEnvelope) {
+      // For spend mode, only show the current envelope (locked)
+      // For transfer mode, show all envelopes except the current one
+      final filteredEnvelopes = isSpendMode
+          ? _availableEnvelopes.where((e) => e.id == widget.sourceId).toList()
+          : _availableEnvelopes.where((e) => e.id != widget.sourceId).toList();
+
       return DropdownButtonFormField<String>(
         value: _destinationId,
         decoration: const InputDecoration(
-          labelText: 'Destination Envelope',
+          labelText: 'Destination',
           border: OutlineInputBorder(),
         ),
-        items: _availableEnvelopes.map((env) {
+        items: filteredEnvelopes.map((env) {
           return DropdownMenuItem(
             value: env.id,
             child: Row(
@@ -369,7 +387,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
             ),
           );
         }).toList(),
-        onChanged: (id) {
+        onChanged: isSpendMode ? null : (id) {
           setState(() => _destinationId = id);
         },
       );
@@ -377,7 +395,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
       return DropdownButtonFormField<String>(
         value: _destinationId,
         decoration: const InputDecoration(
-          labelText: 'Destination Account',
+          labelText: 'Destination',
           border: OutlineInputBorder(),
         ),
         items: _availableAccounts.map((acc) {
@@ -497,8 +515,8 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
 
   String _getDescription() {
     switch (_selectedType) {
-      case AutopilotType.payment:
-        return 'Bill Payment';
+      case AutopilotType.spend:
+        return 'Spend/Bill Payment';
       case AutopilotType.envelopeToAccount:
         return 'Transfer to Account';
       case AutopilotType.envelopeToEnvelope:
@@ -523,7 +541,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
       return;
     }
 
-    if (_selectedType != AutopilotType.payment && _destinationId == null) {
+    if (_destinationId == null) {
       _showError('Please select a destination');
       return;
     }

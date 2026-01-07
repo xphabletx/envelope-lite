@@ -5,12 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/font_provider.dart';
-import '../../providers/locale_provider.dart';
 import '../../theme/app_themes.dart';
 import 'theme_picker_screen.dart';
 import '../../services/localization_service.dart';
-import '../../widgets/envelope/omni_icon_picker_modal.dart';
-import '../../services/icon_search_service_unlimited.dart';
 import '../../utils/responsive_helper.dart';
 
 class AppearanceSettingsScreen extends StatelessWidget {
@@ -21,7 +18,6 @@ class AppearanceSettingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final fontProvider = Provider.of<FontProvider>(context);
-    final localeProvider = Provider.of<LocaleProvider>(context);
     final responsive = context.responsive;
     final isLandscape = responsive.isLandscape;
 
@@ -110,55 +106,9 @@ class AppearanceSettingsScreen extends StatelessWidget {
             isLandscape: isLandscape,
           ),
 
-          SizedBox(height: isLandscape ? 16 : 24),
-
-          // --- CELEBRATION SECTION ---
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: isLandscape ? 16 : 20,
-              vertical: isLandscape ? 6 : 8,
-            ),
-            child: Text(
-              tr('appearance_celebration').toUpperCase(),
-              style: headerStyle,
-            ),
-          ),
-          _SettingsTile(
-            title: tr('appearance_target_emoji'),
-            subtitle: tr('appearance_target_emoji_hint'),
-            leading: Text(
-              localeProvider.celebrationEmoji,
-              style: TextStyle(fontSize: isLandscape ? 20 : 24),
-            ),
-            onTap: () => _showSmartEmojiPicker(context, localeProvider),
-            isLandscape: isLandscape,
-          ),
         ],
       ),
     );
-  }
-
-  // --- NEW EMOJI PICKER LOGIC ---
-  Future<void> _showSmartEmojiPicker(
-    BuildContext context,
-    LocaleProvider provider,
-  ) async {
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => OmniIconPickerModal(
-        initialValue: provider.celebrationEmoji,
-        initialType: IconType.emoji,
-        initialQuery: '',
-      ),
-    );
-
-    if (result != null && result['type'] == 'emoji') {
-      // Only accept emoji type for celebration emoji
-      final emoji = result['value'] as String;
-      provider.setCelebrationEmoji(emoji);
-    }
   }
 
   // --- REUSED FONT PICKER (Cleaned up) ---

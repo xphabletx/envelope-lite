@@ -8,13 +8,17 @@ class LocaleProvider extends ChangeNotifier {
   String _languageCode = 'en';
   String _currencyCode = 'GBP';
   String _currencySymbol = '£';
-  String _celebrationEmoji = '🥰';
+  String _horizonEmoji = '🥰'; // Emoji shown when envelope reaches 100%
 
   // Getters
   String get languageCode => _languageCode;
   String get currencyCode => _currencyCode;
   String get currencySymbol => _currencySymbol;
-  String get celebrationEmoji => _celebrationEmoji;
+  String get horizonEmoji => _horizonEmoji; // Renamed from celebrationEmoji
+
+  // Keep old getter for backward compatibility
+  @Deprecated('Use horizonEmoji instead')
+  String get celebrationEmoji => _horizonEmoji;
 
   // Supported languages
   static const List<Map<String, String>> supportedLanguages = [
@@ -70,9 +74,10 @@ class LocaleProvider extends ChangeNotifier {
       _languageCode = prefs.getString('language_code') ?? 'en';
       _currencyCode = prefs.getString('currency_code') ?? 'GBP';
       _currencySymbol = _getCurrencySymbol(_currencyCode);
-      _celebrationEmoji = prefs.getString('celebration_emoji') ?? '🥰';
+      // Load from old 'celebration_emoji' key for backward compatibility
+      _horizonEmoji = prefs.getString('celebration_emoji') ?? prefs.getString('horizon_emoji') ?? '🥰';
 
-      debugPrint('[LocaleProvider] ✅ Loaded from SharedPreferences: $_languageCode, $_currencyCode, $_celebrationEmoji');
+      debugPrint('[LocaleProvider] ✅ Loaded from SharedPreferences: $_languageCode, $_currencyCode, horizon: $_horizonEmoji');
       notifyListeners();
     } catch (e) {
       debugPrint('[LocaleProvider] ❌ Error loading locale preferences: $e');
@@ -110,18 +115,18 @@ class LocaleProvider extends ChangeNotifier {
     }
   }
 
-  /// Set celebration emoji (local-only, no Firebase sync)
-  Future<void> setCelebrationEmoji(String emoji) async {
-    _celebrationEmoji = emoji;
+  /// Set horizon emoji - shown when envelope reaches 100% (local-only, no Firebase sync)
+  Future<void> setHorizonEmoji(String emoji) async {
+    _horizonEmoji = emoji;
     notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('celebration_emoji', emoji);
+      await prefs.setString('horizon_emoji', emoji);
 
-      debugPrint('[LocaleProvider] ✅ Celebration emoji saved locally: $emoji');
+      debugPrint('[LocaleProvider] ✅ Horizon emoji saved locally: $emoji');
     } catch (e) {
-      debugPrint('[LocaleProvider] ❌ Error saving celebration emoji: $e');
+      debugPrint('[LocaleProvider] ❌ Error saving horizon emoji: $e');
     }
   }
 

@@ -143,14 +143,9 @@ class LocalizationService {
     'settings_appearance': 'Appearance Settings',
     'appearance_theme': 'Theme',
     'appearance_font': 'Font',
-    'appearance_celebration': 'Celebration',
     'appearance_change_theme_hint': 'Tap to change theme',
     'appearance_change_font_hint': 'Tap to change font',
-    'appearance_horizon_emoji': 'Horizon Emoji',
-    'appearance_horizon_emoji_hint': 'Shows when envelope reaches 100%',
-    'appearance_choose_emoji': 'Choose Emoji',
     'appearance_choose_font': 'Choose Font',
-    'appearance_emoji_instructions': 'Tap circle to open keyboard',
 
     // --- WORKSPACE ---
     'workspace_settings': 'Workspace Settings',
