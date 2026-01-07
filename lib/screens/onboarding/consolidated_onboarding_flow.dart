@@ -50,6 +50,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   String? _userName;
   String? _photoUrl;
   String _selectedCurrency = 'GBP';
+  String? _selectedTheme; // Track theme selection for save/restore
+  String? _selectedFont; // Track font selection for save/restore
   bool _isAccountMode = false;
   BinderTemplate? _selectedTemplate;
   int _createdEnvelopeCount = 0;
@@ -90,6 +92,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         _userName = progress.userName;
         _photoUrl = progress.photoUrl;
         _selectedCurrency = progress.selectedCurrency ?? 'GBP';
+        _selectedTheme = progress.selectedTheme;
+        _selectedFont = progress.selectedFont;
         _isAccountMode = progress.isAccountMode ?? false;
         _accountName = progress.accountName;
         _bankName = progress.bankName;
@@ -99,7 +103,25 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         _payAmount = progress.payAmount;
         _payFrequency = progress.payFrequency;
         _nextPayDate = progress.nextPayDate;
+
+        // Restore selected template if it exists
+        if (progress.selectedTemplateId != null) {
+          _selectedTemplate = binderTemplates.firstWhere(
+            (t) => t.id == progress.selectedTemplateId,
+            orElse: () => binderTemplates.first,
+          );
+        }
       });
+
+      // Restore theme and font to providers if they were saved
+      if (progress.selectedTheme != null) {
+        final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+        themeProvider.setTheme(progress.selectedTheme!);
+      }
+      if (progress.selectedFont != null) {
+        final fontProvider = Provider.of<FontProvider>(context, listen: false);
+        fontProvider.setFont(progress.selectedFont!);
+      }
     }
 
     _buildPages();
@@ -129,6 +151,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       userName: _userName,
       photoUrl: _photoUrl,
       selectedCurrency: _selectedCurrency,
+      selectedTheme: _selectedTheme,
+      selectedFont: _selectedFont,
       isAccountMode: _isAccountMode,
       accountName: _accountName,
       bankName: _bankName,
@@ -142,6 +166,34 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
     );
 
     await _progressService.saveProgress(progress);
+  }
+
+  /// CRITICAL FIX: Save pay day settings immediately (called after pay day setup step)
+  /// This ensures they're available for widgets like Insight in subsequent onboarding steps
+  /// (e.g., when using template quick setup or group editor)
+  Future<void> _savePayDaySettingsNow() async {
+    if (!_isAccountMode) return;
+
+    if (_payAmount != null && _payFrequency != null && _nextPayDate != null) {
+      try {
+        final settings = PayDaySettings(
+          userId: widget.userId,
+          payFrequency: _payFrequency!,
+          nextPayDate: _nextPayDate!,
+          expectedPayAmount: _payAmount!,
+          defaultAccountId: null, // Will be set when account is created
+        );
+
+        final payDayService = PayDaySettingsService(
+          FirebaseFirestore.instance,
+          widget.userId,
+        );
+        await payDayService.updatePayDaySettings(settings);
+        debugPrint('[Onboarding] ✅ Pay day settings saved during onboarding');
+      } catch (e) {
+        debugPrint('[Onboarding] ⚠️ Error saving pay day settings during onboarding: $e');
+      }
+    }
   }
 
   void _buildPages() {
@@ -167,10 +219,22 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       ),
 
       // Step 3: Theme
-      _ThemeSelectionStep(onContinue: _nextStep),
+      _ThemeSelectionStep(
+        initialTheme: _selectedTheme,
+        onContinue: (themeId) {
+          setState(() => _selectedTheme = themeId);
+          _nextStep();
+        },
+      ),
 
       // Step 4: Font
-      _FontSelectionStep(onContinue: _nextStep),
+      _FontSelectionStep(
+        initialFont: _selectedFont,
+        onContinue: (fontId) {
+          setState(() => _selectedFont = fontId);
+          _nextStep();
+        },
+      ),
 
       // Step 5: Currency
       _CurrencySelectionStep(
@@ -215,12 +279,17 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           initialPayAmount: _payAmount,
           initialFrequency: _payFrequency,
           initialNextPayDate: _nextPayDate,
-          onContinue: (payAmount, frequency, nextPayDate) {
+          onContinue: (payAmount, frequency, nextPayDate) async {
             setState(() {
               _payAmount = payAmount;
               _payFrequency = frequency;
               _nextPayDate = nextPayDate;
             });
+
+            // CRITICAL FIX: Save pay day settings immediately so they're available
+            // for Insight in subsequent onboarding steps (template quick setup, etc.)
+            await _savePayDaySettingsNow();
+
             _nextStep();
           },
         ),
@@ -331,7 +400,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         debugPrint('[Onboarding] ⚠️ Firestore user profile sync failed (offline?): $e');
       }
 
-      // If in account mode, create the account and pay day settings
+      // If in account mode, create the account and update pay day settings with account ID
       if (_isAccountMode) {
         final envelopeRepo = EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
@@ -350,23 +419,35 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           accountType: AccountType.bankAccount,
         );
 
-        // Save pay day settings
+        // Update pay day settings with the newly created account ID
+        // (Pay day settings were already saved earlier in _savePayDaySettingsNow,
+        // but without the account ID since the account didn't exist yet)
         if (_payAmount != null &&
             _payFrequency != null &&
             _nextPayDate != null) {
-          final settings = PayDaySettings(
-            userId: widget.userId,
-            payFrequency: _payFrequency!,
-            nextPayDate: _nextPayDate!,
-            expectedPayAmount: _payAmount!,
-            defaultAccountId: accountId,
-          );
-
           final payDayService = PayDaySettingsService(
             FirebaseFirestore.instance,
             widget.userId,
           );
-          await payDayService.updatePayDaySettings(settings);
+
+          // Get existing settings and update with account ID
+          final existingSettings = await payDayService.getPayDaySettings();
+          if (existingSettings != null) {
+            final updatedSettings = existingSettings.copyWith(
+              defaultAccountId: accountId,
+            );
+            await payDayService.updatePayDaySettings(updatedSettings);
+          } else {
+            // Fallback: Create new settings if they don't exist for some reason
+            final settings = PayDaySettings(
+              userId: widget.userId,
+              payFrequency: _payFrequency!,
+              nextPayDate: _nextPayDate!,
+              expectedPayAmount: _payAmount!,
+              defaultAccountId: accountId,
+            );
+            await payDayService.updatePayDaySettings(settings);
+          }
         }
       }
 
@@ -812,9 +893,13 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
 
 // _ThemeSelectionStep
 class _ThemeSelectionStep extends StatelessWidget {
-  final VoidCallback onContinue;
+  final String? initialTheme;
+  final Function(String) onContinue;
 
-  const _ThemeSelectionStep({required this.onContinue});
+  const _ThemeSelectionStep({
+    this.initialTheme,
+    required this.onContinue,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -907,7 +992,7 @@ class _ThemeSelectionStep extends StatelessWidget {
               FilledButton(
                 onPressed: () {
                   HapticFeedback.mediumImpact();
-                  onContinue();
+                  onContinue(themeProvider.currentThemeId);
                 },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 56),
@@ -1005,9 +1090,13 @@ class _ThemeCard extends StatelessWidget {
 
 // _FontSelectionStep
 class _FontSelectionStep extends StatelessWidget {
-  final VoidCallback onContinue;
+  final String? initialFont;
+  final Function(String) onContinue;
 
-  const _FontSelectionStep({required this.onContinue});
+  const _FontSelectionStep({
+    this.initialFont,
+    required this.onContinue,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1117,7 +1206,7 @@ class _FontSelectionStep extends StatelessWidget {
               FilledButton(
                 onPressed: () {
                   HapticFeedback.mediumImpact();
-                  onContinue();
+                  onContinue(fontProvider.currentFontId);
                 },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 56),
