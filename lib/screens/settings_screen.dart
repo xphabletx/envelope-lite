@@ -30,6 +30,7 @@ import '../screens/pay_day_settings_screen.dart';
 import '../screens/settings/tutorial_manager_screen.dart';
 import '../screens/settings/faq_screen.dart';
 import '../screens/settings/about_screen.dart';
+import '../screens/debug/force_sync_screen.dart';
 import '../services/scheduled_payment_repo.dart';
 import '../services/pay_day_settings_service.dart';
 import '../widgets/tutorial_wrapper.dart';
@@ -481,6 +482,29 @@ class SettingsScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const AboutScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Developer Tools (Debug only)
+              _SettingsSection(
+                title: 'Developer Tools',
+                icon: Icons.build_outlined,
+                children: [
+                  _SettingsTile(
+                    title: 'Force Sync to Firebase',
+                    subtitle: 'Upload all local data to cloud',
+                    leading: const Icon(Icons.cloud_upload_outlined, color: Colors.orange),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ForceSyncScreen(repo: repo),
+                        ),
                       );
                     },
                   ),
