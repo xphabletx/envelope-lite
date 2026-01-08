@@ -314,6 +314,7 @@ class StuffingEnvelopeRow extends StatelessWidget {
                 fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                 color: binderColors.envelopeTextColor,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 

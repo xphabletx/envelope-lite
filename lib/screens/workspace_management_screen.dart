@@ -1,8 +1,10 @@
 // lib/screens/workspace_management_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/workspace_helper.dart';
 import '../services/envelope_repo.dart';
 import '../services/localization_service.dart';
@@ -196,13 +198,39 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
     }
   }
 
+  /// Get profile photo path for a user
+  Future<String?> _getProfilePhotoPath(String userId) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final photoPath = '${dir.path}/profile_$userId.jpg';
+      final file = File(photoPath);
+      if (await file.exists()) {
+        return photoPath;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[WorkspaceManagement] Error loading profile photo for $userId: $e');
+      return null;
+    }
+  }
+
   Future<void> _editNickname(WorkspaceMember member) async {
     final nicknameCtrl = TextEditingController(text: member.nickname ?? '');
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Edit Nickname'),
-        content: SmartTextField(controller: nicknameCtrl),
+        content: SmartTextField(
+          controller: nicknameCtrl,
+          autofocus: true,
+          onTap: () {
+            // Select all text when tapped
+            nicknameCtrl.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: nicknameCtrl.text.length,
+            );
+          },
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -225,7 +253,10 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
               member.userId: result.isEmpty ? FieldValue.delete() : result,
             },
           }, SetOptions(merge: true));
-      _loadData(); // reload
+      // Reload data to refresh the UI with new nickname
+      await _loadData();
+      // Force rebuild to show updated nickname immediately
+      if (mounted) setState(() {});
     }
   }
 
@@ -421,22 +452,46 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                   color: theme.colorScheme.primary,
                 ),
               ),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Text(
+                    'Show',
+                    style: fontProvider.getTextStyle(
+                      fontSize: isLandscape ? 10 : 12,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Row(
                     children: [
                       Text(
-                        'Mine only',
+                        'Mine',
                         style: fontProvider.getTextStyle(
-                          fontSize: isLandscape ? 10 : 12,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          fontSize: isLandscape ? 11 : 13,
+                          color: !_showPartnerOnly
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontWeight: !_showPartnerOnly ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
+                      SizedBox(width: 8),
                       Switch(
-                        value: !_showPartnerOnly,
+                        value: _showPartnerOnly,
                         activeTrackColor: theme.colorScheme.secondary,
-                        onChanged: (val) => setState(() => _showPartnerOnly = !val),
+                        onChanged: (val) => setState(() => _showPartnerOnly = val),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'All',
+                        style: fontProvider.getTextStyle(
+                          fontSize: isLandscape ? 11 : 13,
+                          color: _showPartnerOnly
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontWeight: _showPartnerOnly ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ],
                   ),
@@ -593,12 +648,23 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         ..._members.map((member) {
           return Card(
             child: ListTile(
-              leading: CircleAvatar(
-                radius: isLandscape ? 16 : 20,
-                child: Text(
-                  member.displayName.isNotEmpty ? member.displayName[0] : '?',
-                  style: TextStyle(fontSize: isLandscape ? 14 : 18),
-                ),
+              leading: FutureBuilder<String?>(
+                future: _getProfilePhotoPath(member.userId),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return CircleAvatar(
+                      radius: isLandscape ? 16 : 20,
+                      backgroundImage: FileImage(File(snapshot.data!)),
+                    );
+                  }
+                  return CircleAvatar(
+                    radius: isLandscape ? 16 : 20,
+                    child: Text(
+                      member.displayName.isNotEmpty ? member.displayName[0] : '?',
+                      style: TextStyle(fontSize: isLandscape ? 14 : 18),
+                    ),
+                  );
+                },
               ),
               title: Text(
                 member.nickname ?? member.displayName,
@@ -651,14 +717,24 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text("Rename Workspace"),
-                  content: SmartTextField(controller: ctrl),
+                  content: SmartTextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    onTap: () {
+                      // Select all text when tapped
+                      ctrl.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: ctrl.text.length,
+                      );
+                    },
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text("Cancel"),
                     ),
                     FilledButton(
-                      onPressed: () => Navigator.pop(ctx, ctrl.text),
+                      onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
                       child: const Text("Save"),
                     ),
                   ],
@@ -670,7 +746,10 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
                     .collection('workspaces')
                     .doc(widget.workspaceId)
                     .update({'displayName': newName});
-                setState(() => _workspaceName = newName);
+                // Update state to refresh UI immediately
+                if (mounted) {
+                  setState(() => _workspaceName = newName);
+                }
               }
             },
           ),

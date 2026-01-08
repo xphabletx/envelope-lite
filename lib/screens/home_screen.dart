@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../utils/calculator_helper.dart';
 
@@ -231,22 +232,41 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: radius,
       );
     } else {
-      // It's a local file path - check if photoURL is stored in SharedPreferences with user ID
-      final prefs = await SharedPreferences.getInstance();
-      final localPath = prefs.getString('profile_photo_path_${widget.repo.currentUserId}');
+      // It's a local file path - reconstruct the path dynamically using current app directory
+      // This handles cases where the iOS container path changes between app launches
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'profile_${widget.repo.currentUserId}.jpg';
+        final reconstructedPath = '${appDir.path}/$fileName';
 
-      if (localPath != null && File(localPath).existsSync()) {
-        return CircleAvatar(
-          backgroundImage: FileImage(File(localPath)),
-          radius: radius,
-        );
-      } else {
-        // Fallback to default icon
-        return CircleAvatar(
-          radius: radius,
-          child: const Icon(Icons.person),
-        );
+        // Try the reconstructed path first (most reliable)
+        if (File(reconstructedPath).existsSync()) {
+          debugPrint('[HomeScreen] ✅ Found profile photo at: $reconstructedPath');
+          return CircleAvatar(
+            backgroundImage: FileImage(File(reconstructedPath)),
+            radius: radius,
+          );
+        }
+
+        // Fallback: Try the stored path (might work if container didn't change)
+        if (File(photoURL).existsSync()) {
+          debugPrint('[HomeScreen] ✅ Found profile photo at stored path: $photoURL');
+          return CircleAvatar(
+            backgroundImage: FileImage(File(photoURL)),
+            radius: radius,
+          );
+        }
+
+        debugPrint('[HomeScreen] ⚠️ Profile photo not found at either path');
+      } catch (e) {
+        debugPrint('[HomeScreen] ⚠️ Error loading profile photo: $e');
       }
+
+      // Fallback to default icon
+      return CircleAvatar(
+        radius: radius,
+        child: const Icon(Icons.person),
+      );
     }
   }
 

@@ -194,7 +194,9 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   }
 
   Future<void> _loadData() async {
-    final envelopes = await widget.envelopeRepo.envelopesStream().first;
+    // WORKSPACE FIX: Exclude partner envelopes from Time Machine projections
+    // You can only project YOUR financial future, not your partner's
+    final envelopes = await widget.envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
     // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
     final allBinders = await widget.groupRepo.getAllGroupsAsync();
 
@@ -992,16 +994,12 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Projection based on current cash flow & autopilot. Pay day settings are stored here.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.7),
-                              ),
+                          child: Text(
+                            'Projection based on current cash flow & autopilot. Pay day settings are stored here.',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7),
                             ),
                           ),
                         ),

@@ -114,15 +114,19 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   }
 
   void _scrollToSection(EnvelopeSettingsSection section) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_scrollController.hasClients) return;
+
+      // Add a small delay to ensure FutureBuilder has completed
+      await Future.delayed(const Duration(milliseconds: 100));
       if (!mounted || !_scrollController.hasClients) return;
 
       switch (section) {
         case EnvelopeSettingsSection.insight:
           final targetKey = _insightKey;
-          if (targetKey.currentContext != null) {
-            final context = targetKey.currentContext!;
-            final renderBox = context.findRenderObject() as RenderBox?;
+          final keyContext = targetKey.currentContext;
+          if (keyContext != null && keyContext.mounted) {
+            final renderBox = keyContext.findRenderObject() as RenderBox?;
             if (renderBox != null) {
               final offset = renderBox.localToGlobal(Offset.zero).dy;
               final scrollOffset = _scrollController.offset + offset - 100;
@@ -144,9 +148,9 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           break;
         case EnvelopeSettingsSection.scheduledPayments:
           final targetKey = _scheduledPaymentsKey;
-          if (targetKey.currentContext != null) {
-            final context = targetKey.currentContext!;
-            final renderBox = context.findRenderObject() as RenderBox?;
+          final keyContext = targetKey.currentContext;
+          if (keyContext != null && keyContext.mounted) {
+            final renderBox = keyContext.findRenderObject() as RenderBox?;
             if (renderBox != null) {
               final offset = renderBox.localToGlobal(Offset.zero).dy;
               final scrollOffset = _scrollController.offset + offset - 100;
@@ -1138,18 +1142,24 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 16),
 
                     // INSIGHT TILE - Financial Planning
-                    InsightTile(
-                      key: _insightKey,
-                      userId: widget.repo.currentUserId,
-                      startingAmount: envelope.currentAmount,
-                      envelopeRepo: widget.repo,
-                      initialData: InsightData(
-                        horizonAmount: envelope.targetAmount,
-                        horizonDate: envelope.targetDate,
-                        cashFlowEnabled: envelope.cashFlowEnabled,
-                        manualCashFlowOverride: envelope.cashFlowAmount,
-                      ),
-                      onInsightChanged: (InsightData data) async {
+                    FutureBuilder(
+                      future: _scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id).first,
+                      builder: (context, snapshot) {
+                        final scheduledPayments = snapshot.data ?? [];
+
+                        return InsightTile(
+                          key: _insightKey,
+                          userId: widget.repo.currentUserId,
+                          startingAmount: envelope.currentAmount,
+                          envelopeRepo: widget.repo,
+                          scheduledPayments: scheduledPayments,
+                          initialData: InsightData(
+                            horizonAmount: envelope.targetAmount,
+                            horizonDate: envelope.targetDate,
+                            cashFlowEnabled: envelope.cashFlowEnabled,
+                            // Don't pass manualCashFlowOverride - let Insight calculate fresh
+                          ),
+                          onInsightChanged: (InsightData data) async {
                         // Update the envelope based on insight data
                         try {
                           // Update target amount and date from Horizon settings
@@ -1176,6 +1186,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         } catch (e) {
                           debugPrint('Error updating from insight data: $e');
                         }
+                      },
+                    );
                       },
                     ),
 

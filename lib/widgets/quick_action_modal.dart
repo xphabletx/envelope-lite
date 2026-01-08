@@ -421,6 +421,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
                 return DropdownMenuItem(
                   value: dest.id,
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
                         width: 24,
@@ -428,7 +429,7 @@ class _QuickActionModalState extends State<QuickActionModal> {
                         child: dest.icon,
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
+                      Flexible(
                         flex: 2,
                         child: Text(
                           dest.name,

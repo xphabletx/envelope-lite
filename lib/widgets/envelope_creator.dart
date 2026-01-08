@@ -1083,6 +1083,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         InsightTile(
                           userId: widget.userId,
                           startingAmount: double.tryParse(_amtCtrl.text),
+                          envelopeRepo: widget.repo, // Pass repo for existing commitments calculation
                           onInsightChanged: (InsightData data) {
                             setState(() {
                               // Store full insight data

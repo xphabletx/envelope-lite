@@ -56,6 +56,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   bool _isAccountMode = false;
   BinderTemplate? _selectedTemplate;
   int _createdEnvelopeCount = 0;
+  List<String> _createdEnvelopeIds = []; // Track envelope IDs for linking to account later
 
   // Account data (not saved until completion)
   String? _accountName;
@@ -324,9 +325,15 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         BinderTemplateQuickSetup(
           template: _selectedTemplate!,
           userId: widget.userId,
-          defaultAccountId: null, // Account not created until completion
-          onComplete: (envelopeCount) {
-            setState(() => _createdEnvelopeCount = envelopeCount);
+          defaultAccountId: null, // Account not created yet during onboarding
+          returnEnvelopeIds: true, // Get envelope IDs to link them to account later
+          onComplete: (envelopeCount, [envelopeIds]) {
+            debugPrint('[Onboarding] 📦 Received envelopes from quick setup: count=$envelopeCount, ids=${envelopeIds?.length ?? 0}');
+            setState(() {
+              _createdEnvelopeCount = envelopeCount;
+              _createdEnvelopeIds = envelopeIds ?? [];
+            });
+            debugPrint('[Onboarding] 📦 Stored envelope IDs: ${_createdEnvelopeIds.length}');
             _nextStep();
           },
         ),
@@ -387,6 +394,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       await prefs.setBool('showTutorial_${widget.userId}', true);
 
       // 5. Best-effort sync to Firestore (optional, fails silently offline)
+      // NOTE: Only sync display name and completion flag to Firestore
+      // DO NOT sync local file paths to Firestore - they are device-specific and won't work across devices
       try {
         final userService = UserService(
           FirebaseFirestore.instance,
@@ -394,7 +403,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         );
         await userService.createUserProfile(
           displayName: _userName ?? 'User',
-          photoURL: _photoUrl,
+          photoURL: null, // Don't sync local file paths to Firestore
           hasCompletedOnboarding: true,
         );
       } catch (e) {
@@ -402,6 +411,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       }
 
       // If in account mode, create the account and update pay day settings with account ID
+      debugPrint('[Onboarding] 🏦 Account mode enabled: $_isAccountMode, Envelope IDs to link: ${_createdEnvelopeIds.length}');
       if (_isAccountMode) {
         final envelopeRepo = EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
@@ -410,6 +420,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         final accountRepo = AccountRepo(envelopeRepo);
 
         // Create account
+        debugPrint('[Onboarding] 🏦 Creating account...');
         final accountId = await accountRepo.createAccount(
           name: _accountName ?? 'Main Account',
           startingBalance: _accountBalance ?? 0.0,
@@ -449,6 +460,22 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
             );
             await payDayService.updatePayDaySettings(settings);
           }
+        }
+
+        // Link all created envelopes to the newly created account
+        if (_createdEnvelopeIds.isNotEmpty) {
+          debugPrint('[Onboarding] 🔗 Linking ${_createdEnvelopeIds.length} envelopes to account $accountId');
+          for (final envelopeId in _createdEnvelopeIds) {
+            try {
+              await envelopeRepo.updateEnvelope(
+                envelopeId: envelopeId,
+                linkedAccountId: accountId,
+              );
+            } catch (e) {
+              debugPrint('[Onboarding] ⚠️ Failed to link envelope $envelopeId to account: $e');
+            }
+          }
+          debugPrint('[Onboarding] ✅ Successfully linked ${_createdEnvelopeIds.length} envelopes to account');
         }
       }
 
@@ -3029,5 +3056,5 @@ class _CompletionStep extends StatelessWidget {
         ],
       ),
     );
-  }
+}
 }

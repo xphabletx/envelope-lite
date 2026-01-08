@@ -1235,8 +1235,8 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
             debugPrint('[Calendar] All payments count: ${paymentsSnapshot.data?.length ?? 0}');
 
             return StreamBuilder<List<dynamic>>(
-              initialData: widget.repo.getEnvelopesSync(),
-              stream: widget.repo.envelopesStream(),
+              initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: false),
+              stream: widget.repo.envelopesStream(showPartnerEnvelopes: false),
               builder: (context, envelopesSnapshot) {
                 final allPayments = paymentsSnapshot.data ?? [];
                 final existingEnvelopes = envelopesSnapshot.data ?? [];

@@ -104,15 +104,18 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
           workspaceId: workspaceId,
         );
 
-    // Pop back to root to trigger HomeScreenWrapper rebuild
+    // HERO FIX: Pop back to root to trigger HomeScreenWrapper rebuild
     // The Consumer<WorkspaceProvider> in HomeScreenWrapper will detect the workspace change
     // and create a new HomeScreen with workspace-enabled EnvelopeRepo
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    final navigator = Navigator.of(context);
+    navigator.popUntil((route) => route.isFirst);
 
-    // Give the Consumer a frame to rebuild, then push to management screen
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        Navigator.of(context).push(
+    // HERO FIX: Use Future.delayed instead of addPostFrameCallback to give enough time
+    // for UserProfileWrapper to settle and complete its rebuild cycle
+    // This prevents navigation collision between WorkspaceGate and UserProfileWrapper
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        navigator.push(
           MaterialPageRoute(
             builder: (_) => WorkspaceManagementScreen(
               workspaceId: workspaceId,

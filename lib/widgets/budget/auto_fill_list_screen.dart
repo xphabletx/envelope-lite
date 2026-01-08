@@ -51,7 +51,7 @@ class AutoFillListScreen extends StatelessWidget {
         ),
       ),
       body: StreamBuilder<List<Envelope>>(
-        stream: envelopeRepo.envelopesStream(),
+        stream: envelopeRepo.envelopesStream(showPartnerEnvelopes: false),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

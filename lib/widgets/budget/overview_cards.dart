@@ -211,7 +211,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                     stream: widget.accountRepo.accountsStream(),
                     builder: (context, accountSnapshot) {
                       return StreamBuilder<List<Envelope>>(
-                        stream: widget.envelopeRepo.envelopesStream(),
+                        stream: widget.envelopeRepo.envelopesStream(showPartnerEnvelopes: false),
                         builder: (context, envelopeSnapshot) {
                           return StreamBuilder<List<Transaction>>(
                             stream: widget.envelopeRepo.transactionsStream,
@@ -305,7 +305,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                       stream: widget.accountRepo.accountsStream(),
                       builder: (context, accountSnapshot) {
                         return StreamBuilder<List<Envelope>>(
-                          stream: widget.envelopeRepo.envelopesStream(),
+                          stream: widget.envelopeRepo.envelopesStream(showPartnerEnvelopes: false),
                           builder: (context, envelopeSnapshot) {
                             return StreamBuilder<List<Transaction>>(
                               stream: widget.envelopeRepo.transactionsStream,
@@ -430,8 +430,11 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
   // 0. Target Data Card -> Links to MultiTargetScreen
   Widget _buildTargetCard(List<Envelope> envelopes) {
     final theme = Theme.of(context);
+    final currentUserId = widget.envelopeRepo.currentUserId;
 
+    // WORKSPACE FIX: Only count YOUR envelopes with targets, not partner's
     final targetEnvelopes = envelopes
+        .where((e) => e.userId == currentUserId)
         .where((e) => e.targetAmount != null && e.targetAmount! > 0)
         .toList();
     final targetCount = targetEnvelopes.length;
@@ -460,7 +463,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
     );
   }
 
-  // 1. Total Balance -> Links to StatsHistoryScreen showing account-level transactions
+  // 1. Net Worth -> Links to StatsHistoryScreen showing account-level transactions
   Widget _buildAccountsCard(List<Account> accounts) {
     final theme = Theme.of(context);
     final locale = Provider.of<LocaleProvider>(context, listen: false);
@@ -470,49 +473,70 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
       listen: false,
     );
 
-    final totalBalance = accounts.fold(
+    // Calculate total account balance (bank accounts - credit cards)
+    final totalAccountBalance = accounts.fold(
       0.0,
       (sum, acc) => sum + acc.currentBalance,
     );
 
-    return _OverviewCard(
-      icon: Icons.account_balance_wallet,
-      title: 'Total Accounts Balance',
-      value: currency.format(totalBalance),
-      subtitle: '${accounts.length} account${accounts.length != 1 ? 's' : ''}',
-      color: theme.colorScheme.primary,
-      onTap: () {
-        // Navigate to stats with entry → target date range
-        // Show account-level transactions: pay day deposits, auto-fills (withdrawals), and transfers
-        DateTime? initialStart;
-        DateTime? initialEnd;
+    // Calculate total assigned to envelopes (money allocated in envelopes)
+    // This needs to be fetched from envelopes stream
+    // For now, we'll stream it and calculate in the builder
+    return StreamBuilder<List<Envelope>>(
+      stream: widget.envelopeRepo.envelopesStream(showPartnerEnvelopes: false),
+      builder: (context, envelopeSnapshot) {
+        final envelopes = envelopeSnapshot.data ?? [];
+        final currentUserId = widget.envelopeRepo.currentUserId;
 
-        if (timeMachine.isActive &&
-            timeMachine.entryDate != null &&
-            timeMachine.futureDate != null) {
-          initialStart = timeMachine.entryDate!;
-          initialEnd = timeMachine.futureDate!;
-        }
+        // Total assigned = sum of all envelope current amounts for this user
+        final totalAssigned = envelopes
+            .where((e) => e.userId == currentUserId)
+            .fold(0.0, (sum, e) => sum + e.currentAmount);
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StatsHistoryScreen(
-              repo: widget.envelopeRepo,
-              title: 'Accounts Balance & History',
-              initialStart: initialStart,
-              initialEnd: initialEnd,
-              // Filter to show account-level transactions only:
-              // - Deposits with no envelope (pay day to account)
-              // - Withdrawals with no envelope (auto-fills from account)
-              // - Transfers (account-to-account)
-              filterTransactionTypes: {
-                TransactionType.deposit,
-                TransactionType.withdrawal,
-                TransactionType.transfer,
-              },
-            ),
-          ),
+        // Net Worth = Total Account Balance - Total Assigned
+        // (Credit cards are already negative in account balance, so they subtract automatically)
+        final netWorth = totalAccountBalance - totalAssigned;
+
+        return _OverviewCard(
+          icon: Icons.account_balance_wallet,
+          title: 'Net Worth',
+          value: currency.format(netWorth),
+          subtitle: 'Accounts - Assigned - Debt',
+          color: theme.colorScheme.primary,
+          onTap: () {
+            // Navigate to stats with entry → target date range
+            // Show account-level transactions: pay day deposits, auto-fills (withdrawals), and transfers
+            DateTime? initialStart;
+            DateTime? initialEnd;
+
+            if (timeMachine.isActive &&
+                timeMachine.entryDate != null &&
+                timeMachine.futureDate != null) {
+              initialStart = timeMachine.entryDate!;
+              initialEnd = timeMachine.futureDate!;
+            }
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StatsHistoryScreen(
+                  repo: widget.envelopeRepo,
+                  title: 'Net Worth & History',
+                  initialStart: initialStart,
+                  initialEnd: initialEnd,
+                  // Filter to show account-level transactions only:
+                  // - Deposits with no envelope (pay day to account)
+                  // - Withdrawals with no envelope (auto-fills from account)
+                  // - Transfers (account-to-account)
+                  filterTransactionTypes: {
+                    TransactionType.deposit,
+                    TransactionType.withdrawal,
+                    TransactionType.transfer,
+                  },
+                ),
+              ),
+            );
+          },
         );
       },
     );

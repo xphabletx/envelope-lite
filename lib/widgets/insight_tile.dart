@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/insight_data.dart';
 import '../models/pay_day_settings.dart';
+import '../models/scheduled_payment.dart';
 import '../services/pay_day_settings_service.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
@@ -19,8 +20,8 @@ class InsightTile extends StatefulWidget {
   final InsightData? initialData;
   final bool initiallyExpanded;
   final double? startingAmount; // NEW: Starting amount to calculate gap
-  final EnvelopeRepo?
-  envelopeRepo; // Optional: for calculating existing commitments
+  final EnvelopeRepo? envelopeRepo; // Optional: for calculating existing commitments
+  final List<ScheduledPayment>? scheduledPayments; // NEW: Scheduled payments for this envelope
 
   const InsightTile({
     super.key,
@@ -30,6 +31,7 @@ class InsightTile extends StatefulWidget {
     this.initiallyExpanded = false,
     this.startingAmount,
     this.envelopeRepo,
+    this.scheduledPayments,
   });
 
   @override
@@ -977,11 +979,22 @@ class _InsightTileState extends State<InsightTile> {
               value: _data.autopilotEnabled,
               onChanged: (enabled) {
                 setState(() {
-                  _data = _data.copyWith(
-                    autopilotEnabled: enabled,
-                    updateWarning:
-                        false, // Warning will be updated in _recalculate
-                  );
+                  if (enabled && widget.scheduledPayments != null && widget.scheduledPayments!.isNotEmpty) {
+                    // Auto-populate from first scheduled payment
+                    final payment = widget.scheduledPayments!.first;
+                    _autopilotAmountCtrl.text = payment.amount.toStringAsFixed(2);
+
+                    _data = _data.copyWith(
+                      autopilotEnabled: enabled,
+                      autopilotAmount: payment.amount,
+                      updateWarning: false,
+                    );
+                  } else {
+                    _data = _data.copyWith(
+                      autopilotEnabled: enabled,
+                      updateWarning: false,
+                    );
+                  }
                 });
                 _recalculate();
               },

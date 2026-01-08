@@ -195,50 +195,92 @@ class PayDayCockpitProvider extends ChangeNotifier {
     _autopilotPreparedness.clear();
 
     try {
+      debugPrint('[PayDayCockpit] ==================== AUTOPILOT CALCULATION START ====================');
+
       // Get pay day settings to determine next pay day
       final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
       final settings = payDayBox.get(userId);
 
-      if (settings == null || settings.lastPayDate == null) {
+      if (settings == null) {
+        debugPrint('[PayDayCockpit] No pay day settings found - skipping autopilot calculation');
         return; // No pay settings configured yet
       }
 
-      final DateTime lastPayDate = settings.lastPayDate!;
-      final String frequency = settings.payFrequency;
+      debugPrint('[PayDayCockpit] Settings found - lastPayDate: ${settings.lastPayDate}, nextPayDate: ${settings.nextPayDate}');
 
-      // Calculate next pay day based on frequency
-      DateTime nextPayDay;
-      switch (frequency.toLowerCase()) {
-        case 'weekly':
-          nextPayDay = lastPayDate.add(const Duration(days: 7));
-          break;
-        case 'biweekly':
-          nextPayDay = lastPayDate.add(const Duration(days: 14));
-          break;
-        case 'semimonthly':
-          nextPayDay = lastPayDate.add(const Duration(days: 15));
-          break;
-        case 'monthly':
-          nextPayDay = DateTime(
-            lastPayDate.month == 12 ? lastPayDate.year + 1 : lastPayDate.year,
-            lastPayDate.month == 12 ? 1 : lastPayDate.month + 1,
-            lastPayDate.day,
-          );
-          break;
-        default:
-          nextPayDay = lastPayDate.add(const Duration(days: 30));
+      // Use nextPayDate if available, otherwise calculate from lastPayDate
+      DateTime? nextPayDay;
+
+      if (settings.nextPayDate != null) {
+        nextPayDay = settings.nextPayDate;
+        debugPrint('[PayDayCockpit] Using nextPayDate from settings: $nextPayDay');
+      } else if (settings.lastPayDate != null) {
+        final DateTime lastPayDate = settings.lastPayDate!;
+        final String frequency = settings.payFrequency;
+
+        debugPrint('[PayDayCockpit] Calculating next pay day from last pay date: $lastPayDate, Frequency: $frequency');
+
+        // Calculate next pay day based on frequency
+        switch (frequency.toLowerCase()) {
+          case 'weekly':
+            nextPayDay = lastPayDate.add(const Duration(days: 7));
+            break;
+          case 'biweekly':
+            nextPayDay = lastPayDate.add(const Duration(days: 14));
+            break;
+          case 'semimonthly':
+            nextPayDay = lastPayDate.add(const Duration(days: 15));
+            break;
+          case 'monthly':
+            nextPayDay = DateTime(
+              lastPayDate.month == 12 ? lastPayDate.year + 1 : lastPayDate.year,
+              lastPayDate.month == 12 ? 1 : lastPayDate.month + 1,
+              lastPayDate.day,
+            );
+            break;
+          default:
+            nextPayDay = lastPayDate.add(const Duration(days: 30));
+        }
+      } else {
+        debugPrint('[PayDayCockpit] No lastPayDate or nextPayDate found - skipping autopilot calculation');
+        return;
+      }
+
+      if (nextPayDay == null) {
+        debugPrint('[PayDayCockpit] Could not determine next pay day - skipping autopilot calculation');
+        return;
       }
 
       final now = DateTime.now();
+      // Normalize to start of day for more accurate comparisons
+      final today = DateTime(now.year, now.month, now.day);
+      final nextPayDayNormalized = DateTime(nextPayDay.year, nextPayDay.month, nextPayDay.day);
+
+      debugPrint('[PayDayCockpit] Today: $today');
+      debugPrint('[PayDayCockpit] Next Pay Day: $nextPayDayNormalized');
 
       // Get all scheduled payments
       final allPayments = await scheduledPaymentRepo.scheduledPaymentsStream.first;
+      debugPrint('[PayDayCockpit] Found ${allPayments.length} total scheduled payments');
 
       // Filter payments due before next pay day
+      int included = 0;
+      int excluded = 0;
       for (final payment in allPayments) {
-        if (payment.nextDueDate.isBefore(nextPayDay) && payment.nextDueDate.isAfter(now)) {
+        final paymentDate = DateTime(payment.nextDueDate.year, payment.nextDueDate.month, payment.nextDueDate.day);
+
+        debugPrint('[PayDayCockpit] Checking payment: ${payment.name}');
+        debugPrint('[PayDayCockpit]   Due date: $paymentDate');
+        debugPrint('[PayDayCockpit]   Amount: ${payment.amount}');
+        debugPrint('[PayDayCockpit]   After today? ${paymentDate.isAfter(today)}');
+        debugPrint('[PayDayCockpit]   Not after next pay day? ${!paymentDate.isAfter(nextPayDayNormalized)}');
+
+        // Include payments that are after today and before (or on) next pay day
+        if (paymentDate.isAfter(today) && !paymentDate.isAfter(nextPayDayNormalized)) {
+          debugPrint('[PayDayCockpit]   ✓ INCLUDING this payment');
           _upcomingPayments.add(payment);
           _autopilotUpcoming += payment.amount;
+          included++;
 
           // Check preparedness: does the envelope have enough balance?
           if (payment.envelopeId != null) {
@@ -254,10 +296,18 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
             _autopilotPreparedness[payment.envelopeId!] = envelope.currentAmount >= payment.amount;
           }
+        } else {
+          debugPrint('[PayDayCockpit]   ✗ EXCLUDING this payment');
+          excluded++;
         }
       }
+
+      debugPrint('[PayDayCockpit] Summary: Included $included payments, Excluded $excluded payments');
+      debugPrint('[PayDayCockpit] Total autopilot upcoming: \$${_autopilotUpcoming.toStringAsFixed(2)}');
+      debugPrint('[PayDayCockpit] ==================== AUTOPILOT CALCULATION END ====================');
     } catch (e) {
-      debugPrint('[PayDayCockpit] Error calculating autopilot payments: $e');
+      debugPrint('[PayDayCockpit] ERROR calculating autopilot payments: $e');
+      debugPrint('[PayDayCockpit] Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -416,7 +466,7 @@ class PayDayCockpitProvider extends ChangeNotifier {
   Future<void> executeStuffing({Map<String, double>? boosts}) async {
     try {
       // Step 0: INITIAL PAUSE - Show the money flow hierarchy clearly
-      await Future.delayed(const Duration(milliseconds: 4000));
+      await Future.delayed(const Duration(milliseconds: 2000));
 
       // Step 1: Animate deposit to account if in account mode (source → account)
       if (_isAccountMode && _defaultAccountId != null) {
@@ -512,7 +562,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
         await Future.delayed(Duration(milliseconds: boostDelay));
       }
 
-      // Step 4: Actually perform the allocations to envelopes
+      // Step 4: Store old balances BEFORE performing allocations
+      final oldBalances = <String, double>{};
+      for (final envelopeId in _stuffingProgress.keys) {
+        final envelope = _allEnvelopes.firstWhere((e) => e.id == envelopeId);
+        oldBalances[envelopeId] = envelope.currentAmount;
+      }
+
+      // Step 5: Actually perform the allocations to envelopes
       _stuffingStage = StuffingStage.complete;
       notifyListeners();
 
@@ -541,8 +598,8 @@ class PayDayCockpitProvider extends ChangeNotifier {
         }
       }
 
-      // Calculate top horizons impacted
-      _calculateTopHorizons();
+      // Calculate top horizons impacted (pass old balances)
+      _calculateTopHorizons(oldBalances);
 
       // Update PayDaySettings
       await _updatePayDaySettings();
@@ -568,12 +625,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
   // PHASE 4: SUCCESS
   // ============================================================================
 
-  void _calculateTopHorizons() {
+  void _calculateTopHorizons(Map<String, double> oldBalances) {
     final impacts = <EnvelopeHorizonImpact>[];
 
-    for (final entry in _allocations.entries) {
-      final envelope = _allEnvelopes.firstWhere((e) => e.id == entry.key);
-      final stuffedAmount = entry.value;
+    // Calculate days saved for EACH envelope using the ACTUAL stuffed amount
+    for (final entry in _stuffingProgress.entries) {
+      final envelopeId = entry.key;
+      final envelope = _allEnvelopes.firstWhere((e) => e.id == envelopeId);
+      final totalStuffedAmount = entry.value; // This includes base + boost from stuffingProgress
 
       if (envelope.targetAmount != null &&
           envelope.targetDate != null &&
@@ -581,9 +640,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
           envelope.cashFlowAmount! > 0) {
 
         final velocity = envelope.cashFlowAmount!;
-        final oldBalance = envelope.currentAmount;
-        final newBalance = oldBalance + stuffedAmount;
 
+        // OLD: Before any stuffing (from saved balances)
+        final oldBalance = oldBalances[envelopeId] ?? envelope.currentAmount;
+
+        // NEW: After stuffing (base + boost)
+        final newBalance = oldBalance + totalStuffedAmount;
+
+        // Calculate days to target before and after
         final oldDaysToTarget = (envelope.targetAmount! - oldBalance) / (velocity / 30.44);
         final newDaysToTarget = (envelope.targetAmount! - newBalance) / (velocity / 30.44);
 
@@ -593,7 +657,7 @@ class PayDayCockpitProvider extends ChangeNotifier {
           impacts.add(EnvelopeHorizonImpact(
             envelope: envelope,
             daysSaved: daysSaved,
-            stuffedAmount: stuffedAmount,
+            stuffedAmount: totalStuffedAmount,
           ));
         }
       }

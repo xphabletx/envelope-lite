@@ -194,50 +194,20 @@ class EnvelopeRepo {
 
   /// Groups stream - syncs from workspace in workspace mode
   Stream<List<EnvelopeGroup>> get groupsStream {
-    if (!_inWorkspace) {
-      // SOLO MODE: Local Hive only
-      final initial = _groupBox.values
-          .where((g) => g.userId == _userId)
-          .toList();
+    // BOTH SOLO AND WORKSPACE MODE: Groups/Binders are NEVER shared
+    // They are always local-only, even in workspace mode
+    // Only envelopes are shared in workspaces, not their organization (binders)
+    final initial = _groupBox.values
+        .where((g) => g.userId == _userId)
+        .toList();
 
-      return Stream.value(initial).asBroadcastStream().concatWith([
-        _groupBox.watch().map((_) {
-          return _groupBox.values
-              .where((g) => g.userId == _userId)
-              .toList();
-        })
-      ]);
-    } else {
-      // WORKSPACE MODE: Firebase sync from workspace groups collection
-      return _firestore
-          .collection('workspaces')
-          .doc(_workspaceId!)
-          .collection('groups')
-          .orderBy('createdAt', descending: false)
-          .snapshots()
-          .handleError((error) {
-            return const Stream<List<EnvelopeGroup>>.empty();
-          })
-          .asyncMap((snapshot) async {
-            final List<EnvelopeGroup> allGroups = [];
-
-            for (final doc in snapshot.docs) {
-              final data = doc.data();
-              data['id'] = doc.id; // Ensure ID is set
-              final group = EnvelopeGroup.fromMap(data);
-
-              allGroups.add(group);
-
-              // Cache to Hive for offline access
-              await _groupBox.put(group.id, group);
-            }
-
-            return allGroups;
-          })
-          .handleError((error) {
-            // Catch any errors during asyncMap as well
-          });
-    }
+    return Stream.value(initial).asBroadcastStream().concatWith([
+      _groupBox.watch().map((_) {
+        return _groupBox.values
+            .where((g) => g.userId == _userId)
+            .toList();
+      })
+    ]);
   }
 
   /// Transactions stream (ALWAYS local only)

@@ -172,9 +172,27 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   // PHASE 2 UI HELPERS
   // ============================================================================
 
+  String _formatCompactCurrency(double amount, String symbol) {
+    final absAmount = amount.abs();
+    final isNegative = amount < 0;
+    final prefix = isNegative ? '-' : '';
+
+    if (absAmount >= 1000000) {
+      // Millions: £1.22M
+      final millions = absAmount / 1000000;
+      return '$prefix$symbol${millions.toStringAsFixed(2)}M';
+    } else if (absAmount >= 1000) {
+      // Thousands: £1.12K - always 2 decimals
+      final thousands = absAmount / 1000;
+      return '$prefix$symbol${thousands.toStringAsFixed(2)}K';
+    } else {
+      // Less than 1000: show full amount
+      return '$prefix$symbol${absAmount.toStringAsFixed(0)}';
+    }
+  }
+
   Widget _buildTopStatsBar(ThemeData theme, FontProvider fontProvider) {
     final locale = Provider.of<LocaleProvider>(context);
-    final currency = NumberFormat.currency(symbol: locale.currencySymbol);
 
     final totalCashFlow = _calculateTotalCashFlow();
     final totalBoost = _calculateTotalBoost();
@@ -197,35 +215,35 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
           _buildStatChip(
             '💰',
             'Income',
-            currency.format(_provider.externalInflow),
+            _formatCompactCurrency(_provider.externalInflow, locale.currencySymbol),
             theme.colorScheme.primary,
             fontProvider,
           ),
           _buildStatChip(
             '🔄',
             'Cash Flow',
-            currency.format(totalCashFlow),
+            _formatCompactCurrency(totalCashFlow, locale.currencySymbol),
             theme.colorScheme.secondary,
             fontProvider,
           ),
           _buildStatChip(
             '⏰',
             'Autopilot',
-            currency.format(_provider.autopilotUpcoming),
+            _formatCompactCurrency(_provider.autopilotUpcoming, locale.currencySymbol),
             _provider.autopilotUpcoming > 0 ? Colors.deepPurple.shade600 : Colors.grey.shade600,
             fontProvider,
           ),
           _buildStatChip(
             '🚀',
             'Boost',
-            currency.format(totalBoost),
+            _formatCompactCurrency(totalBoost, locale.currencySymbol),
             Colors.amber.shade700,
             fontProvider,
           ),
           _buildStatChip(
             '🏦',
             'Reserve',
-            currency.format(reserve),
+            _formatCompactCurrency(reserve, locale.currencySymbol),
             reserve < 0 ? Colors.red.shade700 : Colors.green.shade700,
             fontProvider,
           ),
@@ -255,6 +273,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             fontSize: 11,
             color: Colors.grey.shade600,
           ),
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
         Text(
@@ -264,6 +283,8 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             fontWeight: FontWeight.bold,
             color: color,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         ),
       ],
     );
@@ -491,22 +512,28 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Text(
-                            currency.format(currentAmount),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 14,
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Text(
+                              currency.format(currentAmount),
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (hasBoost) ...[
                             const SizedBox(width: 4),
-                            Text(
-                              '+ ${currency.format(boostAmount)}',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 13,
-                                color: Colors.amber.shade700,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                '+ ${currency.format(boostAmount)}',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  color: Colors.amber.shade700,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],

@@ -264,10 +264,16 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   }
 
   List<Envelope> _getFilteredEnvelopes(List<Envelope> allEnvelopes) {
+    // WORKSPACE FIX: Exclude partner envelopes - you can't manage their targets
+    final currentUserId = widget.envelopeRepo.currentUserId;
+    var filtered = allEnvelopes
+        .where((e) => e.userId == currentUserId)
+        .toList();
+
     // Filter by group if specified
-    var filtered = widget.initialGroupId != null
-        ? allEnvelopes.where((e) => e.groupId == widget.initialGroupId).toList()
-        : allEnvelopes;
+    if (widget.initialGroupId != null) {
+      filtered = filtered.where((e) => e.groupId == widget.initialGroupId).toList();
+    }
 
     // Only show envelopes with targets
     return filtered

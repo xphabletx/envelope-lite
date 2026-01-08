@@ -562,7 +562,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                       label: hasPayments
                           ? (payments.length > 1
                               ? '${payments.length} Payments'
-                              : 'Due: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}')
+                              : 'Autopilot: ${DateFormat('d MMM').format(nextPayment!.nextDueDate)}')
                           : 'Autopilot: Off',
                       subLabel: hasPayments
                           ? (payments.length > 1

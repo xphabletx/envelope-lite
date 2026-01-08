@@ -18,9 +18,9 @@ class BinderTemplateQuickSetup extends StatefulWidget {
   final String userId;
   final String? defaultAccountId; // For Account Mode linking
   final String? existingBinderId; // If adding to existing binder
-  final Function(int)? onComplete; // Optional callback for onboarding flow
+  final Function(int, [List<String>?])? onComplete; // Callback with count and optional envelope IDs
   final bool
-  returnEnvelopeIds; // If true, pops with List<String> of created envelope IDs
+  returnEnvelopeIds; // If true, passes envelope IDs to onComplete callback
 
   const BinderTemplateQuickSetup({
     super.key,
@@ -110,7 +110,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
       );
 
       if (widget.returnEnvelopeIds) {
-        Navigator.of(context).pop(createdIds);
+        widget.onComplete?.call(createdCount, createdIds);
       } else {
         widget.onComplete?.call(createdCount);
       }
@@ -132,7 +132,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
         returnEnvelopeIds: widget.returnEnvelopeIds,
         onComplete: (envelopeCount, createdIds) {
           if (widget.returnEnvelopeIds) {
-            Navigator.of(context).pop(createdIds);
+            widget.onComplete?.call(envelopeCount, createdIds);
           } else {
             widget.onComplete?.call(envelopeCount);
           }
@@ -781,13 +781,17 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+          automaticallyImplyLeading: false, // Disable automatic back button
+          toolbarHeight: 0, // Hide the AppBar completely
+        ),
         body: SafeArea(
           bottom: false,
           child: Column(
             children: [
               // Fixed Header with title centered, skip and progress on right
               Padding(
-                padding: const EdgeInsets.fromLTRB(60, 16, 24, 0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
                 child: Row(
                   children: [
                     // Title with emoji (centered)

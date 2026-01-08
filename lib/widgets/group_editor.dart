@@ -634,7 +634,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
           template: _selectedTemplate!,
           userId: widget.envelopeRepo.currentUserId,
           defaultAccountId: widget.defaultAccountId,
-          onComplete: (count) {
+          onComplete: (count, [envelopeIds]) {
             // Quick setup creates its own binder, so we need to close both screens
             if (mounted) {
               // Pop the quick setup screen first

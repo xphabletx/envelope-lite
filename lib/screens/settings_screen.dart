@@ -138,7 +138,7 @@ class SettingsScreen extends StatelessWidget {
                         : 'Tap to add',
                     leading: photoURL != null
                         ? FutureBuilder<Widget>(
-                            future: _buildProfilePhotoWidget(photoURL),
+                            future: _buildProfilePhotoWidget(photoURL, repo.currentUserId),
                             builder: (context, snapshot) {
                               if (snapshot.hasData) {
                                 return snapshot.data!;
@@ -1001,7 +1001,7 @@ class SettingsScreen extends StatelessWidget {
         debugPrint('[Settings] 📦 Solo mode: saving photo locally');
 
         final appDir = await getApplicationDocumentsDirectory();
-        final localPath = '${appDir.path}/profile_photo_$userId.jpg';
+        final localPath = '${appDir.path}/profile_$userId.jpg';
 
         await imageFile.copy(localPath);
 
@@ -1033,7 +1033,7 @@ class SettingsScreen extends StatelessWidget {
 
   // Helper to build profile photo widget that supports both network URLs and local file paths
   // Note: photoURL parameter is actually the value from SharedPreferences (can be file path or URL)
-  static Future<Widget> _buildProfilePhotoWidget(String photoURL) async {
+  static Future<Widget> _buildProfilePhotoWidget(String photoURL, String userId) async {
     // Check if it's a network URL (starts with http/https)
     if (photoURL.startsWith('http://') || photoURL.startsWith('https://')) {
       return CircleAvatar(
@@ -1041,19 +1041,41 @@ class SettingsScreen extends StatelessWidget {
         radius: 20,
       );
     } else {
-      // It's a local file path - photoURL IS the path already from SharedPreferences
-      if (File(photoURL).existsSync()) {
-        return CircleAvatar(
-          backgroundImage: FileImage(File(photoURL)),
-          radius: 20,
-        );
-      } else {
-        // Fallback to default icon
-        return const CircleAvatar(
-          radius: 20,
-          child: Icon(Icons.person),
-        );
+      // It's a local file path - reconstruct the path dynamically using current app directory
+      // This handles cases where the iOS container path changes between app launches
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'profile_$userId.jpg';
+        final reconstructedPath = '${appDir.path}/$fileName';
+
+        // Try the reconstructed path first (most reliable)
+        if (File(reconstructedPath).existsSync()) {
+          debugPrint('[Settings] ✅ Found profile photo at: $reconstructedPath');
+          return CircleAvatar(
+            backgroundImage: FileImage(File(reconstructedPath)),
+            radius: 20,
+          );
+        }
+
+        // Fallback: Try the stored path (might work if container didn't change)
+        if (File(photoURL).existsSync()) {
+          debugPrint('[Settings] ✅ Found profile photo at stored path: $photoURL');
+          return CircleAvatar(
+            backgroundImage: FileImage(File(photoURL)),
+            radius: 20,
+          );
+        }
+
+        debugPrint('[Settings] ⚠️ Profile photo not found at either path');
+      } catch (e) {
+        debugPrint('[Settings] ⚠️ Error loading profile photo: $e');
       }
+
+      // Fallback to default icon
+      return const CircleAvatar(
+        radius: 20,
+        child: Icon(Icons.person),
+      );
     }
   }
 
