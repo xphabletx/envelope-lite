@@ -36,7 +36,13 @@ Future<String?> showGroupEditor({
 
   if (group == null) {
     // Get existing envelopes to check which templates have been used
-    final existingEnvelopes = await envelopeRepo.envelopesStream().first;
+    // IMPORTANT: Filter to only current user's envelopes, not partner's
+    // (In workspace mode, binders are local-only, so template usage should only
+    // consider your own envelopes, not your partner's shared envelopes)
+    final allEnvelopes = await envelopeRepo.envelopesStream().first;
+    final existingEnvelopes = allEnvelopes
+        .where((e) => e.userId == envelopeRepo.currentUserId)
+        .toList();
 
     if (!context.mounted) return null;
 
