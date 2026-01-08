@@ -34,15 +34,26 @@ class DataExportService {
   Future<String> generateExcelFile() async {
     final excel = Excel.createExcel();
 
-    // Fetch all data
-    final envelopes = await _envelopeRepo.getAllEnvelopes();
-    final transactions = await _envelopeRepo.getAllTransactions();
+    // Fetch all data - IMPORTANT: Filter by current user only (not partner's data)
+    // In workspace mode, only export the current user's own data for privacy
+    final allEnvelopes = await _envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+    final envelopes = allEnvelopes
+        .where((e) => e.userId == _envelopeRepo.currentUserId)
+        .toList();
+
+    final allTransactions = await _envelopeRepo.getAllTransactions();
+    final transactions = allTransactions
+        .where((tx) => tx.userId == _envelopeRepo.currentUserId)
+        .toList();
+
     final scheduledPayments = await _scheduledPaymentRepo.getAllScheduledPayments();
 
     // Use getAllGroupsAsync to read from Hive (works in both solo and workspace mode)
+    // Groups are always local-only, already filtered by userId
     final groups = await _groupRepo.getAllGroupsAsync();
 
-    final accounts = await _accountRepo.getAllAccounts(); // Fetch all accounts
+    // Accounts are already filtered by userId in getAllAccounts()
+    final accounts = await _accountRepo.getAllAccounts();
 
     final groupMap = {for (var group in groups) group.id: group.name};
     final envelopeMap = {for (var envelope in envelopes) envelope.id: envelope.name};
