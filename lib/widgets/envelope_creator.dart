@@ -369,8 +369,11 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     final name = _nameCtrl.text.trim();
     final subtitle = _subtitleCtrl.text.trim();
 
-    // Check for duplicate envelope names
-    final existingEnvelopes = await widget.repo.envelopesStream().first;
+    // Check for duplicate envelope names (only check current user's envelopes)
+    final allEnvelopes = await widget.repo.envelopesStream(showPartnerEnvelopes: false).first;
+    final existingEnvelopes = allEnvelopes
+        .where((e) => e.userId == widget.repo.currentUserId)
+        .toList();
     final duplicateName = existingEnvelopes.any((e) =>
       e.name.trim().toLowerCase() == name.toLowerCase()
     );

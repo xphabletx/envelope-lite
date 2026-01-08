@@ -111,7 +111,12 @@ class _InsightTileState extends State<InsightTile> {
     }
 
     try {
-      final envelopes = await widget.envelopeRepo!.envelopesStream().first;
+      // IMPORTANT: Only get current user's envelopes (not partner's in workspace)
+      final allEnvelopes = await widget.envelopeRepo!.envelopesStream(showPartnerEnvelopes: false).first;
+      final envelopes = allEnvelopes
+          .where((e) => e.userId == widget.envelopeRepo!.currentUserId)
+          .toList();
+
       double total = 0.0;
 
       for (final envelope in envelopes) {
