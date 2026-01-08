@@ -100,8 +100,7 @@ class HorizonController extends ChangeNotifier {
     debugPrint('[HorizonController] ======== REFRESH AVAILABLE FUNDS START ========');
 
     try {
-      // 1. Get account balance (available balance from the special envelope)
-      final envelopes = await envelopeRepo.envelopesStream().first;
+      // 1. Get account balance directly from the account
       final accounts = await accountRepo.accountsStream().first;
       final userAccounts = accounts.where((a) => !a.id.startsWith('_')).toList();
 
@@ -112,19 +111,8 @@ class HorizonController extends ChangeNotifier {
           orElse: () => userAccounts.first,
         );
 
-        // Find the available balance envelope (ID pattern: _account_available_{accountId})
-        final availableEnvelopeId = '_account_available_${defaultAccount.id}';
-        final availableEnvelope = envelopes.firstWhere(
-          (e) => e.id == availableEnvelopeId,
-          orElse: () => Envelope(
-            id: availableEnvelopeId,
-            name: 'Available',
-            userId: envelopeRepo.currentUserId,
-            currentAmount: 0,
-          ),
-        );
-
-        accountBalance = availableEnvelope.currentAmount;
+        // Use the account's current balance directly
+        accountBalance = defaultAccount.currentBalance;
       }
       debugPrint('[HorizonController] Account balance: $accountBalance');
 
