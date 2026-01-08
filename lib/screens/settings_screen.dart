@@ -28,6 +28,8 @@ import '../providers/workspace_provider.dart';
 import '../models/envelope.dart';
 import '../models/account.dart';
 import '../models/transaction.dart' as models;
+import '../models/scheduled_payment.dart';
+import '../models/envelope_group.dart';
 
 import '../screens/appearance_settings_screen.dart';
 import '../screens/workspace_management_screen.dart';
@@ -518,6 +520,12 @@ class SettingsScreen extends StatelessWidget {
                     subtitle: 'Clear all transactions and reset envelope balances to zero',
                     leading: const Icon(Icons.restore_outlined, color: Colors.red),
                     onTap: () => _resetTransactionsAndBalances(context),
+                  ),
+                  _SettingsTile(
+                    title: 'Nuclear Reset: Delete ALL Envelopes',
+                    subtitle: 'Permanently delete all envelopes from Hive AND Firestore',
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    onTap: () => _nuclearDeleteAllEnvelopes(context),
                   ),
                 ],
               ),
@@ -1301,6 +1309,134 @@ class SettingsScreen extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Reset failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _nuclearDeleteAllEnvelopes(BuildContext context) async {
+    final theme = Theme.of(context);
+
+    // Show SCARY confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 28),
+            const SizedBox(width: 8),
+            const Text('⚠️ NUCLEAR RESET ⚠️'),
+          ],
+        ),
+        content: const Text(
+          '🔥 THIS WILL PERMANENTLY DELETE:\n\n'
+          '• ALL envelopes (yours AND partner\'s in workspace)\n'
+          '• ALL transactions\n'
+          '• ALL scheduled payments\n'
+          '• ALL binders/groups\n'
+          '• From BOTH Hive (local) AND Firestore (cloud)\n\n'
+          '⚠️ THIS CANNOT BE UNDONE!\n\n'
+          'Are you absolutely sure?',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('YES, DELETE EVERYTHING'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 1. Delete all envelopes from Hive
+      final envelopeBox = HiveService.getBox<Envelope>('envelopes');
+      await envelopeBox.clear();
+      debugPrint('✅ Cleared all envelopes from Hive');
+
+      // 2. Delete all transactions from Hive
+      final transactionBox = HiveService.getBox<models.Transaction>('transactions');
+      await transactionBox.clear();
+      debugPrint('✅ Cleared all transactions from Hive');
+
+      // 3. Delete all scheduled payments from Hive
+      final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+      await scheduledPaymentBox.clear();
+      debugPrint('✅ Cleared all scheduled payments from Hive');
+
+      // 4. Delete all groups from Hive
+      final groupBox = HiveService.getBox<EnvelopeGroup>('groups');
+      await groupBox.clear();
+      debugPrint('✅ Cleared all groups from Hive');
+
+      // 5. Force delete from Firestore (cloud)
+      await repo.db
+          .collection('envelopes')
+          .where('userId', isEqualTo: repo.currentUserId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+        debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from Firestore');
+      });
+
+      await repo.db
+          .collection('transactions')
+          .where('userId', isEqualTo: repo.currentUserId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+        debugPrint('✅ Deleted ${snapshot.docs.length} transactions from Firestore');
+      });
+
+      await repo.db
+          .collection('scheduledPayments')
+          .where('userId', isEqualTo: repo.currentUserId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+        debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from Firestore');
+      });
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🔥 Nuclear reset complete! All data deleted from Hive and Firestore.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error during nuclear reset: $e');
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Nuclear reset failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
