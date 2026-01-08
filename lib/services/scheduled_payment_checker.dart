@@ -38,8 +38,11 @@ class ScheduledPaymentChecker {
 
       debugPrint('[ScheduledPaymentChecker] Checking ${upcomingPayments.length} payments due tomorrow');
 
-      // Get all envelopes once to avoid repeated queries
-      final allEnvelopes = await envelopeRepo.envelopesStream().first;
+      // Get all current user's envelopes once to avoid repeated queries
+      final fetchedEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+      final allEnvelopes = fetchedEnvelopes
+          .where((e) => e.userId == envelopeRepo.currentUserId)
+          .toList();
 
       for (final payment in upcomingPayments) {
         try {
@@ -185,8 +188,11 @@ class ScheduledPaymentChecker {
         return 0;
       }
 
-      // Get all envelopes
-      final allEnvelopes = await envelopeRepo.envelopesStream().first;
+      // Get all current user's envelopes
+      final fetchedEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+      final allEnvelopes = fetchedEnvelopes
+          .where((e) => e.userId == envelopeRepo.currentUserId)
+          .toList();
 
       // Group payments by envelope to calculate total upcoming deductions
       final Map<String, List<ScheduledPayment>> paymentsByEnvelope = {};

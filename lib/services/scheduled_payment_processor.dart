@@ -66,8 +66,12 @@ class ScheduledPaymentProcessor {
 
       debugPrint('Processing ${duePayments.length} automatic payments');
 
-      // Get all envelopes once to avoid repeated queries
-      final allEnvelopes = await envelopeRepo.envelopesStream().first;
+      // Get all current user's envelopes once to avoid repeated queries
+      // Only process payments for current user's envelopes, not partner's
+      final fetchedEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+      final allEnvelopes = fetchedEnvelopes
+          .where((e) => e.userId == envelopeRepo.currentUserId)
+          .toList();
 
       for (final payment in duePayments) {
         try {

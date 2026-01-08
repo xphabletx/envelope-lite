@@ -189,7 +189,11 @@ class HorizonController extends ChangeNotifier {
       final nextPayDayNormalized = DateTime(nextPayDay.year, nextPayDay.month, nextPayDay.day);
 
       final allPayments = await scheduledRepo.scheduledPaymentsStream.first;
-      final envelopes = await envelopeRepo.envelopesStream().first;
+      // Only get current user's envelopes for horizon calculations
+      final allEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+      final envelopes = allEnvelopes
+          .where((e) => e.userId == envelopeRepo.currentUserId)
+          .toList();
 
       debugPrint('[HorizonController] Checking ${allPayments.length} scheduled payments');
 

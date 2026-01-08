@@ -77,7 +77,11 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
     final envelopeRepo = context.read<EnvelopeRepo>();
     final accountRepo = context.read<AccountRepo>();
 
-    final envelopes = await envelopeRepo.getAllEnvelopes();
+    // Only show current user's envelopes for autopilot configuration
+    final allEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
+    final envelopes = allEnvelopes
+        .where((e) => e.userId == envelopeRepo.currentUserId)
+        .toList();
     final accounts = await accountRepo.getAllAccounts();
 
     setState(() {
