@@ -22,6 +22,8 @@ import '../services/bug_report_service.dart';
 import '../services/subscription_service.dart';
 import '../services/app_update_service.dart';
 import '../services/hive_service.dart';
+import '../services/pay_day_settings_service.dart';
+import '../services/scheduled_payment_repo.dart';
 import '../providers/workspace_provider.dart';
 import '../models/envelope.dart';
 import '../models/account.dart';
@@ -35,8 +37,6 @@ import '../screens/settings/tutorial_manager_screen.dart';
 import '../screens/settings/faq_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/debug/force_sync_screen.dart';
-import '../services/scheduled_payment_repo.dart';
-import '../services/pay_day_settings_service.dart';
 import '../widgets/tutorial_wrapper.dart';
 import '../data/tutorial_sequences.dart';
 import '../utils/responsive_helper.dart';
@@ -1155,12 +1155,14 @@ class SettingsScreen extends StatelessWidget {
       final groupRepo = GroupRepo(repo);
       final scheduledPaymentRepo = ScheduledPaymentRepo(repo.currentUserId);
       final accountRepo = AccountRepo(repo);
+      final payDaySettingsService = PayDaySettingsService(repo.db, repo.currentUserId);
 
       final dataExportService = DataExportService(
         envelopeRepo: repo,
         groupRepo: groupRepo,
         scheduledPaymentRepo: scheduledPaymentRepo,
-        accountRepo: accountRepo, // New: Pass AccountRepo
+        accountRepo: accountRepo,
+        payDaySettingsService: payDaySettingsService,
       );
 
       final filePath = await dataExportService.generateExcelFile();
