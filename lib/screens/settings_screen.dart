@@ -1333,10 +1333,10 @@ class SettingsScreen extends StatelessWidget {
         ),
         content: const Text(
           '🔥 THIS WILL PERMANENTLY DELETE:\n\n'
-          '• ALL envelopes (yours AND partner\'s in workspace)\n'
-          '• ALL transactions\n'
-          '• ALL scheduled payments\n'
-          '• ALL binders/groups\n'
+          '• ALL of YOUR envelopes (not partner\'s)\n'
+          '• ALL of YOUR transactions\n'
+          '• ALL of YOUR scheduled payments\n'
+          '• ALL of YOUR binders/groups\n'
           '• From BOTH Hive (local) AND Firestore (cloud)\n\n'
           '⚠️ THIS CANNOT BE UNDONE!\n\n'
           'Are you absolutely sure?',
@@ -1426,11 +1426,12 @@ class SettingsScreen extends StatelessWidget {
       if (workspaceId != null && workspaceId.isNotEmpty) {
         debugPrint('🔥 Detected workspace mode - deleting from workspace: $workspaceId');
 
-        // Delete workspace envelopes
+        // Delete workspace envelopes (only user's own)
         await repo.db
             .collection('workspaces')
             .doc(workspaceId)
             .collection('envelopes')
+            .where('userId', isEqualTo: repo.currentUserId)
             .get()
             .then((snapshot) async {
           for (var doc in snapshot.docs) {
@@ -1439,11 +1440,12 @@ class SettingsScreen extends StatelessWidget {
           debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from workspace collection');
         });
 
-        // Delete workspace transactions
+        // Delete workspace transactions (only user's own)
         await repo.db
             .collection('workspaces')
             .doc(workspaceId)
             .collection('transactions')
+            .where('userId', isEqualTo: repo.currentUserId)
             .get()
             .then((snapshot) async {
           for (var doc in snapshot.docs) {
@@ -1452,11 +1454,12 @@ class SettingsScreen extends StatelessWidget {
           debugPrint('✅ Deleted ${snapshot.docs.length} transactions from workspace collection');
         });
 
-        // Delete workspace scheduled payments
+        // Delete workspace scheduled payments (only user's own)
         await repo.db
             .collection('workspaces')
             .doc(workspaceId)
             .collection('scheduledPayments')
+            .where('userId', isEqualTo: repo.currentUserId)
             .get()
             .then((snapshot) async {
           for (var doc in snapshot.docs) {
