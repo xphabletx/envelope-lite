@@ -393,6 +393,7 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       MaterialPageRoute(
         builder: (_) => HomeScreen(
           repo: widget.repo,
+          scheduledPaymentRepo: _paymentRepo,
           initialIndex: 2,
           projectionDate: date,
         ),

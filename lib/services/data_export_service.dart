@@ -48,7 +48,7 @@ class DataExportService {
     final envelopeMap = {for (var envelope in envelopes) envelope.id: envelope.name};
     final accountMap = {for (var acc in accounts) acc.id: acc}; // Map for account lookup
 
-    _createSummarySheet(excel, envelopes);
+    _createSummarySheet(excel, envelopes, accounts);
     _createEnvelopesSheet(excel, envelopes, groupMap, accountMap); // Pass accountMap
     _createTransactionsSheet(excel, transactions, envelopeMap);
     _createScheduledPaymentsSheet(excel, scheduledPayments);
@@ -59,8 +59,10 @@ class DataExportService {
 
     // Save to Documents directory instead of temporary directory
     final directory = await getApplicationDocumentsDirectory();
+    final timestamp = DateTime.now();
+    final formattedDate = '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}';
     final filePath =
-        '${directory.path}/envelope_lite_export_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        '${directory.path}/stuffrite_export_$formattedDate.xlsx';
     final fileBytes = excel.save();
 
     if (fileBytes != null) {
@@ -73,33 +75,40 @@ class DataExportService {
     }
   }
 
-  void _createSummarySheet(Excel excel, List<Envelope> envelopes) {
+  void _createSummarySheet(Excel excel, List<Envelope> envelopes, List<Account> accounts) {
     final sheet = excel['Summary'];
     final headers = ['Metric', 'Value'];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
-    
+
     final headerRow = sheet.row(0);
     for (var cell in headerRow) {
         cell?.cellStyle = CellStyle(bold: true);
     }
 
-    final totalNetWorth = envelopes.fold<double>(0.0, (sum, env) => sum + env.currentAmount);
-    // Assuming 'Allocated' is the sum of all envelope balances.
-    // 'Unallocated' would depend on a total budget figure not provided here.
-    final totalAllocated = totalNetWorth;
-    const totalUnallocated = 0.0; 
+    // Calculate total envelope balance (assigned funds)
+    final totalEnvelopeBalance = envelopes.fold<double>(0.0, (sum, env) => sum + env.currentAmount);
 
-    sheet.appendRow([TextCellValue('Total Net Worth'), DoubleCellValue(totalNetWorth)]);
-    sheet.appendRow([TextCellValue('Total Allocated'), DoubleCellValue(totalAllocated)]);
-    sheet.appendRow([TextCellValue('Total Unallocated'), DoubleCellValue(totalUnallocated)]);
+    // Calculate total account balance
+    final totalAccountBalance = accounts.fold<double>(0.0, (sum, acc) => sum + acc.currentBalance);
+
+    // Available balance = total in accounts - total assigned to envelopes
+    final totalAvailable = totalAccountBalance - totalEnvelopeBalance;
+
+    // Net worth = all account balances (includes credit card debt as negative)
+    final netWorth = totalAccountBalance;
+
+    sheet.appendRow([TextCellValue('Total Net Worth'), DoubleCellValue(netWorth)]);
+    sheet.appendRow([TextCellValue('Total in Accounts'), DoubleCellValue(totalAccountBalance)]);
+    sheet.appendRow([TextCellValue('Total Assigned to Envelopes'), DoubleCellValue(totalEnvelopeBalance)]);
+    sheet.appendRow([TextCellValue('Available to Assign'), DoubleCellValue(totalAvailable)]);
     sheet.appendRow([TextCellValue('Export Date'), TextCellValue(DateTime.now().toIso8601String())]);
   }
 
   void _createEnvelopesSheet(Excel excel, List<Envelope> envelopes, Map<String?, String> groupMap, Map<String, Account> accountMap) {
     final sheet = excel['Envelopes'];
     final headers = [
-      'Name', 'Balance', 'Horizon Goal', 'Progress %', 'Group Name',
-      'Icon (emoji/text)', 'Is Shared', 'Cash Flow Settings', 'Linked Account Name' // Updated header
+      'Name', 'Current Balance', 'Target Amount', 'Progress %', 'Group Name',
+      'Icon', 'Is Shared', 'Auto-Fill Settings', 'Linked Account Name'
     ];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
 
@@ -114,7 +123,7 @@ class DataExportService {
           ? (envelope.currentAmount / envelope.targetAmount! * 100)
           : 0.0;
       final autoFillSettings = envelope.cashFlowEnabled
-          ? 'Enabled: ${envelope.cashFlowAmount ?? 0.0}'
+          ? 'Enabled (${envelope.cashFlowAmount ?? 0.0})'
           : 'Disabled';
       
       final linkedAccountName = envelope.linkedAccountId != null
@@ -138,7 +147,7 @@ class DataExportService {
   void _createTransactionsSheet(Excel excel, List<Transaction> transactions, Map<String, String> envelopeMap) {
     final sheet = excel['Transactions'];
     final headers = [
-      'Date', 'Amount', 'Type', 'Envelope Name', 'Description/Note', 'Who made it (User Name)'
+      'Date', 'Amount', 'Type', 'Envelope Name', 'Description', 'User ID'
     ];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
     
@@ -178,7 +187,7 @@ class DataExportService {
 
   void _createScheduledPaymentsSheet(Excel excel, List<ScheduledPayment> payments) {
     final sheet = excel['Scheduled Payments'];
-    final headers = ['Name', 'Amount', 'Frequency', 'Next Due Date', 'Auto-Pay status'];
+    final headers = ['Name', 'Amount', 'Frequency', 'Next Due Date', 'Auto-Pay Enabled'];
     sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
     
     final headerRow = sheet.row(0);
@@ -188,12 +197,13 @@ class DataExportService {
 
 
     for (final payment in payments) {
+      final frequency = 'Every ${payment.frequencyValue} ${payment.frequencyUnit.name}';
       sheet.appendRow([
         TextCellValue(payment.name),
         DoubleCellValue(payment.amount),
-        TextCellValue('N/A'), // Placeholder for frequency
+        TextCellValue(frequency),
         TextCellValue(payment.nextDueDate.toIso8601String()),
-        TextCellValue('N/A'), // Placeholder for autoPay
+        TextCellValue(payment.isAutomatic.toString()),
       ]);
     }
   }
@@ -239,7 +249,7 @@ class DataExportService {
                 await SharePlus.instance.share(
                   ShareParams(
                     files: [XFile(filePath)],
-                    text: 'Envelope Lite Data Export',
+                    text: 'Stuffrite Data Export',
                   ),
                 );
               },

@@ -5,9 +5,11 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../models/account.dart';
 import '../models/pay_day_settings.dart';
+import '../models/scheduled_payment.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/account_repo.dart';
+import '../services/scheduled_payment_repo.dart';
 
 enum CockpitPhase {
   amountEntry,
@@ -26,12 +28,14 @@ class PayDayCockpitProvider extends ChangeNotifier {
   final EnvelopeRepo envelopeRepo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final ScheduledPaymentRepo scheduledPaymentRepo;
   final String userId;
 
   PayDayCockpitProvider({
     required this.envelopeRepo,
     required this.groupRepo,
     required this.accountRepo,
+    required this.scheduledPaymentRepo,
     required this.userId,
   });
 
@@ -64,6 +68,15 @@ class PayDayCockpitProvider extends ChangeNotifier {
   // Autopilot reserves (calculated from cash flow enabled items)
   double _autopilotReserve = 0.0;
   double get autopilotReserve => _autopilotReserve;
+
+  // Autopilot upcoming payments (scheduled payments due before next pay day)
+  double _autopilotUpcoming = 0.0;
+  double get autopilotUpcoming => _autopilotUpcoming;
+  final List<ScheduledPayment> _upcomingPayments = [];
+  List<ScheduledPayment> get upcomingPayments => _upcomingPayments;
+  final Map<String, bool> _autopilotPreparedness = {}; // envelopeId -> isPrepared
+  Map<String, bool> get autopilotPreparedness => _autopilotPreparedness;
+
   double get availableFuel => _externalInflow - _autopilotReserve;
   double get unallocatedFuel => availableFuel - _manualAllocations;
 
@@ -152,6 +165,9 @@ class PayDayCockpitProvider extends ChangeNotifier {
       // Initialize allocations with cash flow enabled envelopes
       _calculateAutopilotAllocations();
 
+      // Calculate upcoming autopilot payments
+      await _calculateUpcomingAutopilotPayments();
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -170,6 +186,78 @@ class PayDayCockpitProvider extends ChangeNotifier {
         _allocations[env.id] = env.cashFlowAmount!;
         _autopilotReserve += env.cashFlowAmount!;
       }
+    }
+  }
+
+  Future<void> _calculateUpcomingAutopilotPayments() async {
+    _upcomingPayments.clear();
+    _autopilotUpcoming = 0.0;
+    _autopilotPreparedness.clear();
+
+    try {
+      // Get pay day settings to determine next pay day
+      final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
+      final settings = payDayBox.get(userId);
+
+      if (settings == null || settings.lastPayDate == null) {
+        return; // No pay settings configured yet
+      }
+
+      final DateTime lastPayDate = settings.lastPayDate!;
+      final String frequency = settings.payFrequency;
+
+      // Calculate next pay day based on frequency
+      DateTime nextPayDay;
+      switch (frequency.toLowerCase()) {
+        case 'weekly':
+          nextPayDay = lastPayDate.add(const Duration(days: 7));
+          break;
+        case 'biweekly':
+          nextPayDay = lastPayDate.add(const Duration(days: 14));
+          break;
+        case 'semimonthly':
+          nextPayDay = lastPayDate.add(const Duration(days: 15));
+          break;
+        case 'monthly':
+          nextPayDay = DateTime(
+            lastPayDate.month == 12 ? lastPayDate.year + 1 : lastPayDate.year,
+            lastPayDate.month == 12 ? 1 : lastPayDate.month + 1,
+            lastPayDate.day,
+          );
+          break;
+        default:
+          nextPayDay = lastPayDate.add(const Duration(days: 30));
+      }
+
+      final now = DateTime.now();
+
+      // Get all scheduled payments
+      final allPayments = await scheduledPaymentRepo.scheduledPaymentsStream.first;
+
+      // Filter payments due before next pay day
+      for (final payment in allPayments) {
+        if (payment.nextDueDate.isBefore(nextPayDay) && payment.nextDueDate.isAfter(now)) {
+          _upcomingPayments.add(payment);
+          _autopilotUpcoming += payment.amount;
+
+          // Check preparedness: does the envelope have enough balance?
+          if (payment.envelopeId != null) {
+            final envelope = _allEnvelopes.firstWhere(
+              (e) => e.id == payment.envelopeId,
+              orElse: () => Envelope(
+                id: payment.envelopeId!,
+                name: '',
+                userId: userId,
+                currentAmount: 0,
+              ),
+            );
+
+            _autopilotPreparedness[payment.envelopeId!] = envelope.currentAmount >= payment.amount;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[PayDayCockpit] Error calculating autopilot payments: $e');
     }
   }
 

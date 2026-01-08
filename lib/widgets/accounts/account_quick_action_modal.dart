@@ -170,14 +170,28 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
       return;
     }
 
-    if ((widget.type == TransactionType.withdrawal ||
-            widget.type == TransactionType.transfer) &&
-        amount > widget.account.currentBalance) {
-      _showErrorDialog(
-        'Insufficient Funds',
-        'The account does not have enough funds for this transaction.',
-      );
-      return;
+    // Validate sufficient funds based on account type
+    if (widget.type == TransactionType.withdrawal ||
+        widget.type == TransactionType.transfer) {
+      if (widget.account.isCreditCard) {
+        // For credit cards, check available credit
+        if (amount > widget.account.availableCredit) {
+          _showErrorDialog(
+            'Credit Limit Exceeded',
+            'This transaction would exceed your credit limit.\nAvailable credit: ${widget.account.availableCredit.toStringAsFixed(2)}',
+          );
+          return;
+        }
+      } else {
+        // For regular accounts, check current balance
+        if (amount > widget.account.currentBalance) {
+          _showErrorDialog(
+            'Insufficient Funds',
+            'The account does not have enough funds for this transaction.',
+          );
+          return;
+        }
+      }
     }
 
     if (widget.type == TransactionType.transfer && _selectedTargetId == null) {
@@ -405,24 +419,35 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
                       return DropdownMenuItem(
                         value: dest.id,
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            dest.icon,
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: dest.icon,
+                            ),
                             const SizedBox(width: 8),
-                            Flexible(
+                            Expanded(
+                              flex: 2,
                               child: Text(
                                 dest.name,
                                 overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                                 style: fontProvider.getTextStyle(fontSize: 16),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 4),
                             // Balance
-                            Text(
-                              '${locale.currencySymbol}${dest.balance.toStringAsFixed(2)}',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 14,
-                                color: theme.colorScheme.onSurface.withAlpha(153),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '${locale.currencySymbol}${dest.balance.toStringAsFixed(2)}',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 14,
+                                    color: theme.colorScheme.onSurface.withAlpha(153),
+                                  ),
+                                ),
                               ),
                             ),
                           ],

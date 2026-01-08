@@ -51,6 +51,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
   final GlobalKey _envelopeCardKey = GlobalKey();
   final GlobalKey _transactionListKey = GlobalKey();
   final GlobalKey _fabKey = GlobalKey();
+  final GlobalKey _cashFlowChipKey = GlobalKey();
+  final GlobalKey _autopilotChipKey = GlobalKey();
 
   // Initialize repos once
   late final GroupRepo _groupRepo;
@@ -202,6 +204,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
             groupRepo: _groupRepo,
             accountRepo: _accountRepo,
             scheduledPaymentRepo: _scheduledPaymentRepo,
+            cashFlowChipKey: _cashFlowChipKey,
+            autopilotChipKey: _autopilotChipKey,
           ),
 
           // ---------------------------------------------------
@@ -267,6 +271,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
               groupRepo: _groupRepo,
               accountRepo: _accountRepo,
               scheduledPaymentRepo: _scheduledPaymentRepo,
+              cashFlowChipKey: _cashFlowChipKey,
+              autopilotChipKey: _autopilotChipKey,
             ),
 
             // Target Status Card
@@ -465,6 +471,8 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
                           'envelopeCard': _envelopeCardKey,
                           'transactionList': _transactionListKey,
                           'fab': _fabKey,
+                          'cash_flow_card': _cashFlowChipKey,
+                          'autopilot_card': _autopilotChipKey,
                         },
                         child: GestureDetector(
                           onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(details, sortedEnvelopes),

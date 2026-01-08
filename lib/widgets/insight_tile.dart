@@ -8,7 +8,6 @@ import '../models/insight_data.dart';
 import '../models/pay_day_settings.dart';
 import '../services/pay_day_settings_service.dart';
 import '../services/envelope_repo.dart';
-import '../models/envelope.dart';
 import '../providers/font_provider.dart';
 import '../providers/locale_provider.dart';
 import '../utils/calculator_helper.dart';
@@ -20,7 +19,8 @@ class InsightTile extends StatefulWidget {
   final InsightData? initialData;
   final bool initiallyExpanded;
   final double? startingAmount; // NEW: Starting amount to calculate gap
-  final EnvelopeRepo? envelopeRepo; // Optional: for calculating existing commitments
+  final EnvelopeRepo?
+  envelopeRepo; // Optional: for calculating existing commitments
 
   const InsightTile({
     super.key,
@@ -86,6 +86,19 @@ class _InsightTileState extends State<InsightTile> {
     _horizonAmountCtrl.addListener(_recalculate);
     _autopilotAmountCtrl.addListener(_recalculate);
     _manualCashFlowCtrl.addListener(_updateManualOverride);
+  }
+
+  @override
+  void didUpdateWidget(InsightTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Recalculate if starting amount changed
+    if (widget.startingAmount != oldWidget.startingAmount) {
+      debugPrint(
+        '[InsightTile] 🔄 Starting amount changed: ${oldWidget.startingAmount} -> ${widget.startingAmount}',
+      );
+      _recalculate();
+    }
   }
 
   Future<void> _loadExistingCommitments() async {
@@ -266,7 +279,10 @@ class _InsightTileState extends State<InsightTile> {
       if (gap > 0) {
         // If autopilot has a first date set, calculate actual pay periods until that date
         if (_data.autopilotFirstDate != null) {
-          autopilotPeriods = _calculatePayPeriods(nextPayDate, _data.autopilotFirstDate!);
+          autopilotPeriods = _calculatePayPeriods(
+            nextPayDate,
+            _data.autopilotFirstDate!,
+          );
           if (autopilotPeriods > 0) {
             totalCashFlow += gap / autopilotPeriods.toDouble();
           } else {
@@ -719,7 +735,9 @@ class _InsightTileState extends State<InsightTile> {
                   'Adjust targets based on your actual financial situation.',
                   style: fontProvider.getTextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ),
@@ -1270,7 +1288,8 @@ class _InsightTileState extends State<InsightTile> {
                       isSubItem: true,
                     ),
                   ],
-                  if (_data.payPeriodsToAutopilot != null && _data.payPeriodsToAutopilot! > 0) ...[
+                  if (_data.payPeriodsToAutopilot != null &&
+                      _data.payPeriodsToAutopilot! > 0) ...[
                     _buildCalculationRow(
                       '   Pay periods until due:',
                       '${_data.payPeriodsToAutopilot}',
@@ -1392,7 +1411,7 @@ class _InsightTileState extends State<InsightTile> {
                   child: Text(
                     _payDaySettings == null
                         ? 'Configure Pay Day settings for automatic calculations, or enter a manual amount below'
-                        : 'Enter a Horizon or Autopilot amount above for automatic calculations, or use manual input below',
+                        : 'Enter a Horizon or Autopilot amount and date above for automatic calculations, or use manual input below',
                     style: fontProvider.getTextStyle(fontSize: 13),
                   ),
                 ),
@@ -1554,13 +1573,17 @@ class _InsightTileState extends State<InsightTile> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: fontProvider.getTextStyle(
-              fontSize: isSubItem ? 12 : 14,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          Flexible(
+            child: Text(
+              label,
+              style: fontProvider.getTextStyle(
+                fontSize: isSubItem ? 12 : 14,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: fontProvider.getTextStyle(

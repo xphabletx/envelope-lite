@@ -10,9 +10,6 @@ import 'stuffrite_paywall_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../services/cloud_migration_service.dart';
-import '../../services/subscription_service.dart';
-import '../../providers/theme_provider.dart';
-import '../../providers/locale_provider.dart';
 import '../../providers/workspace_provider.dart';
 import '../../widgets/migration_overlay.dart';
 import '../../main.dart';
@@ -153,8 +150,10 @@ class _UserProfileWrapper extends StatefulWidget {
 
 class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   final CloudMigrationService _migrationService = CloudMigrationService();
-  bool _restorationComplete = false;
+  // Start as true since restoration already happened during splash screen
+  bool _restorationComplete = true;
   bool? _hasCompletedOnboarding;
+  bool? _hasPremiumSubscription;
 
   // Cache the onboarding flow widget to prevent recreation on rebuilds
   Widget? _cachedOnboardingFlow;
@@ -162,8 +161,11 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   @override
   void initState() {
     super.initState();
-    // Start restoration immediately (but only once per user)
-    _performRestoration();
+    // Check onboarding status (restoration and subscription already done during splash)
+    _checkOnboardingAndInitialize();
+    // Assume premium since subscription was validated during splash
+    // If they didn't have premium, they wouldn't have made it this far
+    _hasPremiumSubscription = true;
   }
 
   @override
@@ -172,28 +174,24 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     super.dispose();
   }
 
-  Future<void> _performRestoration() async {
+  Future<void> _checkOnboardingAndInitialize() async {
     // Prevent re-initialization if already done for this user
     final userId = widget.user.uid;
     if (AuthWrapperState.isInitialized(userId)) {
-      // Still need to check onboarding status and mark restoration complete
+      // Just check onboarding status - restoration already done during splash
       final completed = await _checkOnboardingStatus(userId);
       if (mounted) {
         setState(() {
           _hasCompletedOnboarding = completed;
-          _restorationComplete = true;
         });
       }
       return;
     }
     AuthWrapperState.markInitialized(userId);
 
-    // Initialize providers (local-only)
-    Provider.of<ThemeProvider>(context, listen: false).initialize();
-    Provider.of<LocaleProvider>(
-      context,
-      listen: false,
-    ).initialize(widget.user.uid);
+    // NOTE: Providers and data restoration are now handled during splash screen
+    // in AuthGate._initializeApp() to provide a seamless user experience.
+    // We only need to check onboarding status here.
 
     // Check if user is brand new (first sign-in)
     final creationTime = widget.user.metadata.creationTime;
@@ -208,39 +206,14 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
       // CRITICAL: Clear Hive data if it belongs to a different user
       // BUT: Don't clear onboarding flags - user may have completed offline
       await AuthService.clearHiveIfDifferentUser(widget.user.uid);
-
-      // Check onboarding status (will use "completion wins" logic)
-      final completed = await _checkOnboardingStatus(widget.user.uid);
-
-      if (mounted) {
-        setState(() {
-          _hasCompletedOnboarding = completed;
-          _restorationComplete = true;
-        });
-      }
-      return;
     }
 
-    // Returning user - perform restoration check
-    // Get workspace ID from provider
-    final workspaceProvider = Provider.of<WorkspaceProvider>(
-      context,
-      listen: false,
-    );
-    final workspaceId = workspaceProvider.workspaceId;
-
-    await _migrationService.migrateIfNeeded(
-      userId: widget.user.uid,
-      workspaceId: workspaceId,
-    );
-
-    // Check if user has completed onboarding (after restoration completes)
+    // Check onboarding status (will use "completion wins" logic)
     final completed = await _checkOnboardingStatus(widget.user.uid);
 
     if (mounted) {
       setState(() {
         _hasCompletedOnboarding = completed;
-        _restorationComplete = true;
       });
     }
   }
@@ -274,31 +247,15 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     }
 
     // User has completed onboarding - check subscription
-    return FutureBuilder<bool>(
-      future: SubscriptionService().hasActiveSubscription(
-        userEmail: widget.user.email,
-      ),
-      builder: (context, subscriptionSnapshot) {
-        // Show loading while checking subscription
-        if (subscriptionSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+    // Subscription was pre-checked during splash, so we optimistically show home
+    if (_hasPremiumSubscription == false) {
+      // Only show paywall if we have confirmed NO premium
+      return const StuffritePaywallScreen();
+    }
 
-        // Check subscription status (includes VIP bypass logic)
-        final hasPremium = subscriptionSnapshot.data ?? false;
-
-        if (!hasPremium) {
-          // No premium subscription - show paywall
-          return const StuffritePaywallScreen();
-        }
-
-        // User has premium and completed onboarding - go to home
-        // Use UniqueKey to force new widget instance and prevent state leakage
-        return HomeScreenWrapper(key: UniqueKey());
-      },
-    );
+    // User has premium (or check in progress) - show home
+    // Use stable key based on user ID
+    return HomeScreenWrapper(key: ValueKey('home_${widget.user.uid}'));
   }
 
   /// Check if user has completed onboarding

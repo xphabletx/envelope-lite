@@ -8,11 +8,13 @@ import '../../providers/font_provider.dart';
 class TemplateEnvelopeSelector extends StatefulWidget {
   final String userId;
   final String? existingBinderId; // If adding to an existing binder
+  final bool singleSelectionMode; // If true, only allow selecting one envelope
 
   const TemplateEnvelopeSelector({
     super.key,
     required this.userId,
     this.existingBinderId,
+    this.singleSelectionMode = false, // Default to multiple selection for backward compatibility
   });
 
   @override
@@ -32,7 +34,9 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Select Template Envelopes',
+          widget.singleSelectionMode
+            ? 'Select Template Envelope'
+            : 'Select Template Envelopes',
           style: fontProvider.getTextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -44,7 +48,7 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
                 ? null
                 : () => _proceedToQuickSetup(),
             child: Text(
-              'Next',
+              widget.singleSelectionMode ? 'Select' : 'Next',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -71,7 +75,9 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Choose envelopes from any template',
+                  widget.singleSelectionMode
+                    ? 'Choose one envelope from any template'
+                    : 'Choose envelopes from any template',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -80,8 +86,10 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
                 const SizedBox(height: 8),
                 Text(
                   _getTotalSelectedCount() == 0
-                      ? 'No envelopes selected'
-                      : '${_getTotalSelectedCount()} envelope(s) selected',
+                      ? 'No envelope selected'
+                      : widget.singleSelectionMode
+                        ? '1 envelope selected'
+                        : '${_getTotalSelectedCount()} envelope(s) selected',
                   style: TextStyle(
                     fontSize: 14,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -140,22 +148,24 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
 
                       if (isExpanded) ...[
                         const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Row(
-                            children: [
-                              TextButton(
-                                onPressed: () => _selectAllFromTemplate(template),
-                                child: const Text('Select All'),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () => _deselectAllFromTemplate(template),
-                                child: const Text('Deselect All'),
-                              ),
-                            ],
+                        // Only show Select All / Deselect All in multi-select mode
+                        if (!widget.singleSelectionMode)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () => _selectAllFromTemplate(template),
+                                  child: const Text('Select All'),
+                                ),
+                                const SizedBox(width: 8),
+                                TextButton(
+                                  onPressed: () => _deselectAllFromTemplate(template),
+                                  child: const Text('Deselect All'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                         ...template.envelopes.map((envelope) {
                           final isSelected = _selectedEnvelopesByTemplate[template.id]
                                   ?.contains(envelope.id) ??
@@ -165,6 +175,11 @@ class _TemplateEnvelopeSelectorState extends State<TemplateEnvelopeSelector> {
                             value: isSelected,
                             onChanged: (checked) {
                               setState(() {
+                                // In single selection mode, clear all previous selections
+                                if (widget.singleSelectionMode && checked == true) {
+                                  _selectedEnvelopesByTemplate.clear();
+                                }
+
                                 _selectedEnvelopesByTemplate.putIfAbsent(
                                   template.id,
                                   () => {},

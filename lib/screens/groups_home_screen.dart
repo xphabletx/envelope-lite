@@ -7,6 +7,7 @@ import '../models/envelope.dart';
 import '../models/envelope_group.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
+import '../services/scheduled_payment_repo.dart';
 import '../services/workspace_helper.dart';
 import '../widgets/group_editor.dart' as editor;
 import '../widgets/partner_badge.dart';
@@ -191,6 +192,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                       ElevatedButton.icon(
                         onPressed: () {
                           final accountRepo = AccountRepo(widget.repo);
+                          final scheduledPaymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -198,6 +200,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                 repo: widget.repo,
                                 groupRepo: widget.groupRepo,
                                 accountRepo: accountRepo,
+                                scheduledPaymentRepo: scheduledPaymentRepo,
                               ),
                             ),
                           );
@@ -308,6 +311,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                           ElevatedButton.icon(
                             onPressed: timeMachine.isActive ? null : () {
                               final accountRepo = AccountRepo(widget.repo);
+                              final scheduledPaymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -315,6 +319,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                     repo: widget.repo,
                                     groupRepo: widget.groupRepo,
                                     accountRepo: accountRepo,
+                                    scheduledPaymentRepo: scheduledPaymentRepo,
                                   ),
                                 ),
                               );
@@ -367,6 +372,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                         ElevatedButton.icon(
                           onPressed: timeMachine.isActive ? null : () {
                             final accountRepo = AccountRepo(widget.repo);
+                            final scheduledPaymentRepo = ScheduledPaymentRepo(widget.repo.currentUserId);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -374,6 +380,7 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
                                   repo: widget.repo,
                                   groupRepo: widget.groupRepo,
                                   accountRepo: accountRepo,
+                                  scheduledPaymentRepo: scheduledPaymentRepo,
                                 ),
                               ),
                             );
@@ -989,13 +996,19 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                       color: widget.binderColors.binderColor,
                                     ),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      tr('home_envelopes_tab'),
-                                      style: fontProvider.getTextStyle(
-                                        fontSize: responsive.isLandscape ? 12 : 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: widget.binderColors.envelopeTextColor
-                                            .withAlpha(179),
+                                    Flexible(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          tr('home_envelopes_tab'),
+                                          style: fontProvider.getTextStyle(
+                                            fontSize: responsive.isLandscape ? 12 : 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: widget.binderColors.envelopeTextColor
+                                                .withAlpha(179),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1253,8 +1266,12 @@ class _InfiniteEnvelopeList extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Row(
                     children: [
-                      envelope.getIconWidget(theme, size: iconSize),
-                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: iconSize,
+                        height: iconSize,
+                        child: envelope.getIconWidget(theme, size: iconSize),
+                      ),
+                      SizedBox(width: isLandscape ? 4 : 6),
                       Expanded(
                         child: Text(
                           envelope.name,

@@ -28,6 +28,8 @@ import 'common/smart_text_field.dart';
 import '../models/creation_context.dart';
 import '../models/insight_data.dart';
 import 'insight_tile.dart';
+import 'binder/template_envelope_selector.dart';
+import '../data/binder_templates.dart';
 
 // FULL SCREEN DIALOG IMPLEMENTATION
 Future<void> showEnvelopeCreator(
@@ -257,13 +259,61 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     }
   }
 
+  Future<void> _pickFromTemplate() async {
+    // Navigate to template selector (which allows selecting from ANY template)
+    final selectedEnvelopes = await Navigator.push<Map<String, Set<String>>>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => TemplateEnvelopeSelector(
+          userId: widget.userId,
+          singleSelectionMode: true, // Only allow selecting one envelope
+        ),
+      ),
+    );
+
+    if (selectedEnvelopes == null || selectedEnvelopes.isEmpty || !mounted) {
+      return;
+    }
+
+    // User selected envelope(s) from templates
+    // For envelope creator, we'll use the first selected envelope to populate the form
+    String? firstTemplateId;
+    String? firstEnvelopeId;
+
+    for (final entry in selectedEnvelopes.entries) {
+      if (entry.value.isNotEmpty) {
+        firstTemplateId = entry.key;
+        firstEnvelopeId = entry.value.first;
+        break;
+      }
+    }
+
+    if (firstTemplateId == null || firstEnvelopeId == null) return;
+
+    // Find the template and envelope
+    final template = binderTemplates.firstWhere((t) => t.id == firstTemplateId);
+    final templateEnvelope = template.envelopes.firstWhere((e) => e.id == firstEnvelopeId);
+
+    // Populate form fields with template data
+    setState(() {
+      _nameCtrl.text = templateEnvelope.name;
+      _iconType = 'emoji';
+      _iconValue = templateEnvelope.emoji;
+
+      if (templateEnvelope.defaultAmount != null) {
+        _amtCtrl.text = templateEnvelope.defaultAmount!.toStringAsFixed(2);
+      }
+    });
+  }
+
   Widget _buildIconPreview(ThemeData theme) {
     // If no icon selected yet, show default
     if (_iconType == null || _iconValue == null) {
       return Image.asset(
         'assets/default/stufficon.png',
-        width: 24,
-        height: 24,
+        width: 40,
+        height: 40,
       );
     }
 
@@ -278,9 +328,9 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     );
 
     return SizedBox(
-      width: 24,
-      height: 24,
-      child: tempEnvelope.getIconWidget(theme, size: 24),
+      width: 40,
+      height: 40,
+      child: tempEnvelope.getIconWidget(theme, size: 40),
     );
   }
 
@@ -639,6 +689,26 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Template selector button
+                        OutlinedButton.icon(
+                          onPressed: _pickFromTemplate,
+                          icon: const Icon(Icons.auto_awesome),
+                          label: Text(
+                            'Pick from Template',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
                         // Name field
                         SmartTextFormField(
                           controller: _nameCtrl,

@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -11,6 +12,7 @@ import '../services/subscription_service.dart';
 import '../services/hive_service.dart';
 import '../services/repository_manager.dart';
 import '../providers/workspace_provider.dart';
+import '../providers/repository_provider.dart';
 import '../main.dart' show navigatorKey;
 import '../screens/auth/auth_wrapper.dart' show AuthWrapperState;
 
@@ -378,13 +380,48 @@ class AuthService {
 
   static Future<void> signOut() async {
     try {
-      // STEP 0: Clear auth wrapper initialization state
+      // STEP 0: Sync onboarding status to Firestore BEFORE clearing local data
+      // This ensures the user doesn't lose their onboarding progress
+      final currentUser = _auth.currentUser;
+      if (currentUser != null && !currentUser.isAnonymous) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final hasCompletedOnboarding = prefs.getBool('hasCompletedOnboarding_${currentUser.uid}') ?? false;
+
+          if (hasCompletedOnboarding) {
+            debugPrint('[AuthService] 🔄 Syncing onboarding completion to Firestore before logout');
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUser.uid)
+                .set({
+              'hasCompletedOnboarding': true,
+              'lastSyncAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+            debugPrint('[AuthService] ✅ Onboarding status synced to Firestore');
+          }
+        } catch (e) {
+          debugPrint('[AuthService] ⚠️ Failed to sync onboarding status: $e');
+          // Continue with logout even if sync fails
+        }
+      }
+
+      // STEP 1: Clear auth wrapper initialization state
       // This allows the next user to run through initialization properly
       AuthWrapperState.clearInitializationState();
 
-      // STEP 1: Dispose all repositories FIRST to cancel Firestore streams
+      // STEP 2: Dispose all repositories to cancel Firestore streams
       // This prevents PERMISSION_DENIED errors when we sign out from Firebase
       RepositoryManager().disposeAllRepositories();
+
+      // Also clear the RepositoryProvider if available
+      try {
+        final context = navigatorKey.currentContext;
+        if (context != null) {
+          Provider.of<RepositoryProvider>(context, listen: false).clearRepositories();
+        }
+      } catch (e) {
+        // Continue if provider not available
+      }
 
       // STEP 2: HARD-KILL Firestore listeners at engine level
       // This is the ONLY way to guarantee PERMISSION_DENIED errors stop
@@ -477,12 +514,25 @@ class AuthService {
   }) async {
     if (user == null) return;
     final users = FirebaseFirestore.instance.collection('users');
-    await users.doc(user.uid).set({
-      'displayName': displayNameOverride ?? user.displayName,
+
+    // Build the user document with all required fields
+    final Map<String, dynamic> userData = {
+      'displayName': displayNameOverride ?? user.displayName ?? user.email?.split('@').first ?? 'User',
       'email': user.email,
       'providers': user.providerData.map((p) => p.providerId).toList(),
       'lastLoginAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      // UserProfile fields (only set on first creation, not on subsequent logins)
+      'selectedTheme': 'latte_love',
+      'hasCompletedOnboarding': false,
+      'showTutorial': true,
+    };
+
+    // Add photoURL if available (Google/Apple sign-in provides this)
+    if (user.photoURL != null) {
+      userData['photoURL'] = user.photoURL;
+    }
+
+    await users.doc(user.uid).set(userData, SetOptions(merge: true));
   }
 }

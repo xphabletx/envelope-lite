@@ -738,11 +738,17 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
             children: [
               const Icon(Icons.emoji_events, color: Colors.amber, size: 24),
               const SizedBox(width: 8),
-              Text(
-                'Top Envelopes',
-                style: fontProvider.getTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Top Envelopes',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -772,16 +778,24 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                         env.name,
                         style: fontProvider.getTextStyle(fontSize: 14),
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
-                    Consumer<LocaleProvider>(
-                      builder: (context, locale, _) => Text(
-                        NumberFormat.currency(
-                          symbol: locale.currencySymbol,
-                        ).format(env.currentAmount),
-                        style: fontProvider.getTextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Consumer<LocaleProvider>(
+                        builder: (context, locale, _) => FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            NumberFormat.currency(
+                              symbol: locale.currencySymbol,
+                            ).format(env.currentAmount),
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ),

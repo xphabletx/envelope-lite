@@ -78,7 +78,7 @@ const bindersTutorial = TutorialSequence(
       emoji: '📖',
       title: 'Open Book Design',
       description:
-          'Swipe horizontally to browse your binders like a book! Left page shows envelopes, right shows stats! 📚',
+          'Swipe horizontally to browse your binders! Left page shows envelopes, right shows stats! 📚',
       spotlightWidgetKey: null,
     ),
     TutorialStep(
@@ -86,7 +86,7 @@ const bindersTutorial = TutorialSequence(
       emoji: '📜',
       title: 'Binder Transaction History',
       description:
-          'Each binder tracks ALL transactions from every envelope inside it! Tap "View History" to see the full picture! 👀',
+          'Each binder tracks ALL transactions from every envelope inside it! Tap "Binder Total" to see the full picture! 👀',
       spotlightWidgetKey: 'view_history_button',
     ),
     TutorialStep(
@@ -94,7 +94,7 @@ const bindersTutorial = TutorialSequence(
       emoji: '⚡',
       title: 'Quick Envelope Access',
       description:
-          'Tap any envelope in your binder to jump straight into it! No need to go back home! 🏃‍♂️',
+          'Tap any envelope in your binder twice to jump straight into it! No need to go back home! 🏃‍♂️',
       spotlightWidgetKey: null,
     ),
   ],
@@ -105,20 +105,19 @@ const envelopeDetailTutorial = TutorialSequence(
   screenName: 'Envelope Details',
   steps: [
     TutorialStep(
-      id: 'calculator_chip',
-      emoji: '🧮',
-      title: 'Built-in Calculator',
-      description:
-          'See that calculator chip? Tap it when entering amounts! No need to open another app! 💡',
-      spotlightWidgetKey: 'calculator_chip',
+      id: 'cash_flow',
+      emoji: '💡',
+      title: 'Insight Intelligence',
+      description: 'Tap the Insight chip to enable smart financial planning! Let AI analyze your envelope and suggest optimal cash flow amounts! 🤖',
+      spotlightWidgetKey: 'cash_flow_card',
     ),
     TutorialStep(
-      id: 'month_navigation',
-      emoji: '📅',
-      title: 'Month Navigation',
+      id: 'autopilot',
+      emoji: '🚀',
+      title: 'Autopilot Automation',
       description:
-          'Filter transactions by month! Swipe or use the < > arrows to browse your spending history! 📊',
-      spotlightWidgetKey: 'month_selector',
+          'Tap the Autopilot chip to schedule automatic deposits or withdrawals! Set it once and never worry about it again! ⚡',
+      spotlightWidgetKey: 'autopilot_card',
     ),
     TutorialStep(
       id: 'horizon_suggestions',

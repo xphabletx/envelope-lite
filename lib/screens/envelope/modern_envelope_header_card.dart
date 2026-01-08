@@ -24,6 +24,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
     required this.groupRepo,
     required this.accountRepo,
     required this.scheduledPaymentRepo,
+    this.cashFlowChipKey,
+    this.autopilotChipKey,
   });
 
   final Envelope envelope;
@@ -31,6 +33,8 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
   final ScheduledPaymentRepo scheduledPaymentRepo;
+  final GlobalKey? cashFlowChipKey;
+  final GlobalKey? autopilotChipKey;
 
   void _showScheduledPaymentsList(
     BuildContext context,
@@ -514,6 +518,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                   Expanded(
                     flex: 1,
                     child: _InfoChip(
+                      key: cashFlowChipKey,
                       icon: Icons.autorenew,
                       label: envelope.cashFlowEnabled
                           ? 'Cash Flow: ${currency.format(envelope.cashFlowAmount ?? 0)}'
@@ -552,6 +557,7 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
                   Expanded(
                     flex: 1,
                     child: _InfoChip(
+                      key: autopilotChipKey,
                       icon: Icons.calendar_month,
                       label: hasPayments
                           ? (payments.length > 1
@@ -640,6 +646,7 @@ class _InfoChip extends StatelessWidget {
   final VoidCallback onTap;
 
   const _InfoChip({
+    super.key,
     required this.icon,
     required this.label,
     required this.subLabel,
@@ -723,17 +730,22 @@ class ClosedEnvelopePainter extends CustomPainter {
     // 1. Draw Body
     canvas.drawRRect(rrect, bodyPaint);
 
-    // 2. Draw "Seam" lines
+    // 2. Draw "Seam" lines (clipped to stay within rounded corners)
     final seamPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.05)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
     final seamPath = Path();
-    seamPath.moveTo(0, size.height);
+    // Start slightly inside the bottom-left corner to avoid extending past rounded edges
+    seamPath.moveTo(24, size.height);
     seamPath.lineTo(size.width / 2, size.height * 0.55);
-    seamPath.lineTo(size.width, size.height);
+    seamPath.lineTo(size.width - 24, size.height);
+
+    canvas.save();
+    canvas.clipRRect(rrect);
     canvas.drawPath(seamPath, seamPaint);
+    canvas.restore();
 
     // 3. Draw Flap
     final flapPath = Path();

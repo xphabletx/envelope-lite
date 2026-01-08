@@ -79,6 +79,16 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     //   }
     // });
 
+    // Select all text in name when focused
+    _nameFocus.addListener(() {
+      if (_nameFocus.hasFocus) {
+        _nameController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _nameController.text.length,
+        );
+      }
+    });
+
     // Select all text in balance when focused
     _balanceFocus.addListener(() {
       if (_balanceFocus.hasFocus) {

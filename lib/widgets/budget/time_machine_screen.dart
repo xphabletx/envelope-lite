@@ -752,12 +752,18 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         size: 24,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Projection Settings',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Projection Settings',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -985,12 +991,16 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            'Projection based on current cash flow & autopilot. Pay day settings are stored here.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.7),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Projection based on current cash flow & autopilot. Pay day settings are stored here.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.7),
+                              ),
                             ),
                           ),
                         ),
@@ -1044,15 +1054,21 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                           )
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.calculate, color: Colors.white),
                               const SizedBox(width: 8),
-                              Text(
-                                'Calculate Projection',
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'Calculate Projection',
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1096,25 +1112,34 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Envelopes & Cash Flow:',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                'Envelopes & Cash Flow:',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                'Total: ${currency.format(_calculateTotalAutoFill())}',
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onPrimaryContainer,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'Total: ${currency.format(_calculateTotalAutoFill())}',
+                                    style: fontProvider.getTextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -1135,12 +1160,18 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                               value: _envelopeEnabled[env.id] ?? true,
                               onChanged: (val) => _toggleEnvelope(env.id),
                               title: Row(
-                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (env.iconValue != null || env.emoji != null)
                                     env.getIconWidget(theme, size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(env.name)),
+                                  if (env.iconValue != null || env.emoji != null)
+                                    const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      env.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
                                   IconButton(
                                     icon: Icon(
                                       Icons.settings,
@@ -1218,13 +1249,20 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                                       value: _envelopeEnabled[env.id] ?? true,
                                       onChanged: (val) => _toggleEnvelope(env.id),
                                       title: Row(
-                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           if (env.iconValue != null ||
                                               env.emoji != null)
                                             env.getIconWidget(theme, size: 16),
-                                          const SizedBox(width: 8),
-                                          Expanded(child: Text(env.name)),
+                                          if (env.iconValue != null ||
+                                              env.emoji != null)
+                                            const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              env.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                            ),
+                                          ),
                                           IconButton(
                                             icon: Icon(
                                               Icons.settings,

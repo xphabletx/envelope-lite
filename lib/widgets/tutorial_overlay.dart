@@ -240,6 +240,8 @@ class _TutorialOverlayState extends State<TutorialOverlay>
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                   ),
                 ),
               ],
@@ -284,14 +286,24 @@ class _TutorialOverlayState extends State<TutorialOverlay>
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: _complete,
-                  child: const Text('Skip Tutorial'),
+                Flexible(
+                  child: TextButton(
+                    onPressed: _complete,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: const Text('Skip Tutorial'),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: _nextStep,
-                  child: Text(_isLastStep ? 'Got It! 🎉' : 'Next Tip'),
+                Flexible(
+                  child: FilledButton(
+                    onPressed: _nextStep,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(_isLastStep ? 'Got It! 🎉' : 'Next Tip'),
+                    ),
+                  ),
                 ),
               ],
             ),

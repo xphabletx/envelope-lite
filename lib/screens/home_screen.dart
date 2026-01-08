@@ -12,6 +12,7 @@ import '../utils/calculator_helper.dart';
 import '../services/envelope_repo.dart';
 import '../services/group_repo.dart';
 import '../services/pay_day_settings_service.dart';
+import '../services/scheduled_payment_repo.dart';
 import '../providers/font_provider.dart';
 import '../providers/time_machine_provider.dart';
 import '../services/account_repo.dart';
@@ -55,15 +56,20 @@ SpeedDialChild sdChild({
   final iconColor = theme.colorScheme.onPrimaryContainer;
   final fontProvider = Provider.of<FontProvider>(context, listen: false);
 
+  // Get base font size from provider but cap it at a reasonable maximum
+  // to prevent overflow in SpeedDial labels at extreme accessibility sizes
+  final baseStyle = fontProvider.getTextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+  );
+  final cappedFontSize = (baseStyle.fontSize ?? 18).clamp(14.0, 20.0);
+
   return SpeedDialChild(
     key: key,
     child: Icon(icon, color: iconColor),
     backgroundColor: theme.colorScheme.primaryContainer,
     label: label,
-    labelStyle: fontProvider.getTextStyle(
-      fontSize: 18,
-      fontWeight: FontWeight.bold,
-    ),
+    labelStyle: baseStyle.copyWith(fontSize: cappedFontSize),
     labelBackgroundColor: theme.colorScheme.surface,
     onTap: () {
       onTap();
@@ -78,12 +84,14 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     required this.repo,
+    required this.scheduledPaymentRepo,
     this.initialIndex = 0,
     this.projectionDate,
     this.notificationRepo,
   });
 
   final EnvelopeRepo repo;
+  final ScheduledPaymentRepo scheduledPaymentRepo;
   final int initialIndex;
   final DateTime? projectionDate;
   final dynamic notificationRepo; // NotificationRepo - using dynamic to avoid import
@@ -290,6 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
         repo: widget.repo,
         groupRepo: _groupRepo,
         accountRepo: _accountRepo,
+        scheduledPaymentRepo: widget.scheduledPaymentRepo,
         firstEnvelopeKey: _firstEnvelopeKey,
         sortButtonKey: _sortButtonKey,
         mineOnlyToggleKey: _mineOnlyToggleKey,
@@ -650,6 +659,7 @@ class _AllEnvelopes extends StatefulWidget {
     required this.repo,
     required this.groupRepo,
     required this.accountRepo,
+    required this.scheduledPaymentRepo,
     required this.firstEnvelopeKey,
     required this.sortButtonKey,
     required this.mineOnlyToggleKey,
@@ -658,6 +668,7 @@ class _AllEnvelopes extends StatefulWidget {
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final ScheduledPaymentRepo scheduledPaymentRepo;
   final GlobalKey firstEnvelopeKey;
   final GlobalKey sortButtonKey;
   final GlobalKey mineOnlyToggleKey;
@@ -849,6 +860,7 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
           repo: widget.repo,
           groupRepo: widget.groupRepo,
           accountRepo: widget.accountRepo,
+          scheduledPaymentRepo: widget.scheduledPaymentRepo,
         ),
       ),
     );

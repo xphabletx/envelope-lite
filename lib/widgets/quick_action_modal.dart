@@ -421,24 +421,35 @@ class _QuickActionModalState extends State<QuickActionModal> {
                 return DropdownMenuItem(
                   value: dest.id,
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      dest.icon,
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: dest.icon,
+                      ),
                       const SizedBox(width: 8),
-                      Flexible(
+                      Expanded(
+                        flex: 2,
                         child: Text(
                           dest.name,
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                           style: fontProvider.getTextStyle(fontSize: 16),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       // Balance
-                      Text(
-                        '${locale.currencySymbol}${dest.balance.toStringAsFixed(2)}',
-                        style: fontProvider.getTextStyle(
-                          fontSize: 14,
-                          color: theme.colorScheme.onSurface.withAlpha(153),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${locale.currencySymbol}${dest.balance.toStringAsFixed(2)}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              color: theme.colorScheme.onSurface.withAlpha(153),
+                            ),
+                          ),
                         ),
                       ),
                       if (dest.isAccount) ...[

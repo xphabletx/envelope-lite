@@ -11,6 +11,7 @@ import '../../providers/locale_provider.dart';
 import '../../services/user_service.dart';
 import '../../services/account_repo.dart';
 import '../../services/envelope_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
 import '../../services/pay_day_settings_service.dart';
 import '../../services/onboarding_progress_service.dart';
 import '../../models/pay_day_settings.dart';
@@ -460,9 +461,13 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           FirebaseFirestore.instance,
           userId: widget.userId,
         );
+        final scheduledPaymentRepo = ScheduledPaymentRepo(widget.userId);
 
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => HomeScreen(repo: repo)),
+          MaterialPageRoute(builder: (_) => HomeScreen(
+            repo: repo,
+            scheduledPaymentRepo: scheduledPaymentRepo,
+          )),
         );
       }
     } catch (e) {
@@ -1736,6 +1741,36 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
     _bankNameFocus = FocusNode();
     _nameFocus = FocusNode();
     _balanceFocus = FocusNode();
+
+    // Select all text when account name is focused
+    _nameFocus.addListener(() {
+      if (_nameFocus.hasFocus) {
+        _nameController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _nameController.text.length,
+        );
+      }
+    });
+
+    // Select all text when balance is focused
+    _balanceFocus.addListener(() {
+      if (_balanceFocus.hasFocus) {
+        _balanceController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _balanceController.text.length,
+        );
+      }
+    });
+
+    // Select all text when bank name is focused
+    _bankNameFocus.addListener(() {
+      if (_bankNameFocus.hasFocus) {
+        _bankNameController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _bankNameController.text.length,
+        );
+      }
+    });
   }
 
   @override

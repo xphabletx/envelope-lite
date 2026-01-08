@@ -156,6 +156,52 @@ class _SignInScreenState extends State<SignInScreen> {
     bool obscurePass = true;
     bool obscureConfirm = true;
 
+    // Password strength tracking
+    double passwordStrength = 0.0;
+    String passwordStrengthLabel = '';
+    Color passwordStrengthColor = Colors.grey;
+
+    // Password match tracking
+    bool showPasswordMismatch = false;
+
+    void updatePasswordStrength(String password) {
+      if (password.isEmpty) {
+        passwordStrength = 0.0;
+        passwordStrengthLabel = '';
+        passwordStrengthColor = Colors.grey;
+        return;
+      }
+
+      int strengthPoints = 0;
+      // Length check (max 2 points)
+      if (password.length >= 8) strengthPoints++;
+      if (password.length >= 12) strengthPoints++;
+
+      // Character type checks
+      if (RegExp(r'[A-Z]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[a-z]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[0-9]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) strengthPoints++;
+
+      // Calculate strength (0.0 to 1.0)
+      passwordStrength = strengthPoints / 6.0;
+
+      // Set label and color
+      if (passwordStrength < 0.33) {
+        passwordStrengthLabel = 'Weak';
+        passwordStrengthColor = Colors.red;
+      } else if (passwordStrength < 0.67) {
+        passwordStrengthLabel = 'Fair';
+        passwordStrengthColor = Colors.orange;
+      } else if (passwordStrength < 0.83) {
+        passwordStrengthLabel = 'Good';
+        passwordStrengthColor = Colors.blue;
+      } else {
+        passwordStrengthLabel = 'Strong';
+        passwordStrengthColor = Colors.green;
+      }
+    }
+
     String? emailValidator(String? v) {
       final val = (v ?? '').trim();
       if (val.isEmpty) return 'Email required';
@@ -166,7 +212,24 @@ class _SignInScreenState extends State<SignInScreen> {
 
     String? passValidator(String? v) {
       if ((v ?? '').isEmpty) return 'Password required';
-      if ((v ?? '').length < 6) return 'Min 6 characters';
+      final password = v!;
+
+      // Modern password requirements
+      if (password.length < 8) {
+        return 'At least 8 characters required';
+      }
+      if (!RegExp(r'[A-Z]').hasMatch(password)) {
+        return 'Include at least one uppercase letter';
+      }
+      if (!RegExp(r'[a-z]').hasMatch(password)) {
+        return 'Include at least one lowercase letter';
+      }
+      if (!RegExp(r'[0-9]').hasMatch(password)) {
+        return 'Include at least one number';
+      }
+      if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) {
+        return 'Include at least one special character (!@#\$%^&*...)';
+      }
       return null;
     }
 
@@ -178,32 +241,34 @@ class _SignInScreenState extends State<SignInScreen> {
 
     if (!mounted) return;
 
-    // Define a clean, light theme for the modal specifically
-    final modalTheme = ThemeData(
-      brightness: Brightness.light,
-      primaryColor: const Color(0xFF6D4C41), // Brownish
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6D4C41),
-        surface: const Color(0xFFFFFBF5), // Warm white
-        onSurface: Colors.black87,
-      ),
-      inputDecorationTheme: InputDecorationTheme(
+    // Use the app's current theme instead of hardcoded colors
+    final appTheme = Theme.of(context);
+    final modalTheme = appTheme.copyWith(
+      inputDecorationTheme: appTheme.inputDecorationTheme.copyWith(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: appTheme.colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: appTheme.colorScheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: appTheme.colorScheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF6D4C41), width: 2),
+          borderSide: BorderSide(color: appTheme.colorScheme.primary, width: 2),
         ),
-        labelStyle: const TextStyle(color: Colors.black54),
-        hintStyle: const TextStyle(color: Colors.black38),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: appTheme.colorScheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: appTheme.colorScheme.error, width: 2),
+        ),
+        labelStyle: TextStyle(color: appTheme.colorScheme.onSurface.withValues(alpha: 0.7)),
+        hintStyle: TextStyle(color: appTheme.colorScheme.onSurface.withValues(alpha: 0.5)),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -224,9 +289,9 @@ class _SignInScreenState extends State<SignInScreen> {
               bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
             child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFFBF5), // Warm neutral background
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              decoration: BoxDecoration(
+                color: modalTheme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: SafeArea(
                 top: false,
@@ -235,7 +300,34 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: StatefulBuilder(
                     builder: (ctx2, setSheet) {
                       Future<void> onCreate() async {
-                        if (!formKey.currentState!.validate()) return;
+                        if (!formKey.currentState!.validate()) {
+                          // Show a dialog explaining the validation errors
+                          showDialog(
+                            context: ctx2,
+                            builder: (dialogCtx) => AlertDialog(
+                              title: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: modalTheme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text('Invalid Input'),
+                                ],
+                              ),
+                              content: const Text(
+                                'Please fix the errors shown in the form above before continuing.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dialogCtx),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                          return;
+                        }
                         setSheet(() {
                           sheetError = null;
                           sheetBusy = true;
@@ -319,7 +411,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 24),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade300,
+                                  color: modalTheme.colorScheme.outline.withValues(alpha: 0.3),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -354,9 +446,9 @@ class _SignInScreenState extends State<SignInScreen> {
                                     nextFocusNode: passFocus,
                                     keyboardType: TextInputType.emailAddress,
                                     textCapitalization: TextCapitalization.none,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
-                                      color: Colors.black87,
+                                      color: modalTheme.colorScheme.onSurface,
                                     ),
                                     decoration: const InputDecoration(
                                       labelText: 'Email',
@@ -369,9 +461,9 @@ class _SignInScreenState extends State<SignInScreen> {
                                     focusNode: passFocus,
                                     nextFocusNode: confirmFocus,
                                     obscureText: obscurePass,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
-                                      color: Colors.black87,
+                                      color: modalTheme.colorScheme.onSurface,
                                     ),
                                     decoration: InputDecoration(
                                       labelText: 'Password',
@@ -380,7 +472,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                           obscurePass
                                               ? Icons.visibility_off
                                               : Icons.visibility,
-                                          color: Colors.grey,
+                                          color: modalTheme.colorScheme.onSurface.withValues(alpha: 0.6),
                                         ),
                                         onPressed: () {
                                           setSheet(
@@ -390,16 +482,70 @@ class _SignInScreenState extends State<SignInScreen> {
                                       ),
                                     ),
                                     validator: passValidator,
+                                    onChanged: (value) {
+                                      setSheet(() {
+                                        updatePasswordStrength(value);
+                                        // Update mismatch warning when password changes
+                                        if (confirmCtrl.text.isNotEmpty) {
+                                          if (value.isEmpty || confirmCtrl.text.isEmpty) {
+                                            showPasswordMismatch = false;
+                                          } else {
+                                            showPasswordMismatch = value != confirmCtrl.text;
+                                          }
+                                        }
+                                      });
+                                    },
                                   ),
+                                  if (passCtrl.text.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    // Password strength indicator
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(4),
+                                                child: LinearProgressIndicator(
+                                                  value: passwordStrength,
+                                                  backgroundColor: modalTheme.colorScheme.outline.withValues(alpha: 0.2),
+                                                  valueColor: AlwaysStoppedAnimation<Color>(passwordStrengthColor),
+                                                  minHeight: 6,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              passwordStrengthLabel,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: passwordStrengthColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Use 8+ characters with uppercase, lowercase, number & symbol',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: modalTheme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                   const SizedBox(height: 16),
                                   SmartTextFormField(
                                     controller: confirmCtrl,
                                     focusNode: confirmFocus,
                                     isLastField: true,
                                     obscureText: obscureConfirm,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
-                                      color: Colors.black87,
+                                      color: modalTheme.colorScheme.onSurface,
                                     ),
                                     decoration: InputDecoration(
                                       labelText: 'Confirm Password',
@@ -408,7 +554,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                           obscureConfirm
                                               ? Icons.visibility_off
                                               : Icons.visibility,
-                                          color: Colors.grey,
+                                          color: modalTheme.colorScheme.onSurface.withValues(alpha: 0.6),
                                         ),
                                         onPressed: () {
                                           setSheet(
@@ -419,8 +565,40 @@ class _SignInScreenState extends State<SignInScreen> {
                                       ),
                                     ),
                                     validator: confirmValidator,
+                                    onChanged: (value) {
+                                      setSheet(() {
+                                        // Check if passwords match in real-time
+                                        if (value.isEmpty || passCtrl.text.isEmpty) {
+                                          showPasswordMismatch = false;
+                                        } else {
+                                          showPasswordMismatch = value != passCtrl.text;
+                                        }
+                                      });
+                                    },
                                     onSubmitted: (_) => onCreate(),
                                   ),
+                                  // Password mismatch warning
+                                  if (showPasswordMismatch) ...[
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.warning_rounded,
+                                          size: 16,
+                                          color: modalTheme.colorScheme.error,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Passwords do not match',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: modalTheme.colorScheme.error,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -429,16 +607,16 @@ class _SignInScreenState extends State<SignInScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha:0.1),
+                                  color: modalTheme.colorScheme.error.withValues(alpha:0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: Colors.red.withValues(alpha:0.3),
+                                    color: modalTheme.colorScheme.error.withValues(alpha:0.3),
                                   ),
                                 ),
                                 child: Text(
                                   sheetError!,
-                                  style: const TextStyle(
-                                    color: Colors.red,
+                                  style: TextStyle(
+                                    color: modalTheme.colorScheme.error,
                                     fontSize: 14,
                                   ),
                                   textAlign: TextAlign.center,
@@ -451,19 +629,19 @@ class _SignInScreenState extends State<SignInScreen> {
                               child: FilledButton(
                                 onPressed: sheetBusy ? null : onCreate,
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6D4C41),
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: modalTheme.colorScheme.primary,
+                                  foregroundColor: modalTheme.colorScheme.onPrimary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                                 child: sheetBusy
-                                    ? const SizedBox(
+                                    ? SizedBox(
                                         width: 24,
                                         height: 24,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white,
+                                          color: modalTheme.colorScheme.onPrimary,
                                         ),
                                       )
                                     : const Text(
@@ -489,6 +667,8 @@ class _SignInScreenState extends State<SignInScreen> {
     );
 
     // Dispose focus nodes after modal closes
+    // Wait for the modal to fully close before disposing
+    await Future.delayed(const Duration(milliseconds: 100));
     emailFocus.dispose();
     passFocus.dispose();
     confirmFocus.dispose();

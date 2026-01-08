@@ -15,6 +15,7 @@ import 'providers/workspace_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/time_machine_provider.dart';
 import 'providers/onboarding_provider.dart';
+import 'providers/repository_provider.dart';
 import 'services/envelope_repo.dart';
 import 'services/account_repo.dart';
 import 'services/scheduled_payment_repo.dart';
@@ -24,6 +25,7 @@ import 'services/hive_service.dart';
 import 'services/subscription_service.dart';
 import 'services/logger_service.dart';
 import 'services/app_update_service.dart';
+import 'services/cloud_migration_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_wrapper.dart';
 import 'widgets/app_lifecycle_observer.dart';
@@ -137,6 +139,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => TimeMachineProvider()),
         ChangeNotifierProvider(create: (_) => OnboardingProvider()),
+        ChangeNotifierProvider(create: (_) => RepositoryProvider()),
       ],
       child: const MyApp(),
     ),
@@ -207,14 +210,130 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    // Hide splash after 3 seconds (1.5s fade in + 1.5s fade out)
-    Future.delayed(const Duration(milliseconds: 3000), () {
-      if (mounted) {
-        setState(() {
-          _showSplash = false;
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Start minimum splash duration timer (4 seconds to ensure all initialization completes)
+    final splashTimer = Future.delayed(const Duration(milliseconds: 4000));
+
+    // Wait for authentication state to be ready
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+
+    // If user is logged in, perform data restoration during splash
+    if (user != null && mounted) {
+      // Pre-initialize providers
+      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+      final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+      final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+      final repositoryProvider = Provider.of<RepositoryProvider>(context, listen: false);
+
+      themeProvider.initialize();
+      localeProvider.initialize(user.uid);
+
+      // Check if user is brand new (skip restoration for brand new users)
+      final creationTime = user.metadata.creationTime;
+      final lastSignInTime = user.metadata.lastSignInTime;
+      final isBrandNewUser =
+          creationTime != null &&
+          lastSignInTime != null &&
+          lastSignInTime.difference(creationTime).inSeconds < 5;
+
+      // Start subscription check, migration, and repository initialization in parallel
+      final subscriptionFuture = SubscriptionService().hasActiveSubscription(
+        userEmail: user.email,
+      ).then((hasSub) {
+        debugPrint('[AuthGate] Subscription check completed during splash: $hasSub');
+        return hasSub;
+      }).catchError((e) {
+        debugPrint('[AuthGate] Subscription pre-warm failed: $e');
+        return false;
+      });
+
+      Future<void>? migrationFuture;
+      if (!isBrandNewUser) {
+        // Perform data restoration during splash
+        final migrationService = CloudMigrationService();
+
+        migrationFuture = migrationService.migrateIfNeeded(
+          userId: user.uid,
+          workspaceId: workspaceProvider.workspaceId,
+        ).then((_) {
+          migrationService.dispose();
+        }).catchError((e) {
+          debugPrint('[AuthGate] Migration during splash failed: $e');
+          migrationService.dispose();
+          // Continue anyway - user can access app offline
         });
       }
-    });
+
+      // Initialize repositories during splash to prevent home screen loading delays
+      final repositoryFuture = _initializeRepositories(
+        user: user,
+        workspaceProvider: workspaceProvider,
+        repositoryProvider: repositoryProvider,
+      );
+
+      // Wait for subscription check, migration, and repository initialization to complete
+      await Future.wait([
+        subscriptionFuture,
+        if (migrationFuture != null) migrationFuture,
+        repositoryFuture,
+      ]);
+    }
+
+    // Ensure minimum splash duration has elapsed
+    await splashTimer;
+
+    if (mounted) {
+      setState(() {
+        _showSplash = false;
+      });
+    }
+  }
+
+  /// Initialize repositories during splash screen
+  /// This prevents the brief loading spinner after splash ends
+  Future<void> _initializeRepositories({
+    required User user,
+    required WorkspaceProvider workspaceProvider,
+    required RepositoryProvider repositoryProvider,
+  }) async {
+    try {
+      final db = FirebaseFirestore.instance;
+
+      // Create all repositories
+      final envelopeRepo = EnvelopeRepo.firebase(
+        db,
+        userId: user.uid,
+        workspaceId: workspaceProvider.workspaceId,
+      );
+
+      final accountRepo = AccountRepo(envelopeRepo);
+      final scheduledPaymentRepo = ScheduledPaymentRepo(user.uid);
+      final notificationRepo = NotificationRepo(userId: user.uid);
+
+      // Register with the global manager for cleanup on logout
+      RepositoryManager().registerRepositories(
+        envelopeRepo: envelopeRepo,
+        accountRepo: accountRepo,
+        scheduledPaymentRepo: scheduledPaymentRepo,
+        notificationRepo: notificationRepo,
+      );
+
+      // Store in provider for immediate access by HomeScreen
+      await repositoryProvider.initializeRepositories(
+        envelopeRepo: envelopeRepo,
+        accountRepo: accountRepo,
+        scheduledPaymentRepo: scheduledPaymentRepo,
+        notificationRepo: notificationRepo,
+      );
+
+      debugPrint('[AuthGate] ✅ Repositories initialized during splash');
+    } catch (e) {
+      debugPrint('[AuthGate] ⚠️ Repository initialization failed: $e');
+      // Continue anyway - repositories will be created later if needed
+    }
   }
 
   @override
@@ -233,40 +352,21 @@ class HomeScreenWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
-    final db = FirebaseFirestore.instance;
+    // Listen to workspace changes and repository initialization
+    return Consumer2<WorkspaceProvider, RepositoryProvider>(
+      builder: (context, workspaceProvider, repositoryProvider, _) {
+        // If repositories are not initialized yet (edge case), show loading
+        if (!repositoryProvider.areRepositoriesInitialized) {
+          debugPrint('[HomeScreenWrapper] ⚠️ Repositories not initialized, showing loading...');
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    // Listen to workspace changes and rebuild with a new repo
-    return Consumer<WorkspaceProvider>(
-      builder: (context, workspaceProvider, _) {
-        final envelopeRepo = EnvelopeRepo.firebase(
-          db,
-          userId: user.uid,
-          workspaceId: workspaceProvider.workspaceId,
-        );
-
-        // Clean up any orphaned scheduled payments from deleted envelopes
-        // This is a one-time migration for existing users
-        envelopeRepo.cleanupOrphanedScheduledPayments().then((cleanedCount) {
-          if (cleanedCount > 0) {
-            debugPrint(
-              '[Main] Cleaned up $cleanedCount orphaned scheduled payments',
-            );
-          }
-        });
-
-        // Initialize all repos
-        final accountRepo = AccountRepo(envelopeRepo);
-        final paymentRepo = ScheduledPaymentRepo(user.uid);
-        final notificationRepo = NotificationRepo(userId: user.uid);
-
-        // Register repositories with the global manager for cleanup on logout
-        RepositoryManager().registerRepositories(
-          envelopeRepo: envelopeRepo,
-          accountRepo: accountRepo,
-          scheduledPaymentRepo: paymentRepo,
-          notificationRepo: notificationRepo,
-        );
+        // Get repositories from provider (already initialized during splash)
+        final envelopeRepo = repositoryProvider.envelopeRepo!;
+        final paymentRepo = repositoryProvider.scheduledPaymentRepo!;
+        final notificationRepo = repositoryProvider.notificationRepo!;
 
         final args = ModalRoute.of(context)?.settings.arguments;
         final initialIndex = args is int ? args : 0;
@@ -277,6 +377,7 @@ class HomeScreenWrapper extends StatelessWidget {
           notificationRepo: notificationRepo,
           child: HomeScreen(
             repo: envelopeRepo,
+            scheduledPaymentRepo: paymentRepo,
             initialIndex: initialIndex,
             notificationRepo: notificationRepo,
           ),
@@ -303,7 +404,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 4000),
       vsync: this,
     );
 
