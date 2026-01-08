@@ -716,6 +716,9 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
   void initState() {
     super.initState();
 
+    // Load saved envelope filter preference
+    _loadEnvelopeFilter();
+
     // Initialize pulse animation for Pay Day button
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -738,6 +741,23 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
 
     // Start animation if it's pay day
     _checkPayDayAndAnimate();
+  }
+
+  /// Load the saved envelope filter preference from SharedPreferences
+  Future<void> _loadEnvelopeFilter() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedFilter = prefs.getString('envelope_filter_preference') ?? 'both';
+    if (mounted) {
+      setState(() {
+        _envelopeFilter = savedFilter;
+      });
+    }
+  }
+
+  /// Save the envelope filter preference to SharedPreferences
+  Future<void> _saveEnvelopeFilter(String filter) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('envelope_filter_preference', filter);
   }
 
   Future<void> _checkPayDayAndAnimate() async {
@@ -1093,7 +1113,10 @@ class _AllEnvelopesState extends State<_AllEnvelopes>
                                     : Icons.person_outline,
                             color: theme.colorScheme.primary,
                           ),
-                          onSelected: (value) => setState(() => _envelopeFilter = value),
+                          onSelected: (value) {
+                            setState(() => _envelopeFilter = value);
+                            _saveEnvelopeFilter(value);
+                          },
                           itemBuilder: (context) => [
                             PopupMenuItem(
                               value: 'both',
