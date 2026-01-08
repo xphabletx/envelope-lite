@@ -601,6 +601,18 @@ class PayDayCockpitProvider extends ChangeNotifier {
       // Calculate top horizons impacted (pass old balances)
       _calculateTopHorizons(oldBalances);
 
+      // Reload envelopes to get updated balances after stuffing
+      final envelopeBox = Hive.box<Envelope>('envelopes');
+      _allEnvelopes = envelopeBox.values
+          .where((e) =>
+              e.userId == userId &&
+              !e.id.startsWith('_account_available_'))
+          .toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+      // Recalculate autopilot preparedness with updated balances
+      await _calculateUpcomingAutopilotPayments();
+
       // Update PayDaySettings
       await _updatePayDaySettings();
 
