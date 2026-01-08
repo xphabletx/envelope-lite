@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/envelope.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
-import '../horizon_controller.dart';
+import '../../../providers/horizon_controller.dart';
 
 class HorizonEnvelopeTile extends StatelessWidget {
   final Envelope envelope;

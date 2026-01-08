@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
+import '../../../providers/horizon_controller.dart';
 import '../../../widgets/common/smart_text_field.dart';
 import '../../../utils/calculator_helper.dart';
-import '../horizon_controller.dart';
 
 class HorizonControlPanel extends StatefulWidget {
   final HorizonController controller;

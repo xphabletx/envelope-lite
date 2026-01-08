@@ -730,10 +730,8 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
           MaterialPageRoute(
             builder: (_) => AutoFillListScreen(
               envelopeRepo: widget.envelopeRepo,
-              // Instantiate required repos
               groupRepo: GroupRepo(widget.envelopeRepo),
               accountRepo: AccountRepo(widget.envelopeRepo),
-                    scheduledPaymentRepo: ScheduledPaymentRepo(widget.envelopeRepo.currentUserId),
             ),
           ),
         );

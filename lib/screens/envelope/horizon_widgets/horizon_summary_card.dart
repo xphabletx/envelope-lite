@@ -3,8 +3,8 @@ import '../../../models/envelope.dart';
 import '../../../providers/font_provider.dart';
 import '../../../providers/locale_provider.dart';
 import '../../../providers/time_machine_provider.dart';
+import '../../../providers/horizon_controller.dart';
 import '../../../utils/target_helper.dart';
-import '../horizon_controller.dart'; // From Step 1
 
 class HorizonSummaryCard extends StatelessWidget {
   final List<Envelope> envelopesToShow;
