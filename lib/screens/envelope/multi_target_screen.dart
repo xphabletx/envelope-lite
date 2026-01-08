@@ -100,11 +100,17 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
               .where((e) => e.targetAmount != null && e.targetAmount! > 0)
               .toList();
 
-          // Auto-select if in single mode
-          if (widget.mode == TargetScreenMode.singleEnvelope &&
-              _controller.selectedEnvelopeIds.isEmpty &&
-              filteredEnvelopes.isNotEmpty) {
-            _controller.selectedEnvelopeIds.add(filteredEnvelopes.first.id);
+          // Auto-select all envelopes by default if nothing is selected
+          if (_controller.selectedEnvelopeIds.isEmpty && filteredEnvelopes.isNotEmpty) {
+            if (widget.mode == TargetScreenMode.singleEnvelope) {
+              // Single mode: select only the first envelope
+              _controller.selectedEnvelopeIds.add(filteredEnvelopes.first.id);
+            } else {
+              // Multi mode: select all envelopes by default
+              _controller.selectedEnvelopeIds.addAll(
+                filteredEnvelopes.map((e) => e.id),
+              );
+            }
           }
 
           // Calculate baselines for selected envelopes
