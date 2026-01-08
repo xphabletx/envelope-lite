@@ -175,6 +175,7 @@ class SettingsScreen extends StatelessWidget {
                             content: TextField(
                               controller: controller,
                               textCapitalization: TextCapitalization.words,
+                              autocorrect: false,
                               decoration: const InputDecoration(
                                 labelText: 'Display Name',
                                 border: OutlineInputBorder(),

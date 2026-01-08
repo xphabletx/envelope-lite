@@ -279,6 +279,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
               SmartTextField(
                 controller: _descriptionController,
                 textCapitalization: TextCapitalization.words,
+                autocorrect: false,
                 decoration: InputDecoration(
                   labelText: tr('description_optional'),
                   border: OutlineInputBorder(

@@ -36,6 +36,8 @@ class SmartTextField extends StatefulWidget {
   final int? maxLength;
   final VoidCallback? onEditingComplete;
   final void Function(PointerDownEvent)? onTapOutside;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   const SmartTextField({
     super.key,
@@ -68,6 +70,8 @@ class SmartTextField extends StatefulWidget {
     this.maxLength,
     this.onEditingComplete,
     this.onTapOutside,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   @override
@@ -207,6 +211,8 @@ class _SmartTextFieldState extends State<SmartTextField> {
       maxLength: widget.maxLength,
       onEditingComplete: widget.onEditingComplete,
       onTapOutside: widget.onTapOutside,
+      autocorrect: widget.autocorrect,
+      enableSuggestions: widget.enableSuggestions,
       // CRITICAL: Never auto-show keyboard
       showCursor: true,
       enableInteractiveSelection: true,
@@ -252,6 +258,8 @@ class SmartTextFormField extends FormField<String> {
     int? maxLength,
     VoidCallback? onEditingComplete,
     void Function(PointerDownEvent)? onTapOutside,
+    bool autocorrect = true,
+    bool enableSuggestions = true,
   }) : super(
           initialValue: controller.text,
           builder: (FormFieldState<String> field) {
@@ -292,6 +300,8 @@ class SmartTextFormField extends FormField<String> {
               maxLength: maxLength,
               onEditingComplete: onEditingComplete,
               onTapOutside: onTapOutside,
+              autocorrect: autocorrect,
+              enableSuggestions: enableSuggestions,
             );
           },
         );

@@ -567,6 +567,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     SmartTextField(
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
+                      autocorrect: false,
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -623,6 +624,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                       controller: _subtitleController,
                       maxLines: 1,
                       textCapitalization: TextCapitalization.words,
+                      autocorrect: false,
                       style: fontProvider
                           .getTextStyle(fontSize: 18)
                           .copyWith(fontStyle: FontStyle.italic),

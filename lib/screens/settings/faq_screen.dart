@@ -52,6 +52,7 @@ class _FAQScreenState extends State<FAQScreen> {
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value),
               textCapitalization: TextCapitalization.words,
+              autocorrect: false,
               style: TextStyle(fontSize: isLandscape ? 14 : 16),
               decoration: InputDecoration(
                 hintText: 'Search for help...',

@@ -300,6 +300,7 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
                 SmartTextField(
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
+                  autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Name'),
                   onTap: () => nameController.selection = TextSelection(
                     baseOffset: 0,

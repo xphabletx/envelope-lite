@@ -506,6 +506,7 @@ class _AddScheduledPaymentScreenState extends State<AddScheduledPaymentScreen> {
               focusNode: _descriptionFocus,
               nextFocusNode: _amountFocus,
               textCapitalization: TextCapitalization.words,
+              autocorrect: false,
               style: fontProvider.getTextStyle(fontSize: 18),
               decoration: InputDecoration(
                 hintText: 'e.g., Monthly rent payment',

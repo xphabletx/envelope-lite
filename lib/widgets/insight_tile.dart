@@ -97,7 +97,8 @@ class _InsightTileState extends State<InsightTile> {
       debugPrint(
         '[InsightTile] 🔄 Starting amount changed: ${oldWidget.startingAmount} -> ${widget.startingAmount}',
       );
-      _recalculate();
+      // Recalculate immediately without notifying parent (prevents build-during-build)
+      _recalculateInternal();
     }
   }
 
@@ -151,13 +152,15 @@ class _InsightTileState extends State<InsightTile> {
     }
   }
 
-  void _recalculate() {
+  /// Internal recalculation that updates state without notifying parent
+  /// Used when parent triggers the update (prevents build-during-build)
+  void _recalculateInternal() {
     if (!mounted) return;
 
     final horizonAmount = double.tryParse(_horizonAmountCtrl.text);
     final autopilotAmount = double.tryParse(_autopilotAmountCtrl.text);
 
-    debugPrint('[InsightTile] 🔄 _recalculate called:');
+    debugPrint('[InsightTile] 🔄 _recalculateInternal called:');
     debugPrint('  horizonAmount input: $horizonAmount');
     debugPrint('  autopilotAmount input: $autopilotAmount');
     debugPrint('  current cashFlowEnabled: ${_data.cashFlowEnabled}');
@@ -215,6 +218,13 @@ class _InsightTileState extends State<InsightTile> {
       });
     }
 
+    // Don't notify parent - they already know (they triggered this change)
+  }
+
+  /// Public recalculation that also notifies parent
+  /// Used when user interactions within this widget trigger changes
+  void _recalculate() {
+    _recalculateInternal();
     widget.onInsightChanged(_data);
   }
 
@@ -838,6 +848,10 @@ class _InsightTileState extends State<InsightTile> {
             controller: _horizonAmountCtrl,
             focusNode: _horizonAmountFocus,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onTap: () => _horizonAmountCtrl.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _horizonAmountCtrl.text.length,
+            ),
             decoration: InputDecoration(
               labelText: 'Target Amount',
               prefixText: localeProvider.currencySymbol,
@@ -980,6 +994,10 @@ class _InsightTileState extends State<InsightTile> {
             controller: _autopilotAmountCtrl,
             focusNode: _autopilotAmountFocus,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onTap: () => _autopilotAmountCtrl.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _autopilotAmountCtrl.text.length,
+            ),
             decoration: InputDecoration(
               labelText: 'Bill Amount',
               prefixText: localeProvider.currencySymbol,
@@ -1459,6 +1477,10 @@ class _InsightTileState extends State<InsightTile> {
             controller: _manualCashFlowCtrl,
             focusNode: _manualCashFlowFocus,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onTap: () => _manualCashFlowCtrl.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: _manualCashFlowCtrl.text.length,
+            ),
             decoration: InputDecoration(
               labelText: hasCalculation
                   ? 'Custom Cash Flow Amount'

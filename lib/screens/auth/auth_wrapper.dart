@@ -63,6 +63,7 @@ class AuthWrapper extends StatelessWidget {
     // CRITICAL: Check if we're logging out FIRST to prevent phantom builds
     final workspaceProvider = Provider.of<WorkspaceProvider>(context);
     if (workspaceProvider.isLoggingOut) {
+      debugPrint('[AuthWrapper] 🔄 Logging out, showing spinner');
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -71,6 +72,7 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, snapshot) {
         // Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
+          debugPrint('[AuthWrapper] ⏳ Waiting for auth state...');
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
@@ -80,13 +82,16 @@ class AuthWrapper extends StatelessWidget {
         // When UID changes from logged-in → null, Flutter destroys entire tree
         // This kills all Firestore listeners and prevents PERMISSION_DENIED errors
         if (!snapshot.hasData) {
+          debugPrint('[AuthWrapper] 🚫 No user, showing SignInScreen');
           return SignInScreen(key: const ValueKey('logged-out'));
         }
 
         final user = snapshot.data!;
+        debugPrint('[AuthWrapper] 👤 User signed in: ${user.uid} (${user.email})');
 
         // Anonymous users - let them in (no verification needed)
         if (user.isAnonymous) {
+          debugPrint('[AuthWrapper] ✅ Anonymous user, showing app');
           return _buildUserProfileWrapper(user);
         }
 
@@ -95,22 +100,29 @@ class AuthWrapper extends StatelessWidget {
             ? user.providerData.first.providerId
             : 'password';
 
+        debugPrint('[AuthWrapper] 🔐 Sign-in method: $signInMethod');
+
         // Google/Apple Sign-In users are auto-verified
         final isGoogleOrApple =
             signInMethod == 'google.com' || signInMethod == 'apple.com';
 
         if (isGoogleOrApple) {
+          debugPrint('[AuthWrapper] ✅ Google/Apple user, auto-verified');
           return _buildUserProfileWrapper(user);
         }
 
         // Email/password users need verification check
         if (user.emailVerified) {
+          debugPrint('[AuthWrapper] ✅ Email verified, showing app');
           return _buildUserProfileWrapper(user);
         }
+
+        debugPrint('[AuthWrapper] ⚠️ Email NOT verified, checking grandfather clause...');
 
         // Check if account is old (grandfather clause)
         final accountCreated = user.metadata.creationTime;
         if (accountCreated == null) {
+          debugPrint('[AuthWrapper] ⚠️ No creation time, treating as old account');
           // Safety fallback - if we can't determine age, treat as old account
           return _buildUserProfileWrapper(user);
         }
@@ -118,13 +130,17 @@ class AuthWrapper extends StatelessWidget {
         final now = DateTime.now();
         final accountAge = now.difference(accountCreated).inDays;
 
+        debugPrint('[AuthWrapper] 📅 Account age: $accountAge days');
+
         // Accounts older than 7 days = existing users (grandfathered)
         // Let them in but show optional banner
         if (accountAge > 7) {
+          debugPrint('[AuthWrapper] ✅ Old account (>7 days), grandfathered in');
           return _buildUserProfileWrapper(user);
         }
 
         // New account (< 7 days old) - REQUIRE verification
+        debugPrint('[AuthWrapper] 🚫 New unverified account, showing EmailVerificationScreen');
         return const EmailVerificationScreen();
       },
     );
@@ -177,9 +193,13 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
   Future<void> _checkOnboardingAndInitialize() async {
     // Prevent re-initialization if already done for this user
     final userId = widget.user.uid;
+    debugPrint('[UserProfileWrapper] 🔄 Checking onboarding for user: $userId');
+
     if (AuthWrapperState.isInitialized(userId)) {
+      debugPrint('[UserProfileWrapper] ✅ User already initialized, checking onboarding...');
       // Just check onboarding status - restoration already done during splash
       final completed = await _checkOnboardingStatus(userId);
+      debugPrint('[UserProfileWrapper] 📋 Onboarding completed: $completed');
       if (mounted) {
         setState(() {
           _hasCompletedOnboarding = completed;
@@ -187,6 +207,7 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
       }
       return;
     }
+    debugPrint('[UserProfileWrapper] 🆕 First initialization for this user');
     AuthWrapperState.markInitialized(userId);
 
     // NOTE: Providers and data restoration are now handled during splash screen
@@ -202,6 +223,7 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
         lastSignInTime.difference(creationTime).inSeconds < 5;
 
     if (isBrandNewUser) {
+      debugPrint('[UserProfileWrapper] 🆕 Brand new user detected, clearing Hive if needed');
       // Brand new user - skip migration and go straight to onboarding
       // CRITICAL: Clear Hive data if it belongs to a different user
       // BUT: Don't clear onboarding flags - user may have completed offline
@@ -209,7 +231,9 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     }
 
     // Check onboarding status (will use "completion wins" logic)
+    debugPrint('[UserProfileWrapper] 🔄 Checking onboarding status...');
     final completed = await _checkOnboardingStatus(widget.user.uid);
+    debugPrint('[UserProfileWrapper] 📋 Onboarding completed: $completed');
 
     if (mounted) {
       setState(() {
@@ -220,8 +244,11 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[UserProfileWrapper] 🏗️ Building widget - restoration: $_restorationComplete, onboarding: $_hasCompletedOnboarding');
+
     // RESTORATION GATE: Show restoration overlay until complete
     if (!_restorationComplete) {
+      debugPrint('[UserProfileWrapper] 🔄 Showing restoration overlay');
       return RestorationOverlay(
         progressStream: _migrationService.progressStream,
         onCancel: () {
@@ -237,6 +264,7 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     final hasCompletedOnboarding = _hasCompletedOnboarding ?? false;
 
     if (!hasCompletedOnboarding) {
+      debugPrint('[UserProfileWrapper] 📚 Showing onboarding flow');
       // New user or hasn't completed onboarding - show onboarding flow
       // Cache the onboarding flow to prevent recreation on theme changes
       _cachedOnboardingFlow ??= ConsolidatedOnboardingFlow(
@@ -249,12 +277,14 @@ class _UserProfileWrapperState extends State<_UserProfileWrapper> {
     // User has completed onboarding - check subscription
     // Subscription was pre-checked during splash, so we optimistically show home
     if (_hasPremiumSubscription == false) {
+      debugPrint('[UserProfileWrapper] 💰 Showing paywall (no premium)');
       // Only show paywall if we have confirmed NO premium
       return const StuffritePaywallScreen();
     }
 
     // User has premium (or check in progress) - show home
     // Use stable key based on user ID
+    debugPrint('[UserProfileWrapper] 🏠 Showing home screen');
     return HomeScreenWrapper(key: ValueKey('home_${widget.user.uid}'));
   }
 

@@ -482,6 +482,7 @@ class _TransferModalState extends State<TransferModal> {
           SmartTextField(
             controller: _descController,
             textCapitalization: TextCapitalization.words,
+            autocorrect: false,
             decoration: InputDecoration(
               labelText: 'Description (Optional)',
               border: OutlineInputBorder(

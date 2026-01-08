@@ -588,6 +588,7 @@ class _NameSetupStepState extends State<_NameSetupStep> {
                 autofocus: false,
                 textAlign: TextAlign.center,
                 textCapitalization: TextCapitalization.words,
+                autocorrect: false,
                 onTap: () => _controller.selection = TextSelection(
                   baseOffset: 0,
                   extentOffset: _controller.text.length,
@@ -915,28 +916,29 @@ class _ThemeSelectionStep extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
-                child: Text(
-                  'Choose your vibe',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: 40,
+                  ), // Add padding to avoid back button overlap
+                  child: Text(
+                    'Choose your vibe',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
 
-              const Spacer(flex: 1),
+                const SizedBox(height: 32),
 
-              _ThemeCard(
+                _ThemeCard(
                 themeId: 'latte_love',
                 name: 'Latte Love',
                 description: 'Warm creams & browns',
@@ -990,31 +992,30 @@ class _ThemeSelectionStep extends StatelessWidget {
                 onTap: () => themeProvider.setTheme('singularity'),
               ),
 
-              const Spacer(flex: 1),
+                const SizedBox(height: 32),
 
-              const SizedBox(height: 16),
-
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  onContinue(themeProvider.currentThemeId);
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                FilledButton(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    onContinue(themeProvider.currentThemeId);
+                  },
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Continue',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                child: Text(
-                  'Continue',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1127,28 +1128,29 @@ class _FontSelectionStep extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
-                child: Text(
-                  'Choose your font style',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: 40,
+                  ), // Add padding to avoid back button overlap
+                  child: Text(
+                    'Choose your font style',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
 
-              const Spacer(flex: 1),
+                const SizedBox(height: 32),
 
-              ...fonts.map((font) {
+                ...fonts.map((font) {
                 final fontId = font['id']!;
                 final isSelected = fontProvider.currentFontId == fontId;
 
@@ -1204,31 +1206,30 @@ class _FontSelectionStep extends StatelessWidget {
                 );
               }),
 
-              const Spacer(flex: 1),
+                const SizedBox(height: 32),
 
-              const SizedBox(height: 16),
-
-              FilledButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  onContinue(fontProvider.currentFontId);
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                FilledButton(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    onContinue(fontProvider.currentFontId);
+                  },
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Continue',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                child: Text(
-                  'Continue',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1413,29 +1414,30 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: 40,
-                ), // Add padding to avoid back button overlap
-                child: Text(
-                  'How do you want to budget?',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: 40,
+                  ), // Add padding to avoid back button overlap
+                  child: Text(
+                    'How do you want to budget?',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
 
-              const Spacer(flex: 1),
+                const SizedBox(height: 32),
 
-              // Budget Mode
-              _ModeCard(
+                // Budget Mode
+                _ModeCard(
                 title: 'Simple Envelope Tracking',
                 description: 'Quick & flexible budgeting',
                 features: [
@@ -1465,68 +1467,67 @@ class _ModeSelectionStepState extends State<_ModeSelectionStep> {
                 isSelected: _isAccountMode == true,
                 isRecommended: true,
                 onTap: () => setState(() => _isAccountMode = true),
-              ),
-
-              const Spacer(flex: 1),
-
-              const SizedBox(height: 16),
-
-              // Privacy notice
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withValues(
-                    alpha: 0.3,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.lock_outline,
-                      color: theme.colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'We NEVER connect to your bank. All manual.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 32),
 
-              FilledButton(
-                onPressed: _isAccountMode != null
-                    ? () {
-                        HapticFeedback.mediumImpact();
-                        widget.onContinue(_isAccountMode!);
-                      }
-                    : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  shape: RoundedRectangleBorder(
+                // Privacy notice
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer.withValues(
+                      alpha: 0.3,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-                child: Text(
-                  'Continue',
-                  style: fontProvider.getTextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        color: theme.colorScheme.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'We NEVER connect to your bank. All manual.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 16),
+
+                FilledButton(
+                  onPressed: _isAccountMode != null
+                      ? () {
+                          HapticFeedback.mediumImpact();
+                          widget.onContinue(_isAccountMode!);
+                        }
+                      : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Continue',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1889,6 +1890,7 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       focusNode: _bankNameFocus,
                       nextFocusNode: _nameFocus,
                       textCapitalization: TextCapitalization.words,
+                      autocorrect: false,
                       onTap: () =>
                           _bankNameController.selection = TextSelection(
                             baseOffset: 0,
@@ -1953,6 +1955,7 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
                       focusNode: _nameFocus,
                       nextFocusNode: _balanceFocus,
                       textCapitalization: TextCapitalization.words,
+                      autocorrect: false,
                       onTap: () => _nameController.selection = TextSelection(
                         baseOffset: 0,
                         extentOffset: _nameController.text.length,
@@ -2617,9 +2620,7 @@ class _BinderTemplateSelectionStep extends StatelessWidget {
                           ),
                         ),
 
-                        const Spacer(),
-
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 32),
 
                         OutlinedButton(
                           onPressed: () {

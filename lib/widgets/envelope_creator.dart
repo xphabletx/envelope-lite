@@ -715,6 +715,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           focusNode: _nameFocus,
                           nextFocusNode: _subtitleFocus,
                           textCapitalization: TextCapitalization.words,
+                          autocorrect: false,
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -781,6 +782,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           focusNode: _subtitleFocus,
                           nextFocusNode: _amountFocus,
                           textCapitalization: TextCapitalization.words,
+                          autocorrect: false,
                           maxLines: 1, // FIX: Prevent multi-line expansion
                           style: fontProvider
                               .getTextStyle(fontSize: 18)
@@ -818,6 +820,10 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
+                          onChanged: (value) {
+                            // Trigger rebuild so InsightTile gets updated startingAmount
+                            setState(() {});
+                          },
                           style: fontProvider.getTextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,

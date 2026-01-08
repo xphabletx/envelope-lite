@@ -654,9 +654,17 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
   bool _showRecurringBillTip = false;
   bool _showPayDayTip = false;
 
+  late final EnvelopeRepo _envelopeRepo;
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize envelope repo for InsightTile to load existing commitments
+    _envelopeRepo = EnvelopeRepo.firebase(
+      FirebaseFirestore.instance,
+      userId: widget.userId,
+    );
 
     _currentAmountController = TextEditingController(
       text: widget.data.currentAmount > 0
@@ -909,6 +917,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       InsightTile(
                         userId: widget.userId,
                         startingAmount: widget.data.currentAmount, // Pass starting amount for gap calculation
+                        envelopeRepo: _envelopeRepo, // Pass repo to load existing commitments
                         initiallyExpanded: true, // Auto-expand for onboarding
                         onInsightChanged: (InsightData data) {
                           setState(() {

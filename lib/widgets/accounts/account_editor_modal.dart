@@ -519,6 +519,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
                       focusNode: _nameFocus,
                       nextFocusNode: _balanceFocus,
                       textCapitalization: TextCapitalization.words,
+                      autocorrect: false,
                       style: fontProvider.getTextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

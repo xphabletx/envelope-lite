@@ -25,8 +25,11 @@ class AuthService {
   // --- Sign In Methods ---
 
   static Future<UserCredential> signInWithGoogle() async {
+    debugPrint('[AuthService] 🔐 Starting Google sign-in');
+
     final googleUser = await _google.signIn();
     if (googleUser == null) {
+      debugPrint('[AuthService] ❌ Google sign-in cancelled by user');
       throw FirebaseAuthException(
         code: 'canceled',
         message: 'Google sign-in cancelled',
@@ -38,13 +41,25 @@ class AuthService {
       idToken: googleAuth.idToken,
     );
     final cred = await _auth.signInWithCredential(credential);
-    await _touchUserDoc(cred.user);
+    debugPrint('[AuthService] ✅ Firebase sign-in successful');
 
-    // NEW: Identify user in RevenueCat
+    await _touchUserDoc(cred.user);
+    debugPrint('[AuthService] ✅ User doc touched in Firestore');
+
+    // NEW: Identify user in RevenueCat with timeout protection
     if (cred.user != null) {
-      await SubscriptionService().identifyUser(cred.user!.uid);
+      try {
+        debugPrint('[AuthService] 🔄 Identifying user in RevenueCat...');
+        await SubscriptionService().identifyUser(cred.user!.uid)
+            .timeout(const Duration(seconds: 5));
+        debugPrint('[AuthService] ✅ RevenueCat identification complete');
+      } catch (e) {
+        debugPrint('[AuthService] ⚠️ RevenueCat identification failed or timed out: $e');
+        // Don't block sign-in if RevenueCat fails
+      }
     }
 
+    debugPrint('[AuthService] ✅ Google sign-in flow complete');
     return cred;
   }
 
@@ -52,17 +67,31 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    debugPrint('[AuthService] 🔐 Starting email sign-in for: $email');
+
     final cred = await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
-    await _touchUserDoc(cred.user);
+    debugPrint('[AuthService] ✅ Firebase sign-in successful');
 
-    // NEW: Identify user in RevenueCat
+    await _touchUserDoc(cred.user);
+    debugPrint('[AuthService] ✅ User doc touched in Firestore');
+
+    // NEW: Identify user in RevenueCat with timeout protection
     if (cred.user != null) {
-      await SubscriptionService().identifyUser(cred.user!.uid);
+      try {
+        debugPrint('[AuthService] 🔄 Identifying user in RevenueCat...');
+        await SubscriptionService().identifyUser(cred.user!.uid)
+            .timeout(const Duration(seconds: 5));
+        debugPrint('[AuthService] ✅ RevenueCat identification complete');
+      } catch (e) {
+        debugPrint('[AuthService] ⚠️ RevenueCat identification failed or timed out: $e');
+        // Don't block sign-in if RevenueCat fails
+      }
     }
 
+    debugPrint('[AuthService] ✅ Email sign-in flow complete');
     return cred;
   }
 
@@ -122,7 +151,9 @@ class AuthService {
   /// For iOS-only apps, this parameter can be omitted.
   static Future<UserCredential> signInWithApple() async {
     try {
-      // Request Apple ID credential
+      debugPrint('[AuthService] 🔐 Starting Apple sign-in');
+
+      // Request Apple ID credential with timeout for simulator issues
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -133,7 +164,14 @@ class AuthService {
         //   clientId: 'YOUR_SERVICE_ID',
         //   redirectUri: Uri.parse('YOUR_REDIRECT_URI'),
         // ),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('[AuthService] ⏱️ Apple sign-in timed out after 30 seconds');
+          throw TimeoutException('Apple Sign-In timed out. This often happens on simulators. Please try on a real device or use email/Google sign-in.');
+        },
       );
+      debugPrint('[AuthService] ✅ Apple credential received');
 
       // Create OAuth credential for Firebase
       final oAuthCredential = OAuthProvider('apple.com').credential(
@@ -143,6 +181,7 @@ class AuthService {
 
       // Sign in to Firebase
       final cred = await _auth.signInWithCredential(oAuthCredential);
+      debugPrint('[AuthService] ✅ Firebase sign-in successful');
 
       // Apple might not provide email on subsequent sign-ins
       // Use the name from first sign-in if available
@@ -153,23 +192,36 @@ class AuthService {
                 .trim();
         if (displayName.isNotEmpty) {
           await cred.user?.updateDisplayName(displayName);
+          debugPrint('[AuthService] ✅ Display name updated');
         }
       }
 
       await _touchUserDoc(cred.user);
+      debugPrint('[AuthService] ✅ User doc touched in Firestore');
 
-      // NEW: Identify user in RevenueCat
+      // NEW: Identify user in RevenueCat with timeout protection
       if (cred.user != null) {
-        await SubscriptionService().identifyUser(cred.user!.uid);
+        try {
+          debugPrint('[AuthService] 🔄 Identifying user in RevenueCat...');
+          await SubscriptionService().identifyUser(cred.user!.uid)
+              .timeout(const Duration(seconds: 5));
+          debugPrint('[AuthService] ✅ RevenueCat identification complete');
+        } catch (e) {
+          debugPrint('[AuthService] ⚠️ RevenueCat identification failed or timed out: $e');
+          // Don't block sign-in if RevenueCat fails
+        }
       }
 
+      debugPrint('[AuthService] ✅ Apple sign-in flow complete');
       return cred;
-    } on SignInWithAppleAuthorizationException catch (e) {
+    } on SignInWithAppleAuthorizationException catch (_) {
+      debugPrint('[AuthService] ❌ Apple sign-in cancelled by user');
       throw FirebaseAuthException(
         code: 'apple-signin-cancelled',
         message: 'Apple Sign-In was cancelled',
       );
     } catch (e) {
+      debugPrint('[AuthService] ❌ Apple sign-in failed: $e');
       throw FirebaseAuthException(
         code: 'apple-signin-failed',
         message: 'Apple Sign-In failed: ${e.toString()}',

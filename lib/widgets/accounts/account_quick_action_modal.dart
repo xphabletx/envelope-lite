@@ -466,6 +466,7 @@ class _AccountQuickActionModalState extends State<AccountQuickActionModal> {
           SmartTextField(
             controller: _descController,
             textCapitalization: TextCapitalization.words,
+            autocorrect: false,
             decoration: InputDecoration(
               labelText: 'Description (Optional)',
               border: OutlineInputBorder(

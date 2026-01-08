@@ -232,6 +232,7 @@ class _DepositModalState extends State<DepositModal> {
               SmartTextField(
                 controller: _descriptionController,
                 textCapitalization: TextCapitalization.words,
+                autocorrect: false,
                 decoration: InputDecoration(
                   labelText: tr('description_optional'),
                   border: OutlineInputBorder(

@@ -875,6 +875,7 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
                                 SmartTextFormField(
                                   controller: _nameCtrl,
                                   textCapitalization: TextCapitalization.words,
+                                  autocorrect: false,
                                   decoration: InputDecoration(
                                     labelText: tr('group_binder_name_label'),
                                     labelStyle: fontProvider.getTextStyle(

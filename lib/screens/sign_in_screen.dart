@@ -57,32 +57,40 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _withApple() async {
+    debugPrint('[SignInScreen] 🍎 Apple sign-in button pressed');
     setState(() {
       _busy = true;
       _error = null;
     });
+    debugPrint('[SignInScreen] 🔄 Set busy=true, calling AuthService...');
     try {
       await AuthService.signInWithApple();
+      debugPrint('[SignInScreen] ✅ Apple sign-in completed successfully');
     } on FirebaseAuthException catch (e) {
+      debugPrint('[SignInScreen] ❌ Apple sign-in failed: ${e.code} - ${e.message}');
       final msg = e.message ?? 'Authentication error.';
       setState(() => _error = msg);
       _showSnack(msg);
     } catch (e) {
+      debugPrint('[SignInScreen] ❌ Apple sign-in unexpected error: $e');
       final msg = e.toString();
       setState(() => _error = msg);
       _showSnack(msg);
     } finally {
+      debugPrint('[SignInScreen] 🔄 Setting busy=false');
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _signInEmail() async {
+    debugPrint('[SignInScreen] 🔐 Email sign-in button pressed');
     final email = _email.text.trim();
     final pass = _pass.text;
     if (email.isEmpty || pass.isEmpty) {
       const msg = 'Email and password required';
       setState(() => _error = msg);
       _showSnack(msg);
+      debugPrint('[SignInScreen] ❌ Validation failed: empty fields');
       return;
     }
 
@@ -90,10 +98,13 @@ class _SignInScreenState extends State<SignInScreen> {
       _busy = true;
       _error = null;
     });
+    debugPrint('[SignInScreen] 🔄 Set busy=true, calling AuthService...');
 
     try {
       await AuthService.signInWithEmail(email: email, password: pass);
+      debugPrint('[SignInScreen] ✅ AuthService returned successfully');
     } on FirebaseAuthException catch (e) {
+      debugPrint('[SignInScreen] ❌ FirebaseAuthException: ${e.code} - ${e.message}');
       String msg;
       switch (e.code) {
         case 'user-not-found':
@@ -117,10 +128,12 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() => _error = msg);
       _showSnack(msg);
     } catch (e) {
+      debugPrint('[SignInScreen] ❌ Unexpected error: $e');
       final msg = e.toString();
       setState(() => _error = msg);
       _showSnack(msg);
     } finally {
+      debugPrint('[SignInScreen] 🔄 Setting busy=false');
       if (mounted) setState(() => _busy = false);
     }
   }

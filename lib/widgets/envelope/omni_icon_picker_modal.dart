@@ -156,6 +156,7 @@ class _OmniIconPickerModalState extends State<OmniIconPickerModal> {
               controller: _searchController,
               onChanged: _onSearchChanged,
               textCapitalization: TextCapitalization.words,
+              autocorrect: false,
               decoration: InputDecoration(
                 hintText: 'Search icons, logos, emojis...',
                 hintStyle: fontProvider.getTextStyle(
