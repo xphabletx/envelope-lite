@@ -264,25 +264,47 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   }
 
   List<Envelope> _getFilteredEnvelopes(List<Envelope> allEnvelopes) {
+    debugPrint('[HorizonNavigator-Filter] ========================================');
+    debugPrint('[HorizonNavigator-Filter] Filtering envelopes');
+    debugPrint('[HorizonNavigator-Filter] Input count: ${allEnvelopes.length}');
+
     // WORKSPACE FIX: Exclude partner envelopes - you can't manage their targets
     final currentUserId = widget.envelopeRepo.currentUserId;
     var filtered = allEnvelopes
         .where((e) => e.userId == currentUserId)
         .toList();
+    debugPrint('[HorizonNavigator-Filter] After user filter: ${filtered.length}');
 
     // Filter by group if specified
     if (widget.initialGroupId != null) {
       filtered = filtered.where((e) => e.groupId == widget.initialGroupId).toList();
+      debugPrint('[HorizonNavigator-Filter] After group filter: ${filtered.length}');
     }
 
     // Only show envelopes with targets
-    return filtered
+    final result = filtered
         .where((e) => e.targetAmount != null && e.targetAmount! > 0)
         .toList();
+    debugPrint('[HorizonNavigator-Filter] After target filter: ${result.length}');
+
+    // Debug: show cashflow status for each
+    for (var envelope in result) {
+      debugPrint('[HorizonNavigator-Filter]   "${envelope.name}": cashFlow=${envelope.cashFlowEnabled}, amount=${envelope.cashFlowAmount}');
+    }
+
+    debugPrint('[HorizonNavigator-Filter] ========================================');
+    return result;
   }
 
   void _initializeAllocations(List<Envelope> targetEnvelopes) {
+    debugPrint('[HorizonNavigator-Init] ========================================');
+    debugPrint('[HorizonNavigator-Init] Initializing allocations');
+    debugPrint('[HorizonNavigator-Init] Selected envelope IDs: $_selectedEnvelopeIds');
+    debugPrint('[HorizonNavigator-Init] Contribution allocations empty: ${_contributionAllocations.isEmpty}');
+
     if (_selectedEnvelopeIds.isEmpty || _contributionAllocations.isNotEmpty) {
+      debugPrint('[HorizonNavigator-Init] Skipping initialization (empty selection or already initialized)');
+      debugPrint('[HorizonNavigator-Init] ========================================');
       return;
     }
 
@@ -292,40 +314,57 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     _boostAllocations.clear();
     _totalCashflow = 0.0;
 
+    debugPrint('[HorizonNavigator-Init] Detecting cashflow for ${_selectedEnvelopeIds.length} envelopes');
+
     for (var id in _selectedEnvelopeIds) {
       final envelope = targetEnvelopes.firstWhere((e) => e.id == id);
+
+      debugPrint('[HorizonNavigator-Init] Envelope: ${envelope.name}');
+      debugPrint('[HorizonNavigator-Init]   cashFlowEnabled: ${envelope.cashFlowEnabled}');
+      debugPrint('[HorizonNavigator-Init]   cashFlowAmount: ${envelope.cashFlowAmount}');
 
       // Detect cashflow if enabled
       if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null && envelope.cashFlowAmount! > 0) {
         _cashflowAllocations[id] = envelope.cashFlowAmount!;
         _originalCashflow[id] = envelope.cashFlowAmount!;
         _totalCashflow += envelope.cashFlowAmount!;
+        debugPrint('[HorizonNavigator-Init]   ✓ Cashflow detected: ${envelope.cashFlowAmount}');
       } else {
         _cashflowAllocations[id] = 0.0;
         _originalCashflow[id] = 0.0;
+        debugPrint('[HorizonNavigator-Init]   ✗ No cashflow');
       }
 
       _envelopeFrequencies[id] = _defaultFrequency;
     }
 
+    debugPrint('[HorizonNavigator-Init] ---');
+    debugPrint('[HorizonNavigator-Init] Total cashflow detected: $_totalCashflow');
+
     // Initialize contribution allocations based on detected cashflow percentages
     if (_totalCashflow > 0) {
+      debugPrint('[HorizonNavigator-Init] Using cashflow-based split');
       // Use detected cashflow split
       for (var id in _selectedEnvelopeIds) {
         final cashflowAmount = _cashflowAllocations[id] ?? 0.0;
         _contributionAllocations[id] = (cashflowAmount / _totalCashflow) * 100.0;
         // Initialize boost allocations to same split
         _boostAllocations[id] = (cashflowAmount / _totalCashflow) * 100.0;
+        debugPrint('[HorizonNavigator-Init]   $id: ${_contributionAllocations[id]!.toStringAsFixed(1)}%');
       }
     } else {
+      debugPrint('[HorizonNavigator-Init] Using equal distribution (no cashflow detected)');
       // No cashflow detected, use equal distribution
       final count = _selectedEnvelopeIds.length;
       final equalPercentage = count > 0 ? 100.0 / count : 0.0;
       for (var id in _selectedEnvelopeIds) {
         _contributionAllocations[id] = equalPercentage;
         _boostAllocations[id] = equalPercentage;
+        debugPrint('[HorizonNavigator-Init]   $id: ${equalPercentage.toStringAsFixed(1)}%');
       }
     }
+
+    debugPrint('[HorizonNavigator-Init] ========================================');
 
     // Calculate available funds
     _calculateAvailableFunds();
@@ -334,6 +373,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   /// Calculate available funds for boost contributions
   /// Formula: accountBalance - cashflowReserve - unpreparedAutopilot
   Future<void> _calculateAvailableFunds() async {
+    debugPrint('[HorizonNavigator-Funds] ========================================');
+    debugPrint('[HorizonNavigator-Funds] Calculating available funds');
+
     _accountBalance = 0.0;
     _cashflowReserve = 0.0;
     _autopilotCoverage = 0.0;
@@ -342,16 +384,19 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     try {
       // Get account balance (use available balance from the special envelope)
       final envelopes = await widget.envelopeRepo.envelopesStream().first;
+      debugPrint('[HorizonNavigator-Funds] Total envelopes in repo: ${envelopes.length}');
 
       // Find the default account's available balance envelope
       final accounts = await widget.accountRepo.accountsStream().first;
       final userAccounts = accounts.where((a) => !a.id.startsWith('_')).toList();
+      debugPrint('[HorizonNavigator-Funds] User accounts: ${userAccounts.length}');
 
       if (userAccounts.isNotEmpty) {
         final defaultAccount = userAccounts.firstWhere(
           (a) => a.isDefault,
           orElse: () => userAccounts.first,
         );
+        debugPrint('[HorizonNavigator-Funds] Default account: ${defaultAccount.name}');
 
         // Find the available balance envelope for this account
         final availableEnvelope = envelopes.firstWhere(
@@ -365,22 +410,28 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         );
 
         _accountBalance = availableEnvelope.currentAmount;
+        debugPrint('[HorizonNavigator-Funds] Account balance: $_accountBalance');
       }
 
       // Calculate cashflow reserve (sum of detected cashflow)
       _cashflowReserve = _totalCashflow;
+      debugPrint('[HorizonNavigator-Funds] Cashflow reserve: $_cashflowReserve');
 
       // For now, set autopilot coverage to 0 (can be enhanced later if needed)
       // The full calculation would require access to ScheduledPaymentRepo which isn't passed to this widget
       _autopilotCoverage = 0.0;
+      debugPrint('[HorizonNavigator-Funds] Autopilot coverage: $_autopilotCoverage');
 
       // Calculate available
       _availableForBoost = _accountBalance - _cashflowReserve - _autopilotCoverage;
       if (_availableForBoost < 0) _availableForBoost = 0.0;
+      debugPrint('[HorizonNavigator-Funds] Available for boost: $_availableForBoost');
 
     } catch (e) {
-      debugPrint('[HorizonNavigator] Error calculating available funds: $e');
+      debugPrint('[HorizonNavigator-Funds] Error calculating available funds: $e');
     }
+
+    debugPrint('[HorizonNavigator-Funds] ========================================');
   }
 
   void _updateAllocation(String envelopeId, double newPercentage) {
@@ -584,6 +635,9 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             }
 
             final allEnvelopes = snapshot.data!;
+            debugPrint('[HorizonNavigator-Build] ========================================');
+            debugPrint('[HorizonNavigator-Build] Building Horizon Navigator');
+            debugPrint('[HorizonNavigator-Build] Total envelopes: ${allEnvelopes.length}');
 
             // Apply time machine projections to envelopes
             final projectedEnvelopes = allEnvelopes.map((envelope) {
@@ -591,6 +645,10 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             }).toList();
 
             final targetEnvelopes = _getFilteredEnvelopes(projectedEnvelopes);
+            debugPrint('[HorizonNavigator-Build] Target envelopes (with targets): ${targetEnvelopes.length}');
+            debugPrint('[HorizonNavigator-Build] Selected envelope count: ${_selectedEnvelopeIds.length}');
+            debugPrint('[HorizonNavigator-Build] Total cashflow: $_totalCashflow');
+            debugPrint('[HorizonNavigator-Build] ========================================');
 
             // Auto-select all if in single mode and no selection
             if (widget.mode == TargetScreenMode.singleEnvelope &&
@@ -1361,6 +1419,53 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                           ],
                         ),
                       ),
+                      // Select All button when collapsed
+                      if (!isExpanded && widget.mode != TargetScreenMode.singleEnvelope)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                // Check if all envelopes in this binder are already selected
+                                final allSelected = envelopes.every((e) => _selectedEnvelopeIds.contains(e.id));
+
+                                if (allSelected) {
+                                  // Deselect all
+                                  for (var envelope in envelopes) {
+                                    _selectedEnvelopeIds.remove(envelope.id);
+                                    _contributionAllocations.remove(envelope.id);
+                                    _envelopeFrequencies.remove(envelope.id);
+                                    _cashflowAllocations.remove(envelope.id);
+                                    _boostAllocations.remove(envelope.id);
+                                  }
+                                } else {
+                                  // Select all
+                                  for (var envelope in envelopes) {
+                                    _selectedEnvelopeIds.add(envelope.id);
+                                  }
+                                  _initializeAllocations(envelopes);
+                                }
+                              });
+                            },
+                            icon: Icon(
+                              envelopes.every((e) => _selectedEnvelopeIds.contains(e.id))
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              size: 18,
+                            ),
+                            label: Text(
+                              envelopes.every((e) => _selectedEnvelopeIds.contains(e.id))
+                                  ? 'Deselect All'
+                                  : 'Select All',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ),
                       Icon(
                         isExpanded ? Icons.expand_less : Icons.expand_more,
                         color: theme.colorScheme.primary,
@@ -1984,23 +2089,23 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                ] else if (_totalCashflow == 0) ...[
+                ] else if (_totalCashflow == 0 && _selectedEnvelopeIds.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.errorContainer.withAlpha(51),
+                      color: theme.colorScheme.primaryContainer.withAlpha(51),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 16, color: theme.colorScheme.error),
+                        Icon(Icons.info_outline, size: 16, color: theme.colorScheme.primary),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'No cashflow detected. Add boost amount to distribute.',
+                            'No autopilot cashflow configured for selected envelopes. Enter a contribution amount to distribute manually.',
                             style: TextStyle(
                               fontSize: 11,
-                              color: theme.colorScheme.error,
+                              color: theme.colorScheme.onSurface.withAlpha(179),
                             ),
                           ),
                         ),

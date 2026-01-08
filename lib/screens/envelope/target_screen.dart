@@ -5,6 +5,7 @@ import '../../models/envelope.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
 import 'multi_target_screen.dart';
 
 /// Legacy wrapper for backwards compatibility
@@ -29,6 +30,7 @@ class TargetScreen extends StatelessWidget {
       envelopeRepo: envelopeRepo,
       groupRepo: groupRepo,
       accountRepo: accountRepo,
+                    scheduledPaymentRepo: ScheduledPaymentRepo(envelopeRepo.currentUserId),
       initialEnvelopeIds: [envelope.id],
       mode: TargetScreenMode.singleEnvelope,
       title: '${envelope.name} Target',

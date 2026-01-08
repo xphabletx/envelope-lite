@@ -62,60 +62,69 @@ class _TimeMachineTransitionState extends State<TimeMachineTransition>
     return Material(
       color: Colors.black.withValues(alpha: 0.9),
       child: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _fadeAnimation.value,
-              child: Transform.scale(
-                scale: _scaleAnimation.value,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 120,
-                      color: theme.colorScheme.secondary.withValues(
-                        alpha: _fadeAnimation.value,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'TIME MACHINE',
-                      style: fontProvider.getTextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _fadeAnimation.value,
+                child: Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 100,
                         color: theme.colorScheme.secondary.withValues(
                           alpha: _fadeAnimation.value,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Traveling to...',
-                      style: TextStyle(
-                        fontSize: 20,
-                        color: Colors.white.withValues(
-                          alpha: _fadeAnimation.value * 0.7,
+                      const SizedBox(height: 24),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'TIME MACHINE',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.secondary.withValues(
+                              alpha: _fadeAnimation.value,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      dateFormat.format(widget.targetDate),
-                      style: fontProvider.getTextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withValues(
-                          alpha: _fadeAnimation.value,
+                      const SizedBox(height: 16),
+                      Text(
+                        'Traveling to...',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.white.withValues(
+                            alpha: _fadeAnimation.value * 0.7,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          dateFormat.format(widget.targetDate),
+                          style: fontProvider.getTextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white.withValues(
+                              alpha: _fadeAnimation.value,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

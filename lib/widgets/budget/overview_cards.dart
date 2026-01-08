@@ -454,6 +454,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
                     envelopeRepo: widget.envelopeRepo,
                     groupRepo: GroupRepo(widget.envelopeRepo),
                     accountRepo: widget.accountRepo,
+                    scheduledPaymentRepo: ScheduledPaymentRepo(widget.envelopeRepo.currentUserId),
                     mode: TargetScreenMode.multiEnvelope,
                   ),
                 ),
@@ -732,6 +733,7 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
               // Instantiate required repos
               groupRepo: GroupRepo(widget.envelopeRepo),
               accountRepo: AccountRepo(widget.envelopeRepo),
+                    scheduledPaymentRepo: ScheduledPaymentRepo(widget.envelopeRepo.currentUserId),
             ),
           ),
         );
