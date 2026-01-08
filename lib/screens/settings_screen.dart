@@ -1387,6 +1387,7 @@ class SettingsScreen extends StatelessWidget {
       debugPrint('✅ Cleared all groups from Hive');
 
       // 5. Force delete from Firestore (cloud)
+      // Delete from root collections (solo mode data)
       await repo.db
           .collection('envelopes')
           .where('userId', isEqualTo: repo.currentUserId)
@@ -1395,7 +1396,7 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from Firestore');
+        debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from Firestore root collection');
       });
 
       await repo.db
@@ -1406,7 +1407,7 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} transactions from Firestore');
+        debugPrint('✅ Deleted ${snapshot.docs.length} transactions from Firestore root collection');
       });
 
       await repo.db
@@ -1417,8 +1418,53 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from Firestore');
+        debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from Firestore root collection');
       });
+
+      // WORKSPACE MODE: Also delete from workspace subcollections
+      final workspaceId = repo.workspaceId;
+      if (workspaceId != null && workspaceId.isNotEmpty) {
+        debugPrint('🔥 Detected workspace mode - deleting from workspace: $workspaceId');
+
+        // Delete workspace envelopes
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('envelopes')
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+          debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from workspace collection');
+        });
+
+        // Delete workspace transactions
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('transactions')
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+          debugPrint('✅ Deleted ${snapshot.docs.length} transactions from workspace collection');
+        });
+
+        // Delete workspace scheduled payments
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('scheduledPayments')
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+          debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from workspace collection');
+        });
+      }
 
       if (context.mounted) {
         Navigator.of(context).pop(); // Dismiss loading dialog
