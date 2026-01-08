@@ -106,25 +106,32 @@ class _InsightTileState extends State<InsightTile> {
 
   Future<void> _loadExistingCommitments() async {
     if (widget.envelopeRepo == null) {
+      debugPrint('[InsightTile] 💰 No envelopeRepo - setting commitments to 0');
       setState(() => _existingCommitments = 0.0);
       return;
     }
 
     try {
       // IMPORTANT: Only get current user's envelopes (not partner's in workspace)
+      debugPrint('[InsightTile] 💰 Loading existing commitments...');
       final allEnvelopes = await widget.envelopeRepo!.envelopesStream(showPartnerEnvelopes: false).first;
       final envelopes = allEnvelopes
           .where((e) => e.userId == widget.envelopeRepo!.currentUserId)
           .toList();
+
+      debugPrint('[InsightTile] 💰 Found ${envelopes.length} user envelopes (filtered by userId=${widget.envelopeRepo!.currentUserId})');
 
       double total = 0.0;
 
       for (final envelope in envelopes) {
         // Only count envelopes with cash flow enabled
         if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
+          debugPrint('[InsightTile] 💰   - ${envelope.name}: ${envelope.cashFlowAmount} (userId=${envelope.userId})');
           total += envelope.cashFlowAmount!;
         }
       }
+
+      debugPrint('[InsightTile] 💰 Total existing commitments: $total');
 
       if (mounted) {
         setState(() {
@@ -133,7 +140,7 @@ class _InsightTileState extends State<InsightTile> {
         _recalculate(); // Recalculate with updated commitments
       }
     } catch (e) {
-      debugPrint('Error loading existing commitments: $e');
+      debugPrint('[InsightTile] ❌ Error loading existing commitments: $e');
       if (mounted) {
         setState(() => _existingCommitments = 0.0);
       }
