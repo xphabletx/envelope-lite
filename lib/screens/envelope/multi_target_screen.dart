@@ -75,6 +75,21 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   bool _manualOverride = false; // True when user types manually
   bool _baselineCalculated = false; // Track if baseline has been calculated
 
+  // NEW: Cashflow Detection & Boost Mode
+  final Map<String, double> _cashflowAllocations = {}; // envelopeId -> detected cashflow amount
+  final Map<String, double> _originalCashflow = {}; // Track original cashflow to detect changes
+  double _totalCashflow = 0.0; // Sum of all detected cashflow
+  final TextEditingController _boostAmountController = TextEditingController();
+  double _boostAmount = 0.0;
+  bool _isBoostMode = false; // false = cashflow mode, true = boost mode
+  final Map<String, double> _boostAllocations = {}; // envelopeId -> boost percentage (0-100)
+
+  // NEW: Available Funds Tracking
+  double _accountBalance = 0.0;
+  double _cashflowReserve = 0.0;
+  double _autopilotCoverage = 0.0;
+  double _availableForBoost = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +102,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
   @override
   void dispose() {
     _totalContributionController.dispose();
+    _boostAmountController.dispose();
     super.dispose();
   }
 
@@ -264,12 +280,100 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       return;
     }
 
-    final count = _selectedEnvelopeIds.length;
-    final equalPercentage = count > 0 ? 100.0 / count : 0.0;
+    // Detect cashflow from selected envelopes
+    _cashflowAllocations.clear();
+    _originalCashflow.clear();
+    _boostAllocations.clear();
+    _totalCashflow = 0.0;
 
     for (var id in _selectedEnvelopeIds) {
-      _contributionAllocations[id] = equalPercentage;
+      final envelope = targetEnvelopes.firstWhere((e) => e.id == id);
+
+      // Detect cashflow if enabled
+      if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null && envelope.cashFlowAmount! > 0) {
+        _cashflowAllocations[id] = envelope.cashFlowAmount!;
+        _originalCashflow[id] = envelope.cashFlowAmount!;
+        _totalCashflow += envelope.cashFlowAmount!;
+      } else {
+        _cashflowAllocations[id] = 0.0;
+        _originalCashflow[id] = 0.0;
+      }
+
       _envelopeFrequencies[id] = _defaultFrequency;
+    }
+
+    // Initialize contribution allocations based on detected cashflow percentages
+    if (_totalCashflow > 0) {
+      // Use detected cashflow split
+      for (var id in _selectedEnvelopeIds) {
+        final cashflowAmount = _cashflowAllocations[id] ?? 0.0;
+        _contributionAllocations[id] = (cashflowAmount / _totalCashflow) * 100.0;
+        // Initialize boost allocations to same split
+        _boostAllocations[id] = (cashflowAmount / _totalCashflow) * 100.0;
+      }
+    } else {
+      // No cashflow detected, use equal distribution
+      final count = _selectedEnvelopeIds.length;
+      final equalPercentage = count > 0 ? 100.0 / count : 0.0;
+      for (var id in _selectedEnvelopeIds) {
+        _contributionAllocations[id] = equalPercentage;
+        _boostAllocations[id] = equalPercentage;
+      }
+    }
+
+    // Calculate available funds
+    _calculateAvailableFunds();
+  }
+
+  /// Calculate available funds for boost contributions
+  /// Formula: accountBalance - cashflowReserve - unpreparedAutopilot
+  Future<void> _calculateAvailableFunds() async {
+    _accountBalance = 0.0;
+    _cashflowReserve = 0.0;
+    _autopilotCoverage = 0.0;
+    _availableForBoost = 0.0;
+
+    try {
+      // Get account balance (use available balance from the special envelope)
+      final envelopes = await widget.envelopeRepo.envelopesStream().first;
+
+      // Find the default account's available balance envelope
+      final accounts = await widget.accountRepo.accountsStream().first;
+      final userAccounts = accounts.where((a) => !a.id.startsWith('_')).toList();
+
+      if (userAccounts.isNotEmpty) {
+        final defaultAccount = userAccounts.firstWhere(
+          (a) => a.isDefault,
+          orElse: () => userAccounts.first,
+        );
+
+        // Find the available balance envelope for this account
+        final availableEnvelope = envelopes.firstWhere(
+          (e) => e.id == '_account_available_${defaultAccount.id}',
+          orElse: () => Envelope(
+            id: '_account_available_${defaultAccount.id}',
+            name: 'Available',
+            userId: defaultAccount.userId,
+            currentAmount: 0,
+          ),
+        );
+
+        _accountBalance = availableEnvelope.currentAmount;
+      }
+
+      // Calculate cashflow reserve (sum of detected cashflow)
+      _cashflowReserve = _totalCashflow;
+
+      // For now, set autopilot coverage to 0 (can be enhanced later if needed)
+      // The full calculation would require access to ScheduledPaymentRepo which isn't passed to this widget
+      _autopilotCoverage = 0.0;
+
+      // Calculate available
+      _availableForBoost = _accountBalance - _cashflowReserve - _autopilotCoverage;
+      if (_availableForBoost < 0) _availableForBoost = 0.0;
+
+    } catch (e) {
+      debugPrint('[HorizonNavigator] Error calculating available funds: $e');
     }
   }
 
@@ -277,27 +381,61 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     if (!_selectedEnvelopeIds.contains(envelopeId)) return;
 
     setState(() {
-      final oldPercentage = _contributionAllocations[envelopeId] ?? 0;
-      final difference = newPercentage - oldPercentage;
+      if (_isBoostMode) {
+        // BOOST MODE: Update boost allocations, keep cashflow locked
+        final oldPercentage = _boostAllocations[envelopeId] ?? 0;
+        final difference = newPercentage - oldPercentage;
 
-      // Update this envelope's percentage
-      _contributionAllocations[envelopeId] = newPercentage;
+        _boostAllocations[envelopeId] = newPercentage;
 
-      // Distribute the difference among other selected envelopes
-      final otherEnvelopes = _selectedEnvelopeIds
-          .where((id) => id != envelopeId)
-          .toList();
-      if (otherEnvelopes.isNotEmpty) {
-        final adjustmentPerEnvelope = -difference / otherEnvelopes.length;
-        for (var otherId in otherEnvelopes) {
-          final current = _contributionAllocations[otherId] ?? 0;
-          _contributionAllocations[otherId] = (current + adjustmentPerEnvelope)
-              .clamp(0.0, 100.0);
+        // Distribute the difference among other selected envelopes
+        final otherEnvelopes = _selectedEnvelopeIds
+            .where((id) => id != envelopeId)
+            .toList();
+        if (otherEnvelopes.isNotEmpty) {
+          final adjustmentPerEnvelope = -difference / otherEnvelopes.length;
+          for (var otherId in otherEnvelopes) {
+            final current = _boostAllocations[otherId] ?? 0;
+            _boostAllocations[otherId] = (current + adjustmentPerEnvelope)
+                .clamp(0.0, 100.0);
+          }
         }
-      }
 
-      // Normalize to ensure total is exactly 100%
-      _normalizeAllocations();
+        // Normalize boost allocations
+        _normalizeBoostAllocations();
+      } else {
+        // CASHFLOW MODE: Update contribution allocations and cashflow amounts
+        final oldPercentage = _contributionAllocations[envelopeId] ?? 0;
+        final difference = newPercentage - oldPercentage;
+
+        _contributionAllocations[envelopeId] = newPercentage;
+
+        // Update cashflow allocation based on new percentage
+        if (_totalCashflow > 0) {
+          _cashflowAllocations[envelopeId] = _totalCashflow * (newPercentage / 100.0);
+        }
+
+        // Distribute the difference among other selected envelopes
+        final otherEnvelopes = _selectedEnvelopeIds
+            .where((id) => id != envelopeId)
+            .toList();
+        if (otherEnvelopes.isNotEmpty) {
+          final adjustmentPerEnvelope = -difference / otherEnvelopes.length;
+          for (var otherId in otherEnvelopes) {
+            final current = _contributionAllocations[otherId] ?? 0;
+            _contributionAllocations[otherId] = (current + adjustmentPerEnvelope)
+                .clamp(0.0, 100.0);
+
+            // Update cashflow for other envelopes too
+            if (_totalCashflow > 0) {
+              _cashflowAllocations[otherId] = _totalCashflow * (_contributionAllocations[otherId]! / 100.0);
+            }
+          }
+        }
+
+        // Normalize to ensure total is exactly 100%
+        _normalizeAllocations();
+      }
     });
   }
 
@@ -330,6 +468,26 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     // Verify total is exactly 100%
     final newTotal = _contributionAllocations.values.fold(0.0, (sum, v) => sum + v);
     debugPrint('[HorizonNavigator-Allocation] Normalized total: $newTotal%');
+  }
+
+  void _normalizeBoostAllocations() {
+    if (_selectedEnvelopeIds.isEmpty) return;
+
+    final total = _boostAllocations.values.fold(0.0, (sum, v) => sum + v);
+
+    if (total == 0) {
+      // Edge case: All allocations are 0, distribute equally
+      final equalPercentage = 100.0 / _selectedEnvelopeIds.length;
+      for (var id in _selectedEnvelopeIds) {
+        _boostAllocations[id] = equalPercentage;
+      }
+      return;
+    }
+
+    final factor = 100.0 / total;
+    for (var id in _selectedEnvelopeIds) {
+      _boostAllocations[id] = (_boostAllocations[id] ?? 0) * factor;
+    }
   }
 
   /// Sandbox Engine: Simulate horizon reach dates based on contribution inputs
@@ -543,16 +701,6 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
           ),
           const SizedBox(height: 16),
         ],
-
-        // Overall Progress Summary
-        _buildProgressSummary(
-          targetEnvelopes,
-          theme,
-          fontProvider,
-          locale,
-          timeMachine,
-        ),
-        const SizedBox(height: 24),
 
         // Envelope List with Selection
         _buildEnvelopeList(
@@ -1503,24 +1651,143 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
         .where((e) => _selectedEnvelopeIds.contains(e.id))
         .toList();
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    // Calculate total horizons summary data
+    final totalTarget = selectedEnvelopes.fold(0.0, (sum, e) => sum + (e.targetAmount ?? 0));
+    final totalCurrent = selectedEnvelopes.fold(0.0, (sum, e) => sum + e.currentAmount);
+    final progress = totalTarget > 0 ? (totalCurrent / totalTarget).clamp(0.0, 1.0) : 0.0;
+    final remaining = totalTarget - totalCurrent;
+
+    // Check if on track
+    bool allOnTrack = true;
+    for (var envelope in selectedEnvelopes.where((e) => e.targetDate != null)) {
+      final isOnTrack = _onTrackStatus[envelope.id] ?? true;
+      if (!isOnTrack) {
+        allOnTrack = false;
+        break;
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.primaryContainer.withAlpha(128),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withAlpha(51),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: ExpansionTile(
         initiallyExpanded: _showCalculator,
         onExpansionChanged: (expanded) {
           setState(() => _showCalculator = expanded);
         },
-        leading: Icon(Icons.calculate, color: theme.colorScheme.primary),
-        title: Text(
-          'Horizon Navigator',
-          style: fontProvider.getTextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+        shape: const Border(),
+        backgroundColor: Colors.transparent,
+        collapsedBackgroundColor: Colors.transparent,
+        leading: Icon(Icons.wb_twilight, color: theme.colorScheme.secondary, size: 28),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Horizon Navigator',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+            // On Track Badge
+            if (selectedEnvelopes.where((e) => e.targetDate != null).isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: allOnTrack
+                      ? theme.colorScheme.secondary.withAlpha(51)
+                      : theme.colorScheme.error.withAlpha(51),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: allOnTrack
+                        ? theme.colorScheme.secondary.withAlpha(128)
+                        : theme.colorScheme.error.withAlpha(128),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      allOnTrack ? Icons.check_circle : Icons.warning_amber_rounded,
+                      size: 14,
+                      color: allOnTrack ? theme.colorScheme.secondary : theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      allOnTrack ? 'On Track' : 'Behind',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: allOnTrack ? theme.colorScheme.secondary : theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
-        subtitle: Text(
-          'Simulate contributions for ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  locale.formatCurrency(totalCurrent),
+                  style: fontProvider.getTextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+                Text(
+                  'of ${locale.formatCurrency(totalTarget)}',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onPrimaryContainer.withAlpha(204),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: theme.colorScheme.onPrimaryContainer.withAlpha(51),
+                valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${(progress * 100).toStringAsFixed(1)}% • ${locale.formatCurrency(remaining)} remaining',
+              style: TextStyle(
+                fontSize: 11,
+                color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+              ),
+            ),
+          ],
         ),
         children: [
           Padding(
@@ -1528,6 +1795,218 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // NEW: Cashflow Display Section
+                if (_totalCashflow > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.secondary.withAlpha(26),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.secondary.withAlpha(77),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.water_drop, size: 20, color: theme.colorScheme.secondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Detected Cashflow',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'You have ${locale.formatCurrency(_totalCashflow)} in detected cashflow',
+                          style: fontProvider.getTextStyle(
+                            fontSize: 14,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Split: ${selectedEnvelopes.map((e) => '${((_cashflowAllocations[e.id] ?? 0) / _totalCashflow * 100).toStringAsFixed(0)}%').join(' / ')}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onPrimaryContainer.withAlpha(179),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // NEW: Available Funds Display
+                if (_accountBalance > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withAlpha(128),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withAlpha(77),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.account_balance_wallet, size: 18, color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Available Funds',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _buildFundsRow('Account Balance', _accountBalance, locale, theme, fontProvider),
+                        _buildFundsRow('Cash Flow Reserved', -_cashflowReserve, locale, theme, fontProvider, isNegative: true),
+                        if (_autopilotCoverage > 0)
+                          _buildFundsRow('Autopilot Coverage', -_autopilotCoverage, locale, theme, fontProvider, isNegative: true),
+                        const Divider(height: 16, thickness: 1),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Available for Boost',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.secondary,
+                              ),
+                            ),
+                            Text(
+                              locale.formatCurrency(_availableForBoost),
+                              style: fontProvider.getTextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: theme.colorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // NEW: Boost Contribution Field
+                SmartTextField(
+                  controller: _boostAmountController,
+                  decoration: InputDecoration(
+                    labelText: 'Contribute More (Boost)',
+                    labelStyle: fontProvider.getTextStyle(fontSize: 16),
+                    prefixText: '${locale.currencySymbol} ',
+                    hintText: 'Optional extra contribution',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.secondary.withAlpha(13),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    setState(() {
+                      _boostAmount = double.tryParse(value) ?? 0.0;
+                      // If boost mode was active and amount is now 0, switch back to cashflow mode
+                      if (_boostAmount == 0 && _isBoostMode) {
+                        _isBoostMode = false;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // NEW: Cashflow/Boost Toggle
+                if (_boostAmount > 0) ...[
+                  SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: false,
+                        label: Text('Cashflow', style: fontProvider.getTextStyle(fontSize: 13)),
+                        icon: const Icon(Icons.water_drop, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text('Boost', style: fontProvider.getTextStyle(fontSize: 13)),
+                        icon: const Icon(Icons.rocket_launch, size: 16),
+                      ),
+                    ],
+                    selected: {_isBoostMode},
+                    onSelectionChanged: (Set<bool> selected) {
+                      setState(() {
+                        _isBoostMode = selected.first;
+                      });
+                    },
+                    style: ButtonStyle(
+                      backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                        if (states.contains(MaterialState.selected)) {
+                          return theme.colorScheme.secondary.withAlpha(51);
+                        }
+                        return theme.colorScheme.surfaceContainerHighest;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isBoostMode
+                        ? 'Adjust boost distribution (cashflow locked)'
+                        : 'Adjust cashflow percentage split',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withAlpha(179),
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (_totalCashflow == 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer.withAlpha(51),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: theme.colorScheme.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'No cashflow detected. Add boost amount to distribute.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                const Divider(thickness: 1),
+                const SizedBox(height: 16),
+
                 // Total Contribution Amount Input
                 SmartTextField(
                   controller: _totalContributionController,
@@ -1599,6 +2078,20 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     });
                   },
                 ),
+                const SizedBox(height: 8),
+                // Explanation: Total is calculated from Cash Flow
+                if (_baselineTotal > 0 && !_manualOverride)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Text(
+                      'Detected from Cash Flow: ${locale.currencySymbol}${_baselineTotal.toStringAsFixed(2)}/month',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.secondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 // Default Frequency Selector
@@ -1787,6 +2280,67 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                     color: theme.colorScheme.onSurface.withAlpha(179),
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Baseline Stats Box
+                if (_baselineTotal > 0)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withAlpha(77),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Baseline (from Cash Flow):',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurface.withAlpha(179),
+                              ),
+                            ),
+                            Text(
+                              '${locale.currencySymbol}${_baselineTotal.toStringAsFixed(2)}/month',
+                              style: fontProvider.getTextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_velocityMultiplier != 1.0) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Adjusted Total:',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.secondary,
+                                ),
+                              ),
+                              Text(
+                                '${locale.currencySymbol}${(_baselineTotal * _velocityMultiplier).toStringAsFixed(2)}/month',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 ...selectedEnvelopes.map((envelope) {
@@ -1801,32 +2355,78 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   );
                 }),
 
-                // NEW: Commit Strategy Button
+                // NEW: Smart Commit Button (changes based on what was modified)
                 const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () => _commitStrategy(selectedEnvelopes, theme, fontProvider),
-                  icon: const Icon(Icons.save),
-                  label: Text(
-                    'Commit Strategy to Cash Flow',
-                    style: fontProvider.getTextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                    backgroundColor: theme.colorScheme.secondary,
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Saves your strategy to each envelope\'s Cash Flow settings',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withAlpha(128),
-                  ),
+                Builder(
+                  builder: (context) {
+                    // Detect what changed
+                    bool cashflowChanged = false;
+                    for (var id in _selectedEnvelopeIds) {
+                      final original = _originalCashflow[id] ?? 0.0;
+                      final current = _cashflowAllocations[id] ?? 0.0;
+                      if ((original - current).abs() > 0.01) {
+                        cashflowChanged = true;
+                        break;
+                      }
+                    }
+
+                    final hasBoost = _boostAmount > 0;
+
+                    // Determine button text and icon
+                    String buttonText;
+                    IconData buttonIcon;
+                    if (cashflowChanged && hasBoost) {
+                      buttonText = 'Commit STRATEGY + BOOST';
+                      buttonIcon = Icons.rocket_launch;
+                    } else if (hasBoost) {
+                      buttonText = 'Commit BOOST to Cash Flow';
+                      buttonIcon = Icons.rocket_launch;
+                    } else {
+                      buttonText = 'Commit to Cash Flow Strategy';
+                      buttonIcon = Icons.save;
+                    }
+
+                    return Column(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => _commitStrategy(
+                            selectedEnvelopes,
+                            theme,
+                            fontProvider,
+                            locale,
+                            cashflowChanged: cashflowChanged,
+                            hasBoost: hasBoost,
+                          ),
+                          icon: Icon(buttonIcon),
+                          label: Text(
+                            buttonText,
+                            style: fontProvider.getTextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                            backgroundColor: theme.colorScheme.secondary,
+                            minimumSize: const Size(double.infinity, 50),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          cashflowChanged && hasBoost
+                              ? 'Updates ongoing cashflow AND applies one-time boost'
+                              : hasBoost
+                                  ? 'Applies one-time boost (cashflow unchanged)'
+                                  : 'Updates your ongoing Cash Flow settings',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurface.withAlpha(128),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -1841,137 +2441,264 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     List<Envelope> selectedEnvelopes,
     ThemeData theme,
     FontProvider fontProvider,
-  ) async {
-    final totalContribution = double.tryParse(_totalContributionController.text) ?? 0;
+    LocaleProvider locale, {
+    required bool cashflowChanged,
+    required bool hasBoost,
+  }) async {
+    // Determine dialog content based on scenario
+    String dialogTitle;
+    List<Widget> dialogContent = [];
 
-    if (totalContribution <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please enter a valid contribution amount'),
-          backgroundColor: theme.colorScheme.error,
+    if (cashflowChanged && hasBoost) {
+      // SCENARIO C: Both cashflow and boost
+      dialogTitle = 'Confirm Strategy + Boost?';
+      dialogContent = [
+        Text(
+          'NEW Cashflow Strategy:',
+          style: fontProvider.getTextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
-      );
-      return;
+        const SizedBox(height: 8),
+        ...selectedEnvelopes.map((envelope) {
+          final cashflowAmount = _cashflowAllocations[envelope.id] ?? 0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                envelope.getIconWidget(theme, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(envelope.name, style: const TextStyle(fontSize: 13))),
+                Text(
+                  locale.formatCurrency(cashflowAmount),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary, fontSize: 13),
+                ),
+              ],
+            ),
+          );
+        }),
+        const Divider(height: 20),
+        Text(
+          'PLUS One-Time Boost:',
+          style: fontProvider.getTextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        ...selectedEnvelopes.map((envelope) {
+          final boostPercentage = _boostAllocations[envelope.id] ?? 0;
+          final boostAmount = _boostAmount * (boostPercentage / 100);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                envelope.getIconWidget(theme, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(envelope.name, style: const TextStyle(fontSize: 13))),
+                Text(
+                  locale.formatCurrency(boostAmount),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 13),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer.withAlpha(51),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            'This updates your ongoing cashflow AND applies a boost now',
+            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withAlpha(204)),
+          ),
+        ),
+      ];
+    } else if (hasBoost) {
+      // SCENARIO B: Boost only
+      dialogTitle = 'Add Boost Contribution?';
+      dialogContent = [
+        Text(
+          'Current cashflow strategy: ${locale.formatCurrency(_totalCashflow)} (unchanged)',
+          style: const TextStyle(fontSize: 13),
+        ),
+        const Divider(height: 20),
+        Text(
+          'Boost amounts:',
+          style: fontProvider.getTextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        ...selectedEnvelopes.map((envelope) {
+          final boostPercentage = _boostAllocations[envelope.id] ?? 0;
+          final boostAmount = _boostAmount * (boostPercentage / 100);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                envelope.getIconWidget(theme, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(envelope.name, style: const TextStyle(fontSize: 13))),
+                Text(
+                  locale.formatCurrency(boostAmount),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 13),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withAlpha(51),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.account_balance_wallet, size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Source: Account unassigned balance',
+                  style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withAlpha(204)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ];
+    } else {
+      // SCENARIO A: Cashflow only
+      dialogTitle = 'Update Cash Flow Settings?';
+      dialogContent = [
+        const Text('New cashflow amounts:', style: TextStyle(fontSize: 13)),
+        const SizedBox(height: 8),
+        ...selectedEnvelopes.map((envelope) {
+          final cashflowAmount = _cashflowAllocations[envelope.id] ?? 0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                envelope.getIconWidget(theme, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(envelope.name, style: const TextStyle(fontSize: 13))),
+                Text(
+                  locale.formatCurrency(cashflowAmount),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary, fontSize: 13),
+                ),
+              ],
+            ),
+          );
+        }),
+      ];
     }
 
     // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Commit Strategy?',
-          style: fontProvider.getTextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+        title: Text(dialogTitle, style: fontProvider.getTextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: dialogContent,
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'This will update Cash Flow settings for all selected envelopes:',
-            ),
-            const SizedBox(height: 12),
-            ...selectedEnvelopes.map((envelope) {
-              final allocation = _contributionAllocations[envelope.id] ?? 0;
-              final amount = totalContribution * (allocation / 100);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    envelope.getIconWidget(theme, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        envelope.name,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Text(
-                      Provider.of<LocaleProvider>(context, listen: false)
-                          .formatCurrency(amount),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.secondary,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer.withAlpha(51),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Cash Flow will be enabled and set to these monthly amounts',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, 'cancel'),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: theme.colorScheme.secondary,
+          if (cashflowChanged)
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'edit'),
+              child: const Text('Edit'),
             ),
-            child: const Text('Commit'),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'confirm'),
+            style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.secondary),
+            child: const Text('Confirm'),
           ),
         ],
       ),
     );
 
-    if (confirmed != true) return;
+    if (result != 'confirm') return;
 
-    // Apply changes to all selected envelopes
-    for (var envelope in selectedEnvelopes) {
-      final allocation = _contributionAllocations[envelope.id] ?? 0;
-      final amount = totalContribution * (allocation / 100);
+    // Execute the commit based on scenario
+    try {
+      if (cashflowChanged) {
+        // Update cashflow settings
+        for (var envelope in selectedEnvelopes) {
+          final cashflowAmount = _cashflowAllocations[envelope.id] ?? 0;
+          await widget.envelopeRepo.updateEnvelope(
+            envelopeId: envelope.id,
+            cashFlowEnabled: true,
+            cashFlowAmount: cashflowAmount,
+          );
+        }
+      }
 
-      // Update envelope with new Cash Flow settings
-      await widget.envelopeRepo.updateEnvelope(
-        envelopeId: envelope.id,
-        cashFlowEnabled: true,
-        cashFlowAmount: amount,
-      );
-    }
+      if (hasBoost) {
+        // Apply boost transactions
+        final accounts = await widget.accountRepo.accountsStream().first;
+        final userAccounts = accounts.where((a) => !a.id.startsWith('_')).toList();
 
-    // Show success message
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Strategy committed! ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'} updated.',
+        if (userAccounts.isNotEmpty) {
+          final defaultAccount = userAccounts.firstWhere(
+            (a) => a.isDefault,
+            orElse: () => userAccounts.first,
+          );
+
+          for (var envelope in selectedEnvelopes) {
+            final boostPercentage = _boostAllocations[envelope.id] ?? 0;
+            final boostAmount = _boostAmount * (boostPercentage / 100);
+
+            if (boostAmount > 0) {
+              await widget.accountRepo.transferToEnvelope(
+                accountId: defaultAccount.id,
+                envelopeId: envelope.id,
+                amount: boostAmount,
+                description: 'Boost Contribution',
+                date: DateTime.now(),
+                envelopeRepo: widget.envelopeRepo,
+              );
+            }
+          }
+        }
+      }
+
+      // Show success message
+      if (mounted) {
+        String message;
+        if (cashflowChanged && hasBoost) {
+          message = 'Strategy + Boost committed! ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'} updated.';
+        } else if (hasBoost) {
+          message = 'Boost applied! ${locale.formatCurrency(_boostAmount)} distributed.';
+        } else {
+          message = 'Cashflow strategy committed! ${selectedEnvelopes.length} envelope${selectedEnvelopes.length == 1 ? '' : 's'} updated.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: theme.colorScheme.secondary,
+            action: SnackBarAction(
+              label: 'Done',
+              textColor: theme.colorScheme.onSecondary,
+              onPressed: () {},
+            ),
           ),
-          backgroundColor: theme.colorScheme.secondary,
-          action: SnackBarAction(
-            label: 'Done',
-            textColor: theme.colorScheme.onSecondary,
-            onPressed: () {},
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: theme.colorScheme.error,
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -1982,15 +2709,26 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
     LocaleProvider locale,
     double totalAmount,
   ) {
-    final percentage = _contributionAllocations[envelope.id] ?? 0;
-    final envelopeAmount = totalAmount * (percentage / 100);
+    // Use the appropriate allocation map based on mode
+    final percentage = _isBoostMode
+        ? (_boostAllocations[envelope.id] ?? 0)
+        : (_contributionAllocations[envelope.id] ?? 0);
+
+    // Calculate amounts
+    final cashflowAmount = _cashflowAllocations[envelope.id] ?? 0;
+    final boostPercentage = _boostAllocations[envelope.id] ?? 0;
+    final boostAmount = _boostAmount * (boostPercentage / 100);
+    final totalEnvelopeAmount = _isBoostMode
+        ? cashflowAmount + boostAmount // In boost mode, show cashflow + boost
+        : cashflowAmount; // In cashflow mode, just show adjusted cashflow
+
     final frequency = _envelopeFrequencies[envelope.id] ?? _defaultFrequency;
     final isExpanded = _expandedEnvelopeProjections.contains(envelope.id);
 
     // Calculate projection
     final remaining = (envelope.targetAmount ?? 0) - envelope.currentAmount;
-    final contributionsNeeded = envelopeAmount > 0
-        ? (remaining / envelopeAmount).ceil()
+    final contributionsNeeded = totalEnvelopeAmount > 0
+        ? (remaining / totalEnvelopeAmount).ceil()
         : 0;
     final daysPerContribution = _getDaysPerFrequency(frequency);
     final daysToTarget = contributionsNeeded * daysPerContribution;
@@ -2106,7 +2844,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      locale.formatCurrency(envelopeAmount),
+                                      locale.formatCurrency(totalEnvelopeAmount),
                                       style: fontProvider.getTextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -2273,7 +3011,7 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
                   ),
                   _buildProjectionRow(
                     'Per $frequencyLabel',
-                    locale.formatCurrency(envelopeAmount),
+                    locale.formatCurrency(totalEnvelopeAmount),
                     fontProvider,
                   ),
                   _buildProjectionRow(
@@ -2534,6 +3272,44 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       default:
         return 30;
     }
+  }
+
+  /// Helper widget for available funds breakdown rows
+  Widget _buildFundsRow(
+    String label,
+    double amount,
+    LocaleProvider locale,
+    ThemeData theme,
+    FontProvider fontProvider, {
+    bool isNegative = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: fontProvider.getTextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurface.withAlpha(179),
+            ),
+          ),
+          Text(
+            isNegative
+                ? '-${locale.formatCurrency(amount.abs())}'
+                : locale.formatCurrency(amount),
+            style: fontProvider.getTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isNegative
+                  ? theme.colorScheme.error.withAlpha(179)
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildProjectionRow(
