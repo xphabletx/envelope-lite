@@ -10,6 +10,7 @@ import '../../providers/locale_provider.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart';
+import '../../services/scheduled_payment_repo.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../widgets/common/smart_text_field.dart';
@@ -23,11 +24,13 @@ class PayDayCockpit extends StatefulWidget {
     required this.repo,
     required this.groupRepo,
     required this.accountRepo,
+    required this.scheduledPaymentRepo,
   });
 
   final EnvelopeRepo repo;
   final GroupRepo groupRepo;
   final AccountRepo accountRepo;
+  final ScheduledPaymentRepo scheduledPaymentRepo;
 
   @override
   State<PayDayCockpit> createState() => _PayDayCockpitState();
@@ -68,6 +71,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
       envelopeRepo: widget.repo,
       groupRepo: widget.groupRepo,
       accountRepo: widget.accountRepo,
+      scheduledPaymentRepo: widget.scheduledPaymentRepo,
       userId: widget.repo.currentUserId,
     );
     _provider.initialize().then((_) {
@@ -132,10 +136,10 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 
   double _calculateRemainingSource(PayDayCockpitProvider provider) {
     if (provider.isAccountMode && provider.defaultAccount != null) {
-      // In account mode: use visual animation progress for account deposit
+      // In account mode: source only decreases during account deposit animation
+      // Once money is in the account, source stays at 0
       final accountDepositProgress = provider.accountDepositProgress;
-      final envelopesStuffed = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
-      return provider.externalInflow - accountDepositProgress - envelopesStuffed;
+      return provider.externalInflow - accountDepositProgress;
     } else {
       // In non-account mode, source decreases as envelopes fill
       final totalStuffedSoFar = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
@@ -202,6 +206,13 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             'Cash Flow',
             currency.format(totalCashFlow),
             theme.colorScheme.secondary,
+            fontProvider,
+          ),
+          _buildStatChip(
+            '⏰',
+            'Autopilot',
+            currency.format(_provider.autopilotUpcoming),
+            _provider.autopilotUpcoming > 0 ? Colors.deepPurple.shade600 : Colors.grey.shade600,
             fontProvider,
           ),
           _buildStatChip(
@@ -338,6 +349,8 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Text(
                           '${currency.format(binderCashFlow)} cash flow • $binderHorizon horizons (${currency.format(binderHorizonValue)})',
@@ -804,24 +817,26 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
 
     if (result != null && mounted) {
       setState(() {
-        if (result.binderId != null) {
+        // Add all selected binders
+        for (final binderId in result.binderIds) {
           // Add binder and expand it
-          _expandedBinderIds.add(result.binderId!);
+          _expandedBinderIds.add(binderId);
 
           // Add all envelopes in this binder with their cash flow amounts
-          final binderEnvelopes = _provider.allEnvelopes.where((e) => e.groupId == result.binderId);
+          final binderEnvelopes = _provider.allEnvelopes.where((e) => e.groupId == binderId);
           for (final env in binderEnvelopes) {
             if (env.cashFlowEnabled && env.cashFlowAmount != null && env.cashFlowAmount! > 0) {
               _tempAllocations[env.id] = env.cashFlowAmount!;
             }
           }
-        } else if (result.envelopeId != null) {
-          // Add individual envelope
-          final envelope = _provider.allEnvelopes.firstWhere((e) => e.id == result.envelopeId);
+        }
+
+        // Add all selected individual envelopes
+        for (final envelopeId in result.envelopeIds) {
+          final envelope = _provider.allEnvelopes.firstWhere((e) => e.id == envelopeId);
           final amount = result.customAmount ?? envelope.cashFlowAmount ?? 0.0;
-          if (amount > 0) {
-            _tempAllocations[envelope.id] = amount;
-          }
+          // Add to allocations even if amount is 0, so user can manually set it
+          _tempAllocations[envelope.id] = amount;
         }
       });
     }
@@ -861,10 +876,11 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                   ),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Text(
                     'Edit Cash Flow Amount',
                     style: fontProvider.getTextStyle(
@@ -1054,6 +1070,7 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                     ),
                   ),
                 ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -1472,12 +1489,17 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                     final tempAmount = entry.value;
                     final envelope = _provider.allEnvelopes.firstWhere((e) => e.id == envelopeId);
                     final baselineAmount = envelope.cashFlowAmount ?? 0.0;
-
-                    // Check if this is an increase (implicit boost)
-                    final implicitBoost = tempAmount > baselineAmount ? (tempAmount - baselineAmount) : 0.0;
+                    final hasCashFlow = envelope.cashFlowEnabled && baselineAmount > 0;
 
                     // Check if there's an explicit boost slider value
                     final hasExplicitBoost = _horizonBoosts.containsKey(envelopeId) && (_horizonBoosts[envelopeId] ?? 0) > 0;
+
+                    // Implicit boost logic: ONLY for cash-flow-enabled envelopes with a horizon
+                    // For manual additions to non-cash-flow envelopes, treat the whole amount as base
+                    final canHaveImplicitBoost = hasCashFlow && envelope.targetAmount != null;
+                    final implicitBoost = canHaveImplicitBoost && tempAmount > baselineAmount
+                        ? (tempAmount - baselineAmount)
+                        : 0.0;
 
                     if (implicitBoost > 0) {
                       // Implicit boost: base is baseline, boost is the increase
@@ -1494,8 +1516,8 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                       // No implicit boost, use temp amount as base
                       baseAllocations[envelopeId] = tempAmount;
 
-                      // Add explicit boost if exists
-                      if (hasExplicitBoost) {
+                      // Add explicit boost if exists (only for envelopes with horizons)
+                      if (hasExplicitBoost && envelope.targetAmount != null) {
                         final sliderBoostPercentage = _horizonBoosts[envelopeId]!;
                         final sliderBoostAmount = tempAmount * sliderBoostPercentage;
                         calculatedBoosts[envelopeId] = sliderBoostAmount;
@@ -1507,15 +1529,16 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                   _calculatedBoosts.clear();
                   _calculatedBoosts.addAll(calculatedBoosts);
 
-                  // Sync to provider: base + boost combined
+                  // Sync to provider: ONLY base amounts (boosts are passed separately to executeStuffing)
                   final allEnvelopeIds = _provider.allEnvelopes.map((e) => e.id).toList();
                   for (final id in allEnvelopeIds) {
                     if (!baseAllocations.containsKey(id)) {
                       _provider.updateEnvelopeAllocation(id, 0.0);
                     } else {
                       final base = baseAllocations[id] ?? 0.0;
-                      final boost = calculatedBoosts[id] ?? 0.0;
-                      _provider.updateEnvelopeAllocation(id, base + boost);
+                      // Only pass the base amount to provider allocations
+                      // Boosts will be added separately during Phase 3 animation
+                      _provider.updateEnvelopeAllocation(id, base);
                     }
                   }
 
@@ -1573,15 +1596,16 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     FontProvider fontProvider,
     PayDayCockpitProvider provider,
   ) {
+    // Store initial account balance IMMEDIATELY before any animation
+    if (provider.isAccountMode && provider.defaultAccount != null && _initialAccountBalance == 0.0) {
+      _initialAccountBalance = provider.defaultAccount!.currentBalance;
+    }
+
     // Start the execution immediately with boosts (only once!)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (provider.currentPhase == CockpitPhase.stuffingExecution &&
           !_hasStartedExecution) {
         _hasStartedExecution = true;
-        // Store initial account balance before animation starts
-        if (provider.isAccountMode && provider.defaultAccount != null) {
-          _initialAccountBalance = provider.defaultAccount!.currentBalance;
-        }
         // Use the pre-calculated boosts (both implicit and explicit)
         provider.executeStuffing(boosts: _calculatedBoosts);
       }
@@ -1732,20 +1756,28 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        // AnimatedSwitcher for smooth number updates (increasing balance)
+                        // AnimatedSwitcher for smooth number updates (account balance changes)
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 300),
                           transitionBuilder: (Widget child, Animation<double> animation) {
                             return FadeTransition(opacity: animation, child: child);
                           },
-                          child: Text(
-                            currency.format(_initialAccountBalance + provider.accountDepositProgress),
-                            key: ValueKey<double>(_initialAccountBalance + provider.accountDepositProgress),
-                            style: fontProvider.getTextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary,
-                            ),
+                          child: Builder(
+                            builder: (context) {
+                              // Calculate current account balance:
+                              // Initial + deposit progress - total stuffed into envelopes
+                              final envelopesStuffedTotal = provider.stuffingProgress.values.fold(0.0, (sum, amount) => sum + amount);
+                              final currentAccountBalance = _initialAccountBalance + provider.accountDepositProgress - envelopesStuffedTotal;
+                              return Text(
+                                currency.format(currentAccountBalance),
+                                key: ValueKey<double>(currentAccountBalance),
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -2215,6 +2247,21 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
               ),
             ],
 
+            // Autopilot Preparedness Section
+            if (provider.upcomingPayments.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              Text(
+                'Autopilot Status',
+                style: fontProvider.getTextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildAutopilotPreparednessCard(provider, theme, fontProvider, currency),
+            ],
+
             const SizedBox(height: 32),
 
             // Top 3 horizons moved forward
@@ -2278,9 +2325,10 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     String value,
     MaterialColor color,
     ThemeData theme,
-    FontProvider fontProvider,
-  ) {
-    return Container(
+    FontProvider fontProvider, {
+    VoidCallback? onTap,
+  }) {
+    final cardContent = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -2314,6 +2362,138 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
             ),
             textAlign: TextAlign.center,
           ),
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: cardContent,
+      );
+    }
+
+    return cardContent;
+  }
+
+  Widget _buildAutopilotPreparednessCard(
+    PayDayCockpitProvider provider,
+    ThemeData theme,
+    FontProvider fontProvider,
+    NumberFormat currency,
+  ) {
+    final preparedCount = provider.autopilotPreparedness.values.where((prepared) => prepared).length;
+    final totalCount = provider.upcomingPayments.length;
+    final allPrepared = preparedCount == totalCount;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: allPrepared
+              ? [Colors.green.shade50, Colors.green.shade100]
+              : [Colors.orange.shade50, Colors.orange.shade100],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: allPrepared ? Colors.green.shade300 : Colors.orange.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                allPrepared ? '✅' : '⚠️',
+                style: const TextStyle(fontSize: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  allPrepared
+                      ? 'All Envelopes Ready for Autopilot!'
+                      : 'Some Envelopes Need Attention',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: allPrepared ? Colors.green.shade900 : Colors.orange.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$preparedCount of $totalCount upcoming scheduled payments are fully funded',
+            style: fontProvider.getTextStyle(
+              fontSize: 14,
+              color: allPrepared ? Colors.green.shade700 : Colors.orange.shade700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...provider.upcomingPayments.map<Widget>((payment) {
+            final envelope = provider.allEnvelopes.firstWhere(
+              (e) => e.id == payment.envelopeId,
+              orElse: () => Envelope(
+                id: payment.envelopeId ?? '',
+                name: 'Unknown',
+                userId: provider.userId,
+                currentAmount: 0,
+              ),
+            );
+            final isPrepared = provider.autopilotPreparedness[payment.envelopeId] ?? false;
+            final shortage = isPrepared ? 0.0 : (payment.amount - envelope.currentAmount);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Text(
+                    isPrepared ? '✓' : '✗',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: isPrepared ? Colors.green.shade700 : Colors.red.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  envelope.getIconWidget(theme, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          envelope.name,
+                          style: fontProvider.getTextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (!isPrepared)
+                          Text(
+                            'Short ${currency.format(shortage)}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 11,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    currency.format(payment.amount),
+                    style: fontProvider.getTextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isPrepared ? Colors.green.shade700 : Colors.orange.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );

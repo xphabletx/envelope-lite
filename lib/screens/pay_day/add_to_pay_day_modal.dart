@@ -8,11 +8,15 @@ import '../../../providers/time_machine_provider.dart';
 import '../../../utils/responsive_helper.dart';
 
 class PayDayAddition {
-  final String? envelopeId;
-  final String? binderId;
+  final List<String> envelopeIds;
+  final List<String> binderIds;
   final double? customAmount;
 
-  PayDayAddition({this.envelopeId, this.binderId, this.customAmount});
+  PayDayAddition({
+    this.envelopeIds = const [],
+    this.binderIds = const [],
+    this.customAmount,
+  });
 }
 
 class AddToPayDayModal extends StatefulWidget {
@@ -35,8 +39,8 @@ class AddToPayDayModal extends StatefulWidget {
 
 class _AddToPayDayModalState extends State<AddToPayDayModal> {
   final Map<String, TextEditingController> _controllers = {};
-  String? _selectedType; // 'envelope' or 'binder'
-  String? _selectedId;
+  final Set<String> _selectedBinderIds = {};
+  final Set<String> _selectedEnvelopeIds = {};
 
   @override
   void dispose() {
@@ -60,19 +64,16 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
       return;
     }
 
-    if (_selectedId == null) return;
+    if (_selectedBinderIds.isEmpty && _selectedEnvelopeIds.isEmpty) return;
 
-    if (_selectedType == 'binder') {
-      Navigator.pop(
-        context,
-        PayDayAddition(binderId: _selectedId, customAmount: null),
-      );
-    } else {
-      Navigator.pop(
-        context,
-        PayDayAddition(envelopeId: _selectedId, customAmount: null),
-      );
-    }
+    Navigator.pop(
+      context,
+      PayDayAddition(
+        binderIds: _selectedBinderIds.toList(),
+        envelopeIds: _selectedEnvelopeIds.toList(),
+        customAmount: null,
+      ),
+    );
   }
 
   @override
@@ -135,12 +136,15 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                     ),
                     const SizedBox(height: 8),
                     ...availableBinders.map((binder) {
-                      final isSelected = _selectedId == binder.id;
+                      final isSelected = _selectedBinderIds.contains(binder.id);
                       return InkWell(
                         onTap: () {
                           setState(() {
-                            _selectedType = 'binder';
-                            _selectedId = isSelected ? null : binder.id;
+                            if (isSelected) {
+                              _selectedBinderIds.remove(binder.id);
+                            } else {
+                              _selectedBinderIds.add(binder.id);
+                            }
                           });
                         },
                         child: Container(
@@ -156,6 +160,8 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                             title: Text(
                               binder.name,
                               style: fontProvider.getTextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Icon(
                               isSelected ? Icons.check_circle : Icons.circle_outlined,
@@ -180,12 +186,15 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                     ),
                     const SizedBox(height: 8),
                     ...availableEnvelopes.map((env) {
-                      final isSelected = _selectedId == env.id;
+                      final isSelected = _selectedEnvelopeIds.contains(env.id);
                       return InkWell(
                         onTap: () {
                           setState(() {
-                            _selectedType = 'envelope';
-                            _selectedId = isSelected ? null : env.id;
+                            if (isSelected) {
+                              _selectedEnvelopeIds.remove(env.id);
+                            } else {
+                              _selectedEnvelopeIds.add(env.id);
+                            }
                           });
                         },
                         child: Container(
@@ -201,6 +210,8 @@ class _AddToPayDayModalState extends State<AddToPayDayModal> {
                             title: Text(
                               env.name,
                               style: fontProvider.getTextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Icon(
                               isSelected ? Icons.check_circle : Icons.circle_outlined,

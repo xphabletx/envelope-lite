@@ -198,6 +198,17 @@ class TransactionListItem extends StatelessWidget {
     );
   }
 
+  String? _getAccountNameById(String? accountId) {
+    if (accountId == null || accountId.isEmpty) return null;
+
+    try {
+      final account = accounts.firstWhere((a) => a.id == accountId);
+      return account.name;
+    } catch (e) {
+      return null;
+    }
+  }
+
   TransactionDisplayInfo _getDisplayInfo(BuildContext context) {
     final theme = Theme.of(context);
     final t = transaction;
@@ -351,8 +362,9 @@ class TransactionListItem extends StatelessWidget {
         }
 
         // Regular transfers
-        String targetName = t.targetEnvelopeName ?? 'Unknown';
-        String sourceTransferName = t.sourceEnvelopeName ?? 'Unknown';
+        // Try to get names from envelope names first, then fall back to account lookup
+        String targetName = t.targetEnvelopeName ?? _getAccountNameById(t.destinationId) ?? 'Unknown';
+        String sourceTransferName = t.sourceEnvelopeName ?? _getAccountNameById(t.sourceId) ?? 'Unknown';
 
         // For transfers, show "Sent to" or "Received from" based on direction
         bool isOutgoing = t.transferDirection == TransferDirection.out_;
