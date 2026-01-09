@@ -46,6 +46,7 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
+        automaticallyImplyLeading: false, // Prevent double back arrow (fullscreenDialog already adds one)
         title: Text(
           'Choose Binder Template',
           style: fontProvider.getTextStyle(
