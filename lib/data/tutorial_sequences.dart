@@ -108,7 +108,8 @@ const envelopeDetailTutorial = TutorialSequence(
       id: 'cash_flow',
       emoji: '💡',
       title: 'Insight Intelligence',
-      description: 'Tap the Insight chip to enable smart financial planning! Let AI analyze your envelope and suggest optimal cash flow amounts! 🤖',
+      description:
+          'Tap the Cash Flow button to enable smart financial planning! Insight will analyze your envelope and suggest optimal cash flow amounts! 🤖',
       spotlightWidgetKey: 'cash_flow_card',
     ),
     TutorialStep(
@@ -116,7 +117,7 @@ const envelopeDetailTutorial = TutorialSequence(
       emoji: '🚀',
       title: 'Autopilot Automation',
       description:
-          'Tap the Autopilot chip to schedule automatic deposits or withdrawals! Set it once and never worry about it again! ⚡',
+          'Tap the Autopilot button to schedule automatic transfers or withdrawals! Set it once and never worry about it again! ⚡',
       spotlightWidgetKey: 'autopilot_card',
     ),
     TutorialStep(

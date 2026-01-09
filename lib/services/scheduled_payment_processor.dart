@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'envelope_repo.dart';
 import 'scheduled_payment_repo.dart';
 import 'notification_repo.dart';
+import 'insight_recalculation_service.dart';
 import '../models/app_notification.dart';
 import '../models/scheduled_payment.dart';
 import '../models/envelope.dart';
@@ -169,6 +170,32 @@ class ScheduledPaymentProcessor {
             debugPrint(
               'Processed: ${payment.name} - ${currency.format(amountToDeduct)}',
             );
+
+            // DYNAMIC RECALCULATION: Trigger Insight recalculation after autopilot execution
+            // This allows cash flow amounts to adjust automatically based on new balance
+            if (payment.isAutomatic) {
+              try {
+                final recalcService = InsightRecalculationService();
+                final recalculated = await recalcService.recalculateAfterAutopilot(
+                  envelopeId: payment.envelopeId!,
+                  userId: userId,
+                  envelopeRepo: envelopeRepo,
+                  paymentRepo: paymentRepo,
+                  notificationRepo: notificationRepo,
+                );
+
+                if (recalculated) {
+                  debugPrint(
+                    '✅ Insight recalculated for ${envelope.name} after autopilot payment',
+                  );
+                }
+              } catch (e) {
+                debugPrint(
+                  '⚠️ Error recalculating Insight for ${envelope.name}: $e',
+                );
+                // Don't fail payment processing if recalc fails
+              }
+            }
           }
           // Handle group-based payments (future implementation)
           else if (payment.groupId != null) {

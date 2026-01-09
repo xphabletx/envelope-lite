@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../models/envelope.dart';
 import '../../models/envelope_group.dart';
 import '../../models/account.dart'; // NEW
+import '../../models/scheduled_payment.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/group_repo.dart';
 import '../../services/account_repo.dart'; // NEW
@@ -1142,15 +1143,21 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     const SizedBox(height: 16),
 
                     // INSIGHT TILE - Financial Planning
-                    FutureBuilder(
-                      future: _scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id).first,
+                    FutureBuilder<List<dynamic>>(
+                      future: Future.wait([
+                        _scheduledPaymentRepo.getPaymentsForEnvelope(envelope.id).first,
+                        widget.accountRepo.getDefaultAccount(),
+                      ]),
                       builder: (context, snapshot) {
-                        final scheduledPayments = snapshot.data ?? [];
+                        final scheduledPayments = (snapshot.data?[0] as List<ScheduledPayment>?) ?? [];
+                        final defaultAccount = snapshot.data?[1] as Account?;
+                        final accountBalance = defaultAccount?.currentBalance ?? 0.0;
 
                         return InsightTile(
                           key: _insightKey,
                           userId: widget.repo.currentUserId,
                           startingAmount: envelope.currentAmount,
+                          accountBalance: accountBalance,
                           envelopeRepo: widget.repo,
                           scheduledPayments: scheduledPayments,
                           initialData: InsightData(

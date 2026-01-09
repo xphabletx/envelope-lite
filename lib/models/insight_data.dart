@@ -35,6 +35,13 @@ class InsightData {
   bool? autopilotAlwaysCovered; // True if cash flow always keeps balance above bill amount
   String? coverageSuggestion; // Intelligent suggestion based on coverage analysis
 
+  // DYNAMIC RECALCULATION - Setup phase support for bills due before payday
+  double? initialCatchUpAmount; // One-time "NOW" amount needed to reach first bill
+  double? ongoingCashFlow; // Sustainable "NEXT" amount after first bill is paid
+  bool isInSetupPhase; // True until first bill payment creates steady state
+  DateTime? setupPhaseEndDate; // When setup phase ends (first autopilot payment date)
+  int? payPeriodsUntilSteadyState; // How many pay periods until steady state achieved
+
   InsightData({
     this.horizonEnabled = false,
     this.horizonAmount,
@@ -57,6 +64,11 @@ class InsightData {
     this.autopilotPaymentsCovered,
     this.autopilotAlwaysCovered,
     this.coverageSuggestion,
+    this.initialCatchUpAmount,
+    this.ongoingCashFlow,
+    this.isInSetupPhase = false,
+    this.setupPhaseEndDate,
+    this.payPeriodsUntilSteadyState,
   }) {
     debugPrint('[InsightData] 🆕 Created new InsightData: cashFlowEnabled=$cashFlowEnabled, autopilotAutoExecute=$autopilotAutoExecute');
   }
@@ -148,6 +160,12 @@ class InsightData {
     int? autopilotPaymentsCovered,
     bool? autopilotAlwaysCovered,
     String? coverageSuggestion,
+    double? initialCatchUpAmount,
+    double? ongoingCashFlow,
+    bool? isInSetupPhase,
+    DateTime? setupPhaseEndDate,
+    bool? setupPhaseEndDateCleared,
+    int? payPeriodsUntilSteadyState,
     bool updateWarning = true, // Flag to indicate we're explicitly updating the warning
   }) {
     debugPrint('[InsightData] 📝 copyWith called:');
@@ -186,6 +204,13 @@ class InsightData {
       autopilotPaymentsCovered: autopilotPaymentsCovered ?? this.autopilotPaymentsCovered,
       autopilotAlwaysCovered: autopilotAlwaysCovered ?? this.autopilotAlwaysCovered,
       coverageSuggestion: coverageSuggestion ?? this.coverageSuggestion,
+      initialCatchUpAmount: initialCatchUpAmount ?? this.initialCatchUpAmount,
+      ongoingCashFlow: ongoingCashFlow ?? this.ongoingCashFlow,
+      isInSetupPhase: isInSetupPhase ?? this.isInSetupPhase,
+      setupPhaseEndDate: setupPhaseEndDateCleared == true
+          ? null
+          : (setupPhaseEndDate ?? this.setupPhaseEndDate),
+      payPeriodsUntilSteadyState: payPeriodsUntilSteadyState ?? this.payPeriodsUntilSteadyState,
     );
 
     return newData;
