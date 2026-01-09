@@ -156,7 +156,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
           children: [
             // Title Header with Back button
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
               child: Row(
                 children: [
                   IconButton(
@@ -797,7 +797,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
             children: [
               // Fixed Header with title centered, skip and progress on right
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 24, 0),
+                padding: const EdgeInsets.fromLTRB(16, 60, 24, 0),
                 child: Row(
                   children: [
                     // Title with emoji (centered)
