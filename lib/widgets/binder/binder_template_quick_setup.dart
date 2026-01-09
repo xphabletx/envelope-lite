@@ -145,6 +145,12 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        automaticallyImplyLeading: false, // Prevent double back arrow
+        toolbarHeight: 0, // Hide the AppBar completely
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: Column(
           children: [
