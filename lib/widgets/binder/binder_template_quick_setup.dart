@@ -148,15 +148,15 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
       body: SafeArea(
         child: Column(
           children: [
-            // Title Header with Close button
+            // Title Header with Back button
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.arrow_back),
                     onPressed: () => Navigator.of(context).pop(),
-                    tooltip: 'Cancel',
+                    tooltip: 'Back',
                   ),
                   Expanded(
                     child: Text(
@@ -169,7 +169,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  const SizedBox(width: 48), // Balance the close button
+                  const SizedBox(width: 48), // Balance the back button
                 ],
               ),
             ),
@@ -791,7 +791,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
             children: [
               // Fixed Header with title centered, skip and progress on right
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
+                padding: const EdgeInsets.fromLTRB(16, 24, 24, 0),
                 child: Row(
                   children: [
                     // Title with emoji (centered)

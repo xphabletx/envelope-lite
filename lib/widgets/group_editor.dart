@@ -30,11 +30,12 @@ Future<String?> showGroupEditor({
   String? draftEnvelopeName,
   CreationContext? creationContext,
   String? defaultAccountId, // For Account Mode linking
+  bool skipTemplateSelector = false, // Skip template selector and go straight to editor
 }) async {
   // If creating a new binder (not editing), show template selector first
   BinderTemplate? selectedTemplate;
 
-  if (group == null) {
+  if (group == null && !skipTemplateSelector) {
     // Get existing envelopes to check which templates have been used
     // IMPORTANT: Filter to only current user's envelopes, not partner's
     // (In workspace mode, binders are local-only, so template usage should only

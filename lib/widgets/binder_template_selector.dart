@@ -46,10 +46,6 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close, color: theme.colorScheme.primary, size: isLandscape ? 20 : 24),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           'Choose Binder Template',
           style: fontProvider.getTextStyle(
@@ -68,7 +64,7 @@ class _BinderTemplateSelectorState extends State<BinderTemplateSelector> {
           // From Scratch option
           _TemplateCard(
             title: 'From Scratch',
-            emoji: '✏️',
+            emoji: '📚',
             description: 'Create an empty binder and add envelopes manually',
             envelopeCount: null,
             isSelected: selectedTemplateId == null,

@@ -2797,6 +2797,7 @@ class _StartFromScratchCardState extends State<_StartFromScratchCard> {
       context: context,
       groupRepo: groupRepo,
       envelopeRepo: envelopeRepo,
+      skipTemplateSelector: true, // Skip template selector - user already chose "Start from Scratch"
     );
 
     // If a binder was created, call the callback
@@ -2833,10 +2834,9 @@ class _StartFromScratchCardState extends State<_StartFromScratchCard> {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: Icon(
-                  Icons.edit_note,
-                  color: theme.colorScheme.primary,
-                  size: 28,
+                child: Text(
+                  '📚',
+                  style: TextStyle(fontSize: 28),
                 ),
               ),
             ),
