@@ -154,29 +154,17 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
       body: SafeArea(
         child: Column(
           children: [
-            // Title Header with Back button
+            // Title Header (back arrow is provided by parent onboarding flow)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.of(context).pop(),
-                    tooltip: 'Back',
-                  ),
-                  Expanded(
-                    child: Text(
-                      widget.template.name,
-                      style: fontProvider.getTextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(width: 48), // Balance the back button
-                ],
+              child: Text(
+                widget.template.name,
+                style: fontProvider.getTextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
             // Header
