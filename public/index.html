@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stuffrite | Account Actions ✨</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        :root { --latte-bg: #E8DFD0; --latte-cream: #F8FAF6; --latte-brown: #8B6F47; --latte-dark: #5D4A2F; --latte-gold: #D4AF37; --text: #3E3224; }
+        body { font-family: 'Inter', sans-serif; background: var(--latte-bg); background: linear-gradient(135deg, var(--latte-bg) 0%, var(--latte-cream) 100%); color: var(--text); display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; }
+        .handwriting { font-family: 'Caveat', cursive; font-weight: 700; color: var(--latte-gold); font-size: 2.8rem; }
+        .card { background: white; padding: 3rem; border-radius: 25px; box-shadow: 0 15px 40px rgba(93, 74, 47, 0.1); max-width: 500px; border: 1px solid rgba(212, 175, 55, 0.2); width: 100%; }
+        .logo { height: 60px; border-radius: 12px; margin-bottom: 1.5rem; }
+        h1 { font-size: 2rem; color: var(--latte-dark); margin-bottom: 1rem; line-height: 1.2; }
+        p { font-size: 1.1rem; color: var(--latte-brown); margin-bottom: 2rem; }
+        input { width: 100%; padding: 12px; margin-bottom: 1rem; border-radius: 8px; border: 1px solid var(--latte-bg); font-size: 1rem; }
+        .btn { background: var(--latte-brown); color: white; padding: 1.1rem 2.5rem; border-radius: 12px; font-weight: 700; text-decoration: none; display: none; cursor: pointer; border: none; width: 100%; }
+        .btn:hover { background: var(--latte-dark); transform: translateY(-2px); }
+        #reset-form { display: none; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="logo.jpg" alt="Stuffrite" class="logo">
+        <h1 id="status-title">One <br><span class="handwriting">Moment...</span></h1>
+        <p id="status-text">Processing your request.</p>
+
+        <div id="reset-form">
+            <label style="color: var(--latte-brown); font-weight: 600; margin-bottom: 5px; display: block;">New Password</label>
+            <input type="password" id="new-password" placeholder="••••••••">
+            <button id="submit-reset" class="btn" style="display: block;">Save New Password</button>
+        </div>
+
+        <a href="https://develapp.tech" id="done-btn" class="btn">Back to Stuffrite 🎉</a>
+    </div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getAuth, applyActionCode, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCek6l3pmIrL4p0CBdPfo4L9eVloQCD5i4",
+    authDomain: "teamenvelopes-11262.firebaseapp.com",
+    projectId: "teamenvelopes-11262",
+    storageBucket: "teamenvelopes-11262.firebasestorage.app",
+    messagingSenderId: "407252577895",
+    appId: "1:407252577895:web:fd08fd0692ac330fd86ec2",
+    measurementId: "G-QYPBBV4HZE"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = urlParams.get('mode');
+  const actionCode = urlParams.get('oobCode');
+
+  const title = document.getElementById('status-title');
+  const text = document.getElementById('status-text');
+  const btn = document.getElementById('done-btn');
+  const resetForm = document.getElementById('reset-form');
+
+  // BRANCH 1: EMAIL VERIFICATION
+  if (mode === 'verifyEmail') {
+    applyActionCode(auth, actionCode)
+      .then(() => {
+        title.innerHTML = 'Verification <br><span class="handwriting">Successful!</span>';
+        text.innerHTML = "Your email is confirmed. Ready to take control?";
+        btn.style.display = 'inline-block';
+      })
+      .catch(() => {
+        title.innerHTML = 'Link <br><span class="handwriting" style="color: #e8a0bf;">Error</span>';
+        text.innerHTML = "This link has expired. Try requesting a new one!";
+        btn.style.display = 'inline-block';
+      });
+  } 
+
+  // BRANCH 2: PASSWORD RESET
+  else if (mode === 'resetPassword') {
+    verifyPasswordResetCode(auth, actionCode)
+      .then((email) => {
+        title.innerHTML = 'Reset <br><span class="handwriting">Password</span>';
+        text.innerHTML = `Set a new password for <strong>${email}</strong>`;
+        resetForm.style.display = 'block';
+
+        document.getElementById('submit-reset').onclick = () => {
+          const newPass = document.getElementById('new-password').value;
+          confirmPasswordReset(auth, actionCode, newPass)
+            .then(() => {
+                resetForm.style.display = 'none';
+                title.innerHTML = 'Password <br><span class="handwriting">Updated!</span>';
+                text.innerHTML = "Your new password is saved. You can now log in to the app.";
+                btn.style.display = 'inline-block';
+            })
+            .catch(() => alert("Error updating password. Please try again."));
+        };
+      })
+      .catch(() => {
+        title.innerHTML = 'Link <br><span class="handwriting" style="color: #e8a0bf;">Expired</span>';
+        text.innerHTML = "This reset link is no longer valid.";
+        btn.style.display = 'inline-block';
+      });
+  }
+</script>
+</body>
+</html>
