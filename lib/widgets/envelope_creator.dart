@@ -990,7 +990,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    prefixIcon: const Icon(Icons.folder),
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 16,

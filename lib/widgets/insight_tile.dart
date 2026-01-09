@@ -211,6 +211,9 @@ class _InsightTileState extends State<InsightTile> {
           availableIncome: calculations['available'],
           isAffordable: calculations['affordable'],
           warningMessage: calculations['warning'],
+          autopilotPaymentsCovered: calculations['paymentsCovered'],
+          autopilotAlwaysCovered: calculations['alwaysCovered'],
+          coverageSuggestion: calculations['coverageSuggestion'],
         );
       });
       debugPrint(
@@ -266,22 +269,91 @@ class _InsightTileState extends State<InsightTile> {
 
     final now = DateTime.now();
     final nextPayDate = _payDaySettings!.nextPayDate ?? now;
+    final startingAmount = widget.startingAmount ?? 0.0;
+
+    // CRITICAL: Determine if autopilot payment happens BEFORE next payday
+    // This affects how we allocate the starting amount between goals
+    bool autopilotBeforePayday = false;
+    double effectiveStartingForHorizon = startingAmount;
+    double effectiveStartingForAutopilot = startingAmount;
+
+    if (_data.autopilotEnabled &&
+        autopilotAmount != null &&
+        autopilotAmount > 0 &&
+        _data.autopilotFirstDate != null) {
+      autopilotBeforePayday = _data.autopilotFirstDate!.isBefore(nextPayDate);
+
+      if (autopilotBeforePayday) {
+        // Autopilot payment happens BEFORE payday
+        // The starting amount will be consumed by autopilot payment
+        // So Horizon should NOT benefit from it
+        effectiveStartingForHorizon = 0.0;
+        effectiveStartingForAutopilot = startingAmount;
+
+        debugPrint('[InsightTile] 💡 Autopilot before payday: allocating starting amount (\$$startingAmount) to autopilot only');
+      } else {
+        // Payday happens BEFORE autopilot payment
+        // Both goals can benefit from starting amount in their calculations
+        effectiveStartingForHorizon = startingAmount;
+        effectiveStartingForAutopilot = startingAmount;
+
+        debugPrint('[InsightTile] 💡 Payday before autopilot: both goals can use starting amount (\$$startingAmount)');
+      }
+    }
 
     // Calculate Horizon cash flow (ONLY if enabled)
     if (_data.horizonEnabled && horizonAmount != null && horizonAmount > 0) {
-      // Calculate the gap: target - starting amount
-      final startingAmount = widget.startingAmount ?? 0.0;
-      final gap = horizonAmount - startingAmount;
+      // Calculate the gap: target - effective starting amount
+      final gap = horizonAmount - effectiveStartingForHorizon;
 
       if (gap > 0) {
         if (horizonDate != null) {
           // Calculate pay periods until target date
           horizonPeriods = _calculatePayPeriods(nextPayDate, horizonDate);
+
+          // IMPORTANT: If both Horizon and Autopilot are enabled,
+          // we need to account for autopilot payments during the horizon period
+          // BUT ONLY if autopilot has a gap (needs funding)
+          double adjustedGap = gap;
+
+          if (_data.autopilotEnabled && autopilotAmount != null && autopilotAmount > 0) {
+            // Check if autopilot needs funding (gap > 0)
+            final autopilotGap = autopilotAmount - effectiveStartingForAutopilot;
+
+            // Only add autopilot costs if autopilot itself needs cash flow funding
+            // If starting amount >= autopilot amount, those payments are already covered
+            if (autopilotGap > 0) {
+              // Calculate how many autopilot payments will occur before horizon date
+              int autopilotPaymentsDuringHorizon = 0;
+
+              if (_data.autopilotFirstDate != null && horizonDate.isAfter(_data.autopilotFirstDate!)) {
+                // Count autopilot payments between first payment and horizon date
+                DateTime currentAutopilotDate = _data.autopilotFirstDate!;
+                while (currentAutopilotDate.isBefore(horizonDate) || currentAutopilotDate.isAtSameMomentAs(horizonDate)) {
+                  autopilotPaymentsDuringHorizon++;
+                  currentAutopilotDate = _getNextAutopilotDate(currentAutopilotDate, autopilotFrequency ?? 'monthly');
+
+                  // Safety check
+                  if (autopilotPaymentsDuringHorizon > 1000) break;
+                }
+
+                // Add the cost of these autopilot payments to the horizon gap
+                final totalAutopilotCost = autopilotPaymentsDuringHorizon * autopilotAmount;
+                adjustedGap = gap + totalAutopilotCost;
+
+                debugPrint('[InsightTile] 💰 Horizon+Autopilot combined: $autopilotPaymentsDuringHorizon autopilot payments during horizon period = +\$$totalAutopilotCost');
+                debugPrint('[InsightTile] 💰 Adjusted gap: \$${gap.toStringAsFixed(2)} + \$${totalAutopilotCost.toStringAsFixed(2)} = \$${adjustedGap.toStringAsFixed(2)}');
+              }
+            } else {
+              debugPrint('[InsightTile] 💰 Autopilot is covered by starting amount - not adding to horizon calculation');
+            }
+          }
+
           if (horizonPeriods > 0) {
-            totalCashFlow += gap / horizonPeriods.toDouble();
+            totalCashFlow += adjustedGap / horizonPeriods.toDouble();
           } else {
             // Target date is before next pay day - need full gap amount now
-            totalCashFlow += gap;
+            totalCashFlow += adjustedGap;
           }
         } else {
           // No date set - can't calculate periods, just note we need to save the gap
@@ -292,12 +364,15 @@ class _InsightTileState extends State<InsightTile> {
     }
 
     // Calculate Autopilot cash flow (ONLY if enabled)
+    int? paymentsCovered;
+    bool? alwaysCovered;
+    String? coverageSuggestion;
+
     if (_data.autopilotEnabled &&
         autopilotAmount != null &&
         autopilotAmount > 0) {
-      // Calculate the gap: bill amount - starting amount already saved
-      final startingAmount = widget.startingAmount ?? 0.0;
-      final gap = autopilotAmount - startingAmount;
+      // Calculate the gap: bill amount - effective starting amount for autopilot
+      final gap = autopilotAmount - effectiveStartingForAutopilot;
 
       // Only calculate if we need to save more
       if (gap > 0) {
@@ -326,8 +401,46 @@ class _InsightTileState extends State<InsightTile> {
             totalCashFlow += gap / periodsPerAutopilot.toDouble();
           }
         }
+      } else {
+        // Smart handling: gap <= 0, meaning starting amount >= bill amount
+        // Calculate how many payments are covered and provide intelligent suggestions
+
+        // First, estimate a baseline cash flow (the amount needed per pay period for the bill)
+        final periodsPerAutopilot = _data.autopilotFirstDate != null
+            ? _calculatePayPeriods(nextPayDate, _data.autopilotFirstDate!)
+            : _getPayPeriodsPerAutopilot(
+                _payDaySettings!.payFrequency,
+                autopilotFrequency ?? 'monthly',
+              );
+
+        final baselineCashFlow = periodsPerAutopilot > 0
+            ? autopilotAmount / periodsPerAutopilot.toDouble()
+            : autopilotAmount;
+
+        // Use existing manual override or calculate baseline
+        final testCashFlow = _data.manualCashFlowOverride ?? baselineCashFlow;
+
+        // Calculate coverage with this cash flow
+        final coverage = _calculateAutopilotCoverage(
+          startingAmount: startingAmount,
+          billAmount: autopilotAmount,
+          autopilotFrequency: autopilotFrequency ?? 'monthly',
+          payPerPeriod: testCashFlow,
+          firstBillDate: _data.autopilotFirstDate,
+        );
+
+        paymentsCovered = coverage['paymentsCovered'] as int;
+        alwaysCovered = coverage['alwaysCovered'] as bool;
+        coverageSuggestion = coverage['suggestion'] as String?;
+
+        // Use the recommended cash flow if no manual override
+        if (_data.manualCashFlowOverride == null) {
+          final recommendedCashFlow = coverage['recommendedCashFlow'] as double?;
+          if (recommendedCashFlow != null && recommendedCashFlow > 0) {
+            totalCashFlow += recommendedCashFlow;
+          }
+        }
       }
-      // If gap <= 0, we already have enough saved for the bill
     }
 
     // Calculate percentage of income
@@ -357,6 +470,9 @@ class _InsightTileState extends State<InsightTile> {
       'available': available,
       'affordable': affordable,
       'warning': warning,
+      'paymentsCovered': paymentsCovered,
+      'alwaysCovered': alwaysCovered,
+      'coverageSuggestion': coverageSuggestion,
     };
   }
 
@@ -425,6 +541,176 @@ class _InsightTileState extends State<InsightTile> {
 
     if (payDays == 0) return 1;
     return (autopilotDays / payDays).ceil();
+  }
+
+  /// Calculate smart autopilot coverage when starting amount >= bill amount
+  /// Returns map with: paymentsCovered, alwaysCovered, suggestion, recommendedCashFlow
+  Map<String, dynamic> _calculateAutopilotCoverage({
+    required double startingAmount,
+    required double billAmount,
+    required String autopilotFrequency,
+    required double payPerPeriod, // Cash flow added per pay period
+    DateTime? firstBillDate,
+  }) {
+    if (_payDaySettings == null) {
+      return {
+        'paymentsCovered': 0,
+        'alwaysCovered': false,
+        'suggestion': null,
+        'recommendedCashFlow': billAmount,
+      };
+    }
+
+    final now = DateTime.now();
+    final nextPayDate = _payDaySettings!.nextPayDate ?? now;
+
+    // Calculate pay periods per autopilot cycle
+    int payPeriodsPerBill;
+    DateTime? nextBillDate;
+
+    if (firstBillDate != null) {
+      // Use actual date if provided
+      payPeriodsPerBill = _calculatePayPeriods(nextPayDate, firstBillDate);
+      nextBillDate = firstBillDate;
+    } else {
+      // Estimate based on frequency
+      payPeriodsPerBill = _getPayPeriodsPerAutopilot(
+        _payDaySettings!.payFrequency,
+        autopilotFrequency,
+      );
+      // Estimate next bill date
+      final daysUntilBill = _getDaysForFrequency(autopilotFrequency);
+      nextBillDate = now.add(Duration(days: daysUntilBill.round()));
+    }
+
+    // Simulate balance over time to see how many payments are covered
+    double balance = startingAmount;
+    int paymentsCovered = 0;
+    const maxPaymentsToCheck = 12; // Check up to 1 year ahead
+    DateTime currentDate = nextPayDate;
+    DateTime currentBillDate = nextBillDate;
+    int payPeriodsUntilNextBill = payPeriodsPerBill;
+
+    for (int payment = 0; payment < maxPaymentsToCheck; payment++) {
+      // Add cash flow for pay periods until bill is due
+      for (int i = 0; i < payPeriodsUntilNextBill; i++) {
+        balance += payPerPeriod;
+        currentDate = PayDaySettings.calculateNextPayDate(
+          currentDate,
+          _payDaySettings!.payFrequency,
+        );
+      }
+
+      // Check if we can pay the bill
+      if (balance >= billAmount) {
+        balance -= billAmount;
+        paymentsCovered++;
+      } else {
+        // Can't afford this payment
+        break;
+      }
+
+      // Move to next bill cycle
+      currentBillDate = _getNextAutopilotDate(currentBillDate, autopilotFrequency);
+      payPeriodsUntilNextBill = _calculatePayPeriods(currentDate, currentBillDate);
+
+      if (payPeriodsUntilNextBill <= 0) {
+        payPeriodsUntilNextBill = _getPayPeriodsPerAutopilot(
+          _payDaySettings!.payFrequency,
+          autopilotFrequency,
+        );
+      }
+    }
+
+    // Determine if always covered (balance stays above bill amount after steady state)
+    final alwaysCovered = paymentsCovered >= maxPaymentsToCheck;
+
+    // Generate intelligent suggestion
+    String? suggestion;
+    double? recommendedCashFlow;
+
+    if (alwaysCovered) {
+      // Cash flow always keeps balance above bill amount
+      if (payPerPeriod > billAmount / payPeriodsPerBill) {
+        suggestion = 'Your balance will always exceed the bill amount. Consider reducing cash flow to ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck, or set up a Horizon goal to save the excess.';
+        recommendedCashFlow = billAmount / payPeriodsPerBill;
+      } else {
+        suggestion = 'Your balance is sufficient to cover all autopilot payments with current cash flow.';
+        recommendedCashFlow = payPerPeriod;
+      }
+    } else if (paymentsCovered > 0) {
+      // Covers some payments but not all
+      if (startingAmount >= billAmount * 2) {
+        suggestion = 'You have enough for $paymentsCovered payment(s). Consider making a manual payment now to reduce balance, then set cash flow to ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck for ongoing autopilot.';
+      } else {
+        suggestion = 'Your starting balance covers $paymentsCovered payment(s). After that, you\'ll need ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck to maintain coverage.';
+      }
+      recommendedCashFlow = billAmount / payPeriodsPerBill;
+    } else {
+      // Starting amount equals bill amount exactly
+      if (startingAmount == billAmount) {
+        if (firstBillDate != null) {
+          final isBeforePayday = firstBillDate.isBefore(nextPayDate);
+          if (isBeforePayday) {
+            suggestion = 'Bill is due before your next payday. After this payment, you\'ll need ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck to rebuild the balance.';
+          } else {
+            suggestion = 'You\'ll have $payPeriodsPerBill paycheck(s) to rebuild the balance after the first payment. Set cash flow to ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck.';
+          }
+        } else {
+          suggestion = 'You have exactly enough for the next payment. Set cash flow to ${(billAmount / payPeriodsPerBill).toStringAsFixed(2)} per paycheck to maintain coverage.';
+        }
+        recommendedCashFlow = billAmount / payPeriodsPerBill;
+      } else {
+        suggestion = 'Starting amount is less than bill. You\'ll need to save ${(billAmount - startingAmount).toStringAsFixed(2)} more before the first payment.';
+        recommendedCashFlow = billAmount / payPeriodsPerBill;
+      }
+    }
+
+    return {
+      'paymentsCovered': paymentsCovered,
+      'alwaysCovered': alwaysCovered,
+      'suggestion': suggestion,
+      'recommendedCashFlow': recommendedCashFlow,
+    };
+  }
+
+  /// Get the next autopilot date based on frequency
+  DateTime _getNextAutopilotDate(DateTime currentDate, String frequency) {
+    switch (frequency) {
+      case 'weekly':
+        return currentDate.add(const Duration(days: 7));
+      case 'biweekly':
+        return currentDate.add(const Duration(days: 14));
+      case 'fourweekly':
+        return currentDate.add(const Duration(days: 28));
+      case 'monthly':
+        // Add one month
+        final year = currentDate.month == 12 ? currentDate.year + 1 : currentDate.year;
+        final month = currentDate.month == 12 ? 1 : currentDate.month + 1;
+        return DateTime(year, month, currentDate.day);
+      case 'yearly':
+        return DateTime(currentDate.year + 1, currentDate.month, currentDate.day);
+      default:
+        return currentDate.add(const Duration(days: 30));
+    }
+  }
+
+  /// Get days for a given frequency (for estimation)
+  double _getDaysForFrequency(String frequency) {
+    switch (frequency) {
+      case 'weekly':
+        return 7.0;
+      case 'biweekly':
+        return 14.0;
+      case 'fourweekly':
+        return 28.0;
+      case 'monthly':
+        return 30.44;
+      case 'yearly':
+        return 365.25;
+      default:
+        return 30.44;
+    }
   }
 
   void _updateManualOverride() {
@@ -1399,6 +1685,67 @@ class _InsightTileState extends State<InsightTile> {
                               fontSize: 13,
                               color: theme.colorScheme.error,
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Coverage suggestion (smart autopilot analysis)
+                if (_data.coverageSuggestion != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.lightbulb_outline,
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Insight Analysis',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _data.coverageSuggestion!,
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              if (_data.autopilotPaymentsCovered != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Payments covered: ${_data.autopilotPaymentsCovered}${_data.autopilotAlwaysCovered == true ? '+ (ongoing)' : ''}',
+                                  style: fontProvider.getTextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],

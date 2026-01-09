@@ -30,6 +30,11 @@ class InsightData {
   bool isAffordable;
   String? warningMessage;
 
+  // COVERAGE - Smart autopilot analysis when starting amount >= bill amount
+  int? autopilotPaymentsCovered; // Number of payments fully covered by starting amount
+  bool? autopilotAlwaysCovered; // True if cash flow always keeps balance above bill amount
+  String? coverageSuggestion; // Intelligent suggestion based on coverage analysis
+
   InsightData({
     this.horizonEnabled = false,
     this.horizonAmount,
@@ -49,6 +54,9 @@ class InsightData {
     this.availableIncome,
     this.isAffordable = true,
     this.warningMessage,
+    this.autopilotPaymentsCovered,
+    this.autopilotAlwaysCovered,
+    this.coverageSuggestion,
   }) {
     debugPrint('[InsightData] 🆕 Created new InsightData: cashFlowEnabled=$cashFlowEnabled, autopilotAutoExecute=$autopilotAutoExecute');
   }
@@ -137,6 +145,9 @@ class InsightData {
     double? availableIncome,
     bool? isAffordable,
     String? warningMessage,
+    int? autopilotPaymentsCovered,
+    bool? autopilotAlwaysCovered,
+    String? coverageSuggestion,
     bool updateWarning = true, // Flag to indicate we're explicitly updating the warning
   }) {
     debugPrint('[InsightData] 📝 copyWith called:');
@@ -172,6 +183,9 @@ class InsightData {
       isAffordable: isAffordable ?? this.isAffordable,
       // Use new warning value when explicitly updating (even if null), otherwise keep old value
       warningMessage: updateWarning ? warningMessage : (warningMessage ?? this.warningMessage),
+      autopilotPaymentsCovered: autopilotPaymentsCovered ?? this.autopilotPaymentsCovered,
+      autopilotAlwaysCovered: autopilotAlwaysCovered ?? this.autopilotAlwaysCovered,
+      coverageSuggestion: coverageSuggestion ?? this.coverageSuggestion,
     );
 
     return newData;

@@ -316,8 +316,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         },
         onSkip: () {
           setState(() => _selectedTemplate = null);
-          // Skip template AND quick setup, go to target icon
-          _nextStep();
+          // Skip template AND quick setup, go directly to completion
+          _skipToCompletion();
         },
       ),
 
@@ -371,6 +371,14 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  void _skipToCompletion() {
+    // Jump directly to the completion step (last page)
+    final completionPageIndex = _pages.length - 1;
+    setState(() => _currentPageIndex = completionPageIndex);
+    _pageController.jumpToPage(completionPageIndex);
+    _saveProgress();
   }
 
   Future<void> _completeOnboarding() async {
@@ -486,27 +494,63 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           }
         }
 
-        // Link all created envelopes to the newly created account
-        if (_createdEnvelopeIds.isNotEmpty) {
-          debugPrint('[Onboarding] 🔗 Linking ${_createdEnvelopeIds.length} envelopes to account $accountId');
-          debugPrint('[Onboarding] 🔗 Envelope IDs: $_createdEnvelopeIds');
-          for (final envelopeId in _createdEnvelopeIds) {
-            try {
-              debugPrint('[Onboarding] 🔗 Linking envelope $envelopeId to account $accountId');
-              await envelopeRepo.updateEnvelope(
-                envelopeId: envelopeId,
-                linkedAccountId: accountId,
-              );
-              debugPrint('[Onboarding] ✅ Successfully linked envelope $envelopeId');
-            } catch (e) {
-              debugPrint('[Onboarding] ⚠️ Failed to link envelope $envelopeId to account: $e');
+        // Link ALL unlinked envelopes to the newly created account
+        // This includes:
+        // 1. Template-created envelopes (tracked in _createdEnvelopeIds)
+        // 2. Custom binder envelopes (created via "Start from Scratch")
+        // 3. Any other envelopes created during onboarding
+        debugPrint('[Onboarding] 🔗 Querying all user envelopes to link to account $accountId');
+
+        try {
+          // Get all current user's envelopes
+          final allEnvelopes = await envelopeRepo.envelopesStream().first;
+          final userEnvelopes = allEnvelopes
+              .where((e) => e.userId == widget.userId)
+              .toList();
+
+          debugPrint('[Onboarding] 📊 Found ${userEnvelopes.length} total user envelopes');
+
+          // Find all envelopes that are NOT linked to any account
+          final unlinkedEnvelopes = userEnvelopes
+              .where((e) => e.linkedAccountId == null)
+              .toList();
+
+          debugPrint('[Onboarding] 🔗 Found ${unlinkedEnvelopes.length} unlinked envelopes to link');
+
+          if (unlinkedEnvelopes.isNotEmpty) {
+            for (final envelope in unlinkedEnvelopes) {
+              try {
+                debugPrint('[Onboarding] 🔗 Linking envelope "${envelope.name}" (${envelope.id}) to account $accountId');
+                await envelopeRepo.updateEnvelope(
+                  envelopeId: envelope.id,
+                  linkedAccountId: accountId,
+                );
+                debugPrint('[Onboarding] ✅ Successfully linked envelope "${envelope.name}"');
+              } catch (e) {
+                debugPrint('[Onboarding] ⚠️ Failed to link envelope ${envelope.id} to account: $e');
+              }
+            }
+            debugPrint('[Onboarding] ✅ Successfully linked ${unlinkedEnvelopes.length} envelopes to account');
+          } else {
+            debugPrint('[Onboarding] ℹ️ No unlinked envelopes found (all envelopes already linked)');
+          }
+        } catch (e) {
+          debugPrint('[Onboarding] ⚠️ Failed to query/link envelopes: $e');
+
+          // Fallback: Try to link envelopes from the tracked IDs list
+          if (_createdEnvelopeIds.isNotEmpty) {
+            debugPrint('[Onboarding] 🔄 Falling back to tracked envelope IDs: ${_createdEnvelopeIds.length}');
+            for (final envelopeId in _createdEnvelopeIds) {
+              try {
+                await envelopeRepo.updateEnvelope(
+                  envelopeId: envelopeId,
+                  linkedAccountId: accountId,
+                );
+              } catch (e) {
+                debugPrint('[Onboarding] ⚠️ Failed to link envelope $envelopeId: $e');
+              }
             }
           }
-          debugPrint('[Onboarding] ✅ Successfully linked ${_createdEnvelopeIds.length} envelopes to account');
-        } else {
-          debugPrint('[Onboarding] ⚠️ No envelopes to link - envelope IDs list is empty!');
-          debugPrint('[Onboarding] ⚠️ Template was: ${_selectedTemplate?.name ?? "null"}');
-          debugPrint('[Onboarding] ⚠️ Created envelope count: $_createdEnvelopeCount');
         }
 
         debugPrint('[Onboarding] ✅ Account created with ID: $accountId');
