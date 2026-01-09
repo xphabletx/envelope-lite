@@ -73,6 +73,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   int _currentPageIndex = 0;
   List<Widget> _pages = [];
   bool _isLoading = true;
+  bool _isCompleting = false; // Guard to prevent duplicate completion calls
 
   @override
   void initState() {
@@ -373,6 +374,29 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   }
 
   Future<void> _completeOnboarding() async {
+    // Guard against duplicate calls
+    if (_isCompleting) {
+      debugPrint('[Onboarding] ⚠️ Already completing onboarding, ignoring duplicate call');
+      return;
+    }
+    _isCompleting = true;
+
+    debugPrint('[Onboarding] 🎉 Starting onboarding completion');
+    debugPrint('[Onboarding] 📊 Collected data summary:');
+    debugPrint('[Onboarding]   - User name: $_userName');
+    debugPrint('[Onboarding]   - Photo URL: $_photoUrl');
+    debugPrint('[Onboarding]   - Currency: $_selectedCurrency');
+    debugPrint('[Onboarding]   - Account mode: $_isAccountMode');
+    debugPrint('[Onboarding]   - Selected template: ${_selectedTemplate?.name ?? "none"}');
+    debugPrint('[Onboarding]   - Created envelope count: $_createdEnvelopeCount');
+    debugPrint('[Onboarding]   - Created envelope IDs: $_createdEnvelopeIds');
+    debugPrint('[Onboarding]   - Account name: $_accountName');
+    debugPrint('[Onboarding]   - Bank name: $_bankName');
+    debugPrint('[Onboarding]   - Account balance: $_accountBalance');
+    debugPrint('[Onboarding]   - Pay amount: $_payAmount');
+    debugPrint('[Onboarding]   - Pay frequency: $_payFrequency');
+    debugPrint('[Onboarding]   - Next pay date: $_nextPayDate');
+
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -465,18 +489,29 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         // Link all created envelopes to the newly created account
         if (_createdEnvelopeIds.isNotEmpty) {
           debugPrint('[Onboarding] 🔗 Linking ${_createdEnvelopeIds.length} envelopes to account $accountId');
+          debugPrint('[Onboarding] 🔗 Envelope IDs: $_createdEnvelopeIds');
           for (final envelopeId in _createdEnvelopeIds) {
             try {
+              debugPrint('[Onboarding] 🔗 Linking envelope $envelopeId to account $accountId');
               await envelopeRepo.updateEnvelope(
                 envelopeId: envelopeId,
                 linkedAccountId: accountId,
               );
+              debugPrint('[Onboarding] ✅ Successfully linked envelope $envelopeId');
             } catch (e) {
               debugPrint('[Onboarding] ⚠️ Failed to link envelope $envelopeId to account: $e');
             }
           }
           debugPrint('[Onboarding] ✅ Successfully linked ${_createdEnvelopeIds.length} envelopes to account');
+        } else {
+          debugPrint('[Onboarding] ⚠️ No envelopes to link - envelope IDs list is empty!');
+          debugPrint('[Onboarding] ⚠️ Template was: ${_selectedTemplate?.name ?? "null"}');
+          debugPrint('[Onboarding] ⚠️ Created envelope count: $_createdEnvelopeCount');
         }
+
+        debugPrint('[Onboarding] ✅ Account created with ID: $accountId');
+      } else {
+        debugPrint('[Onboarding] ⚠️ Skipping account creation - not in account mode');
       }
 
       // Clear onboarding progress after successful completion
