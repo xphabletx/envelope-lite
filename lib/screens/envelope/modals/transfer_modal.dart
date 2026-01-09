@@ -155,6 +155,8 @@ class _TransferModalState extends State<TransferModal> {
   }
 
   Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {

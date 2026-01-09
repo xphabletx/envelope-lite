@@ -67,6 +67,8 @@ class _DepositModalState extends State<DepositModal> {
   }
 
   Future<void> _deposit() async {
+    FocusScope.of(context).unfocus();
+
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {

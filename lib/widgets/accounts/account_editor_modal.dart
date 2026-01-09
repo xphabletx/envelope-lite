@@ -79,25 +79,7 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
     //   }
     // });
 
-    // Select all text in name when focused
-    _nameFocus.addListener(() {
-      if (_nameFocus.hasFocus) {
-        _nameController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _nameController.text.length,
-        );
-      }
-    });
-
-    // Select all text in balance when focused
-    _balanceFocus.addListener(() {
-      if (_balanceFocus.hasFocus) {
-        _balanceController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _balanceController.text.length,
-        );
-      }
-    });
+    // SmartTextField now handles select-all-on-focus automatically
   }
 
   void _checkIfFirstAccount() {
@@ -171,6 +153,9 @@ class _AccountEditorModalState extends State<AccountEditorModal> {
   }
 
   Future<void> _handleSave() async {
+    // Dismiss keyboard immediately when save is pressed
+    FocusScope.of(context).unfocus();
+
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {

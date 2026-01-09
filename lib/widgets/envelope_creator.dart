@@ -142,32 +142,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
     // REMOVED: Auto-focus on name field - user must tap to open keyboard
     // This follows the global keyboard UX pattern
 
-    _amountFocus.addListener(() {
-      if (_amountFocus.hasFocus) {
-        _amtCtrl.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _amtCtrl.text.length,
-        );
-      }
-    });
-
-    _targetFocus.addListener(() {
-      if (_targetFocus.hasFocus) {
-        _targetCtrl.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _targetCtrl.text.length,
-        );
-      }
-    });
-
-    _cashFlowAmountFocus.addListener(() {
-      if (_cashFlowAmountFocus.hasFocus) {
-        _cashFlowAmountCtrl.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _cashFlowAmountCtrl.text.length,
-        );
-      }
-    });
+    // SmartTextField now handles select-all-on-focus automatically
   }
 
   Future<void> _loadBinders() async {

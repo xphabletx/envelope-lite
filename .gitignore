@@ -30,3 +30,11 @@ firebase_app_id_file.json
 
 # Log files
 *.log
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+**/secrets.dart
+**/*_secrets.dart
+**/*_keys.dart

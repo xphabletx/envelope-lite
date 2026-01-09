@@ -52,15 +52,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _accountType = widget.account.accountType;
     _creditLimit = widget.account.creditLimit;
 
-    // Select all text in balance when focused
-    _balanceFocus.addListener(() {
-      if (_balanceFocus.hasFocus) {
-        _balanceController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _balanceController.text.length,
-        );
-      }
-    });
+    // SmartTextField now handles select-all-on-focus automatically
   }
 
   @override
@@ -102,6 +94,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
 
   Future<void> _handleSave() async {
+    FocusScope.of(context).unfocus();
+
     // Check if time machine mode is active - block modifications
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.shouldBlockModifications()) {

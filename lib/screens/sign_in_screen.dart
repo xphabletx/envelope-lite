@@ -83,6 +83,8 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _signInEmail() async {
+    FocusScope.of(context).unfocus();
+
     debugPrint('[SignInScreen] 🔐 Email sign-in button pressed');
     final email = _email.text.trim();
     final pass = _pass.text;
@@ -139,6 +141,8 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _forgotPassword() async {
+    FocusScope.of(context).unfocus();
+
     final email = _email.text.trim();
     if (email.isEmpty) {
       const msg = 'Enter your email to reset password';
@@ -313,6 +317,8 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: StatefulBuilder(
                     builder: (ctx2, setSheet) {
                       Future<void> onCreate() async {
+                        FocusScope.of(ctx2).unfocus();
+
                         if (!formKey.currentState!.validate()) {
                           // Show a dialog explaining the validation errors
                           showDialog(

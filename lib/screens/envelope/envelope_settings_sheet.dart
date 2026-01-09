@@ -1438,6 +1438,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
   }
 
   Future<void> _saveChanges(Envelope envelope) async {
+    FocusScope.of(context).unfocus();
+
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Envelope name cannot be empty')),

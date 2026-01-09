@@ -3,21 +3,34 @@ import 'package:flutter/foundation.dart';
 
 /// RevenueCat configuration for Stuffrite (com.stuffrite.app)
 ///
-/// SECURITY WARNING: These keys are production API keys.
-/// - DO NOT commit to public repositories
-/// - Consider using environment variables or secret management for production
-/// - These keys are read-only and cannot be used to make purchases
+/// SECURITY: API keys are now loaded from environment variables.
+/// Set these before running:
+/// - REVENUECAT_TEST_API_KEY
+/// - REVENUECAT_IOS_API_KEY
+/// - REVENUECAT_ANDROID_API_KEY
 class RevenueCatConfig {
   RevenueCatConfig._(); // Private constructor to prevent instantiation
 
   /// Test API Key for development (both iOS and Android)
-  static const String testApiKey = 'REDACTED_TEST_KEY';
+  /// Set via environment variable: REVENUECAT_TEST_API_KEY
+  static const String testApiKey = String.fromEnvironment(
+    'REVENUECAT_TEST_API_KEY',
+    defaultValue: '',
+  );
 
   /// iOS/macOS API Key for com.stuffrite.app (production)
-  static const String iosApiKey = 'REDACTED_IOS_KEY';
+  /// Set via environment variable: REVENUECAT_IOS_API_KEY
+  static const String iosApiKey = String.fromEnvironment(
+    'REVENUECAT_IOS_API_KEY',
+    defaultValue: '',
+  );
 
   /// Android API Key for com.stuffrite.app (production)
-  static const String androidApiKey = 'REDACTED_ANDROID_KEY';
+  /// Set via environment variable: REVENUECAT_ANDROID_API_KEY
+  static const String androidApiKey = String.fromEnvironment(
+    'REVENUECAT_ANDROID_API_KEY',
+    defaultValue: '',
+  );
 
   /// Premium entitlement identifier
   /// This matches the "Stuffrite Unlocked" entitlement in RevenueCat Dashboard

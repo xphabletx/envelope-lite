@@ -38,6 +38,7 @@ class SmartTextField extends StatefulWidget {
   final void Function(PointerDownEvent)? onTapOutside;
   final bool autocorrect;
   final bool enableSuggestions;
+  final bool selectAllOnFocus;
 
   const SmartTextField({
     super.key,
@@ -72,6 +73,7 @@ class SmartTextField extends StatefulWidget {
     this.onTapOutside,
     this.autocorrect = true,
     this.enableSuggestions = true,
+    this.selectAllOnFocus = true,
   });
 
   @override
@@ -127,9 +129,24 @@ class _SmartTextFieldState extends State<SmartTextField> {
         _hasFocus = _internalFocusNode.hasFocus;
       });
 
-      // Auto-scroll to this field when it gains focus
+      // Handle focus changes
       if (_hasFocus) {
+        // Auto-scroll to this field when it gains focus
         _ensureVisible();
+
+        // Select all text when field gains focus (if enabled)
+        if (widget.selectAllOnFocus && widget.controller.text.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            widget.controller.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: widget.controller.text.length,
+            );
+          });
+        }
+      } else {
+        // Always dismiss keyboard when field loses focus
+        _internalFocusNode.unfocus();
       }
     }
   }
@@ -210,7 +227,11 @@ class _SmartTextFieldState extends State<SmartTextField> {
       textAlign: widget.textAlign ?? TextAlign.start,
       maxLength: widget.maxLength,
       onEditingComplete: widget.onEditingComplete,
-      onTapOutside: widget.onTapOutside,
+      onTapOutside: (event) {
+        // Always dismiss keyboard when tapping outside
+        _internalFocusNode.unfocus();
+        widget.onTapOutside?.call(event);
+      },
       autocorrect: widget.autocorrect,
       enableSuggestions: widget.enableSuggestions,
       // CRITICAL: Never auto-show keyboard
@@ -260,6 +281,7 @@ class SmartTextFormField extends FormField<String> {
     void Function(PointerDownEvent)? onTapOutside,
     bool autocorrect = true,
     bool enableSuggestions = true,
+    bool selectAllOnFocus = true,
   }) : super(
           initialValue: controller.text,
           builder: (FormFieldState<String> field) {
@@ -302,6 +324,7 @@ class SmartTextFormField extends FormField<String> {
               onTapOutside: onTapOutside,
               autocorrect: autocorrect,
               enableSuggestions: enableSuggestions,
+              selectAllOnFocus: selectAllOnFocus,
             );
           },
         );

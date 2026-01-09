@@ -1849,35 +1849,7 @@ class _AccountSetupStepState extends State<_AccountSetupStep> {
     _nameFocus = FocusNode();
     _balanceFocus = FocusNode();
 
-    // Select all text when account name is focused
-    _nameFocus.addListener(() {
-      if (_nameFocus.hasFocus) {
-        _nameController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _nameController.text.length,
-        );
-      }
-    });
-
-    // Select all text when balance is focused
-    _balanceFocus.addListener(() {
-      if (_balanceFocus.hasFocus) {
-        _balanceController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _balanceController.text.length,
-        );
-      }
-    });
-
-    // Select all text when bank name is focused
-    _bankNameFocus.addListener(() {
-      if (_bankNameFocus.hasFocus) {
-        _bankNameController.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _bankNameController.text.length,
-        );
-      }
-    });
+    // SmartTextField now handles select-all-on-focus automatically
   }
 
   @override

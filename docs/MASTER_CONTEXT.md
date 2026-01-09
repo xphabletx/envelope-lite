@@ -894,10 +894,11 @@ static Future<List<String>> getCompletedTutorials()
 
 **Configuration:**
 ```dart
-// API Keys
-static const String testApiKey = 'REDACTED_TEST_KEY';
-static const String iosApiKey = 'REDACTED_IOS_KEY';
-static const String androidApiKey = 'REDACTED_ANDROID_KEY';
+// API Keys - Now loaded from environment variables for security
+// Set these via --dart-define at compile time:
+// - REVENUECAT_TEST_API_KEY
+// - REVENUECAT_IOS_API_KEY
+// - REVENUECAT_ANDROID_API_KEY
 
 // Entitlement
 static const String premiumEntitlementId = 'Stuffrite Unlocked';
