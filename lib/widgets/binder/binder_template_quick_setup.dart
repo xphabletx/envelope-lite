@@ -5,6 +5,8 @@ import '../../models/scheduled_payment.dart';
 import '../../services/envelope_repo.dart';
 import '../../services/scheduled_payment_repo.dart';
 import '../../services/group_repo.dart';
+import '../../services/account_repo.dart';
+import '../../models/account.dart';
 import '../../providers/font_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/calculator_helper.dart';
@@ -649,6 +651,7 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
   bool _showPayDayTip = false;
 
   late final EnvelopeRepo _envelopeRepo;
+  late final AccountRepo _accountRepo;
 
   @override
   void initState() {
@@ -659,6 +662,9 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
       FirebaseFirestore.instance,
       userId: widget.userId,
     );
+
+    // Initialize account repo for InsightTile to load account balance
+    _accountRepo = AccountRepo(_envelopeRepo);
 
     _currentAmountController = TextEditingController(
       text: widget.data.currentAmount > 0
@@ -912,12 +918,18 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       const SizedBox(height: 24),
 
                       // 👁️‍🗨️ INSIGHT TILE - Financial Planning
-                      InsightTile(
-                        userId: widget.userId,
-                        startingAmount: widget.data.currentAmount, // Pass starting amount for gap calculation
-                        envelopeRepo: _envelopeRepo, // Pass repo to load existing commitments
-                        initiallyExpanded: true, // Auto-expand for onboarding
-                        onInsightChanged: (InsightData data) {
+                      FutureBuilder<Account?>(
+                        future: _accountRepo.getDefaultAccount(),
+                        builder: (context, snapshot) {
+                          final accountBalance = snapshot.data?.currentBalance ?? 0.0;
+
+                          return InsightTile(
+                            userId: widget.userId,
+                            startingAmount: widget.data.currentAmount, // Pass starting amount for gap calculation
+                            accountBalance: accountBalance,
+                            envelopeRepo: _envelopeRepo, // Pass repo to load existing commitments
+                            initiallyExpanded: true, // Auto-expand for onboarding
+                            onInsightChanged: (InsightData data) {
                           setState(() {
                             // Store full InsightData
                             widget.data.insightData = data;
@@ -956,17 +968,19 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                             }
                           });
                         },
-                        initialData: InsightData(
-                          horizonEnabled: widget.data.targetAmount != null,
-                          horizonAmount: widget.data.targetAmount,
-                          cashFlowEnabled: widget.data.payDayDepositEnabled,
-                          calculatedCashFlow: widget.data.payDayDepositAmount,
-                          autopilotEnabled: widget.data.recurringBillEnabled,
-                          autopilotAmount: widget.data.recurringBillAmount,
-                          autopilotFrequency: _mapFrequencyToString(widget.data.recurringFrequency),
-                          autopilotFirstDate: widget.data.firstPaymentDate,
-                          autopilotAutoExecute: widget.data.autoExecute,
-                        ),
+                            initialData: InsightData(
+                              horizonEnabled: widget.data.targetAmount != null,
+                              horizonAmount: widget.data.targetAmount,
+                              cashFlowEnabled: widget.data.payDayDepositEnabled,
+                              calculatedCashFlow: widget.data.payDayDepositAmount,
+                              autopilotEnabled: widget.data.recurringBillEnabled,
+                              autopilotAmount: widget.data.recurringBillAmount,
+                              autopilotFrequency: _mapFrequencyToString(widget.data.recurringFrequency),
+                              autopilotFirstDate: widget.data.firstPaymentDate,
+                              autopilotAutoExecute: widget.data.autoExecute,
+                            ),
+                          );
+                        },
                       ),
 
                       if (widget.isAccountMode && widget.data.payDayDepositEnabled) ...[

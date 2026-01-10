@@ -407,7 +407,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
       target = parsed;
     }
 
-    // Validate: target date requires target amount
+    // Validate: target date requires target amount (fixed mode only)
     if (_targetDate != null && (target == null || target <= 0)) {
       if (!mounted) return;
       await ErrorHandler.handle(
@@ -419,6 +419,66 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         ),
       );
       return;
+    }
+
+    // Validate: percentage mode requires valid percentage
+    if (_insightData?.horizonMode == HorizonAllocationMode.percentage) {
+      if (_insightData?.horizonPercentage == null || _insightData!.horizonPercentage! <= 0) {
+        if (!mounted) return;
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'PERCENTAGE_REQUIRED',
+            userMessage: 'Please enter a valid allocation percentage (greater than 0%).',
+            category: ErrorCategory.validation,
+          ),
+        );
+        return;
+      }
+      if (_insightData!.horizonPercentage! > 100) {
+        if (!mounted) return;
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'PERCENTAGE_TOO_HIGH',
+            userMessage: 'Allocation percentage cannot exceed 100%.',
+            category: ErrorCategory.validation,
+          ),
+        );
+        return;
+      }
+    }
+
+    // Validate: fixed amount mode requires valid amount
+    if (_insightData?.horizonMode == HorizonAllocationMode.fixedAmount) {
+      if (_insightData?.horizonFixedAmount == null || _insightData!.horizonFixedAmount! <= 0) {
+        if (!mounted) return;
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'FIXED_AMOUNT_REQUIRED',
+            userMessage: 'Please enter a valid fixed amount (greater than 0).',
+            category: ErrorCategory.validation,
+          ),
+        );
+        return;
+      }
+    }
+
+    // Validate: date mode requires a target date
+    if (_insightData?.horizonMode == HorizonAllocationMode.date) {
+      if (_insightData?.horizonDate == null) {
+        if (!mounted) return;
+        await ErrorHandler.handle(
+          context,
+          AppError.medium(
+            code: 'HORIZON_DATE_REQUIRED',
+            userMessage: 'Please set a target date for your horizon goal.',
+            category: ErrorCategory.validation,
+          ),
+        );
+        return;
+      }
     }
 
     // CRITICAL VALIDATION: Account Mode enforcement
@@ -1057,40 +1117,48 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
                         ],
 
                         // 👁️‍🗨️ INSIGHT TILE - Unified financial planning
-                        InsightTile(
-                          userId: widget.userId,
-                          startingAmount: double.tryParse(_amtCtrl.text),
-                          envelopeRepo: widget.repo, // Pass repo for existing commitments calculation
-                          onInsightChanged: (InsightData data) {
-                            setState(() {
-                              // Store full insight data
-                              _insightData = data;
+                        FutureBuilder<Account?>(
+                          future: widget.accountRepo.getDefaultAccount(),
+                          builder: (context, snapshot) {
+                            final accountBalance = snapshot.data?.currentBalance ?? 0.0;
 
-                              // Update target/horizon
-                              if (data.horizonAmount != null) {
-                                _targetCtrl.text = data.horizonAmount.toString();
-                              }
-                              _targetDate = data.horizonDate;
+                            return InsightTile(
+                              userId: widget.userId,
+                              startingAmount: double.tryParse(_amtCtrl.text),
+                              accountBalance: accountBalance,
+                              envelopeRepo: widget.repo, // Pass repo for existing commitments calculation
+                              onInsightChanged: (InsightData data) {
+                                setState(() {
+                                  // Store full insight data
+                                  _insightData = data;
 
-                              // Update cash flow
-                              _cashFlowEnabled = data.cashFlowEnabled;
-                              final cashFlow = data.effectiveCashFlow;
-                              if (cashFlow != null) {
-                                _cashFlowAmountCtrl.text = cashFlow.toString();
-                              }
+                                  // Update target/horizon
+                                  if (data.horizonAmount != null) {
+                                    _targetCtrl.text = data.horizonAmount.toString();
+                                  }
+                                  _targetDate = data.horizonDate;
 
-                              // Update autopilot flag
-                              _addScheduledPayment = data.autopilotEnabled;
-                            });
+                                  // Update cash flow
+                                  _cashFlowEnabled = data.cashFlowEnabled;
+                                  final cashFlow = data.effectiveCashFlow;
+                                  if (cashFlow != null) {
+                                    _cashFlowAmountCtrl.text = cashFlow.toString();
+                                  }
+
+                                  // Update autopilot flag
+                                  _addScheduledPayment = data.autopilotEnabled;
+                                });
+                              },
+                              initialData: InsightData(
+                                horizonEnabled: double.tryParse(_targetCtrl.text) != null,
+                                horizonAmount: double.tryParse(_targetCtrl.text),
+                                horizonDate: _targetDate,
+                                cashFlowEnabled: _cashFlowEnabled,
+                                calculatedCashFlow: double.tryParse(_cashFlowAmountCtrl.text),
+                                autopilotEnabled: _addScheduledPayment,
+                              ),
+                            );
                           },
-                          initialData: InsightData(
-                            horizonEnabled: double.tryParse(_targetCtrl.text) != null,
-                            horizonAmount: double.tryParse(_targetCtrl.text),
-                            horizonDate: _targetDate,
-                            cashFlowEnabled: _cashFlowEnabled,
-                            calculatedCashFlow: double.tryParse(_cashFlowAmountCtrl.text),
-                            autopilotEnabled: _addScheduledPayment,
-                          ),
                         ),
                         const SizedBox(height: 24),
 

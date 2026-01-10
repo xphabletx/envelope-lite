@@ -2,12 +2,20 @@
 // Data model for Insight financial planning calculations
 
 import 'package:flutter/foundation.dart';
+import 'envelope.dart';
 
 class InsightData {
   // HORIZON - Savings goal / wealth building
   bool horizonEnabled;
   double? horizonAmount;
   DateTime? horizonDate;
+
+  // NEW: Percentage allocation mode support
+  HorizonAllocationMode? horizonMode;
+  double? horizonPercentage;  // User's selected percentage
+  double? horizonFixedAmount;  // User's selected fixed amount per payday (for fixed amount mode)
+  DateTime? projectedArrivalDate;  // Calculated arrival date
+  double? projectedMonthlyContribution;  // Calculated contribution amount
 
   // AUTOPILOT - Recurring bills
   bool autopilotEnabled;
@@ -46,6 +54,11 @@ class InsightData {
     this.horizonEnabled = false,
     this.horizonAmount,
     this.horizonDate,
+    this.horizonMode,
+    this.horizonPercentage,
+    this.horizonFixedAmount,
+    this.projectedArrivalDate,
+    this.projectedMonthlyContribution,
     this.autopilotEnabled = false,
     this.autopilotAmount,
     this.autopilotFrequency = 'monthly',
@@ -104,10 +117,26 @@ class InsightData {
     }
 
     if (horizonEnabled && horizonAmount != null && horizonAmount! > 0) {
-      final dateStr = horizonDate != null
-          ? ' by ${horizonDate!.day}/${horizonDate!.month}/${horizonDate!.year}'
-          : '';
-      parts.add('🎯 Horizon: $currencySymbol${horizonAmount!.toStringAsFixed(2)}$dateStr');
+      if (horizonMode == HorizonAllocationMode.percentage && horizonPercentage != null) {
+        final projectedStr = projectedArrivalDate != null
+            ? ' → arrive by ${projectedArrivalDate!.day}/${projectedArrivalDate!.month}/${projectedArrivalDate!.year}'
+            : '';
+        parts.add('🎯 Horizon: ${horizonPercentage!.toStringAsFixed(0)}% of income$projectedStr');
+      } else if (horizonMode == HorizonAllocationMode.fixedAmount) {
+        final projectedStr = projectedArrivalDate != null
+            ? ' → arrive by ${projectedArrivalDate!.day}/${projectedArrivalDate!.month}/${projectedArrivalDate!.year}'
+            : '';
+        final amountStr = calculatedCashFlow != null
+            ? '$currencySymbol${calculatedCashFlow!.toStringAsFixed(2)}/payday'
+            : '';
+        parts.add('🎯 Horizon: $amountStr$projectedStr');
+      } else {
+        // Date mode
+        final dateStr = horizonDate != null
+            ? ' by ${horizonDate!.day}/${horizonDate!.month}/${horizonDate!.year}'
+            : '';
+        parts.add('🎯 Horizon: $currencySymbol${horizonAmount!.toStringAsFixed(2)}$dateStr');
+      }
     }
 
     if (autopilotEnabled && autopilotAmount != null && autopilotAmount! > 0) {
@@ -140,6 +169,11 @@ class InsightData {
     double? horizonAmount,
     DateTime? horizonDate,
     bool? horizonDateCleared,
+    HorizonAllocationMode? horizonMode,
+    double? horizonPercentage,
+    double? horizonFixedAmount,
+    DateTime? projectedArrivalDate,
+    double? projectedMonthlyContribution,
     bool? autopilotEnabled,
     double? autopilotAmount,
     String? autopilotFrequency,
@@ -181,6 +215,11 @@ class InsightData {
       horizonEnabled: horizonEnabled ?? this.horizonEnabled,
       horizonAmount: horizonAmount ?? this.horizonAmount,
       horizonDate: horizonDateCleared == true ? null : (horizonDate ?? this.horizonDate),
+      horizonMode: horizonMode ?? this.horizonMode,
+      horizonPercentage: horizonPercentage ?? this.horizonPercentage,
+      horizonFixedAmount: horizonFixedAmount ?? this.horizonFixedAmount,
+      projectedArrivalDate: projectedArrivalDate ?? this.projectedArrivalDate,
+      projectedMonthlyContribution: projectedMonthlyContribution ?? this.projectedMonthlyContribution,
       autopilotEnabled: autopilotEnabled ?? this.autopilotEnabled,
       autopilotAmount: autopilotAmount ?? this.autopilotAmount,
       autopilotFrequency: autopilotFrequency ?? this.autopilotFrequency,

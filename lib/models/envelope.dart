@@ -21,6 +21,18 @@ enum TargetStartDateType {
   customDate,
 }
 
+@HiveType(typeId: 8)
+enum HorizonAllocationMode {
+  @HiveField(0)
+  date,           // User sets target date, system calculates required contribution
+
+  @HiveField(1)
+  fixedAmount,    // User sets fixed dollar amount, system calculates arrival date
+
+  @HiveField(2)
+  percentage,     // User sets percentage allocation, system calculates arrival date
+}
+
 @HiveType(typeId: 0)
 class Envelope {
   @HiveField(0)
@@ -108,6 +120,22 @@ class Envelope {
   @HiveField(29)
   final DateTime? customTargetStartDate;
 
+  // NEW: Percentage-based allocation fields (Hive fields 30-34)
+  @HiveField(30)
+  final HorizonAllocationMode? horizonMode;
+
+  @HiveField(31)
+  final double? allocationPercentage;  // 1-100 (percentage of available income)
+
+  @HiveField(32)
+  final DateTime? projectedArrivalDate;  // Calculated based on percentage
+
+  @HiveField(33)
+  final double? lastKnownAvailableIncome;  // Track for recalculation triggers
+
+  @HiveField(34)
+  final bool? enableDynamicRecalculation;  // Auto-update when income changes
+
   Envelope({
     required this.id,
     required this.name,
@@ -135,6 +163,11 @@ class Envelope {
     this.createdAt,
     this.targetStartDateType,
     this.customTargetStartDate,
+    this.horizonMode,
+    this.allocationPercentage,
+    this.projectedArrivalDate,
+    this.lastKnownAvailableIncome,
+    this.enableDynamicRecalculation,
   });
 
   /// Get icon widget for display
@@ -371,6 +404,11 @@ class Envelope {
     DateTime? createdAt,
     TargetStartDateType? targetStartDateType,
     DateTime? customTargetStartDate,
+    HorizonAllocationMode? horizonMode,
+    double? allocationPercentage,
+    DateTime? projectedArrivalDate,
+    double? lastKnownAvailableIncome,
+    bool? enableDynamicRecalculation,
   }) {
     return Envelope(
       id: id ?? this.id,
@@ -399,6 +437,11 @@ class Envelope {
       createdAt: createdAt ?? this.createdAt,
       targetStartDateType: targetStartDateType ?? this.targetStartDateType,
       customTargetStartDate: customTargetStartDate ?? this.customTargetStartDate,
+      horizonMode: horizonMode ?? this.horizonMode,
+      allocationPercentage: allocationPercentage ?? this.allocationPercentage,
+      projectedArrivalDate: projectedArrivalDate ?? this.projectedArrivalDate,
+      lastKnownAvailableIncome: lastKnownAvailableIncome ?? this.lastKnownAvailableIncome,
+      enableDynamicRecalculation: enableDynamicRecalculation ?? this.enableDynamicRecalculation,
     );
   }
 
@@ -430,6 +473,11 @@ class Envelope {
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       'targetStartDateType': targetStartDateType?.name,
       'customTargetStartDate': customTargetStartDate != null ? Timestamp.fromDate(customTargetStartDate!) : null,
+      'horizonMode': horizonMode?.name,
+      'allocationPercentage': allocationPercentage,
+      'projectedArrivalDate': projectedArrivalDate != null ? Timestamp.fromDate(projectedArrivalDate!) : null,
+      'lastKnownAvailableIncome': lastKnownAvailableIncome,
+      'enableDynamicRecalculation': enableDynamicRecalculation ?? true,
     };
   }
 
@@ -453,6 +501,18 @@ class Envelope {
         return TargetStartDateType.values.firstWhere(
           (e) => e.name == value,
           orElse: () => TargetStartDateType.fromToday,
+        );
+      }
+      return null;
+    }
+
+    // Parse horizonAllocationMode enum
+    HorizonAllocationMode? parseHorizonMode(dynamic value) {
+      if (value == null) return null;
+      if (value is String) {
+        return HorizonAllocationMode.values.firstWhere(
+          (e) => e.name == value,
+          orElse: () => HorizonAllocationMode.date,
         );
       }
       return null;
@@ -493,6 +553,15 @@ class Envelope {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       targetStartDateType: parseTargetStartDateType(data['targetStartDateType']),
       customTargetStartDate: (data['customTargetStartDate'] as Timestamp?)?.toDate(),
+      horizonMode: parseHorizonMode(data['horizonMode']),
+      allocationPercentage: (data['allocationPercentage'] == null)
+          ? null
+          : toDouble(data['allocationPercentage']),
+      projectedArrivalDate: (data['projectedArrivalDate'] as Timestamp?)?.toDate(),
+      lastKnownAvailableIncome: (data['lastKnownAvailableIncome'] == null)
+          ? null
+          : toDouble(data['lastKnownAvailableIncome']),
+      enableDynamicRecalculation: (data['enableDynamicRecalculation'] as bool?) ?? true,
     );
   }
 }

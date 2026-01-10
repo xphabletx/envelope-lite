@@ -140,7 +140,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
           }
           break;
         case EnvelopeSettingsSection.autofill:
-          // For autofill, scroll to the bottom to ensure the section is visible above sticky buttons
+          // For autofill, scroll to the bottom to ensure the section is visible
           _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,
             duration: const Duration(milliseconds: 500),
@@ -563,7 +563,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                   padding: EdgeInsets.only(
                     left: isLandscape ? 16 : 24,
                     right: isLandscape ? 16 : 24,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + (isLandscape ? 16 : 24),
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
                   ),
                   physics: const ClampingScrollPhysics(),
                   children: [
@@ -1153,9 +1153,52 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         final defaultAccount = snapshot.data?[1] as Account?;
                         final accountBalance = defaultAccount?.currentBalance ?? 0.0;
 
+                        // Extract autopilot data from scheduled payments if they exist
+                        bool hasAutopilot = scheduledPayments.isNotEmpty;
+                        String? autopilotFrequency;
+                        DateTime? autopilotFirstDate;
+                        double? autopilotAmount;
+                        bool? autopilotAutoExecute;
+
+                        if (hasAutopilot) {
+                          final payment = scheduledPayments.first;
+                          autopilotAmount = payment.amount;
+                          autopilotAutoExecute = payment.isAutomatic;
+
+                          // Convert frequency unit to insight format
+                          if (payment.frequencyUnit.name == 'weeks') {
+                            if (payment.frequencyValue == 1) {
+                              autopilotFrequency = 'weekly';
+                            } else if (payment.frequencyValue == 2) {
+                              autopilotFrequency = 'biweekly';
+                            } else if (payment.frequencyValue == 4) {
+                              autopilotFrequency = 'fourweekly';
+                            }
+                          } else if (payment.frequencyUnit.name == 'months' && payment.frequencyValue == 1) {
+                            autopilotFrequency = 'monthly';
+                          } else if (payment.frequencyUnit.name == 'years' && payment.frequencyValue == 1) {
+                            autopilotFrequency = 'yearly';
+                          }
+                          autopilotFirstDate = payment.nextDueDate;
+
+                          debugPrint('[EnvelopeSettings] 📅 Extracted autopilot data from scheduled payment:');
+                          debugPrint('  Amount: $autopilotAmount');
+                          debugPrint('  Frequency: $autopilotFrequency');
+                          debugPrint('  First Date: $autopilotFirstDate');
+                          debugPrint('  Auto Execute: $autopilotAutoExecute');
+                        }
+
+                        debugPrint('[EnvelopeSettings] 🔧 Creating InsightTile with initialData:');
+                        debugPrint('  autopilotEnabled: $hasAutopilot');
+                        debugPrint('  autopilotAmount: $autopilotAmount');
+                        debugPrint('  autopilotFrequency: ${autopilotFrequency ?? 'monthly'}');
+                        debugPrint('  autopilotFirstDate: $autopilotFirstDate');
+                        debugPrint('  autopilotAutoExecute: ${autopilotAutoExecute ?? true}');
+
                         return InsightTile(
                           key: _insightKey,
                           userId: widget.repo.currentUserId,
+                          envelopeId: envelope.id,
                           startingAmount: envelope.currentAmount,
                           accountBalance: accountBalance,
                           envelopeRepo: widget.repo,
@@ -1164,6 +1207,11 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             horizonAmount: envelope.targetAmount,
                             horizonDate: envelope.targetDate,
                             cashFlowEnabled: envelope.cashFlowEnabled,
+                            autopilotEnabled: hasAutopilot,
+                            autopilotAmount: autopilotAmount,
+                            autopilotFrequency: autopilotFrequency ?? 'monthly',
+                            autopilotFirstDate: autopilotFirstDate,
+                            autopilotAutoExecute: autopilotAutoExecute ?? true,
                             // Don't pass manualCashFlowOverride - let Insight calculate fresh
                           ),
                           onInsightChanged: (InsightData data) async {
@@ -1297,145 +1345,63 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                     ],
                     const SizedBox(height: 24),
 
-                    // INLINE BUTTONS FOR LANDSCAPE
-                    if (isLandscape) ...[
-                      FilledButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () => _saveChanges(envelope),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: const Size(double.infinity, 0),
+                    // SAVE AND DELETE BUTTONS (now in scrollable area for all orientations)
+                    FilledButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () => _saveChanges(envelope),
+                      style: FilledButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: isLandscape ? 12 : 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                'Save Changes',
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                        minimumSize: const Size(double.infinity, 0),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                _confirmDelete(envelope);
-                              },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          side: BorderSide(color: Colors.red.shade600),
-                          minimumSize: const Size(double.infinity, 0),
+                            )
+                          : Text(
+                              'Save Changes',
+                              style: fontProvider.getTextStyle(
+                                fontSize: isLandscape ? 16 : 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              _confirmDelete(envelope);
+                            },
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: isLandscape ? 12 : 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          'Delete Envelope',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade600,
-                          ),
+                        side: BorderSide(color: Colors.red.shade600),
+                        minimumSize: const Size(double.infinity, 0),
+                      ),
+                      child: Text(
+                        'Delete Envelope',
+                        style: fontProvider.getTextStyle(
+                          fontSize: isLandscape ? 16 : 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade600,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                    ],
+                    ),
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + (isLandscape ? 16 : 24)),
                   ],
                 ),
               ),
-
-              // Sticky buttons section at bottom (hidden in landscape)
-              if (!isLandscape)
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                    border: Border(
-                      top: BorderSide(
-                        color: theme.colorScheme.outline.withAlpha(77),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  padding: EdgeInsets.only(
-                    left: 24,
-                    right: 24,
-                    top: 16,
-                    bottom: MediaQuery.of(context).padding.bottom + 16,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // SAVE BUTTON
-                      FilledButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () => _saveChanges(envelope),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          minimumSize: const Size(double.infinity, 0),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                'Save Changes',
-                                style: fontProvider.getTextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // DELETE BUTTON
-                      OutlinedButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                _confirmDelete(envelope);
-                              },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          side: BorderSide(color: Colors.red.shade600),
-                          minimumSize: const Size(double.infinity, 0),
-                        ),
-                        child: Text(
-                          'Delete Envelope',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red.shade600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
             ],
             ),
           ),

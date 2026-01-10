@@ -389,6 +389,11 @@ class EnvelopeRepo {
     DateTime? customTargetStartDate,
     bool updateTargetStartDateType = false, // Flag to explicitly update targetStartDateType (including to null)
     bool updateCustomTargetStartDate = false, // Flag to explicitly update customTargetStartDate (including to null)
+    HorizonAllocationMode? horizonMode,
+    double? allocationPercentage,
+    DateTime? projectedArrivalDate,
+    double? lastKnownAvailableIncome,
+    bool? enableDynamicRecalculation,
   }) async {
     final envelope = _envelopeBox.get(envelopeId);
     if (envelope == null) {
@@ -428,6 +433,11 @@ class EnvelopeRepo {
         createdAt: envelope.createdAt, // Preserve creation timestamp
         targetStartDateType: updateTargetStartDateType ? targetStartDateType : envelope.targetStartDateType,
         customTargetStartDate: updateCustomTargetStartDate ? customTargetStartDate : envelope.customTargetStartDate,
+        horizonMode: horizonMode ?? envelope.horizonMode,
+        allocationPercentage: allocationPercentage ?? envelope.allocationPercentage,
+        projectedArrivalDate: projectedArrivalDate ?? envelope.projectedArrivalDate,
+        lastKnownAvailableIncome: lastKnownAvailableIncome ?? envelope.lastKnownAvailableIncome,
+        enableDynamicRecalculation: enableDynamicRecalculation ?? envelope.enableDynamicRecalculation,
       );
 
       await _envelopeBox.put(envelopeId, updatedEnvelope);

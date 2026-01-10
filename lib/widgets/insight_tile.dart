@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/insight_data.dart';
 import '../models/pay_day_settings.dart';
 import '../models/scheduled_payment.dart';
+import '../models/envelope.dart';
 import '../services/pay_day_settings_service.dart';
 import '../services/envelope_repo.dart';
 import '../providers/font_provider.dart';
@@ -23,6 +24,7 @@ class InsightTile extends StatefulWidget {
   final double? accountBalance; // User's actual main account balance
   final EnvelopeRepo? envelopeRepo; // Optional: for calculating existing commitments
   final List<ScheduledPayment>? scheduledPayments; // Scheduled payments for this envelope
+  final String? envelopeId; // Optional: envelope ID to exclude from commitments calculation
 
   const InsightTile({
     super.key,
@@ -34,6 +36,7 @@ class InsightTile extends StatefulWidget {
     this.accountBalance,
     this.envelopeRepo,
     this.scheduledPayments,
+    this.envelopeId,
   });
 
   @override
@@ -47,16 +50,24 @@ class _InsightTileState extends State<InsightTile> {
   bool _isLoadingPayDay = true;
   bool _showManualOverride = false;
   double _existingCommitments = 0.0; // Total cash flow from other envelopes
+  bool _hasInitializedFromScheduledPayments = false; // Track if we've loaded autopilot data
+
+  // Horizon mode state
+  HorizonAllocationMode _horizonMode = HorizonAllocationMode.date;
 
   // Controllers
   late TextEditingController _horizonAmountCtrl;
   late TextEditingController _autopilotAmountCtrl;
   late TextEditingController _manualCashFlowCtrl;
+  late TextEditingController _percentageCtrl;
+  late TextEditingController _fixedAmountCtrl;
 
   // Focus nodes
   final _horizonAmountFocus = FocusNode();
   final _autopilotAmountFocus = FocusNode();
   final _manualCashFlowFocus = FocusNode();
+  final _percentageFocus = FocusNode();
+  final _fixedAmountFocus = FocusNode();
 
   @override
   void initState() {
@@ -68,7 +79,10 @@ class _InsightTileState extends State<InsightTile> {
     debugPrint('  cashFlowEnabled: ${_data.cashFlowEnabled}');
     debugPrint('  autopilotAutoExecute: ${_data.autopilotAutoExecute}');
     debugPrint('  horizonAmount: ${_data.horizonAmount}');
+    debugPrint('  autopilotEnabled: ${_data.autopilotEnabled}');
     debugPrint('  autopilotAmount: ${_data.autopilotAmount}');
+    debugPrint('  autopilotFrequency: ${_data.autopilotFrequency}');
+    debugPrint('  autopilotFirstDate: ${_data.autopilotFirstDate}');
 
     // Initialize controllers
     _horizonAmountCtrl = TextEditingController(
@@ -80,8 +94,15 @@ class _InsightTileState extends State<InsightTile> {
     _manualCashFlowCtrl = TextEditingController(
       text: _data.manualCashFlowOverride?.toString() ?? '',
     );
+    _percentageCtrl = TextEditingController(
+      text: _data.horizonPercentage?.toString() ?? '',
+    );
+    _fixedAmountCtrl = TextEditingController(
+      text: _data.horizonFixedAmount?.toString() ?? '',
+    );
 
     _showManualOverride = _data.isManualOverride;
+    _horizonMode = _data.horizonMode ?? HorizonAllocationMode.date;
 
     _loadPayDaySettings();
     _loadExistingCommitments();
@@ -95,6 +116,31 @@ class _InsightTileState extends State<InsightTile> {
   @override
   void didUpdateWidget(InsightTile oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Check if initialData changed (e.g., from FutureBuilder completing with scheduled payments)
+    // Only apply once when autopilot data first arrives, not on every rebuild
+    if (!_hasInitializedFromScheduledPayments &&
+        widget.initialData != null &&
+        widget.initialData!.autopilotEnabled &&
+        widget.initialData!.autopilotAmount != null) {
+      debugPrint('[InsightTile] 🔄 Scheduled payment data arrived, initializing autopilot');
+      debugPrint('  autopilotEnabled: ${widget.initialData?.autopilotEnabled}');
+      debugPrint('  autopilotAmount: ${widget.initialData?.autopilotAmount}');
+      debugPrint('  autopilotFirstDate: ${widget.initialData?.autopilotFirstDate}');
+
+      setState(() {
+        _data = widget.initialData!;
+        // Update controllers to match new data
+        _autopilotAmountCtrl.text = _data.autopilotAmount?.toString() ?? '';
+        _horizonAmountCtrl.text = _data.horizonAmount?.toString() ?? '';
+        _manualCashFlowCtrl.text = _data.manualCashFlowOverride?.toString() ?? '';
+        // Mark as initialized so we don't overwrite user changes
+        _hasInitializedFromScheduledPayments = true;
+      });
+
+      // Recalculate with new data
+      _recalculateInternal();
+    }
 
     // Recalculate if starting amount changed
     if (widget.startingAmount != oldWidget.startingAmount) {
@@ -126,6 +172,12 @@ class _InsightTileState extends State<InsightTile> {
       double total = 0.0;
 
       for (final envelope in envelopes) {
+        // Exclude current envelope from commitments calculation
+        if (widget.envelopeId != null && envelope.id == widget.envelopeId) {
+          debugPrint('[InsightTile] 💰   - ${envelope.name}: SKIPPED (current envelope)');
+          continue;
+        }
+
         // Only count envelopes with cash flow enabled
         if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
           debugPrint('[InsightTile] 💰   - ${envelope.name}: ${envelope.cashFlowAmount} (userId=${envelope.userId})');
@@ -287,6 +339,18 @@ class _InsightTileState extends State<InsightTile> {
     debugPrint('[InsightTile] ⚡ Autopilot enabled: ${_data.autopilotEnabled}, amount: \$$autopilotAmount, date: ${_data.autopilotFirstDate}, frequency: $autopilotFrequency');
     debugPrint('[InsightTile] 💵 Pay frequency: ${_payDaySettings!.payFrequency}');
 
+    // Detect allocation mode
+    final horizonMode = _data.horizonMode ?? HorizonAllocationMode.date;
+
+    // Calculate available income for percentage/fixed amount allocation
+    final expectedPay = _payDaySettings!.expectedPayAmount ?? 0.0;
+    final availableIncome = expectedPay - _existingCommitments;
+
+    debugPrint('[InsightTile] 🎯 Horizon mode: ${horizonMode.name.toUpperCase()}');
+    debugPrint('[InsightTile] 💵 Expected pay: \$$expectedPay');
+    debugPrint('[InsightTile] 💸 Existing commitments: \$$_existingCommitments');
+    debugPrint('[InsightTile] 💰 Available income: \$$availableIncome');
+
     // CRITICAL: Determine if autopilot payment happens BEFORE next payday
     // This affects how we allocate the starting amount between goals
     bool autopilotBeforePayday = false;
@@ -334,15 +398,54 @@ class _InsightTileState extends State<InsightTile> {
     // Calculate Horizon cash flow (ONLY if enabled)
     if (_data.horizonEnabled && horizonAmount != null && horizonAmount > 0) {
       debugPrint('[InsightTile] 🎯 ========== HORIZON CALCULATION ==========');
+      debugPrint('[InsightTile] 🎯 Horizon mode: ${horizonMode.name.toUpperCase()}');
       debugPrint('[InsightTile] 🎯 Horizon target: \$$horizonAmount');
-      debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
 
-      // Calculate the gap: target - effective starting amount
-      final gap = horizonAmount - effectiveStartingForHorizon;
-      debugPrint('[InsightTile] 🎯 Horizon gap to save: \$$gap');
+      if (horizonMode == HorizonAllocationMode.percentage && _data.horizonPercentage != null) {
+        // === PERCENTAGE MODE ===
+        debugPrint('[InsightTile] 🎯 Percentage allocation: ${_data.horizonPercentage}%');
+        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
 
-      if (gap > 0) {
-        if (horizonDate != null) {
+        // Calculate contribution per paycheck
+        final contributionPerPay = availableIncome * (_data.horizonPercentage! / 100);
+        debugPrint('[InsightTile] 🎯 Contribution per paycheck: \$$contributionPerPay');
+
+        // Calculate gap to target
+        final gap = horizonAmount - effectiveStartingForHorizon;
+        debugPrint('[InsightTile] 🎯 Gap to target: \$$gap');
+
+        if (gap > 0 && contributionPerPay > 0) {
+          // Calculate number of pay periods needed
+          final periodsNeeded = (gap / contributionPerPay).ceil();
+          horizonPeriods = periodsNeeded;
+          debugPrint('[InsightTile] 🎯 Pay periods needed: $periodsNeeded');
+
+          // Calculate projected arrival date
+          final projectedDate = _calculateProjectedDate(nextPayDate, periodsNeeded);
+          _data = _data.copyWith(
+            projectedArrivalDate: projectedDate,
+            projectedMonthlyContribution: contributionPerPay,
+          );
+          debugPrint('[InsightTile] 🎯 Projected arrival: $projectedDate');
+
+          // Add to total cash flow
+          totalCashFlow += contributionPerPay;
+          debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
+        } else if (gap <= 0) {
+          debugPrint('[InsightTile] 🎯 Target already met! No cash flow needed');
+        } else {
+          debugPrint('[InsightTile] 🎯 ⚠️ Warning: Zero contribution (no available income)');
+        }
+      } else if (horizonMode == HorizonAllocationMode.date) {
+        // === DATE MODE (user sets date, system calculates contribution) ===
+        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
+
+        // Calculate the gap: target - effective starting amount
+        final gap = horizonAmount - effectiveStartingForHorizon;
+        debugPrint('[InsightTile] 🎯 Horizon gap to save: \$$gap');
+
+        if (gap > 0) {
+          if (horizonDate != null) {
           // Calculate pay periods until target date
           horizonPeriods = _calculatePayPeriods(nextPayDate, horizonDate);
           debugPrint('[InsightTile] 🎯 Pay periods until horizon date ($horizonDate): $horizonPeriods');
@@ -394,21 +497,68 @@ class _InsightTileState extends State<InsightTile> {
             debugPrint('[InsightTile] 🎯 Horizon cash flow per period: \$${adjustedGap.toStringAsFixed(2)} / $horizonPeriods = \$${horizonCashFlow.toStringAsFixed(2)}');
             totalCashFlow += horizonCashFlow;
             debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
+
+            // Set projected arrival date to the user's chosen horizon date
+            _data = _data.copyWith(
+              projectedArrivalDate: horizonDate,
+            );
+            debugPrint('[InsightTile] 🎯 Projected arrival (date mode): $horizonDate');
           } else {
             // Target date is before next pay day - need full gap amount now
             debugPrint('[InsightTile] 🎯 ⚠️ Horizon date is before next payday! Need full amount now: \$$adjustedGap');
             totalCashFlow += adjustedGap;
             debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
+
+            // Still set the projected arrival date to show the target
+            _data = _data.copyWith(
+              projectedArrivalDate: horizonDate,
+            );
+          }
+          } else {
+            // No date set - can't calculate periods, just note we need to save the gap
+            debugPrint('[InsightTile] 🎯 No horizon date set - cannot calculate periods');
+            horizonPeriods = null;
           }
         } else {
-          // No date set - can't calculate periods, just note we need to save the gap
-          debugPrint('[InsightTile] 🎯 No horizon date set - cannot calculate periods');
-          horizonPeriods = null;
+          debugPrint('[InsightTile] 🎯 Horizon already met or exceeded (gap <= 0) - no cash flow needed');
         }
-      } else {
-        debugPrint('[InsightTile] 🎯 Horizon already met or exceeded (gap <= 0) - no cash flow needed');
+        // If gap <= 0, target is already met or exceeded, no cash flow needed for horizon
+      } else if (horizonMode == HorizonAllocationMode.fixedAmount) {
+        // === FIXED AMOUNT MODE (user sets amount, system calculates arrival date) ===
+        debugPrint('[InsightTile] 🎯 Fixed amount mode - contribution set by user');
+
+        // Get the fixed amount from horizonFixedAmount (user's input, isolated from autopilot)
+        final fixedContribution = _data.horizonFixedAmount ?? 0.0;
+        debugPrint('[InsightTile] 🎯 Fixed contribution per payday: \$$fixedContribution');
+        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
+
+        // Calculate the gap: target - effective starting amount
+        final gap = horizonAmount - effectiveStartingForHorizon;
+        debugPrint('[InsightTile] 🎯 Horizon gap to save: \$$gap');
+
+        if (gap > 0 && fixedContribution > 0) {
+          // Calculate number of pay periods needed
+          final periodsNeeded = (gap / fixedContribution).ceil();
+          horizonPeriods = periodsNeeded;
+          debugPrint('[InsightTile] 🎯 Pay periods needed: $periodsNeeded');
+
+          // Calculate projected arrival date
+          final projectedDate = _calculateProjectedDate(nextPayDate, periodsNeeded);
+          _data = _data.copyWith(
+            projectedArrivalDate: projectedDate,
+            projectedMonthlyContribution: fixedContribution,
+          );
+          debugPrint('[InsightTile] 🎯 Projected arrival: $projectedDate');
+
+          // Use the fixed contribution as the cash flow (for horizon only)
+          totalCashFlow += fixedContribution;
+          debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
+        } else if (gap <= 0) {
+          debugPrint('[InsightTile] 🎯 Target already met! No cash flow needed');
+        } else {
+          debugPrint('[InsightTile] 🎯 ⚠️ Warning: Zero fixed contribution set');
+        }
       }
-      // If gap <= 0, target is already met or exceeded, no cash flow needed for horizon
     }
 
     // Calculate Autopilot cash flow (ONLY if enabled)
@@ -430,6 +580,9 @@ class _InsightTileState extends State<InsightTile> {
       // Only calculate if we need to save more
       if (gap > 0) {
         debugPrint('[InsightTile] ⚡ Need to save more for autopilot (gap > 0)');
+        // Clear any old coverage suggestion since we now have a gap
+        coverageSuggestion = null;
+
         // If autopilot has a first date set, calculate actual pay periods until that date
         if (_data.autopilotFirstDate != null) {
           autopilotPeriods = _calculatePayPeriods(
@@ -561,8 +714,7 @@ class _InsightTileState extends State<InsightTile> {
     debugPrint('[InsightTile] 💵 ========== FINAL CALCULATION ==========');
     debugPrint('[InsightTile] 💵 Total cash flow needed: \$${totalCashFlow.toStringAsFixed(2)}');
 
-    final expectedPay = _payDaySettings!.expectedPayAmount;
-    if (expectedPay != null && expectedPay > 0) {
+    if (expectedPay > 0) {
       percentage = (totalCashFlow / expectedPay) * 100;
       // Subtract existing commitments from other envelopes
       available = expectedPay - _existingCommitments;
@@ -573,39 +725,87 @@ class _InsightTileState extends State<InsightTile> {
       debugPrint('[InsightTile] 💵 Percentage of income: ${percentage.toStringAsFixed(1)}%');
       debugPrint('[InsightTile] 💵 Envelope starting balance: \$$startingAmount');
 
-      // Use account balance for affordability check, fallback to starting amount if not provided
-      final accountBalanceForCheck = widget.accountBalance ?? startingAmount;
-      debugPrint('[InsightTile] 💵 Account balance for affordability check: \$$accountBalanceForCheck');
+      // Calculate unallocated account balance (account balance - existing commitments)
+      final unallocatedBalance = widget.accountBalance != null
+          ? (widget.accountBalance! - _existingCommitments).clamp(0.0, double.infinity)
+          : startingAmount;
+
+      debugPrint('[InsightTile] 💵 Account balance: \$${widget.accountBalance?.toStringAsFixed(2) ?? 'N/A'}');
+      debugPrint('[InsightTile] 💵 Unallocated balance (after commitments): \$${unallocatedBalance.toStringAsFixed(2)}');
+      debugPrint('[InsightTile] 💵 Envelope starting amount: \$$startingAmount');
 
       if (totalCashFlow > available) {
         // Cash flow exceeds available income per paycheck
         final shortfall = totalCashFlow - available;
         debugPrint('[InsightTile] 💵 Shortfall per paycheck: \$${shortfall.toStringAsFixed(2)}');
 
-        // Check if current ACCOUNT balance can cover the shortfall during setup/accumulation
-        // For Horizon: Calculate how many periods until we've saved enough to be self-sustaining
-        // For Autopilot: Check if balance covers until first payment
+        // Calculate how many paychecks worth of shortfall the unallocated balance can cover
+        final payPeriodsOfCoverage = shortfall > 0 ? (unallocatedBalance / shortfall).floor() : 0;
+        debugPrint('[InsightTile] 💵 Pay periods of coverage from unallocated balance: $payPeriodsOfCoverage');
 
-        if (accountBalanceForCheck >= shortfall) {
-          // Current balance can cover the initial shortfall
+        // Check if unallocated balance can sustain the shortfall for a reasonable period
+        // We consider it affordable if it can cover at least 2-3 pay periods
+        if (payPeriodsOfCoverage >= 2) {
+          // Unallocated balance provides cushion for initial period
           requiresCurrentBalance = true;
           affordable = true;
           warning =
               'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck but you only have \$${available.toStringAsFixed(2)} available after existing commitments. '
-              'However, your current account balance (\$${accountBalanceForCheck.toStringAsFixed(2)}) can cover the shortfall during the initial period. '
-              'You\'ll use approximately \$${shortfall.toStringAsFixed(2)} from your current balance until paychecks accumulate enough to maintain this goal.';
-          debugPrint('[InsightTile] 💵 ⚠️ REQUIRES CURRENT BALANCE - shortfall covered by existing balance');
+              'Your unallocated account balance (\$${unallocatedBalance.toStringAsFixed(2)}) can cover the \$${shortfall.toStringAsFixed(2)} shortfall for approximately $payPeriodsOfCoverage pay periods. '
+              'Consider adjusting targets to make this sustainable long-term, or use this as a temporary bridge.';
+          debugPrint('[InsightTile] 💵 ⚠️ REQUIRES CURRENT BALANCE - unallocated balance provides cushion');
+        } else if (payPeriodsOfCoverage == 1) {
+          // Only covers one period - marginal affordability
+          requiresCurrentBalance = true;
+          affordable = true;
+          warning =
+              'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck but you only have \$${available.toStringAsFixed(2)} available after existing commitments. '
+              'Your unallocated balance (\$${unallocatedBalance.toStringAsFixed(2)}) can only cover the shortfall for about 1 pay period. '
+              'This plan is risky and not sustainable. Consider reducing your targets.';
+          debugPrint('[InsightTile] 💵 ⚠️ MARGINAL - only 1 period of coverage');
         } else {
-          // Not affordable even with current balance
+          // Not affordable - insufficient unallocated balance
           affordable = false;
           warning =
               'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck, but you only have \$${available.toStringAsFixed(2)} available after existing commitments (\$${_existingCommitments.toStringAsFixed(2)} already committed). '
-              'Your current account balance (\$${accountBalanceForCheck.toStringAsFixed(2)}) is not sufficient to cover the ongoing shortfall. Consider adjusting your targets.';
-          debugPrint('[InsightTile] 💵 ❌ NOT AFFORDABLE - exceeds both available income and current balance');
+              'Your unallocated account balance (\$${unallocatedBalance.toStringAsFixed(2)}) cannot sustain this ongoing shortfall. Reduce targets or increase income.';
+          debugPrint('[InsightTile] 💵 ❌ NOT AFFORDABLE - insufficient unallocated balance');
         }
         debugPrint('[InsightTile] 💵 Warning: $warning');
       } else {
         debugPrint('[InsightTile] 💵 ✅ AFFORDABLE - within available income');
+      }
+
+      // Check for over-allocation (percentage mode)
+      String? overAllocationWarning;
+      if (horizonMode == HorizonAllocationMode.percentage && _data.horizonPercentage != null) {
+        final totalPercentage = _data.horizonPercentage!;
+
+        // Calculate percentage used by existing commitments
+        final commitmentsPercentage = expectedPay > 0
+            ? (_existingCommitments / expectedPay) * 100
+            : 0.0;
+
+        final totalUsed = commitmentsPercentage + totalPercentage;
+
+        if (totalUsed > 100) {
+          overAllocationWarning = 'Total allocations (${totalUsed.toStringAsFixed(0)}%) exceed available income (100%). ';
+
+          // Check if autopilot is affected
+          if (_data.autopilotEnabled && _data.autopilotFirstDate != null) {
+            final daysToAutopilot = _data.autopilotFirstDate!.difference(DateTime.now()).inDays;
+            if (daysToAutopilot < 7) {
+              overAllocationWarning += 'Autopilot payment due in $daysToAutopilot days may be affected.';
+            }
+          }
+        }
+      }
+
+      // Merge with existing warning
+      if (overAllocationWarning != null) {
+        warning = warning == null
+            ? overAllocationWarning
+            : '$warning\n$overAllocationWarning';
       }
     }
 
@@ -653,6 +853,33 @@ class _InsightTileState extends State<InsightTile> {
     }
 
     return periods;
+  }
+
+  /// Calculate projected arrival date based on pay periods needed
+  DateTime _calculateProjectedDate(DateTime startDate, int payPeriods) {
+    if (_payDaySettings == null || payPeriods <= 0) return startDate;
+
+    final frequency = _payDaySettings!.payFrequency;
+    DateTime projected = startDate;
+
+    for (int i = 0; i < payPeriods; i++) {
+      switch (frequency) {
+        case 'weekly':
+          projected = projected.add(const Duration(days: 7));
+          break;
+        case 'biweekly':
+          projected = projected.add(const Duration(days: 14));
+          break;
+        case 'fourweekly':
+          projected = projected.add(const Duration(days: 28));
+          break;
+        case 'monthly':
+          projected = DateTime(projected.year, projected.month + 1, projected.day);
+          break;
+      }
+    }
+
+    return projected;
   }
 
   int _getPayPeriodsPerAutopilot(
@@ -852,9 +1079,17 @@ class _InsightTileState extends State<InsightTile> {
         debugPrint('[InsightTile] 🔬 Recommendation: Reduce to optimal (\$${optimalCashFlow.toStringAsFixed(2)})');
       } else {
         if (hasHorizon) {
-          suggestion = 'Autopilot needs ${payPerPeriod.toStringAsFixed(2)}/paycheck to maintain coverage. This is included in your total cash flow calculation with your Horizon goal.';
+          suggestion = '✅ Balance Covered\n\n'
+              '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+              '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+              '🔄 Suggested Cash Flow: \$${payPerPeriod.toStringAsFixed(2)}/paycheck\n\n'
+              'Why? Your Autopilot bill needs \$${payPerPeriod.toStringAsFixed(2)} per paycheck to maintain coverage. This is included in your total cash flow calculation alongside your Horizon goal.';
         } else {
-          suggestion = 'Your balance is sufficient to cover all autopilot payments. Insight is setting cash flow to ${payPerPeriod.toStringAsFixed(2)} per paycheck to maintain coverage.';
+          suggestion = '✅ Balance Covered\n\n'
+              '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+              '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+              '🔄 Suggested Cash Flow: \$${payPerPeriod.toStringAsFixed(2)}/paycheck\n\n'
+              'Why? Your balance fully covers the bill. The suggested cash flow maintains this coverage for future payments.';
         }
         recommendedCashFlow = payPerPeriod;
         debugPrint('[InsightTile] 🔬 Recommendation: Keep current (\$${payPerPeriod.toStringAsFixed(2)})');
@@ -877,10 +1112,24 @@ class _InsightTileState extends State<InsightTile> {
       debugPrint('[InsightTile] 🔬   Effective periods per bill: $effectivePeriodsPerBill');
       debugPrint('[InsightTile] 🔬 Recommended cash flow: \$${recommendedCashFlow.toStringAsFixed(2)}');
 
+      // Create clear math breakdown
+      final periodsText = effectivePeriodsPerBill == 1 ? 'paycheck' : '$effectivePeriodsPerBill paychecks';
+
       if (startingAmount >= billAmount * 2) {
-        suggestion = 'Your starting balance covers $paymentsCovered payment(s). Insight is setting cash flow to ${recommendedCashFlow.toStringAsFixed(2)} per paycheck to maintain ongoing coverage. Consider making a manual payment to reduce excess balance if desired.';
+        suggestion = '⚠️ Partial Coverage\n\n'
+            '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+            '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+            '✅ Covers: $paymentsCovered payment(s)\n'
+            '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
+            'Why? You have approximately $periodsText between bills. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck maintains coverage.\n\n'
+            '💡 Tip: Your balance is high - consider a manual payment to reduce excess if desired.';
       } else {
-        suggestion = 'Your starting balance covers $paymentsCovered payment(s). Insight is setting cash flow to ${recommendedCashFlow.toStringAsFixed(2)} per paycheck to maintain coverage after that.';
+        suggestion = '⚠️ Partial Coverage\n\n'
+            '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+            '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+            '✅ Covers: $paymentsCovered payment(s)\n'
+            '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
+            'Why? You have approximately $periodsText between bills. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck maintains coverage.';
       }
     } else {
       // No payments covered or starting amount equals bill amount exactly
@@ -902,18 +1151,38 @@ class _InsightTileState extends State<InsightTile> {
       if (startingAmount == billAmount) {
         if (firstBillDate != null) {
           final isBeforePayday = firstBillDate.isBefore(nextPayDate);
+          final periodsText = effectivePeriodsPerBill == 1 ? 'paycheck' : '$effectivePeriodsPerBill paychecks';
+
           if (isBeforePayday) {
-            suggestion = 'Bill is due before your next payday. After this payment, Insight will set cash flow to ${recommendedCashFlow.toStringAsFixed(2)} per paycheck to rebuild the balance.';
+            suggestion = '⚠️ Bill Due Before Payday\n\n'
+                '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+                '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+                '📅 Bill Date: ${firstBillDate.day}/${firstBillDate.month}/${firstBillDate.year}\n'
+                '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
+                'Why? After the first bill pays, you\'ll have $periodsText between payments. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck.';
             debugPrint('[InsightTile] 🔬 Bill before payday scenario');
           } else {
-            suggestion = 'You\'ll have $effectivePeriodsPerBill paycheck(s) to rebuild the balance after the first payment. Insight is setting cash flow to ${recommendedCashFlow.toStringAsFixed(2)} per paycheck.';
+            suggestion = '✅ Ready for First Payment\n\n'
+                '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+                '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+                '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
+                'Why? You\'ll have $periodsText to rebuild after payment. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck.';
             debugPrint('[InsightTile] 🔬 Standard rebuild scenario');
           }
         } else {
-          suggestion = 'You have exactly enough for the next payment. Insight is setting cash flow to ${recommendedCashFlow.toStringAsFixed(2)} per paycheck to maintain coverage.';
+          suggestion = '✅ Exact Amount\n\n'
+              '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+              '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+              '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
+              'Why? You have exactly enough for the next payment. The suggested cash flow maintains coverage for future bills.';
         }
       } else {
-        suggestion = 'Starting amount is less than bill. You\'ll need to save ${(billAmount - startingAmount).toStringAsFixed(2)} more before the first payment.';
+        final gap = billAmount - startingAmount;
+        suggestion = '❌ Insufficient Balance\n\n'
+            '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
+            '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
+            '⚠️ Shortfall: \$${gap.toStringAsFixed(2)}\n\n'
+            'You need \$${gap.toStringAsFixed(2)} more before the first payment. Consider adding funds or adjusting the bill amount.';
       }
     }
 
@@ -1026,7 +1295,7 @@ class _InsightTileState extends State<InsightTile> {
       initialDate: _data.autopilotFirstDate ?? now.add(const Duration(days: 7)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 365 * 2)),
-      helpText: 'Select first payment date',
+      helpText: 'Select payment date',
     );
 
     if (picked != null && mounted) {
@@ -1046,9 +1315,13 @@ class _InsightTileState extends State<InsightTile> {
     _horizonAmountCtrl.dispose();
     _autopilotAmountCtrl.dispose();
     _manualCashFlowCtrl.dispose();
+    _percentageCtrl.dispose();
+    _fixedAmountCtrl.dispose();
     _horizonAmountFocus.dispose();
     _autopilotAmountFocus.dispose();
     _manualCashFlowFocus.dispose();
+    _percentageFocus.dispose();
+    _fixedAmountFocus.dispose();
     super.dispose();
   }
 
@@ -1421,6 +1694,7 @@ class _InsightTileState extends State<InsightTile> {
             ),
             decoration: InputDecoration(
               labelText: 'Target Amount',
+              helperText: 'Your savings goal (required for cash flow calculation)',
               prefixText: localeProvider.currencySymbol,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1450,57 +1724,220 @@ class _InsightTileState extends State<InsightTile> {
             ),
           ),
           const SizedBox(height: 12),
-          InkWell(
-            onTap: _pickHorizonDate,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outline),
-                borderRadius: BorderRadius.circular(12),
+          // Mode toggle (three-way)
+          SegmentedButton<HorizonAllocationMode>(
+            segments: [
+              const ButtonSegment(
+                value: HorizonAllocationMode.date,
+                label: Text('Date'),
+                icon: Icon(Icons.event, size: 16),
               ),
-              child: Row(
+              ButtonSegment(
+                value: HorizonAllocationMode.fixedAmount,
+                label: Text(localeProvider.currencySymbol),
+              ),
+              const ButtonSegment(
+                value: HorizonAllocationMode.percentage,
+                label: Text('%'),
+              ),
+            ],
+            selected: {_horizonMode},
+            onSelectionChanged: (Set<HorizonAllocationMode> selection) {
+              setState(() {
+                final previousMode = _horizonMode;
+                _horizonMode = selection.first;
+                _data = _data.copyWith(horizonMode: _horizonMode);
+
+                // Mode conversion logic
+                if (_payDaySettings?.expectedPayAmount != null) {
+                  final availIncome = _payDaySettings!.expectedPayAmount! - _existingCommitments;
+
+                  if (_horizonMode == HorizonAllocationMode.percentage) {
+                    // Converting TO percentage mode
+                    if (previousMode == HorizonAllocationMode.fixedAmount && _data.horizonFixedAmount != null && availIncome > 0) {
+                      // From fixedAmount: use the user's fixed amount input
+                      final percentage = (_data.horizonFixedAmount! / availIncome) * 100;
+                      _data = _data.copyWith(horizonPercentage: percentage);
+                      _percentageCtrl.text = percentage.toStringAsFixed(1);
+                    } else if (previousMode == HorizonAllocationMode.date && _data.calculatedCashFlow != null && _data.horizonAmount != null && availIncome > 0) {
+                      // From date: use calculated cash flow to determine percentage
+                      // ONLY if there was a horizon target set (otherwise calculatedCashFlow is just autopilot)
+                      final percentage = (_data.calculatedCashFlow! / availIncome) * 100;
+                      _data = _data.copyWith(horizonPercentage: percentage);
+                      _percentageCtrl.text = percentage.toStringAsFixed(1);
+                    }
+                  } else if (_horizonMode == HorizonAllocationMode.fixedAmount) {
+                    // Converting TO fixed amount mode
+                    if (previousMode == HorizonAllocationMode.percentage && _data.horizonPercentage != null && availIncome > 0) {
+                      // From percentage: calculate dollar amount
+                      final amount = (availIncome * _data.horizonPercentage!) / 100;
+                      // Store this in horizonFixedAmount (user's input field)
+                      _data = _data.copyWith(horizonFixedAmount: amount);
+                      _fixedAmountCtrl.text = amount.toStringAsFixed(2);
+                    } else if (previousMode == HorizonAllocationMode.date && _data.calculatedCashFlow != null && _data.horizonAmount != null) {
+                      // From date: use the calculated cash flow from the date mode
+                      // ONLY if there was a horizon target set (otherwise calculatedCashFlow is just autopilot)
+                      _data = _data.copyWith(horizonFixedAmount: _data.calculatedCashFlow);
+                      _fixedAmountCtrl.text = _data.calculatedCashFlow!.toStringAsFixed(2);
+                    }
+                    _data = _data.copyWith(
+                      horizonPercentage: null,
+                      projectedArrivalDate: null,
+                    );
+                  } else if (_horizonMode == HorizonAllocationMode.date) {
+                    // Converting TO date mode
+                    // Keep existing cash flow calculation, it will be recalculated
+                    _data = _data.copyWith(
+                      horizonPercentage: null,
+                      horizonFixedAmount: null,
+                      projectedArrivalDate: null,
+                    );
+                  }
+                }
+
+                _recalculate();
+              });
+            },
+          ),
+          // Context-specific input field based on mode
+          if (_horizonMode == HorizonAllocationMode.date) ...[
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pickHorizonDate,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.colorScheme.outline),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Horizon Date',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _data.horizonDate == null
+                                ? 'Tap to set target date'
+                                : '${_data.horizonDate!.day}/${_data.horizonDate!.month}/${_data.horizonDate!.year}',
+                            style: fontProvider.getTextStyle(
+                              fontSize: 13,
+                              color: _data.horizonDate == null
+                                  ? theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.6,
+                                    )
+                                  : theme.colorScheme.secondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_data.horizonDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: _clearHorizonDate,
+                        tooltip: 'Clear date',
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (_horizonMode == HorizonAllocationMode.fixedAmount) ...[
+            const SizedBox(height: 12),
+            SmartTextField(
+              controller: _fixedAmountCtrl,
+              focusNode: _fixedAmountFocus,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (value) {
+                final amount = double.tryParse(value);
+                _data = _data.copyWith(horizonFixedAmount: amount);
+                _recalculate();
+              },
+              decoration: InputDecoration(
+                labelText: 'Fixed Amount per Payday',
+                hintText: '0.00',
+                prefixText: localeProvider.currencySymbol,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+          if (_horizonMode == HorizonAllocationMode.percentage) ...[
+            const SizedBox(height: 12),
+            SmartTextField(
+              controller: _percentageCtrl,
+              focusNode: _percentageFocus,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (value) {
+                final percentage = double.tryParse(value);
+                _data = _data.copyWith(horizonPercentage: percentage);
+                _recalculate();
+              },
+              decoration: InputDecoration(
+                labelText: '% of Available Income (after existing commitments)',
+                hintText: '0.0',
+                suffixText: '%',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+          // Display enriched arrival info for all modes
+          if (_data.projectedArrivalDate != null && _data.calculatedCashFlow != null && _data.payPeriodsToHorizon != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.calendar_today),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Target Date (Optional)',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 14,
+                  Row(
+                    children: [
+                      Icon(Icons.timeline, size: 16, color: theme.colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _horizonMode == HorizonAllocationMode.percentage
+                              ? '${_data.horizonPercentage?.toStringAsFixed(1) ?? '0'}% (${localeProvider.currencySymbol}${_data.calculatedCashFlow!.toStringAsFixed(2)}) per payday'
+                              : '${localeProvider.currencySymbol}${_data.calculatedCashFlow!.toStringAsFixed(2)} per payday',
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _data.horizonDate == null
-                              ? 'Tap to set deadline'
-                              : '${_data.horizonDate!.day}/${_data.horizonDate!.month}/${_data.horizonDate!.year}',
-                          style: fontProvider.getTextStyle(
-                            fontSize: 13,
-                            color: _data.horizonDate == null
-                                ? theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.6,
-                                  )
-                                : theme.colorScheme.secondary,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  if (_data.horizonDate != null)
-                    IconButton(
-                      icon: const Icon(Icons.clear, size: 20),
-                      onPressed: _clearHorizonDate,
-                      tooltip: 'Clear date',
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const SizedBox(width: 24),
+                      Text(
+                        '@ ${_data.payPeriodsToHorizon} paydays = arrives ${_data.projectedArrivalDate!.day}/${_data.projectedArrivalDate!.month}/${_data.projectedArrivalDate!.year}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
+          ],
         ],
       ],
     );
@@ -1657,7 +2094,7 @@ class _InsightTileState extends State<InsightTile> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'First Payment Date',
+                          'Payment Date',
                           style: fontProvider.getTextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -2067,20 +2504,73 @@ class _InsightTileState extends State<InsightTile> {
                               ],
                             ),
                             if (_data.setupPhaseEndDate != null) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 12),
                               const Divider(height: 1),
+                              const SizedBox(height: 8),
+                              // Math breakdown
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '📊 The Math:',
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Bill Amount: ${localeProvider.currencySymbol}${_data.autopilotAmount?.toStringAsFixed(2) ?? '0.00'}',
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 11,
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                    Text(
+                                      'Pay Frequency: ${_payDaySettings?.payFrequency ?? 'N/A'}',
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 11,
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                    if (_data.payPeriodsUntilSteadyState != null) ...[
+                                      Text(
+                                        'Paychecks per cycle: ${_data.payPeriodsUntilSteadyState}',
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 11,
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                        ),
+                                      ),
+                                      Text(
+                                        '${localeProvider.currencySymbol}${_data.autopilotAmount?.toStringAsFixed(2) ?? '0.00'} ÷ ${_data.payPeriodsUntilSteadyState} = ${localeProvider.currencySymbol}${_data.ongoingCashFlow!.toStringAsFixed(2)}/paycheck',
+                                        style: fontProvider.getTextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.secondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.info_outline,
+                                    Icons.notification_important,
                                     size: 16,
-                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                    color: theme.colorScheme.primary,
                                   ),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
-                                      'After bill payment on ${_data.setupPhaseEndDate!.day}/${_data.setupPhaseEndDate!.month}/${_data.setupPhaseEndDate!.year}, cash flow will automatically adjust to ${localeProvider.currencySymbol}${_data.ongoingCashFlow!.toStringAsFixed(2)}',
+                                      'After bill payment on ${_data.setupPhaseEndDate!.day}/${_data.setupPhaseEndDate!.month}/${_data.setupPhaseEndDate!.year}, Insight will notify you to adjust cash flow to ${localeProvider.currencySymbol}${_data.ongoingCashFlow!.toStringAsFixed(2)}. You\'ll be able to accept, keep current, or adjust manually.',
                                       style: fontProvider.getTextStyle(
                                         fontSize: 11,
                                         color: theme.colorScheme.onSurface.withValues(alpha: 0.7),

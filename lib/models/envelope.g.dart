@@ -43,13 +43,18 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       createdAt: fields[27] as DateTime?,
       targetStartDateType: fields[28] as TargetStartDateType?,
       customTargetStartDate: fields[29] as DateTime?,
+      horizonMode: fields[30] as HorizonAllocationMode?,
+      allocationPercentage: fields[31] as double?,
+      projectedArrivalDate: fields[32] as DateTime?,
+      lastKnownAvailableIncome: fields[33] as double?,
+      enableDynamicRecalculation: fields[34] as bool?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Envelope obj) {
     writer
-      ..writeByte(26)
+      ..writeByte(31)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -101,7 +106,17 @@ class EnvelopeAdapter extends TypeAdapter<Envelope> {
       ..writeByte(28)
       ..write(obj.targetStartDateType)
       ..writeByte(29)
-      ..write(obj.customTargetStartDate);
+      ..write(obj.customTargetStartDate)
+      ..writeByte(30)
+      ..write(obj.horizonMode)
+      ..writeByte(31)
+      ..write(obj.allocationPercentage)
+      ..writeByte(32)
+      ..write(obj.projectedArrivalDate)
+      ..writeByte(33)
+      ..write(obj.lastKnownAvailableIncome)
+      ..writeByte(34)
+      ..write(obj.enableDynamicRecalculation);
   }
 
   @override
@@ -155,6 +170,50 @@ class TargetStartDateTypeAdapter extends TypeAdapter<TargetStartDateType> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TargetStartDateTypeAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class HorizonAllocationModeAdapter extends TypeAdapter<HorizonAllocationMode> {
+  @override
+  final int typeId = 8;
+
+  @override
+  HorizonAllocationMode read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return HorizonAllocationMode.date;
+      case 1:
+        return HorizonAllocationMode.fixedAmount;
+      case 2:
+        return HorizonAllocationMode.percentage;
+      default:
+        return HorizonAllocationMode.date;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, HorizonAllocationMode obj) {
+    switch (obj) {
+      case HorizonAllocationMode.date:
+        writer.writeByte(0);
+        break;
+      case HorizonAllocationMode.fixedAmount:
+        writer.writeByte(1);
+        break;
+      case HorizonAllocationMode.percentage:
+        writer.writeByte(2);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HorizonAllocationModeAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

@@ -10,6 +10,7 @@ import 'notification_repo.dart';
 import '../models/pay_day_settings.dart';
 import '../models/scheduled_payment.dart';
 import '../models/app_notification.dart';
+import '../models/envelope.dart';
 
 class InsightRecalculationService {
   /// Recalculates Insight cash flow for an envelope after Autopilot execution.
@@ -101,40 +102,52 @@ class InsightRecalculationService {
 
       // 7. Check if we've reached steady state
       final isInSteadyState = calculation['isInSteadyState'] as bool;
+      final payPeriodsPerCycle = calculation['payPeriodsPerCycle'] as int;
 
       debugPrint('[InsightRecalc] 💰 Results:');
       debugPrint('[InsightRecalc]   Old cash flow: \$$oldCashFlow');
       debugPrint('[InsightRecalc]   New cash flow: \$$newCashFlow');
       debugPrint('[InsightRecalc]   Steady state: $isInSteadyState');
+      debugPrint('[InsightRecalc]   Pay periods per cycle: $payPeriodsPerCycle');
 
-      // 8. Only update if amount changed significantly (more than $0.01)
+      // 8. Only notify if amount changed significantly (more than $0.01)
       if ((newCashFlow - oldCashFlow).abs() < 0.01) {
-        debugPrint('[InsightRecalc] ✅ No significant change, skipping update');
+        debugPrint('[InsightRecalc] ✅ No significant change, skipping notification');
         return false;
       }
 
-      // 9. Update envelope's cash flow amount
-      await envelopeRepo.updateEnvelope(
-        envelopeId: envelope.id,
-        cashFlowAmount: newCashFlow,
-      );
+      // 9. DO NOT auto-update - just create notification with suggestion
+      // User will approve the change via notification action
+      debugPrint('[InsightRecalc] 💡 Calculated new cash flow: \$$oldCashFlow → \$$newCashFlow (SUGGESTION ONLY)');
 
-      debugPrint('[InsightRecalc] ✅ Updated cash flow: \$$oldCashFlow → \$$newCashFlow');
+      // 10. Create notification with suggested change
+      final periodsText = payPeriodsPerCycle == 1 ? 'paycheck' : '$payPeriodsPerCycle paychecks';
+      final billAmountFormatted = nextPayment.amount.toStringAsFixed(2);
+      final mathExplanation = '\$$billAmountFormatted ÷ $payPeriodsPerCycle = \$${newCashFlow.toStringAsFixed(2)}/paycheck';
 
-      // 10. Create notification
       await notificationRepo.createNotification(
         type: NotificationType.scheduledPaymentProcessed, // Reuse existing type
-        title: 'Cash Flow Updated',
+        title: '💡 Autopilot Update: ${envelope.name}',
         message: isInSteadyState
-            ? '${envelope.name}: Cash flow adjusted to \$${newCashFlow.toStringAsFixed(2)}/paycheck (steady state reached)'
-            : '${envelope.name}: Cash flow adjusted to \$${newCashFlow.toStringAsFixed(2)}/paycheck',
+            ? '✅ Bill paid: \$${billAmountFormatted}\n\n'
+              '📊 Suggested Cash Flow: \$${newCashFlow.toStringAsFixed(2)}/paycheck\n'
+              'Why? You have $periodsText between bills.\n'
+              '$mathExplanation\n\n'
+              '(Steady state reached)'
+            : '✅ Bill paid: \$${billAmountFormatted}\n\n'
+              '📊 Suggested Cash Flow: \$${newCashFlow.toStringAsFixed(2)}/paycheck\n'
+              'Why? You have $periodsText between bills.\n'
+              '$mathExplanation',
         metadata: {
           'envelopeId': envelope.id,
           'envelopeName': envelope.name,
           'oldCashFlow': oldCashFlow,
-          'newCashFlow': newCashFlow,
+          'suggestedCashFlow': newCashFlow,
+          'billAmount': nextPayment.amount,
+          'periodsPerCycle': payPeriodsPerCycle,
           'isInSteadyState': isInSteadyState,
-          'reason': 'autopilot_recalculation',
+          'reason': 'autopilot_recalculation_suggestion',
+          'requiresUserApproval': true, // Flag for Phase 2
         },
       );
 
@@ -321,5 +334,115 @@ class InsightRecalculationService {
 
     if (payDays == 0) return 1;
     return (billDays / payDays).ceil();
+  }
+
+  /// Recalculate projected arrival dates for percentage-based allocations
+  /// Triggered when income changes or commitments are modified
+  Future<void> recalculatePercentageAllocations({
+    required String userId,
+    required EnvelopeRepo repo,
+  }) async {
+    debugPrint('[InsightRecalc] 🔄 Checking percentage-based allocations for recalculation');
+
+    // Get all envelopes
+    final envelopes = await repo.envelopesStream().first;
+
+    // Filter to only percentage-based envelopes with dynamic recalculation enabled
+    final percentageEnvelopes = envelopes.where((env) =>
+      env.horizonMode == HorizonAllocationMode.percentage &&
+      env.enableDynamicRecalculation == true &&
+      env.allocationPercentage != null &&
+      env.targetAmount != null
+    ).toList();
+
+    if (percentageEnvelopes.isEmpty) {
+      debugPrint('[InsightRecalc] No percentage-based envelopes to recalculate');
+      return;
+    }
+
+    // Get current pay settings
+    final payDayService = PayDaySettingsService(null, userId);
+    final paySettings = await payDayService.getPayDaySettings();
+
+    if (paySettings == null || paySettings.expectedPayAmount == null) {
+      debugPrint('[InsightRecalc] ⚠️ No pay settings found, skipping recalculation');
+      return;
+    }
+
+    final currentAvailableIncome = await _calculateCurrentAvailableIncome(repo, paySettings);
+
+    for (final envelope in percentageEnvelopes) {
+      final lastKnownIncome = envelope.lastKnownAvailableIncome ?? 0.0;
+      final incomeChange = (currentAvailableIncome - lastKnownIncome).abs();
+      final changeThreshold = lastKnownIncome * 0.05; // 5% threshold
+
+      if (incomeChange > changeThreshold) {
+        debugPrint('[InsightRecalc] 💰 Income changed by \$${incomeChange.toStringAsFixed(2)} for ${envelope.name}');
+
+        // Recalculate projected date
+        final contributionPerPay = currentAvailableIncome * (envelope.allocationPercentage! / 100);
+        final gap = envelope.targetAmount! - envelope.currentAmount;
+
+        if (gap > 0 && contributionPerPay > 0) {
+          final periodsNeeded = (gap / contributionPerPay).ceil();
+          final newProjectedDate = _calculateProjectedDate(
+            paySettings.nextPayDate ?? DateTime.now(),
+            periodsNeeded,
+            paySettings.payFrequency,
+          );
+
+          // Check if date changed significantly (> 7 days)
+          final oldDate = envelope.projectedArrivalDate ?? DateTime.now();
+          final daysDifference = newProjectedDate.difference(oldDate).inDays.abs();
+
+          if (daysDifference > 7) {
+            debugPrint('[InsightRecalc] 📅 Projected date changed by $daysDifference days');
+
+            // Update envelope
+            await repo.updateEnvelope(
+              envelopeId: envelope.id,
+              projectedArrivalDate: newProjectedDate,
+              lastKnownAvailableIncome: currentAvailableIncome,
+            );
+
+            debugPrint('[InsightRecalc] ✅ Updated ${envelope.name} with new projected date: ${newProjectedDate.day}/${newProjectedDate.month}/${newProjectedDate.year}');
+          }
+        }
+      }
+    }
+  }
+
+  Future<double> _calculateCurrentAvailableIncome(
+    EnvelopeRepo repo,
+    PayDaySettings paySettings,
+  ) async {
+    // Calculate total existing commitments
+    final envelopes = await repo.envelopesStream().first;
+    final commitments = envelopes
+        .where((env) => env.cashFlowEnabled && env.cashFlowAmount != null)
+        .fold<double>(0.0, (sum, env) => sum + env.cashFlowAmount!);
+
+    return (paySettings.expectedPayAmount ?? 0.0) - commitments;
+  }
+
+  DateTime _calculateProjectedDate(DateTime start, int periods, String frequency) {
+    DateTime projected = start;
+    for (int i = 0; i < periods; i++) {
+      switch (frequency) {
+        case 'weekly':
+          projected = projected.add(const Duration(days: 7));
+          break;
+        case 'biweekly':
+          projected = projected.add(const Duration(days: 14));
+          break;
+        case 'fourweekly':
+          projected = projected.add(const Duration(days: 28));
+          break;
+        case 'monthly':
+          projected = DateTime(projected.year, projected.month + 1, projected.day);
+          break;
+      }
+    }
+    return projected;
   }
 }
