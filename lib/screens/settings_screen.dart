@@ -24,6 +24,7 @@ import '../services/app_update_service.dart';
 import '../services/hive_service.dart';
 import '../services/pay_day_settings_service.dart';
 import '../services/scheduled_payment_repo.dart';
+import '../services/onboarding_progress_service.dart';
 import '../providers/workspace_provider.dart';
 import '../models/envelope.dart';
 import '../models/account.dart';
@@ -498,6 +499,12 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Developer Tools',
                 icon: Icons.build_outlined,
                 children: [
+                  _SettingsTile(
+                    title: 'Reset Onboarding & Start Over',
+                    subtitle: 'Clear all data and restart onboarding flow',
+                    leading: const Icon(Icons.restart_alt, color: Colors.blue),
+                    onTap: () => _resetOnboarding(context),
+                  ),
                   _SettingsTile(
                     title: 'Force Sync to Firebase',
                     subtitle: 'Upload all local data to cloud',
@@ -1192,6 +1199,204 @@ class SettingsScreen extends StatelessWidget {
 
   // Removed - DataCleanupService no longer exists
   // Future<void> _cleanupOrphanedData(BuildContext context) async { ... }
+
+  Future<void> _resetOnboarding(BuildContext context) async {
+    final theme = Theme.of(context);
+    final userId = repo.currentUserId;
+
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        title: const Text('Reset Onboarding?'),
+        content: const Text(
+          'This will:\n'
+          '• Clear ALL app data (envelopes, transactions, accounts, etc.)\n'
+          '• Delete onboarding progress\n'
+          '• Sign you out\n'
+          '• Return you to the onboarding flow on next login\n'
+          '\n'
+          '⚠️ This action cannot be undone!\n'
+          '\n'
+          'Use this to test the complete onboarding experience from the beginning.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.blue,
+            ),
+            child: const Text('Reset & Restart'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !context.mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 1. Clear all Hive boxes
+      final envelopeBox = HiveService.getBox<Envelope>('envelopes');
+      final accountBox = HiveService.getBox<Account>('accounts');
+      final transactionBox = HiveService.getBox<models.Transaction>('transactions');
+      final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
+      final groupBox = HiveService.getBox<EnvelopeGroup>('groups');
+
+      await envelopeBox.clear();
+      await accountBox.clear();
+      await transactionBox.clear();
+      await scheduledPaymentBox.clear();
+      await groupBox.clear();
+
+      // 2. Clear onboarding progress from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('onboarding_progress_$userId');
+      debugPrint('[Settings:ResetOnboarding] ✅ Cleared onboarding progress from SharedPreferences');
+
+      // 3. Clear onboarding progress from Firestore
+      try {
+        await repo.db
+            .collection('users')
+            .doc(userId)
+            .collection('onboarding')
+            .doc('progress')
+            .delete();
+        debugPrint('[Settings:ResetOnboarding] ✅ Deleted onboarding progress from Firestore');
+      } catch (e) {
+        debugPrint('[Settings:ResetOnboarding] ⚠️ Failed to delete Firestore onboarding progress: $e');
+      }
+
+      // 4. Clear user profile data from SharedPreferences
+      await prefs.remove('profile_photo_path_$userId');
+
+      // 5. Clear pay day settings
+      try {
+        await repo.db
+            .collection('users')
+            .doc(userId)
+            .collection('settings')
+            .doc('payDay')
+            .delete();
+        debugPrint('[Settings:ResetOnboarding] ✅ Deleted pay day settings from Firestore');
+      } catch (e) {
+        debugPrint('[Settings:ResetOnboarding] ⚠️ Failed to delete pay day settings: $e');
+      }
+
+      // 6. Clear all Firestore data
+      // Delete from root collections (solo mode)
+      await repo.db
+          .collection('envelopes')
+          .where('userId', isEqualTo: userId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+      });
+
+      await repo.db
+          .collection('transactions')
+          .where('userId', isEqualTo: userId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+      });
+
+      await repo.db
+          .collection('scheduledPayments')
+          .where('userId', isEqualTo: userId)
+          .get()
+          .then((snapshot) async {
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+      });
+
+      // Delete from workspace collections if applicable
+      final workspaceId = repo.workspaceId;
+      if (workspaceId != null && workspaceId.isNotEmpty) {
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('envelopes')
+            .where('userId', isEqualTo: userId)
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+        });
+
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('transactions')
+            .where('userId', isEqualTo: userId)
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+        });
+
+        await repo.db
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('scheduledPayments')
+            .where('userId', isEqualTo: userId)
+            .get()
+            .then((snapshot) async {
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+        });
+      }
+
+      debugPrint('[Settings:ResetOnboarding] ✅ All data cleared, now signing out...');
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Dismiss loading dialog
+
+        // Set logging out flag
+        final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+        workspaceProvider.setLoggingOut(true);
+
+        // Sign out
+        await AuthService.signOut();
+
+        // Pop all routes - AuthWrapper will show sign in screen
+        if (context.mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Settings:ResetOnboarding] ❌ Reset failed: $e');
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Dismiss loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reset failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _resetTransactionsAndBalances(BuildContext context) async {
     final theme = Theme.of(context);

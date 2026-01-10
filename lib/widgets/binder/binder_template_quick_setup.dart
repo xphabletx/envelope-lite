@@ -23,6 +23,7 @@ class BinderTemplateQuickSetup extends StatefulWidget {
   final Function(int, [List<String>?])? onComplete; // Callback with count and optional envelope IDs
   final bool
   returnEnvelopeIds; // If true, passes envelope IDs to onComplete callback
+  final double? accountBalance; // Account balance for InsightTile during onboarding
 
   const BinderTemplateQuickSetup({
     super.key,
@@ -32,6 +33,7 @@ class BinderTemplateQuickSetup extends StatefulWidget {
     this.existingBinderId,
     this.onComplete,
     this.returnEnvelopeIds = false,
+    this.accountBalance,
   });
 
   @override
@@ -132,6 +134,7 @@ class _BinderTemplateQuickSetupState extends State<BinderTemplateQuickSetup> {
         defaultAccountId: widget.defaultAccountId,
         existingBinderId: widget.existingBinderId,
         returnEnvelopeIds: widget.returnEnvelopeIds,
+        accountBalance: widget.accountBalance,
         onComplete: (envelopeCount, createdIds) {
           if (widget.returnEnvelopeIds) {
             widget.onComplete?.call(envelopeCount, createdIds);
@@ -344,6 +347,7 @@ class _QuickEntryFlow extends StatefulWidget {
   final String? defaultAccountId;
   final String? existingBinderId;
   final bool returnEnvelopeIds;
+  final double? accountBalance;
   final Function(int, List<String>)
   onComplete; // Returns count and envelope IDs
   final VoidCallback onBack;
@@ -355,6 +359,7 @@ class _QuickEntryFlow extends StatefulWidget {
     this.defaultAccountId,
     this.existingBinderId,
     this.returnEnvelopeIds = false,
+    this.accountBalance,
     required this.onComplete,
     required this.onBack,
   });
@@ -579,6 +584,7 @@ class _QuickEntryFlowState extends State<_QuickEntryFlow> {
             data: _collectedData[index],
             userId: widget.userId,
             isAccountMode: widget.defaultAccountId != null,
+            accountBalance: widget.accountBalance,
             currentIndex: index + 1,
             totalCount: _selectedEnvelopes.length,
             onNext: _nextCard,
@@ -604,6 +610,7 @@ class _QuickEntryCard extends StatefulWidget {
   final EnvelopeData data;
   final String userId;
   final bool isAccountMode;
+  final double? accountBalance;
   final int currentIndex;
   final int totalCount;
   final VoidCallback onNext;
@@ -619,6 +626,7 @@ class _QuickEntryCard extends StatefulWidget {
     required this.data,
     required this.userId,
     required this.isAccountMode,
+    this.accountBalance,
     required this.currentIndex,
     required this.totalCount,
     required this.onNext,
@@ -897,10 +905,14 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
                       const SizedBox(height: 24),
 
                       // 👁️‍🗨️ INSIGHT TILE - Financial Planning
+                      // During onboarding, use the passed accountBalance instead of fetching from DB
+                      // since the account hasn't been created yet
                       FutureBuilder<Account?>(
-                        future: _accountRepo.getDefaultAccount(),
+                        future: widget.accountBalance != null
+                            ? null // Don't fetch if we have accountBalance from onboarding
+                            : _accountRepo.getDefaultAccount(),
                         builder: (context, snapshot) {
-                          final accountBalance = snapshot.data?.currentBalance ?? 0.0;
+                          final accountBalance = widget.accountBalance ?? snapshot.data?.currentBalance ?? 0.0;
 
                           return InsightTile(
                             userId: widget.userId,

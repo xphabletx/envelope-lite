@@ -258,7 +258,23 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
     debugPrint('[Onboarding:ConsolidatedFlow] 🏗️ _buildPages - Building pages, isAccountMode: $_isAccountMode');
 
     _pages = [
-      // Step 1: Name
+      // Step 1: Legal Disclaimer & Philosophy
+      _DisclaimerStep(
+        onContinue: () {
+          debugPrint('[Onboarding:ConsolidatedFlow] ⚖️ Disclaimer step - User agreed to terms');
+          _nextStep();
+        },
+      ),
+
+      // Step 2: The Preparation Ritual
+      _PreparationStep(
+        onContinue: () {
+          debugPrint('[Onboarding:ConsolidatedFlow] 🕯️ Preparation step - User ready to begin');
+          _nextStep();
+        },
+      ),
+
+      // Step 3: Name (previously Step 1)
       _NameSetupStep(
         initialName: _userName,
         onContinue: (name) {
@@ -409,6 +425,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           userId: widget.userId,
           defaultAccountId: null, // Account not created yet during onboarding
           returnEnvelopeIds: true, // Get envelope IDs to link them to account later
+          accountBalance: _accountBalance, // Pass the collected account balance for InsightTile
           onComplete: (envelopeCount, [envelopeIds]) {
             debugPrint('[Onboarding:ConsolidatedFlow] 📦 Quick setup complete - Created $envelopeCount envelopes');
             debugPrint('[Onboarding:ConsolidatedFlow] 📦 Envelope IDs: ${envelopeIds ?? []}');
@@ -3247,4 +3264,205 @@ class _CompletionStep extends StatelessWidget {
       ),
     );
 }
+}
+
+// ============================================================================
+// LEGAL DISCLAIMER & PHILOSOPHY
+// ============================================================================
+class _DisclaimerStep extends StatelessWidget {
+  final VoidCallback onContinue;
+
+  const _DisclaimerStep({required this.onContinue});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const SizedBox(height: 60),
+              const Text('⚖️', style: TextStyle(fontSize: 60)),
+              const SizedBox(height: 24),
+              Text(
+                'A Tool, Not a Teacher',
+                style: fontProvider.getTextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.5)),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'This app is a useful tool to visualise spending habits. It is designed to help you see where your money goes and calculate potential outcomes based on your input.',
+                      style: fontProvider.getTextStyle(fontSize: 16).copyWith(height: 1.5),
+                      textAlign: TextAlign.center,
+                    ),
+                    const Divider(height: 32),
+                    Text(
+                      '• This is NOT financial advice.\n• You are responsible for your own decisions.\n• We provide the interface; you provide the intent.',
+                      style: fontProvider.getTextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                      ).copyWith(height: 1.6),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  onContinue();
+                },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  'I Understand & Agree',
+                  style: fontProvider.getTextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// THE PREPARATION RITUAL
+// ============================================================================
+class _PreparationStep extends StatelessWidget {
+  final VoidCallback onContinue;
+
+  const _PreparationStep({required this.onContinue});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
+                const Text('🕯️', style: TextStyle(fontSize: 60)),
+                const SizedBox(height: 24),
+                Text(
+                  'The 15-Minute Ritual',
+                  style: fontProvider.getTextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'To build your Financial Machine, you need your blueprints. Set aside a few quiet minutes to gather your info.',
+                  style: fontProvider.getTextStyle(fontSize: 16).copyWith(height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                _buildPrepItem(context, '📜', '3 Months of Statements', 'Identify your real spending habits.'),
+                _buildPrepItem(context, '📅', 'Upcoming Dates', 'Birthdays, renewals, and holidays.'),
+                _buildPrepItem(context, '🧾', 'Fixed Bills', 'Rent, utilities, and subscriptions.'),
+                _buildPrepItem(context, '💎', 'Financial Goals', 'The things you are actually working for.'),
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '"The magic happens once you put the work in. It\'s complex once, then it\'s set-and-forget."',
+                    style: fontProvider.getTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ).copyWith(fontStyle: FontStyle.italic),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                FilledButton(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    onContinue();
+                  },
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(
+                    'I\'m Ready to Begin',
+                    style: fontProvider.getTextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrepItem(BuildContext context, String emoji, String title, String subtitle) {
+    final theme = Theme.of(context);
+    final fontProvider = Provider.of<FontProvider>(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 28)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: fontProvider.getTextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: fontProvider.getTextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
