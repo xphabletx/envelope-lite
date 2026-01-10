@@ -63,7 +63,6 @@ class AppUpdateService {
         _showNoUpdateDialog(context);
       }
     } catch (e) {
-      debugPrint('Error checking for updates: $e');
       if (showNoUpdateDialog && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -100,7 +99,6 @@ class AppUpdateService {
       await LoggerService.info('Remote Config initialized successfully');
     } catch (e) {
       await LoggerService.error('Failed to initialize Remote Config', e);
-      debugPrint('Error initializing Remote Config: $e');
     }
   }
 
@@ -120,7 +118,6 @@ class AppUpdateService {
       }
     } catch (e) {
       await LoggerService.error('Error fetching latest version from Remote Config', e);
-      debugPrint('Error fetching latest version: $e');
     }
 
     return null;
@@ -348,7 +345,6 @@ class AppUpdateService {
 
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch store URL: $url');
     }
   }
 
@@ -376,7 +372,6 @@ class AppUpdateService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_lastCheckKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
-      debugPrint('Error saving last check time: $e');
     }
   }
 
@@ -386,7 +381,6 @@ class AppUpdateService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_skipVersionKey, version);
     } catch (e) {
-      debugPrint('Error skipping version: $e');
     }
   }
 
@@ -407,7 +401,6 @@ class AppUpdateService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_skipVersionKey);
     } catch (e) {
-      debugPrint('Error clearing skipped version: $e');
     }
   }
 }

@@ -30,13 +30,6 @@ class TimeMachineProvider extends ChangeNotifier {
     required DateTime targetDate,
     required ProjectionResult projection,
   }) {
-    debugPrint('[TimeMachine] ========================================');
-    debugPrint('[TimeMachine] ENTERING TIME MACHINE MODE');
-    debugPrint('[TimeMachine] Entry Date: ${DateTime.now()}');
-    debugPrint('[TimeMachine] Target Date: $targetDate');
-    debugPrint('[TimeMachine] Account Projections: ${projection.accountProjections.length}');
-    debugPrint('[TimeMachine] Timeline Events: ${projection.timeline.length}');
-    debugPrint('[TimeMachine] ========================================');
 
     _isActive = true;
     _entryDate = DateTime.now(); // Record when user entered time machine
@@ -44,15 +37,10 @@ class TimeMachineProvider extends ChangeNotifier {
     _projectionData = projection;
     notifyListeners();
 
-    debugPrint('[TimeMachine] ✅ Time Machine activated, listeners notified');
   }
 
   /// Exit Time Machine mode and return to present
   void exitTimeMachine() {
-    debugPrint('[TimeMachine] ========================================');
-    debugPrint('[TimeMachine] EXITING TIME MACHINE MODE');
-    debugPrint('[TimeMachine] Returning to present');
-    debugPrint('[TimeMachine] ========================================');
 
     _isActive = false;
     _entryDate = null;
@@ -60,7 +48,6 @@ class TimeMachineProvider extends ChangeNotifier {
     _projectionData = null;
     notifyListeners();
 
-    debugPrint('[TimeMachine] ✅ Time Machine deactivated, listeners notified');
   }
 
   /// Get projected balance for an envelope
@@ -81,7 +68,6 @@ class TimeMachineProvider extends ChangeNotifier {
     }
 
     // Only log if we're active but can't find the projection (this might indicate an error)
-    debugPrint('[TimeMachine] ⚠️ No projection found for envelope $envelopeId');
     return null;
   }
 
@@ -117,7 +103,6 @@ class TimeMachineProvider extends ChangeNotifier {
     }
 
     // Only log if we're active but can't find the projection (this might indicate an error)
-    debugPrint('[TimeMachine] ⚠️ No projection found for account $accountId');
     return null;
   }
 
@@ -176,17 +161,14 @@ class TimeMachineProvider extends ChangeNotifier {
   /// Build a modified account with projected balance
   Account getProjectedAccount(Account realAccount) {
     if (!_isActive) {
-      debugPrint('[TimeMachine] getProjectedAccount(${realAccount.name}): inactive, returning real account');
       return realAccount;
     }
 
     final projectedBalance = getProjectedAccountBalance(realAccount.id);
     if (projectedBalance == null) {
-      debugPrint('[TimeMachine] getProjectedAccount(${realAccount.name}): no projection, returning real account');
       return realAccount;
     }
 
-    debugPrint('[TimeMachine] ✅ Projecting account ${realAccount.name}: ${realAccount.currentBalance} → $projectedBalance');
 
     return Account(
       id: realAccount.id,
@@ -214,15 +196,9 @@ class TimeMachineProvider extends ChangeNotifier {
     bool includeTransfers = true,
   }) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine::Projection] getAllProjectedTransactions: inactive');
       return [];
     }
 
-    debugPrint('[TimeMachine::Projection] ========================================');
-    debugPrint('[TimeMachine::Projection] Generating ALL projected transactions');
-    debugPrint('[TimeMachine::Projection] Total timeline events: ${_projectionData!.timeline.length}');
-    debugPrint('[TimeMachine::Projection] Include transfers: $includeTransfers');
-    debugPrint('[TimeMachine::Projection] ========================================');
 
     final futureTransactions = <Transaction>[];
     final now = DateTime.now();
@@ -237,7 +213,6 @@ class TimeMachineProvider extends ChangeNotifier {
 
         if (event.type == 'transfer') {
           if (!includeTransfers) {
-            debugPrint('[TimeMachine::Projection] ⏭️ Skipping transfer event: $description');
             continue;
           }
           txType = TransactionType.transfer;
@@ -283,16 +258,12 @@ class TimeMachineProvider extends ChangeNotifier {
         );
 
         futureTransactions.add(tx);
-        debugPrint('[TimeMachine::Projection] ✅ Added: ${event.type} - $description on ${event.date}');
       }
     }
 
     // Sort by date descending (newest first)
     futureTransactions.sort((a, b) => b.date.compareTo(a.date));
 
-    debugPrint('[TimeMachine::Projection] ========================================');
-    debugPrint('[TimeMachine::Projection] Generated ${futureTransactions.length} projected transactions');
-    debugPrint('[TimeMachine::Projection] ========================================');
 
     return futureTransactions;
   }
@@ -304,16 +275,9 @@ class TimeMachineProvider extends ChangeNotifier {
     bool includeTransfers = true,
   }) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine::Projection] getProjectedTransactionsForDateRange: inactive');
       return [];
     }
 
-    debugPrint('[TimeMachine::Projection] ========================================');
-    debugPrint('[TimeMachine::Projection] Getting projected transactions for date range');
-    debugPrint('[TimeMachine::Projection] Start: $start');
-    debugPrint('[TimeMachine::Projection] End: $end');
-    debugPrint('[TimeMachine::Projection] Include transfers: $includeTransfers');
-    debugPrint('[TimeMachine::Projection] ========================================');
 
     final allProjected = getAllProjectedTransactions(
       includeTransfers: includeTransfers,
@@ -324,29 +288,17 @@ class TimeMachineProvider extends ChangeNotifier {
              tx.date.isBefore(end.add(const Duration(milliseconds: 1)));
     }).toList();
 
-    debugPrint('[TimeMachine::Projection] Filtered to ${filtered.length} transactions in date range');
     return filtered;
   }
 
   /// Calculate projected account balances at a specific date in the timeline
   Map<String, double> getProjectedAccountBalancesAtDate(DateTime date) {
     if (!_isActive || _projectionData == null) {
-      debugPrint('[TimeMachine::Projection] getProjectedAccountBalancesAtDate: inactive');
       return {};
     }
 
-    debugPrint('[TimeMachine::Projection] ========================================');
-    debugPrint('[TimeMachine::Projection] Calculating account balances at date: $date');
-    debugPrint('[TimeMachine::Projection] ========================================');
 
     final balances = <String, double>{};
-
-    // Get all events up to the target date
-    final relevantEvents = _projectionData!.timeline.where((event) {
-      return event.date.isBefore(date.add(const Duration(milliseconds: 1)));
-    }).toList();
-
-    debugPrint('[TimeMachine::Projection] Found ${relevantEvents.length} events before $date');
 
     // Start with current account balances from projection data
     for (final entry in _projectionData!.accountProjections.entries) {
@@ -361,18 +313,13 @@ class TimeMachineProvider extends ChangeNotifier {
       // For now, just use the projected balance if date matches future date
       if (date.isAtSameMomentAs(_futureDate!)) {
         balances[accountId] = balance;
-        debugPrint('[TimeMachine::Projection] Account $accountId at future date: $balance');
       } else {
         // For intermediate dates, we'd need more complex calculation
         // For now, return current balances
         balances[accountId] = projection.projectedBalance;
-        debugPrint('[TimeMachine::Projection] Account $accountId (approximation): $balance');
       }
     }
 
-    debugPrint('[TimeMachine::Projection] ========================================');
-    debugPrint('[TimeMachine::Projection] Calculated ${balances.length} account balances');
-    debugPrint('[TimeMachine::Projection] ========================================');
 
     return balances;
   }
@@ -381,7 +328,6 @@ class TimeMachineProvider extends ChangeNotifier {
   bool shouldBlockModifications() {
     final blocked = _isActive;
     if (blocked) {
-      debugPrint('[TimeMachine::ReadOnly] ⛔ Modification blocked - Time Machine is active');
     }
     return blocked;
   }
@@ -390,7 +336,6 @@ class TimeMachineProvider extends ChangeNotifier {
   String getBlockedActionMessage() {
     final random = math.Random();
     final message = _blockedMessages[random.nextInt(_blockedMessages.length)];
-    debugPrint('[TimeMachine::ReadOnly] Blocked action message: $message');
     return message;
   }
 }

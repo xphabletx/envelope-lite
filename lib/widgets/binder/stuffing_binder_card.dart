@@ -84,10 +84,6 @@ class _StuffingBinderCardState extends State<StuffingBinderCard>
       0.0,
       (sum, e) => sum + e.currentAmount,
     );
-    final targetTotal = widget.envelopes.fold(
-      0.0,
-      (sum, e) => sum + (e.targetAmount ?? 0),
-    );
 
     return GestureDetector(
       onTap: widget.onTap,

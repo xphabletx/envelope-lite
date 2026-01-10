@@ -87,13 +87,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
         providedEnd.day,
         23, 59, 59, 999,
       );
-      debugPrint('[StatsV2] Using explicit dates: $start to $end');
     } else if (timeMachine.isActive && timeMachine.entryDate != null && timeMachine.futureDate != null) {
       // Time machine active, no explicit dates - use entry date → target date
       start = timeMachine.entryDate!;
       final targetDate = timeMachine.futureDate!;
       end = DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59, 999);
-      debugPrint('[StatsV2] Time Machine active: $start to $end');
     } else {
       // Normal mode - last 30 days
       start = DateTime.now().subtract(const Duration(days: 30));
@@ -127,14 +125,6 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
       }
 
       // DEBUG: Log initial context
-      debugPrint('[StatsHistoryScreen] ===== CONTEXT INITIALIZATION =====');
-      debugPrint('[StatsHistoryScreen] Title: ${widget.title}');
-      debugPrint('[StatsHistoryScreen] Initial Envelope IDs: ${widget.initialEnvelopeIds}');
-      debugPrint('[StatsHistoryScreen] Initial Group IDs: ${widget.initialGroupIds}');
-      debugPrint('[StatsHistoryScreen] Initial Account IDs: ${widget.initialAccountIds}');
-      debugPrint('[StatsHistoryScreen] Active Filters: $activeFilters');
-      debugPrint('[StatsHistoryScreen] Selected IDs: $selectedIds');
-      debugPrint('[StatsHistoryScreen] ====================================');
     }
   }
 
@@ -635,11 +625,6 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
 
                                 // Filter transactions by context
                                 // DEBUG: Log filtering context
-                                debugPrint('[StatsHistoryScreen] ===== TRANSACTION FILTERING =====');
-                                debugPrint('[StatsHistoryScreen] Total transactions: ${txs.length}');
-                                debugPrint('[StatsHistoryScreen] Active filters: $activeFilters');
-                                debugPrint('[StatsHistoryScreen] Selected IDs: $selectedIds');
-                                debugPrint('[StatsHistoryScreen] Chosen Envelope IDs: ${chosenEnvelopeIds.length}');
 
                                 // Extract account IDs from selectedIds for efficient lookup
                                 final selectedAccountIds = selectedIds
@@ -688,17 +673,7 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                   return true;
                                 }).toList();
 
-                                // DEBUG: Log sample transaction details when filtering returns 0 results
-                                if (contextFilteredTxs.isEmpty && txs.isNotEmpty) {
-                                  debugPrint('[StatsHistoryScreen] ⚠️ No transactions matched filters!');
-                                  debugPrint('[StatsHistoryScreen] Selected Account IDs: $selectedAccountIds');
-                                  debugPrint('[StatsHistoryScreen] Chosen Envelope IDs: $chosenEnvelopeIds');
-                                  debugPrint('[StatsHistoryScreen] Sample transactions (first 3):');
-                                  for (var i = 0; i < (txs.length > 3 ? 3 : txs.length); i++) {
-                                    final t = txs[i];
-                                    debugPrint('[StatsHistoryScreen]   - Tx ${i+1}: accountId=${t.accountId}, envelopeId=${t.envelopeId}, type=${t.type}, amount=${t.amount}');
-                                  }
-                                }
+                                // DEBUG: Sample transaction inspection removed (unused)
 
                                 // Deduplicate transfer transactions
                                 final seenTransferLinks = <String>{};
@@ -716,54 +691,11 @@ class _StatsHistoryScreenState extends State<StatsHistoryScreen> {
                                 contextFilteredTxs.sort((a, b) => b.date.compareTo(a.date));
 
                                 // DEBUG: Log filtered results with useful information
-                                debugPrint('[StatsHistoryScreen] Filtered transactions: ${contextFilteredTxs.length}');
                                 if (contextFilteredTxs.isNotEmpty) {
-                                  debugPrint('[StatsHistoryScreen] ');
-                                  debugPrint('[StatsHistoryScreen] TRANSACTION LIST:');
-                                  debugPrint('[StatsHistoryScreen] ');
                                   for (var i = 0; i < (contextFilteredTxs.length > 10 ? 10 : contextFilteredTxs.length); i++) {
-                                    final t = contextFilteredTxs[i];
-                                    final txDate = DateFormat('MMM d, yyyy').format(t.date);
-                                    final txTime = DateFormat('h:mm a').format(t.date);
-
-                                    // Find account and envelope names
-                                    String accName = 'None';
-                                    if (t.accountId != null && t.accountId!.isNotEmpty) {
-                                      final acc = accounts.firstWhere(
-                                        (a) => a.id == t.accountId,
-                                        orElse: () => Account(id: '', name: 'Unknown', currentBalance: 0, userId: '', createdAt: DateTime.now(), lastUpdated: DateTime.now()),
-                                      );
-                                      accName = acc.name;
-                                    }
-
-                                    String envName = 'None';
-                                    if (t.envelopeId.isNotEmpty) {
-                                      final env = envelopes.firstWhere(
-                                        (e) => e.id == t.envelopeId,
-                                        orElse: () => Envelope(id: '', name: 'Unknown', userId: ''),
-                                      );
-                                      envName = env.name;
-                                    }
-
-                                    String typeStr = t.type.name.toUpperCase();
-                                    String fromTo = '';
-
-                                    if (t.type == TransactionType.transfer) {
-                                      fromTo = 'From: ${t.sourceEnvelopeName ?? 'Unknown'} → To: ${t.targetEnvelopeName ?? 'Unknown'}';
-                                    } else if (t.type == TransactionType.deposit) {
-                                      fromTo = accName != 'None' ? 'To Account: $accName' : 'To Envelope: $envName';
-                                    } else if (t.type == TransactionType.withdrawal) {
-                                      fromTo = accName != 'None' ? 'From Account: $accName' : 'From Envelope: $envName';
-                                    }
-
-                                    debugPrint('[StatsHistoryScreen] ${i + 1}. ${t.description}');
-                                    debugPrint('[StatsHistoryScreen]    Type: $typeStr | Amount: £${t.amount.toStringAsFixed(2)}');
-                                    debugPrint('[StatsHistoryScreen]    $fromTo');
-                                    debugPrint('[StatsHistoryScreen]    Date: $txDate at $txTime');
-                                    debugPrint('[StatsHistoryScreen] ');
+                                    // Debug logging omitted in production
                                   }
                                 }
-                                debugPrint('[StatsHistoryScreen] ====================================');
 
                                 // Calculate Horizon Strategy Stats
                                 final horizonStats = _calculateHorizonStats(

@@ -75,14 +75,6 @@ class _InsightTileState extends State<InsightTile> {
     _isExpanded = widget.initiallyExpanded;
     _data = widget.initialData ?? InsightData();
 
-    debugPrint('[InsightTile] 🚀 initState - Initial data:');
-    debugPrint('  cashFlowEnabled: ${_data.cashFlowEnabled}');
-    debugPrint('  autopilotAutoExecute: ${_data.autopilotAutoExecute}');
-    debugPrint('  horizonAmount: ${_data.horizonAmount}');
-    debugPrint('  autopilotEnabled: ${_data.autopilotEnabled}');
-    debugPrint('  autopilotAmount: ${_data.autopilotAmount}');
-    debugPrint('  autopilotFrequency: ${_data.autopilotFrequency}');
-    debugPrint('  autopilotFirstDate: ${_data.autopilotFirstDate}');
 
     // Initialize controllers
     _horizonAmountCtrl = TextEditingController(
@@ -123,10 +115,6 @@ class _InsightTileState extends State<InsightTile> {
         widget.initialData != null &&
         widget.initialData!.autopilotEnabled &&
         widget.initialData!.autopilotAmount != null) {
-      debugPrint('[InsightTile] 🔄 Scheduled payment data arrived, initializing autopilot');
-      debugPrint('  autopilotEnabled: ${widget.initialData?.autopilotEnabled}');
-      debugPrint('  autopilotAmount: ${widget.initialData?.autopilotAmount}');
-      debugPrint('  autopilotFirstDate: ${widget.initialData?.autopilotFirstDate}');
 
       setState(() {
         _data = widget.initialData!;
@@ -144,9 +132,6 @@ class _InsightTileState extends State<InsightTile> {
 
     // Recalculate if starting amount changed
     if (widget.startingAmount != oldWidget.startingAmount) {
-      debugPrint(
-        '[InsightTile] 🔄 Starting amount changed: ${oldWidget.startingAmount} -> ${widget.startingAmount}',
-      );
       // Recalculate immediately without notifying parent (prevents build-during-build)
       _recalculateInternal();
     }
@@ -154,38 +139,32 @@ class _InsightTileState extends State<InsightTile> {
 
   Future<void> _loadExistingCommitments() async {
     if (widget.envelopeRepo == null) {
-      debugPrint('[InsightTile] 💰 No envelopeRepo - setting commitments to 0');
       setState(() => _existingCommitments = 0.0);
       return;
     }
 
     try {
       // IMPORTANT: Only get current user's envelopes (not partner's in workspace)
-      debugPrint('[InsightTile] 💰 Loading existing commitments...');
       final allEnvelopes = await widget.envelopeRepo!.envelopesStream(showPartnerEnvelopes: false).first;
       final envelopes = allEnvelopes
           .where((e) => e.userId == widget.envelopeRepo!.currentUserId)
           .toList();
 
-      debugPrint('[InsightTile] 💰 Found ${envelopes.length} user envelopes (filtered by userId=${widget.envelopeRepo!.currentUserId})');
 
       double total = 0.0;
 
       for (final envelope in envelopes) {
         // Exclude current envelope from commitments calculation
         if (widget.envelopeId != null && envelope.id == widget.envelopeId) {
-          debugPrint('[InsightTile] 💰   - ${envelope.name}: SKIPPED (current envelope)');
           continue;
         }
 
         // Only count envelopes with cash flow enabled
         if (envelope.cashFlowEnabled && envelope.cashFlowAmount != null) {
-          debugPrint('[InsightTile] 💰   - ${envelope.name}: ${envelope.cashFlowAmount} (userId=${envelope.userId})');
           total += envelope.cashFlowAmount!;
         }
       }
 
-      debugPrint('[InsightTile] 💰 Total existing commitments: $total');
 
       if (mounted) {
         setState(() {
@@ -194,7 +173,6 @@ class _InsightTileState extends State<InsightTile> {
         _recalculate(); // Recalculate with updated commitments
       }
     } catch (e) {
-      debugPrint('[InsightTile] ❌ Error loading existing commitments: $e');
       if (mounted) {
         setState(() => _existingCommitments = 0.0);
       }
@@ -213,7 +191,6 @@ class _InsightTileState extends State<InsightTile> {
         _recalculate(); // Recalculate with loaded settings
       }
     } catch (e) {
-      debugPrint('Error loading Pay Day settings: $e');
       if (mounted) {
         setState(() => _isLoadingPayDay = false);
       }
@@ -228,10 +205,6 @@ class _InsightTileState extends State<InsightTile> {
     final horizonAmount = double.tryParse(_horizonAmountCtrl.text);
     final autopilotAmount = double.tryParse(_autopilotAmountCtrl.text);
 
-    debugPrint('[InsightTile] 🔄 _recalculateInternal called:');
-    debugPrint('  horizonAmount input: $horizonAmount');
-    debugPrint('  autopilotAmount input: $autopilotAmount');
-    debugPrint('  current cashFlowEnabled: ${_data.cashFlowEnabled}');
 
     // Update amounts in data (don't update warning yet, will be set below)
     _data = _data.copyWith(
@@ -243,7 +216,6 @@ class _InsightTileState extends State<InsightTile> {
     // Calculate cash flow if we have pay day settings
     if (_payDaySettings != null &&
         (horizonAmount != null || autopilotAmount != null)) {
-      debugPrint('[InsightTile] 💰 Calculating cash flow...');
       final calculations = _calculateCashFlow(
         horizonAmount: horizonAmount,
         horizonDate: _data.horizonDate,
@@ -251,10 +223,6 @@ class _InsightTileState extends State<InsightTile> {
         autopilotFrequency: _data.autopilotFrequency,
       );
 
-      debugPrint('[InsightTile] 📊 Calculation results:');
-      debugPrint('  cashFlow: ${calculations['cashFlow']}');
-      debugPrint('  affordable: ${calculations['affordable']}');
-      debugPrint('  warning: ${calculations['warning']}');
 
       setState(() {
         _data = _data.copyWith(
@@ -276,13 +244,7 @@ class _InsightTileState extends State<InsightTile> {
           payPeriodsUntilSteadyState: calculations['payPeriodsUntilSteadyState'],
         );
       });
-      debugPrint(
-        '[InsightTile] ✅ After update - cashFlowEnabled: ${_data.cashFlowEnabled}',
-      );
     } else {
-      debugPrint(
-        '[InsightTile] ⚠️ Resetting calculations (no pay day settings or amounts)',
-      );
       setState(() {
         _data = _data.copyWith(
           calculatedCashFlow: 0.0,
@@ -331,13 +293,6 @@ class _InsightTileState extends State<InsightTile> {
     final nextPayDate = _payDaySettings!.nextPayDate ?? now;
     final startingAmount = widget.startingAmount ?? 0.0;
 
-    debugPrint('[InsightTile] 🧮 ========== CASH FLOW CALCULATION START ==========');
-    debugPrint('[InsightTile] 📅 Current date: $now');
-    debugPrint('[InsightTile] 📅 Next payday: $nextPayDate');
-    debugPrint('[InsightTile] 💰 Starting amount: \$$startingAmount');
-    debugPrint('[InsightTile] 🎯 Horizon enabled: ${_data.horizonEnabled}, amount: \$$horizonAmount, date: $horizonDate');
-    debugPrint('[InsightTile] ⚡ Autopilot enabled: ${_data.autopilotEnabled}, amount: \$$autopilotAmount, date: ${_data.autopilotFirstDate}, frequency: $autopilotFrequency');
-    debugPrint('[InsightTile] 💵 Pay frequency: ${_payDaySettings!.payFrequency}');
 
     // Detect allocation mode
     final horizonMode = _data.horizonMode ?? HorizonAllocationMode.date;
@@ -346,10 +301,6 @@ class _InsightTileState extends State<InsightTile> {
     final expectedPay = _payDaySettings!.expectedPayAmount ?? 0.0;
     final availableIncome = expectedPay - _existingCommitments;
 
-    debugPrint('[InsightTile] 🎯 Horizon mode: ${horizonMode.name.toUpperCase()}');
-    debugPrint('[InsightTile] 💵 Expected pay: \$$expectedPay');
-    debugPrint('[InsightTile] 💸 Existing commitments: \$$_existingCommitments');
-    debugPrint('[InsightTile] 💰 Available income: \$$availableIncome');
 
     // CRITICAL: Determine if autopilot payment happens BEFORE next payday
     // This affects how we allocate the starting amount between goals
@@ -363,10 +314,6 @@ class _InsightTileState extends State<InsightTile> {
         _data.autopilotFirstDate != null) {
       autopilotBeforePayday = _data.autopilotFirstDate!.isBefore(nextPayDate);
 
-      debugPrint('[InsightTile] 🔍 Autopilot date comparison:');
-      debugPrint('[InsightTile]    Autopilot due: ${_data.autopilotFirstDate}');
-      debugPrint('[InsightTile]    Next payday: $nextPayDate');
-      debugPrint('[InsightTile]    Autopilot before payday? $autopilotBeforePayday');
 
       if (autopilotBeforePayday) {
         // Autopilot payment happens BEFORE payday
@@ -375,50 +322,32 @@ class _InsightTileState extends State<InsightTile> {
         effectiveStartingForHorizon = 0.0;
         effectiveStartingForAutopilot = startingAmount;
 
-        debugPrint('[InsightTile] 💡 ALLOCATION: Autopilot before payday');
-        debugPrint('[InsightTile]    Starting amount (\$$startingAmount) allocated to AUTOPILOT only');
-        debugPrint('[InsightTile]    Horizon effective starting: \$0.0');
-        debugPrint('[InsightTile]    Autopilot effective starting: \$$startingAmount');
       } else {
         // Payday happens BEFORE autopilot payment
         // Both goals can benefit from starting amount in their calculations
         effectiveStartingForHorizon = startingAmount;
         effectiveStartingForAutopilot = startingAmount;
 
-        debugPrint('[InsightTile] 💡 ALLOCATION: Payday before autopilot');
-        debugPrint('[InsightTile]    Both goals can use starting amount (\$$startingAmount)');
-        debugPrint('[InsightTile]    Horizon effective starting: \$$startingAmount');
-        debugPrint('[InsightTile]    Autopilot effective starting: \$$startingAmount');
       }
     } else {
-      debugPrint('[InsightTile] 💡 ALLOCATION: No autopilot with date, horizon gets full starting amount');
-      debugPrint('[InsightTile]    Horizon effective starting: \$$startingAmount');
     }
 
     // Calculate Horizon cash flow (ONLY if enabled)
     if (_data.horizonEnabled && horizonAmount != null && horizonAmount > 0) {
-      debugPrint('[InsightTile] 🎯 ========== HORIZON CALCULATION ==========');
-      debugPrint('[InsightTile] 🎯 Horizon mode: ${horizonMode.name.toUpperCase()}');
-      debugPrint('[InsightTile] 🎯 Horizon target: \$$horizonAmount');
 
       if (horizonMode == HorizonAllocationMode.percentage && _data.horizonPercentage != null) {
         // === PERCENTAGE MODE ===
-        debugPrint('[InsightTile] 🎯 Percentage allocation: ${_data.horizonPercentage}%');
-        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
 
         // Calculate contribution per paycheck
         final contributionPerPay = availableIncome * (_data.horizonPercentage! / 100);
-        debugPrint('[InsightTile] 🎯 Contribution per paycheck: \$$contributionPerPay');
 
         // Calculate gap to target
         final gap = horizonAmount - effectiveStartingForHorizon;
-        debugPrint('[InsightTile] 🎯 Gap to target: \$$gap');
 
         if (gap > 0 && contributionPerPay > 0) {
           // Calculate number of pay periods needed
           final periodsNeeded = (gap / contributionPerPay).ceil();
           horizonPeriods = periodsNeeded;
-          debugPrint('[InsightTile] 🎯 Pay periods needed: $periodsNeeded');
 
           // Calculate projected arrival date
           final projectedDate = _calculateProjectedDate(nextPayDate, periodsNeeded);
@@ -426,29 +355,22 @@ class _InsightTileState extends State<InsightTile> {
             projectedArrivalDate: projectedDate,
             projectedMonthlyContribution: contributionPerPay,
           );
-          debugPrint('[InsightTile] 🎯 Projected arrival: $projectedDate');
 
           // Add to total cash flow
           totalCashFlow += contributionPerPay;
-          debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
         } else if (gap <= 0) {
-          debugPrint('[InsightTile] 🎯 Target already met! No cash flow needed');
         } else {
-          debugPrint('[InsightTile] 🎯 ⚠️ Warning: Zero contribution (no available income)');
         }
       } else if (horizonMode == HorizonAllocationMode.date) {
         // === DATE MODE (user sets date, system calculates contribution) ===
-        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
 
         // Calculate the gap: target - effective starting amount
         final gap = horizonAmount - effectiveStartingForHorizon;
-        debugPrint('[InsightTile] 🎯 Horizon gap to save: \$$gap');
 
         if (gap > 0) {
           if (horizonDate != null) {
           // Calculate pay periods until target date
           horizonPeriods = _calculatePayPeriods(nextPayDate, horizonDate);
-          debugPrint('[InsightTile] 🎯 Pay periods until horizon date ($horizonDate): $horizonPeriods');
 
           // IMPORTANT: If both Horizon and Autopilot are enabled,
           // we need to account for autopilot payments during the horizon period
@@ -458,12 +380,10 @@ class _InsightTileState extends State<InsightTile> {
           if (_data.autopilotEnabled && autopilotAmount != null && autopilotAmount > 0) {
             // Check if autopilot needs funding (gap > 0)
             final autopilotGap = autopilotAmount - effectiveStartingForAutopilot;
-            debugPrint('[InsightTile] 🎯 Checking autopilot integration: autopilot gap = \$$autopilotGap');
 
             // Only add autopilot costs if autopilot itself needs cash flow funding
             // If starting amount >= autopilot amount, those payments are already covered
             if (autopilotGap > 0) {
-              debugPrint('[InsightTile] 🎯 Autopilot needs funding - counting payments during horizon period');
               // Calculate how many autopilot payments will occur before horizon date
               int autopilotPaymentsDuringHorizon = 0;
 
@@ -482,32 +402,22 @@ class _InsightTileState extends State<InsightTile> {
                 final totalAutopilotCost = autopilotPaymentsDuringHorizon * autopilotAmount;
                 adjustedGap = gap + totalAutopilotCost;
 
-                debugPrint('[InsightTile] 🎯 Autopilot payments during horizon: $autopilotPaymentsDuringHorizon');
-                debugPrint('[InsightTile] 🎯 Total autopilot cost: \$$totalAutopilotCost');
-                debugPrint('[InsightTile] 🎯 Original gap: \$${gap.toStringAsFixed(2)}');
-                debugPrint('[InsightTile] 🎯 Adjusted gap (with autopilot): \$${adjustedGap.toStringAsFixed(2)}');
               }
             } else {
-              debugPrint('[InsightTile] 🎯 Autopilot is covered by starting amount (\$$effectiveStartingForAutopilot >= \$$autopilotAmount) - not adding to horizon calculation');
             }
           }
 
           if (horizonPeriods > 0) {
             final horizonCashFlow = adjustedGap / horizonPeriods.toDouble();
-            debugPrint('[InsightTile] 🎯 Horizon cash flow per period: \$${adjustedGap.toStringAsFixed(2)} / $horizonPeriods = \$${horizonCashFlow.toStringAsFixed(2)}');
             totalCashFlow += horizonCashFlow;
-            debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
 
             // Set projected arrival date to the user's chosen horizon date
             _data = _data.copyWith(
               projectedArrivalDate: horizonDate,
             );
-            debugPrint('[InsightTile] 🎯 Projected arrival (date mode): $horizonDate');
           } else {
             // Target date is before next pay day - need full gap amount now
-            debugPrint('[InsightTile] 🎯 ⚠️ Horizon date is before next payday! Need full amount now: \$$adjustedGap');
             totalCashFlow += adjustedGap;
-            debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
 
             // Still set the projected arrival date to show the target
             _data = _data.copyWith(
@@ -516,31 +426,24 @@ class _InsightTileState extends State<InsightTile> {
           }
           } else {
             // No date set - can't calculate periods, just note we need to save the gap
-            debugPrint('[InsightTile] 🎯 No horizon date set - cannot calculate periods');
             horizonPeriods = null;
           }
         } else {
-          debugPrint('[InsightTile] 🎯 Horizon already met or exceeded (gap <= 0) - no cash flow needed');
         }
         // If gap <= 0, target is already met or exceeded, no cash flow needed for horizon
       } else if (horizonMode == HorizonAllocationMode.fixedAmount) {
         // === FIXED AMOUNT MODE (user sets amount, system calculates arrival date) ===
-        debugPrint('[InsightTile] 🎯 Fixed amount mode - contribution set by user');
 
         // Get the fixed amount from horizonFixedAmount (user's input, isolated from autopilot)
         final fixedContribution = _data.horizonFixedAmount ?? 0.0;
-        debugPrint('[InsightTile] 🎯 Fixed contribution per payday: \$$fixedContribution');
-        debugPrint('[InsightTile] 🎯 Effective starting for horizon: \$$effectiveStartingForHorizon');
 
         // Calculate the gap: target - effective starting amount
         final gap = horizonAmount - effectiveStartingForHorizon;
-        debugPrint('[InsightTile] 🎯 Horizon gap to save: \$$gap');
 
         if (gap > 0 && fixedContribution > 0) {
           // Calculate number of pay periods needed
           final periodsNeeded = (gap / fixedContribution).ceil();
           horizonPeriods = periodsNeeded;
-          debugPrint('[InsightTile] 🎯 Pay periods needed: $periodsNeeded');
 
           // Calculate projected arrival date
           final projectedDate = _calculateProjectedDate(nextPayDate, periodsNeeded);
@@ -548,15 +451,11 @@ class _InsightTileState extends State<InsightTile> {
             projectedArrivalDate: projectedDate,
             projectedMonthlyContribution: fixedContribution,
           );
-          debugPrint('[InsightTile] 🎯 Projected arrival: $projectedDate');
 
           // Use the fixed contribution as the cash flow (for horizon only)
           totalCashFlow += fixedContribution;
-          debugPrint('[InsightTile] 🎯 Running total cash flow: \$$totalCashFlow');
         } else if (gap <= 0) {
-          debugPrint('[InsightTile] 🎯 Target already met! No cash flow needed');
         } else {
-          debugPrint('[InsightTile] 🎯 ⚠️ Warning: Zero fixed contribution set');
         }
       }
     }
@@ -569,17 +468,12 @@ class _InsightTileState extends State<InsightTile> {
     if (_data.autopilotEnabled &&
         autopilotAmount != null &&
         autopilotAmount > 0) {
-      debugPrint('[InsightTile] ⚡ ========== AUTOPILOT CALCULATION ==========');
-      debugPrint('[InsightTile] ⚡ Autopilot bill amount: \$$autopilotAmount');
-      debugPrint('[InsightTile] ⚡ Effective starting for autopilot: \$$effectiveStartingForAutopilot');
 
       // Calculate the gap: bill amount - effective starting amount for autopilot
       final gap = autopilotAmount - effectiveStartingForAutopilot;
-      debugPrint('[InsightTile] ⚡ Autopilot gap to save: \$$gap');
 
       // Only calculate if we need to save more
       if (gap > 0) {
-        debugPrint('[InsightTile] ⚡ Need to save more for autopilot (gap > 0)');
         // Clear any old coverage suggestion since we now have a gap
         coverageSuggestion = null;
 
@@ -589,21 +483,16 @@ class _InsightTileState extends State<InsightTile> {
             nextPayDate,
             _data.autopilotFirstDate!,
           );
-          debugPrint('[InsightTile] ⚡ Pay periods until autopilot date (${_data.autopilotFirstDate}): $autopilotPeriods');
 
           if (autopilotPeriods > 0) {
             final autopilotCashFlow = gap / autopilotPeriods.toDouble();
-            debugPrint('[InsightTile] ⚡ Autopilot cash flow per period: \$${gap.toStringAsFixed(2)} / $autopilotPeriods = \$${autopilotCashFlow.toStringAsFixed(2)}');
             totalCashFlow += autopilotCashFlow;
-            debugPrint('[InsightTile] ⚡ Running total cash flow: \$$totalCashFlow');
           } else {
             // SETUP PHASE: Bill is due before next pay day
             // Calculate BOTH initial catch-up AND ongoing amount
-            debugPrint('[InsightTile] ⚡ 🔄 SETUP PHASE DETECTED: Autopilot due before next payday!');
 
             // Initial amount needed NOW
             final initialCatchUp = gap;
-            debugPrint('[InsightTile] ⚡   Initial catch-up (NOW): \$${initialCatchUp.toStringAsFixed(2)}');
 
             // Calculate ongoing amount (for after first bill is paid)
             final ongoingPeriods = _getPayPeriodsPerAutopilot(
@@ -614,8 +503,6 @@ class _InsightTileState extends State<InsightTile> {
                 ? autopilotAmount / ongoingPeriods.toDouble()
                 : autopilotAmount;
 
-            debugPrint('[InsightTile] ⚡   Ongoing cash flow (NEXT): \$${ongoingAmount.toStringAsFixed(2)}/paycheck');
-            debugPrint('[InsightTile] ⚡   Pay periods per cycle: $ongoingPeriods');
 
             // Store setup phase data
             _data = _data.copyWith(
@@ -629,7 +516,6 @@ class _InsightTileState extends State<InsightTile> {
             // Use initial catch-up for current cash flow calculation
             totalCashFlow += initialCatchUp;
             autopilotPeriods = 0;
-            debugPrint('[InsightTile] ⚡ Running total cash flow: \$$totalCashFlow');
           }
         } else {
           // No date set - estimate based on frequency
@@ -637,18 +523,14 @@ class _InsightTileState extends State<InsightTile> {
             _payDaySettings!.payFrequency,
             autopilotFrequency ?? 'monthly',
           );
-          debugPrint('[InsightTile] ⚡ No autopilot date - estimated periods per bill: $periodsPerAutopilot');
 
           if (periodsPerAutopilot > 0) {
             autopilotPeriods = periodsPerAutopilot;
             final autopilotCashFlow = gap / periodsPerAutopilot.toDouble();
-            debugPrint('[InsightTile] ⚡ Autopilot cash flow per period: \$${gap.toStringAsFixed(2)} / $periodsPerAutopilot = \$${autopilotCashFlow.toStringAsFixed(2)}');
             totalCashFlow += autopilotCashFlow;
-            debugPrint('[InsightTile] ⚡ Running total cash flow: \$$totalCashFlow');
           }
         }
       } else {
-        debugPrint('[InsightTile] ⚡ Starting amount covers autopilot (gap <= 0) - entering smart coverage analysis');
         // Smart handling: gap <= 0, meaning starting amount >= bill amount
         // Calculate how many payments are covered and provide intelligent suggestions
 
@@ -664,15 +546,11 @@ class _InsightTileState extends State<InsightTile> {
             ? autopilotAmount / periodsPerAutopilot.toDouble()
             : autopilotAmount;
 
-        debugPrint('[InsightTile] ⚡ Periods per autopilot cycle: $periodsPerAutopilot');
-        debugPrint('[InsightTile] ⚡ Baseline cash flow: \$${baselineCashFlow.toStringAsFixed(2)}');
 
         // Use existing manual override or calculate baseline
         final testCashFlow = _data.manualCashFlowOverride ?? baselineCashFlow;
-        debugPrint('[InsightTile] ⚡ Test cash flow for simulation: \$${testCashFlow.toStringAsFixed(2)} ${_data.manualCashFlowOverride != null ? "(manual override)" : "(baseline)"}');
 
         // Calculate coverage with this cash flow
-        debugPrint('[InsightTile] ⚡ Running coverage simulation...');
         final coverage = _calculateAutopilotCoverage(
           startingAmount: startingAmount,
           billAmount: autopilotAmount,
@@ -685,21 +563,14 @@ class _InsightTileState extends State<InsightTile> {
         alwaysCovered = coverage['alwaysCovered'] as bool;
         coverageSuggestion = coverage['suggestion'] as String?;
 
-        debugPrint('[InsightTile] ⚡ Coverage simulation results:');
-        debugPrint('[InsightTile] ⚡   Payments covered: $paymentsCovered');
-        debugPrint('[InsightTile] ⚡   Always covered: $alwaysCovered');
-        debugPrint('[InsightTile] ⚡   Suggestion: $coverageSuggestion');
 
         // Use the recommended cash flow if no manual override
         if (_data.manualCashFlowOverride == null) {
           final recommendedCashFlow = coverage['recommendedCashFlow'] as double?;
-          debugPrint('[InsightTile] ⚡ Recommended cash flow from coverage: \$${recommendedCashFlow?.toStringAsFixed(2)}');
           if (recommendedCashFlow != null && recommendedCashFlow > 0) {
             totalCashFlow += recommendedCashFlow;
-            debugPrint('[InsightTile] ⚡ Running total cash flow: \$$totalCashFlow');
           }
         } else {
-          debugPrint('[InsightTile] ⚡ Manual override in effect - not adding recommended cash flow');
         }
       }
     }
@@ -711,37 +582,25 @@ class _InsightTileState extends State<InsightTile> {
     String? warning;
     bool requiresCurrentBalance = false;
 
-    debugPrint('[InsightTile] 💵 ========== FINAL CALCULATION ==========');
-    debugPrint('[InsightTile] 💵 Total cash flow needed: \$${totalCashFlow.toStringAsFixed(2)}');
 
     if (expectedPay > 0) {
       percentage = (totalCashFlow / expectedPay) * 100;
       // Subtract existing commitments from other envelopes
       available = expectedPay - _existingCommitments;
 
-      debugPrint('[InsightTile] 💵 Expected pay per period: \$$expectedPay');
-      debugPrint('[InsightTile] 💵 Existing commitments: \$$_existingCommitments');
-      debugPrint('[InsightTile] 💵 Available after commitments: \$$available');
-      debugPrint('[InsightTile] 💵 Percentage of income: ${percentage.toStringAsFixed(1)}%');
-      debugPrint('[InsightTile] 💵 Envelope starting balance: \$$startingAmount');
 
       // Calculate unallocated account balance (account balance - existing commitments)
       final unallocatedBalance = widget.accountBalance != null
           ? (widget.accountBalance! - _existingCommitments).clamp(0.0, double.infinity)
           : startingAmount;
 
-      debugPrint('[InsightTile] 💵 Account balance: \$${widget.accountBalance?.toStringAsFixed(2) ?? 'N/A'}');
-      debugPrint('[InsightTile] 💵 Unallocated balance (after commitments): \$${unallocatedBalance.toStringAsFixed(2)}');
-      debugPrint('[InsightTile] 💵 Envelope starting amount: \$$startingAmount');
 
       if (totalCashFlow > available) {
         // Cash flow exceeds available income per paycheck
         final shortfall = totalCashFlow - available;
-        debugPrint('[InsightTile] 💵 Shortfall per paycheck: \$${shortfall.toStringAsFixed(2)}');
 
         // Calculate how many paychecks worth of shortfall the unallocated balance can cover
         final payPeriodsOfCoverage = shortfall > 0 ? (unallocatedBalance / shortfall).floor() : 0;
-        debugPrint('[InsightTile] 💵 Pay periods of coverage from unallocated balance: $payPeriodsOfCoverage');
 
         // Check if unallocated balance can sustain the shortfall for a reasonable period
         // We consider it affordable if it can cover at least 2-3 pay periods
@@ -753,7 +612,6 @@ class _InsightTileState extends State<InsightTile> {
               'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck but you only have \$${available.toStringAsFixed(2)} available after existing commitments. '
               'Your unallocated account balance (\$${unallocatedBalance.toStringAsFixed(2)}) can cover the \$${shortfall.toStringAsFixed(2)} shortfall for approximately $payPeriodsOfCoverage pay periods. '
               'Consider adjusting targets to make this sustainable long-term, or use this as a temporary bridge.';
-          debugPrint('[InsightTile] 💵 ⚠️ REQUIRES CURRENT BALANCE - unallocated balance provides cushion');
         } else if (payPeriodsOfCoverage == 1) {
           // Only covers one period - marginal affordability
           requiresCurrentBalance = true;
@@ -762,18 +620,14 @@ class _InsightTileState extends State<InsightTile> {
               'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck but you only have \$${available.toStringAsFixed(2)} available after existing commitments. '
               'Your unallocated balance (\$${unallocatedBalance.toStringAsFixed(2)}) can only cover the shortfall for about 1 pay period. '
               'This plan is risky and not sustainable. Consider reducing your targets.';
-          debugPrint('[InsightTile] 💵 ⚠️ MARGINAL - only 1 period of coverage');
         } else {
           // Not affordable - insufficient unallocated balance
           affordable = false;
           warning =
               'This requires \$${totalCashFlow.toStringAsFixed(2)} per paycheck, but you only have \$${available.toStringAsFixed(2)} available after existing commitments (\$${_existingCommitments.toStringAsFixed(2)} already committed). '
               'Your unallocated account balance (\$${unallocatedBalance.toStringAsFixed(2)}) cannot sustain this ongoing shortfall. Reduce targets or increase income.';
-          debugPrint('[InsightTile] 💵 ❌ NOT AFFORDABLE - insufficient unallocated balance');
         }
-        debugPrint('[InsightTile] 💵 Warning: $warning');
       } else {
-        debugPrint('[InsightTile] 💵 ✅ AFFORDABLE - within available income');
       }
 
       // Check for over-allocation (percentage mode)
@@ -809,7 +663,6 @@ class _InsightTileState extends State<InsightTile> {
       }
     }
 
-    debugPrint('[InsightTile] 💵 ========== CALCULATION COMPLETE ==========\n');
 
     return {
       'cashFlow': totalCashFlow,
@@ -939,15 +792,8 @@ class _InsightTileState extends State<InsightTile> {
     required double payPerPeriod, // Cash flow added per pay period
     DateTime? firstBillDate,
   }) {
-    debugPrint('[InsightTile] 🔬 ========== COVERAGE SIMULATION START ==========');
-    debugPrint('[InsightTile] 🔬 Starting amount: \$$startingAmount');
-    debugPrint('[InsightTile] 🔬 Bill amount: \$$billAmount');
-    debugPrint('[InsightTile] 🔬 Pay per period: \$$payPerPeriod');
-    debugPrint('[InsightTile] 🔬 Autopilot frequency: $autopilotFrequency');
-    debugPrint('[InsightTile] 🔬 First bill date: $firstBillDate');
 
     if (_payDaySettings == null) {
-      debugPrint('[InsightTile] 🔬 ⚠️ No pay day settings - returning defaults');
       return {
         'paymentsCovered': 0,
         'alwaysCovered': false,
@@ -967,8 +813,6 @@ class _InsightTileState extends State<InsightTile> {
       // Use actual date if provided
       payPeriodsPerBill = _calculatePayPeriods(nextPayDate, firstBillDate);
       nextBillDate = firstBillDate;
-      debugPrint('[InsightTile] 🔬 Using actual first bill date: $firstBillDate');
-      debugPrint('[InsightTile] 🔬 Pay periods until first bill: $payPeriodsPerBill');
     } else {
       // Estimate based on frequency
       payPeriodsPerBill = _getPayPeriodsPerAutopilot(
@@ -978,8 +822,6 @@ class _InsightTileState extends State<InsightTile> {
       // Estimate next bill date
       final daysUntilBill = _getDaysForFrequency(autopilotFrequency);
       nextBillDate = now.add(Duration(days: daysUntilBill.round()));
-      debugPrint('[InsightTile] 🔬 Estimated bill date: $nextBillDate');
-      debugPrint('[InsightTile] 🔬 Estimated pay periods per bill: $payPeriodsPerBill');
     }
 
     // Simulate balance over time to see how many payments are covered
@@ -990,12 +832,8 @@ class _InsightTileState extends State<InsightTile> {
     DateTime currentBillDate = nextBillDate;
     int payPeriodsUntilNextBill = payPeriodsPerBill;
 
-    debugPrint('[InsightTile] 🔬 Starting simulation (max $maxPaymentsToCheck payments)...');
 
     for (int payment = 0; payment < maxPaymentsToCheck; payment++) {
-      debugPrint('[InsightTile] 🔬 --- Payment cycle ${payment + 1} ---');
-      debugPrint('[InsightTile] 🔬   Starting balance: \$${balance.toStringAsFixed(2)}');
-      debugPrint('[InsightTile] 🔬   Pay periods until bill: $payPeriodsUntilNextBill');
 
       // Add cash flow for pay periods until bill is due
       for (int i = 0; i < payPeriodsUntilNextBill; i++) {
@@ -1006,18 +844,13 @@ class _InsightTileState extends State<InsightTile> {
         );
       }
 
-      debugPrint('[InsightTile] 🔬   Balance after adding cash flow: \$${balance.toStringAsFixed(2)}');
-      debugPrint('[InsightTile] 🔬   Bill due on: $currentBillDate');
 
       // Check if we can pay the bill
       if (balance >= billAmount) {
         balance -= billAmount;
         paymentsCovered++;
-        debugPrint('[InsightTile] 🔬   ✅ Payment covered! Balance after: \$${balance.toStringAsFixed(2)}');
       } else {
         // Can't afford this payment
-        debugPrint('[InsightTile] 🔬   ❌ Insufficient funds! Need \$$billAmount, have \$${balance.toStringAsFixed(2)}');
-        debugPrint('[InsightTile] 🔬   Simulation stopped at payment ${payment + 1}');
         break;
       }
 
@@ -1030,23 +863,17 @@ class _InsightTileState extends State<InsightTile> {
           _payDaySettings!.payFrequency,
           autopilotFrequency,
         );
-        debugPrint('[InsightTile] 🔬   Next bill cycle: using estimated periods ($payPeriodsUntilNextBill)');
       }
     }
 
     // Determine if always covered (balance stays above bill amount after steady state)
     final alwaysCovered = paymentsCovered >= maxPaymentsToCheck;
 
-    debugPrint('[InsightTile] 🔬 Simulation complete:');
-    debugPrint('[InsightTile] 🔬   Total payments covered: $paymentsCovered');
-    debugPrint('[InsightTile] 🔬   Always covered (12+): $alwaysCovered');
-    debugPrint('[InsightTile] 🔬   Final balance: \$${balance.toStringAsFixed(2)}');
 
     // Generate intelligent suggestion
     String? suggestion;
     double? recommendedCashFlow;
 
-    debugPrint('[InsightTile] 🔬 Generating recommendation...');
 
     if (alwaysCovered) {
       // Cash flow always keeps balance above bill amount
@@ -1062,9 +889,6 @@ class _InsightTileState extends State<InsightTile> {
           ? billAmount / effectivePeriodsPerBill.toDouble()
           : billAmount; // Fallback if still 0
 
-      debugPrint('[InsightTile] 🔬 All payments covered!');
-      debugPrint('[InsightTile] 🔬   Pay periods per bill: $payPeriodsPerBill (initial) → $effectivePeriodsPerBill (effective)');
-      debugPrint('[InsightTile] 🔬   Optimal cash flow: \$${optimalCashFlow.toStringAsFixed(2)}');
 
       // Check if Horizon goal exists to provide contextual message
       final hasHorizon = _data.horizonEnabled && _data.horizonAmount != null && _data.horizonAmount! > 0;
@@ -1076,7 +900,6 @@ class _InsightTileState extends State<InsightTile> {
           suggestion = 'Your balance will always exceed the bill amount. Insight recommends ${optimalCashFlow.toStringAsFixed(2)} per paycheck for optimal coverage. Consider setting up a Horizon goal to save the excess.';
         }
         recommendedCashFlow = optimalCashFlow;
-        debugPrint('[InsightTile] 🔬 Recommendation: Reduce to optimal (\$${optimalCashFlow.toStringAsFixed(2)})');
       } else {
         if (hasHorizon) {
           suggestion = '✅ Balance Covered\n\n'
@@ -1092,7 +915,6 @@ class _InsightTileState extends State<InsightTile> {
               'Why? Your balance fully covers the bill. The suggested cash flow maintains this coverage for future payments.';
         }
         recommendedCashFlow = payPerPeriod;
-        debugPrint('[InsightTile] 🔬 Recommendation: Keep current (\$${payPerPeriod.toStringAsFixed(2)})');
       }
     } else if (paymentsCovered > 0) {
       // Covers some payments but not all
@@ -1108,9 +930,6 @@ class _InsightTileState extends State<InsightTile> {
           ? billAmount / effectivePeriodsPerBill.toDouble()
           : billAmount;
 
-      debugPrint('[InsightTile] 🔬 Partial coverage ($paymentsCovered payments)');
-      debugPrint('[InsightTile] 🔬   Effective periods per bill: $effectivePeriodsPerBill');
-      debugPrint('[InsightTile] 🔬 Recommended cash flow: \$${recommendedCashFlow.toStringAsFixed(2)}');
 
       // Create clear math breakdown
       final periodsText = effectivePeriodsPerBill == 1 ? 'paycheck' : '$effectivePeriodsPerBill paychecks';
@@ -1145,8 +964,6 @@ class _InsightTileState extends State<InsightTile> {
           ? billAmount / effectivePeriodsPerBill.toDouble()
           : billAmount;
 
-      debugPrint('[InsightTile] 🔬 No coverage - effective periods: $effectivePeriodsPerBill');
-      debugPrint('[InsightTile] 🔬 Recommended: \$${recommendedCashFlow.toStringAsFixed(2)}');
 
       if (startingAmount == billAmount) {
         if (firstBillDate != null) {
@@ -1160,14 +977,12 @@ class _InsightTileState extends State<InsightTile> {
                 '📅 Bill Date: ${firstBillDate.day}/${firstBillDate.month}/${firstBillDate.year}\n'
                 '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
                 'Why? After the first bill pays, you\'ll have $periodsText between payments. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck.';
-            debugPrint('[InsightTile] 🔬 Bill before payday scenario');
           } else {
             suggestion = '✅ Ready for First Payment\n\n'
                 '💰 Current Balance: \$${startingAmount.toStringAsFixed(2)}\n'
                 '📋 Bill Amount: \$${billAmount.toStringAsFixed(2)}\n'
                 '🔄 Suggested Cash Flow: \$${recommendedCashFlow.toStringAsFixed(2)}/paycheck\n\n'
                 'Why? You\'ll have $periodsText to rebuild after payment. \$${billAmount.toStringAsFixed(2)} ÷ $effectivePeriodsPerBill = \$${recommendedCashFlow.toStringAsFixed(2)} per paycheck.';
-            debugPrint('[InsightTile] 🔬 Standard rebuild scenario');
           }
         } else {
           suggestion = '✅ Exact Amount\n\n'
@@ -1186,9 +1001,6 @@ class _InsightTileState extends State<InsightTile> {
       }
     }
 
-    debugPrint('[InsightTile] 🔬 Final recommendation: \$${recommendedCashFlow.toStringAsFixed(2)}');
-    debugPrint('[InsightTile] 🔬 Suggestion: $suggestion');
-    debugPrint('[InsightTile] 🔬 ========== COVERAGE SIMULATION END ==========\n');
 
     return {
       'paymentsCovered': paymentsCovered,

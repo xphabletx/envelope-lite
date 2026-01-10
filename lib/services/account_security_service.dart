@@ -187,7 +187,6 @@ class AccountSecurityService {
   }
 
   Future<void> _performGDPRCascade(String userId) async {
-    debugPrint('[AccountSecurity::_performGDPRCascade] Starting cascade delete for user: $userId');
 
     // CRITICAL: Get user's workspace memberships BEFORE deleting user doc
     final userDoc = await _firestore.doc('users/$userId').get();
@@ -202,9 +201,7 @@ class AccountSecurityService {
     if (workspaceId != null) {
       try {
         await WorkspaceHelper.leaveWorkspace(workspaceId, userId);
-        debugPrint('[AccountSecurity::_performGDPRCascade] Removed user from workspace: $workspaceId');
       } catch (e) {
-        debugPrint('[AccountSecurity::_performGDPRCascade] Error leaving workspace: $e');
         // Continue with deletion even if workspace removal fails
       }
     }
@@ -212,20 +209,17 @@ class AccountSecurityService {
     // Clear ALL SharedPreferences (complete reset)
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Cleared all SharedPreferences (complete reset)');
 
     try {
       // ==========================================
       // DELETE FROM HIVE (PRIMARY STORAGE)
       // ==========================================
 
-      debugPrint('[AccountSecurity::_performGDPRCascade] 🗑️ Clearing ALL Hive data...');
 
       // Clear ALL Hive data (not just this user's data)
       // This ensures a complete clean slate when deleting account
       await HiveService.clearAllData();
 
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ All Hive data cleared');
 
       // ==========================================
       // DELETE FROM FIREBASE (USER PROFILE ONLY)
@@ -239,20 +233,16 @@ class AccountSecurityService {
           .doc(userId)
           .collection('notifications')
           .get();
-      debugPrint('[AccountSecurity::_performGDPRCascade] Deleting ${notificationsSnap.docs.length} notifications from Firebase');
       for (var doc in notificationsSnap.docs) {
         batch.delete(doc.reference);
       }
 
       // Delete User Profile (last!)
       batch.delete(_firestore.doc('users/$userId'));
-      debugPrint('[AccountSecurity::_performGDPRCascade] Marked user profile for deletion');
 
       // Final commit
       await batch.commit();
-      debugPrint('[AccountSecurity::_performGDPRCascade] ✅ Cascade delete completed successfully for user: $userId');
     } catch (e) {
-      debugPrint('[AccountSecurity::_performGDPRCascade] ❌ Error during cascade delete: $e');
       rethrow;
     }
   }

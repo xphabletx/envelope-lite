@@ -76,10 +76,11 @@ class _MultiTargetScreenState extends State<MultiTargetScreen> {
       child: StreamBuilder<List<Envelope>>(
         stream: widget.envelopeRepo.envelopesStream(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
+          }
 
           final allEnvelopes = snapshot.data!;
 

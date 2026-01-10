@@ -35,7 +35,6 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
 
   // New Flow Logic
   void _initiateCreate() {
-    debugPrint('[WorkspaceGate] DEBUG: Initiating Create Workspace flow.');
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -43,11 +42,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
           mode: WorkspaceSharingMode.create,
           repo: widget.repo,
           onComplete: (workspaceId) async {
-            debugPrint('[WorkspaceGate] DEBUG: Create workspace completed with ID: $workspaceId');
             // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
             final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
             await workspaceProvider.setWorkspaceId(workspaceId);
-            debugPrint('[WorkspaceGate] DEBUG: WorkspaceProvider updated with ID: $workspaceId');
 
             widget.onJoined(workspaceId);
             if (mounted) {
@@ -62,9 +59,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
 
   void _initiateJoin() {
     final code = _joinCtrl.text.trim().toUpperCase();
-    debugPrint('[WorkspaceGate] DEBUG: Initiating Join Workspace flow with code: $code');
     if (code.isEmpty) {
-      debugPrint('[WorkspaceGate] DEBUG: Join code is empty, aborting.');
       return;
     }
 
@@ -76,11 +71,9 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
           joinCode: code,
           repo: widget.repo,
           onComplete: (workspaceId) async {
-            debugPrint('[WorkspaceGate] DEBUG: Join workspace completed with ID: $workspaceId');
             // CRITICAL FIX: Update global WorkspaceProvider to trigger rebuild
             final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
             await workspaceProvider.setWorkspaceId(workspaceId);
-            debugPrint('[WorkspaceGate] DEBUG: WorkspaceProvider updated with ID: $workspaceId');
 
             widget.onJoined(workspaceId);
             if (mounted) {
@@ -94,9 +87,7 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
   }
 
   void _navigateToManagementScreen(String workspaceId) {
-    debugPrint('[WorkspaceGate] DEBUG: Navigating to WorkspaceManagementScreen with workspaceId: $workspaceId');
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    debugPrint('[WorkspaceGate] DEBUG: Current user ID: $currentUserId');
     final repo = widget.repo ??
         EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
@@ -122,7 +113,6 @@ class _WorkspaceGateState extends State<WorkspaceGate> {
               currentUserId: currentUserId,
               repo: repo,
               onWorkspaceLeft: () {
-                debugPrint('[WorkspaceGate] DEBUG: User explicitly left workspace - clearing workspace ID');
                 // This is only called when user clicks "Leave Workspace" button
                 // The WorkspaceProvider was already cleared in _leaveWorkspace
                 // No need to navigate - _leaveWorkspace already does that
@@ -322,7 +312,6 @@ class _WorkspaceSharingSelectionScreenState
         });
       }
     } catch (e) {
-      debugPrint("Error fetching data from Hive: $e");
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -334,14 +323,9 @@ class _WorkspaceSharingSelectionScreenState
   }
 
   Future<void> _finish() async {
-    debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: _finish called.');
-    debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Mode: ${widget.mode}');
-    debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Hidden envelope IDs: $_hiddenEnvelopeIds');
-    debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Hide future envelopes: $_hideFutureEnvelopes');
     setState(() => _processing = true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: User is not authenticated.');
       return;
     }
 
@@ -349,10 +333,8 @@ class _WorkspaceSharingSelectionScreenState
       String workspaceId = '';
 
       // 1. Create or Join Workspace
-      debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Step 1 - Create or Join Workspace.');
       if (widget.mode == WorkspaceSharingMode.create) {
         final code = _randomCode(6);
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Generated join code: $code');
         final ref = _db.collection('workspaces').doc();
         await ref.set({
           'joinCode': code,
@@ -362,42 +344,33 @@ class _WorkspaceSharingSelectionScreenState
           'members': {uid: true},
         });
         workspaceId = ref.id;
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Created workspace with id: $workspaceId, join code: $code');
       } else {
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Attempting to join with code: ${widget.joinCode}');
         final snap = await _db
             .collection('workspaces')
             .where('joinCode', isEqualTo: widget.joinCode)
             .limit(1)
             .get();
         if (snap.docs.isEmpty) {
-          debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: No workspace found with code: ${widget.joinCode}');
           throw Exception(tr('error_workspace_not_found'));
         }
         final doc = snap.docs.first;
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Found workspace: ${doc.id}');
         await doc.reference.update({'members.$uid': true});
         workspaceId = doc.id;
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Joined workspace with id: $workspaceId');
       }
 
       // 2. Update Sharing Preferences in Hive AND sync to Firebase
-      debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Step 2 - Update Sharing Preferences in Hive and sync to Firebase.');
       final envelopeBox = Hive.box<Envelope>('envelopes');
 
       for (var envelope in _myEnvelopes) {
         final hide = _hiddenEnvelopeIds.contains(envelope.id);
         final newIsShared = !hide;
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Updating envelope "${envelope.name}" (${envelope.id}): isShared=$newIsShared');
 
         // Use copyWith since Envelope fields are final
         final updatedEnvelope = envelope.copyWith(isShared: newIsShared);
         await envelopeBox.put(envelope.id, updatedEnvelope);
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Successfully updated envelope "${envelope.name}" in Hive');
 
         // CRITICAL: Sync envelope to Firebase workspace collection
         if (newIsShared) {
-          debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Syncing shared envelope "${envelope.name}" to Firebase workspace');
 
           // Ensure createdAt is set for Firebase orderBy query
           final envelopeToSync = updatedEnvelope.createdAt == null
@@ -410,7 +383,6 @@ class _WorkspaceSharingSelectionScreenState
               .collection('envelopes')
               .doc(envelope.id)
               .set(envelopeToSync.toMap());
-          debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Successfully synced envelope "${envelope.name}" to Firebase (createdAt: ${envelopeToSync.createdAt})');
 
           // Also update Hive with the createdAt timestamp
           await envelopeBox.put(envelope.id, envelopeToSync);
@@ -418,19 +390,14 @@ class _WorkspaceSharingSelectionScreenState
       }
 
       // 3. Save "Hide Future" Preference to Firebase (user profile)
-      debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Step 3 - Save "Hide Future" Preference to Firebase.');
       await _db.collection('users').doc(uid).set({
         'workspacePreferences': {'hideFutureEnvelopes': _hideFutureEnvelopes},
       }, SetOptions(merge: true));
-      debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Preferences saved successfully to Firebase.');
 
       if (mounted) {
-        debugPrint('[WorkspaceSharingSelectionScreen] DEBUG: Calling onComplete with workspaceId: $workspaceId');
         widget.onComplete(workspaceId);
       }
-    } catch (e, stackTrace) {
-      debugPrint('[WorkspaceSharingSelectionScreen] ERROR: Error in _finish: $e');
-      debugPrint('[WorkspaceSharingSelectionScreen] ERROR: Stack trace: $stackTrace');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,

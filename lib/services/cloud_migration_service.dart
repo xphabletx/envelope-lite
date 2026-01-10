@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/envelope.dart';
 import '../models/envelope_group.dart';
@@ -59,14 +58,11 @@ class CloudMigrationService {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[CloudMigration] ⛔ No premium subscription - skipping cloud migration');
-        debugPrint('[CloudMigration]    Reason: ${authResult.reason}');
         _progressController.add(MigrationProgress.complete());
         return false;
       }
 
       // Log successful authorization with details
-      debugPrint('[CloudMigration] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
 
       _progressController.add(MigrationProgress.step(
         progress: 0.1,
@@ -80,12 +76,10 @@ class CloudMigrationService {
       final needsMigration = await _checkIfMigrationNeeded(userId);
 
       if (!needsMigration) {
-        debugPrint('[CloudMigration] Hive boxes already populated, skipping migration');
         _progressController.add(MigrationProgress.complete());
         return false;
       }
 
-      debugPrint('[CloudMigration] Starting cloud migration for user $userId...');
 
       int totalItemsProcessed = 0;
 
@@ -142,11 +136,8 @@ class CloudMigrationService {
         itemsProcessed: totalItemsProcessed,
       ));
 
-      debugPrint('[CloudMigration] ✓ Migration complete: $totalItemsProcessed items');
       return true;
-    } catch (e, stackTrace) {
-      debugPrint('[CloudMigration] ✗ Migration failed: $e');
-      debugPrint('[CloudMigration] Stack trace: $stackTrace');
+    } catch (e) {
 
       _progressController.add(MigrationProgress.error(
         'Failed to restore data: ${e.toString()}',
@@ -165,9 +156,6 @@ class CloudMigrationService {
     // Check if there's existing data for a different user
     final existingEnvelope = envelopeBox.values.firstOrNull;
     if (existingEnvelope != null && existingEnvelope.userId != newUserId) {
-      debugPrint('[CloudMigration] ⚠️ User mismatch detected! Clearing all local data...');
-      debugPrint('[CloudMigration]   Old user: ${existingEnvelope.userId}');
-      debugPrint('[CloudMigration]   New user: $newUserId');
 
       // Clear all Hive boxes
       await _clearAllData();
@@ -193,9 +181,7 @@ class CloudMigrationService {
         payDaySettingsBox.clear(),
       ]);
 
-      debugPrint('[CloudMigration] ✓ All Hive data cleared');
     } catch (e) {
-      debugPrint('[CloudMigration] ✗ Failed to clear Hive data: $e');
     }
   }
 
@@ -230,26 +216,22 @@ class CloudMigrationService {
           .collection('groups')
           .get();
 
-      debugPrint('[CloudMigration] Found ${snapshot.docs.length} groups');
 
       for (final doc in snapshot.docs) {
         try {
           final group = EnvelopeGroup.fromMap(doc.data());
           bulkData[group.id] = group;
         } catch (e) {
-          debugPrint('[CloudMigration] Failed to parse group ${doc.id}: $e');
         }
       }
 
       // Bulk insert using putAll for performance
       if (bulkData.isNotEmpty) {
         await groupBox.putAll(bulkData);
-        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} groups');
       }
 
       return bulkData.length;
     } catch (e) {
-      debugPrint('[CloudMigration] ✗ Failed to migrate groups: $e');
       return 0;
     }
   }
@@ -266,26 +248,22 @@ class CloudMigrationService {
           .collection('accounts')
           .get();
 
-      debugPrint('[CloudMigration] Found ${snapshot.docs.length} accounts');
 
       for (final doc in snapshot.docs) {
         try {
           final account = Account.fromMap(doc.data());
           bulkData[account.id] = account;
         } catch (e) {
-          debugPrint('[CloudMigration] Failed to parse account ${doc.id}: $e');
         }
       }
 
       // Bulk insert using putAll for performance
       if (bulkData.isNotEmpty) {
         await accountBox.putAll(bulkData);
-        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} accounts');
       }
 
       return bulkData.length;
     } catch (e) {
-      debugPrint('[CloudMigration] ✗ Failed to migrate accounts: $e');
       return 0;
     }
   }
@@ -302,7 +280,6 @@ class CloudMigrationService {
         .collection('envelopes')
         .get();
 
-    debugPrint('[CloudMigration] Found ${soloSnapshot.docs.length} solo envelopes');
 
     for (final doc in soloSnapshot.docs) {
       try {
@@ -312,7 +289,6 @@ class CloudMigrationService {
         );
         bulkData[envelope.id] = envelope;
       } catch (e) {
-        debugPrint('[CloudMigration] Failed to parse envelope ${doc.id}: $e');
       }
     }
 
@@ -324,7 +300,6 @@ class CloudMigrationService {
           .collection('envelopes')
           .get();
 
-      debugPrint('[CloudMigration] Found ${workspaceSnapshot.docs.length} workspace envelopes');
 
       for (final doc in workspaceSnapshot.docs) {
         try {
@@ -334,7 +309,6 @@ class CloudMigrationService {
           );
           bulkData[envelope.id] = envelope;
         } catch (e) {
-          debugPrint('[CloudMigration] Failed to parse workspace envelope ${doc.id}: $e');
         }
       }
     }
@@ -342,7 +316,6 @@ class CloudMigrationService {
     // Bulk insert using putAll for performance
     if (bulkData.isNotEmpty) {
       await envelopeBox.putAll(bulkData);
-      debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} envelopes');
     }
 
     return bulkData.length;
@@ -360,7 +333,6 @@ class CloudMigrationService {
         .collection('transactions')
         .get();
 
-    debugPrint('[CloudMigration] Found ${soloSnapshot.docs.length} solo transactions');
 
     for (final doc in soloSnapshot.docs) {
       try {
@@ -368,7 +340,6 @@ class CloudMigrationService {
         // Already has isSynced and lastUpdated from fromFirestore
         bulkData[transaction.id] = transaction;
       } catch (e) {
-        debugPrint('[CloudMigration] Failed to parse transaction ${doc.id}: $e');
       }
     }
 
@@ -380,14 +351,12 @@ class CloudMigrationService {
           .collection('transfers')
           .get();
 
-      debugPrint('[CloudMigration] Found ${workspaceSnapshot.docs.length} workspace transfers');
 
       for (final doc in workspaceSnapshot.docs) {
         try {
           final transaction = model.Transaction.fromFirestore(doc);
           bulkData[transaction.id] = transaction;
         } catch (e) {
-          debugPrint('[CloudMigration] Failed to parse workspace transfer ${doc.id}: $e');
         }
       }
     }
@@ -395,7 +364,6 @@ class CloudMigrationService {
     // Bulk insert using putAll for performance
     if (bulkData.isNotEmpty) {
       await transactionBox.putAll(bulkData);
-      debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} transactions');
     }
 
     return bulkData.length;
@@ -413,26 +381,22 @@ class CloudMigrationService {
           .collection('scheduledPayments')
           .get();
 
-      debugPrint('[CloudMigration] Found ${snapshot.docs.length} scheduled payments');
 
       for (final doc in snapshot.docs) {
         try {
           final payment = ScheduledPayment.fromMap(doc.data());
           bulkData[payment.id] = payment;
         } catch (e) {
-          debugPrint('[CloudMigration] Failed to parse scheduled payment ${doc.id}: $e');
         }
       }
 
       // Bulk insert using putAll for performance
       if (bulkData.isNotEmpty) {
         await paymentBox.putAll(bulkData);
-        debugPrint('[CloudMigration] ✓ Bulk inserted ${bulkData.length} scheduled payments');
       }
 
       return bulkData.length;
     } catch (e) {
-      debugPrint('[CloudMigration] ✗ Failed to migrate scheduled payments: $e');
       return 0;
     }
   }
@@ -449,13 +413,11 @@ class CloudMigrationService {
           .get();
 
       if (!userDoc.exists) {
-        debugPrint('[CloudMigration] No user document found, skipping pay day settings');
         return;
       }
 
       final data = userDoc.data();
       if (data == null || data['payDaySettings'] == null) {
-        debugPrint('[CloudMigration] No pay day settings in user document');
         return;
       }
 
@@ -463,9 +425,7 @@ class CloudMigrationService {
       final settings = PayDaySettings.fromFirestore(settingsData);
 
       await settingsBox.put(userId, settings);
-      debugPrint('[CloudMigration] ✓ Restored pay day settings');
     } catch (e) {
-      debugPrint('[CloudMigration] ✗ Failed to migrate pay day settings: $e');
     }
   }
 
@@ -475,7 +435,6 @@ class CloudMigrationService {
     required String userId,
     String? workspaceId,
   }) async {
-    debugPrint('[CloudMigration] Force re-sync requested - clearing Hive boxes...');
 
     final envelopeBox = await Hive.openBox<Envelope>('envelopes');
     final transactionBox = await Hive.openBox<model.Transaction>('transactions');

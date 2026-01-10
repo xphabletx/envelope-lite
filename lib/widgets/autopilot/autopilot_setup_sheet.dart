@@ -166,7 +166,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
 
             // Type selection
             DropdownButtonFormField<AutopilotType>(
-              value: _selectedType,
+              initialValue: _selectedType,
               decoration: const InputDecoration(
                 labelText: 'Autopilot Type',
                 border: OutlineInputBorder(),
@@ -209,7 +209,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    value: _frequencyValue,
+                    initialValue: _frequencyValue,
                     decoration: const InputDecoration(
                       labelText: 'Every',
                       border: OutlineInputBorder(),
@@ -229,7 +229,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<PaymentFrequencyUnit>(
-                    value: _frequencyUnit,
+                    initialValue: _frequencyUnit,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                     ),
@@ -252,7 +252,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
             // Day of month (for monthly frequency)
             if (_frequencyUnit == PaymentFrequencyUnit.months) ...[
               DropdownButtonFormField<int>(
-                value: _dayOfMonth,
+                initialValue: _dayOfMonth,
                 decoration: const InputDecoration(
                   labelText: 'Day of Month',
                   border: OutlineInputBorder(),
@@ -367,7 +367,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
           : _availableEnvelopes.where((e) => e.id != widget.sourceId).toList();
 
       return DropdownButtonFormField<String>(
-        value: _destinationId,
+        initialValue: _destinationId,
         decoration: const InputDecoration(
           labelText: 'Destination',
           border: OutlineInputBorder(),
@@ -397,7 +397,7 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
       );
     } else if (needsAccount) {
       return DropdownButtonFormField<String>(
-        value: _destinationId,
+        initialValue: _destinationId,
         decoration: const InputDecoration(
           labelText: 'Destination',
           border: OutlineInputBorder(),
@@ -514,21 +514,6 @@ class _AutopilotSetupSheetState extends State<AutopilotSetupSheet> {
     } else {
       // For other frequencies, start tomorrow
       return now.add(const Duration(days: 1));
-    }
-  }
-
-  String _getDescription() {
-    switch (_selectedType) {
-      case AutopilotType.spend:
-        return 'Spend/Bill Payment';
-      case AutopilotType.envelopeToAccount:
-        return 'Transfer to Account';
-      case AutopilotType.envelopeToEnvelope:
-        return 'Transfer to Envelope';
-      case AutopilotType.accountToAccount:
-        return 'Transfer to Account';
-      case AutopilotType.accountToEnvelope:
-        return 'Transfer to Envelope';
     }
   }
 

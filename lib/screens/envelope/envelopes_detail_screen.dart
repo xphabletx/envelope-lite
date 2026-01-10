@@ -73,7 +73,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
           setState(() {
             _viewingMonth = DateTime(timeMachine.futureDate!.year, timeMachine.futureDate!.month, 1);
           });
-          debugPrint('[EnvelopeDetail] Time Machine active: initialized viewing month to ${timeMachine.futureDate}');
         }
       }
     });
@@ -160,7 +159,6 @@ class _EnvelopeDetailScreenState extends State<EnvelopeDetailScreen> {
     final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
     if (timeMachine.isActive && timeMachine.futureDate != null) {
       setState(() => _viewingMonth = DateTime(timeMachine.futureDate!.year, timeMachine.futureDate!.month, 1));
-      debugPrint('[EnvelopeDetail] Go to current month (Time Machine): ${timeMachine.futureDate}');
     } else {
       setState(() => _viewingMonth = DateTime.now());
     }

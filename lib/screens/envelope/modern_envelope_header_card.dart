@@ -247,28 +247,12 @@ class ModernEnvelopeHeaderCard extends StatelessWidget {
       final elapsedDuration = referenceDayStart.difference(startDate);
 
       // DEBUG: Log time progress calculation with detailed breakdown
-      debugPrint('[ModernHeaderCard-TimeProgress] ========================================');
-      debugPrint('[ModernHeaderCard-TimeProgress] Envelope: ${envelope.name}');
-      debugPrint('[ModernHeaderCard-TimeProgress] Target Start Date Type: ${envelope.targetStartDateType}');
-      debugPrint('[ModernHeaderCard-TimeProgress] Start Date: $startDate');
-      debugPrint('[ModernHeaderCard-TimeProgress] Target Date (original): ${envelope.targetDate}');
-      debugPrint('[ModernHeaderCard-TimeProgress] Target Date (with time 00:00:01): $targetWithTime');
-      debugPrint('[ModernHeaderCard-TimeProgress] Reference Date (viewing): $referenceDate');
-      debugPrint('[ModernHeaderCard-TimeProgress] Reference Day Start (normalized): $referenceDayStart');
-      debugPrint('[ModernHeaderCard-TimeProgress] ---');
-      debugPrint('[ModernHeaderCard-TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inHours} hours)');
-      debugPrint('[ModernHeaderCard-TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inHours} hours)');
-      debugPrint('[ModernHeaderCard-TimeProgress] ---');
-      debugPrint('[ModernHeaderCard-TimeProgress] Calculation: ${elapsedDuration.inDays} / ${totalDuration.inDays} (using whole days)');
 
       // Progress based on whole days (date-based targets should not care about time of day)
       timeProgress = totalDuration.inDays > 0
           ? (elapsedDuration.inDays / totalDuration.inDays).clamp(0.0, 1.0)
           : 0.0;
 
-      debugPrint('[ModernHeaderCard-TimeProgress] Time Progress (raw): $timeProgress');
-      debugPrint('[ModernHeaderCard-TimeProgress] Time Progress (%): ${(timeProgress * 100).toStringAsFixed(2)}%');
-      debugPrint('[ModernHeaderCard-TimeProgress] ========================================');
 
       daysRemaining = targetWithTime.difference(referenceDate).inDays;
     }
@@ -946,31 +930,18 @@ class _LargeTargetTile extends StatelessWidget {
                   () {
                     // If time machine is active and target was achieved, show achievement info
                     if (targetAchievedDate != null && envelope.targetDate != null) {
-                      debugPrint('[ModernHeaderCard] ========================================');
-                      debugPrint('[ModernHeaderCard] Calculating target achievement text:');
-                      debugPrint('[ModernHeaderCard]   Target Date (deadline): ${envelope.targetDate}');
-                      debugPrint('[ModernHeaderCard]   Target Achieved Date: $targetAchievedDate');
-                      debugPrint('[ModernHeaderCard]   Reference Date (viewing): $referenceDate');
 
                       // Calculate how many days from reference date (time machine viewing date) to achieved date
                       final daysFromNow = referenceDate.difference(targetAchievedDate!).inDays;
-                      debugPrint('[ModernHeaderCard]   Days from viewing to achievement: $daysFromNow');
-                      debugPrint('[ModernHeaderCard]   Calculation: referenceDate ($referenceDate) - targetAchievedDate ($targetAchievedDate) = $daysFromNow days');
 
                       if (daysFromNow > 0) {
                         // Horizon was achieved in the past (before our time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Horizon achieved $daysFromNow days ago');
-                        debugPrint('[ModernHeaderCard] ========================================');
                         return 'Horizon achieved $daysFromNow days ago on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
                       } else if (daysFromNow < 0) {
                         // Horizon will be achieved in the future (after our time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Horizon will be achieved in ${daysFromNow.abs()} days');
-                        debugPrint('[ModernHeaderCard] ========================================');
                         return 'Horizon will be achieved in ${daysFromNow.abs()} days on ${DateFormat('MMM d, yyyy').format(targetAchievedDate!)}';
                       } else {
                         // Horizon achieved today (at the time machine viewing date)
-                        debugPrint('[ModernHeaderCard]   Result: Horizon achieved today!');
-                        debugPrint('[ModernHeaderCard] ========================================');
                         return 'Horizon achieved today!';
                       }
                     }

@@ -526,7 +526,6 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         });
       }
     } catch (e) {
-      debugPrint('[StuffritePaywall] Error loading offerings: $e');
       setState(() {
         _errorMessage =
             'Failed to load subscription plans. Please check your connection.';
@@ -548,20 +547,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final purchaseParams = PurchaseParams.package(_selectedPackage!);
       final purchaseResult = await Purchases.purchase(purchaseParams);
 
-      debugPrint(
-        '[StuffritePaywall] Purchase completed: ${purchaseResult.customerInfo.entitlements.active}',
-      );
 
       // Debug: Print ALL entitlement keys to see what RevenueCat SDK is seeing
-      debugPrint(
-        '[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 ALL entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.all.keys.toList()}',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 Active entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.active.keys.toList()}',
-      );
 
       // Check if the premium entitlement is active
       final entitlement = purchaseResult
@@ -571,23 +558,13 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final hasPremium = entitlement?.isActive ?? false;
 
       if (entitlement != null) {
-        debugPrint(
-          '[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}',
-        );
       } else {
-        debugPrint(
-          '[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND',
-        );
       }
 
       if (hasPremium) {
-        debugPrint('[StuffritePaywall] ✅ Premium entitlement unlocked!');
         // Check and dismiss to trigger app rebuild
         await _checkAndDismiss();
       } else {
-        debugPrint(
-          '[StuffritePaywall] ⚠️ Purchase completed but entitlement not active',
-        );
         setState(() {
           _isPurchasing = false;
           _errorMessage =
@@ -596,24 +573,20 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       }
     } on PlatformException catch (e) {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
-      debugPrint('[StuffritePaywall] Purchase error code: $errorCode');
 
       if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
         // User cancelled - just reset state, no error message
-        debugPrint('[StuffritePaywall] Purchase cancelled by user');
         setState(() {
           _isPurchasing = false;
         });
       } else {
         // Other error - show error message
-        debugPrint('[StuffritePaywall] Purchase failed: ${e.message}');
         setState(() {
           _isPurchasing = false;
           _errorMessage = e.message ?? 'Purchase failed. Please try again.';
         });
       }
     } catch (e) {
-      debugPrint('[StuffritePaywall] Unexpected purchase error: $e');
       setState(() {
         _isPurchasing = false;
         _errorMessage = 'An unexpected error occurred. Please try again.';
@@ -630,20 +603,8 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
 
     try {
       final customerInfo = await Purchases.restorePurchases();
-      debugPrint(
-        '[StuffritePaywall] Restore completed: ${customerInfo.entitlements.active}',
-      );
 
       // Debug: Print ALL entitlement keys to see what RevenueCat SDK is seeing
-      debugPrint(
-        '[StuffritePaywall] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 ALL entitlement keys after restore: ${customerInfo.entitlements.all.keys.toList()}',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 Active entitlement keys after restore: ${customerInfo.entitlements.active.keys.toList()}',
-      );
 
       // Check if the premium entitlement is active after restore
       final entitlement =
@@ -651,21 +612,13 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final hasPremium = entitlement?.isActive ?? false;
 
       if (entitlement != null) {
-        debugPrint(
-          '[StuffritePaywall] 🔍 Entitlement "${RevenueCatConfig.premiumEntitlementId}" found - isActive: ${entitlement.isActive}',
-        );
       } else {
-        debugPrint(
-          '[StuffritePaywall] ⚠️ Entitlement "${RevenueCatConfig.premiumEntitlementId}" NOT FOUND',
-        );
       }
 
       if (hasPremium) {
-        debugPrint('[StuffritePaywall] ✅ Purchases restored successfully!');
         // Check and dismiss to trigger app rebuild
         await _checkAndDismiss();
       } else {
-        debugPrint('[StuffritePaywall] ⚠️ No active subscriptions found');
         setState(() {
           _isPurchasing = false;
           _errorMessage =
@@ -673,17 +626,12 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         });
       }
     } on PlatformException catch (e) {
-      final errorCode = PurchasesErrorHelper.getErrorCode(e);
-      debugPrint('[StuffritePaywall] Restore error code: $errorCode');
-      debugPrint('[StuffritePaywall] Restore failed: ${e.message}');
-
       setState(() {
         _isPurchasing = false;
         _errorMessage =
             e.message ?? 'Failed to restore purchases. Please try again.';
       });
     } catch (e) {
-      debugPrint('[StuffritePaywall] Unexpected restore error: $e');
       setState(() {
         _isPurchasing = false;
         _errorMessage = 'An unexpected error occurred. Please try again.';
@@ -699,26 +647,9 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       final customerInfo = await Purchases.getCustomerInfo();
 
       // Debug: Print ALL entitlement keys to see what's available
-      debugPrint(
-        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}',
-      );
-      debugPrint(
-        '[StuffritePaywall] 🔍 [CHECK_AND_DISMISS] Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}',
-      );
 
       // If active is empty, print details about ALL entitlements
       if (customerInfo.entitlements.active.isEmpty) {
-        debugPrint('[StuffritePaywall] ⚠️ No active entitlements found!');
-        debugPrint('[StuffritePaywall] 🔍 Inspecting ALL entitlements:');
-        for (var key in customerInfo.entitlements.all.keys) {
-          final entitlement = customerInfo.entitlements.all[key];
-          debugPrint(
-            '[StuffritePaywall]   - "$key": isActive=${entitlement?.isActive}, identifier=${entitlement?.identifier}',
-          );
-        }
       }
 
       // Check for premium entitlement
@@ -727,15 +658,9 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
       );
 
       if (hasPremium) {
-        debugPrint(
-          '[StuffritePaywall] ✅ Premium entitlement active - allowing access',
-        );
         // The AuthWrapper will automatically rebuild and show HomeScreen
         // No need to manually navigate
       } else {
-        debugPrint(
-          '[StuffritePaywall] ⚠️ No premium entitlement - staying on paywall',
-        );
         if (mounted) {
           setState(() {
             _isPurchasing = false;
@@ -746,7 +671,6 @@ class _StuffritePaywallScreenState extends State<StuffritePaywallScreen> {
         }
       }
     } catch (e) {
-      debugPrint('[StuffritePaywall] ❌ Error checking subscription: $e');
       if (mounted) {
         setState(() {
           _isPurchasing = false;

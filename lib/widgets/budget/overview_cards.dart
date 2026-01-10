@@ -563,19 +563,6 @@ class _BudgetOverviewCardsState extends State<BudgetOverviewCards> {
       subtitle: 'In selected history range',
       color: Colors.green,
       onTap: () {
-        debugPrint(
-          '[TimeMachine::OverviewCards] ========================================',
-        );
-        debugPrint('[TimeMachine::OverviewCards] Income card tapped!');
-        debugPrint(
-          '[TimeMachine::OverviewCards] Navigating to Stats & History',
-        );
-        debugPrint(
-          '[TimeMachine::OverviewCards] Will use entry → target date in time machine mode',
-        );
-        debugPrint(
-          '[TimeMachine::OverviewCards] ========================================',
-        );
         Navigator.push(
           context,
           MaterialPageRoute(

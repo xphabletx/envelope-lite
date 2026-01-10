@@ -46,10 +46,8 @@ class RepositoryProvider extends ChangeNotifier {
     try {
       final cleanedCount = await envelopeRepo.cleanupOrphanedScheduledPayments();
       if (cleanedCount > 0) {
-        debugPrint('[RepositoryProvider] Cleaned up $cleanedCount orphaned scheduled payments');
       }
     } catch (e) {
-      debugPrint('[RepositoryProvider] Failed to cleanup orphaned payments: $e');
     }
 
     notifyListeners();

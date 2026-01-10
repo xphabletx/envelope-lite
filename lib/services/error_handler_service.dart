@@ -34,7 +34,6 @@ class ErrorHandler {
     final appError = _convertToAppError(error);
 
     // Log error for debugging
-    debugPrint(appError.toDebugString());
 
     switch (appError.severity) {
       case ErrorSeverity.critical:
@@ -49,7 +48,6 @@ class ErrorHandler {
 
       case ErrorSeverity.validation:
         // Validation errors should be handled inline by the caller
-        debugPrint('Validation error should be handled inline: ${appError.userMessage}');
         break;
     }
 

@@ -1,5 +1,4 @@
 // lib/services/pay_day_processor.dart
-import 'package:flutter/foundation.dart';
 import './envelope_repo.dart';
 import './account_repo.dart';
 import './pay_day_settings_service.dart';
@@ -34,7 +33,6 @@ class PayDayProcessor {
 
   // BUDGET MODE: Virtual allocation (magic money)
   Future<PayDayResult> _processBudgetMode() async {
-    debugPrint('[PayDay] Processing in BUDGET MODE');
 
     final settings = await payDayService.getSettings();
     if (settings == null) {
@@ -49,7 +47,6 @@ class PayDayProcessor {
       (sum, e) => sum + (e.cashFlowAmount ?? 0.0),
     );
 
-    debugPrint('[PayDay] Budget: £$budgetAmount, Cash Flow: £$totalCashFlow');
 
     // Process cash flows (magic money appears!)
     // In Budget Mode, this is still EXTERNAL (virtual income from outside)
@@ -63,9 +60,7 @@ class PayDayProcessor {
           // EXTERNAL because it's virtual income (no real account involved)
         );
         successCount++;
-        debugPrint('[PayDay] ✅ ${envelope.name}: +£${envelope.cashFlowAmount}');
       } catch (e) {
-        debugPrint('[PayDay] ❌ ${envelope.name} failed: $e');
       }
     }
 
@@ -83,7 +78,6 @@ class PayDayProcessor {
 
   // ACCOUNT MIRROR MODE: Real account tracking
   Future<PayDayResult> _processAccountMirrorMode() async {
-    debugPrint('[PayDay] Processing in ACCOUNT MIRROR MODE');
 
     final settings = await payDayService.getSettings();
     if (settings == null || settings.defaultAccountId == null) {
@@ -104,7 +98,6 @@ class PayDayProcessor {
       payAmount,
       description: 'Pay Day Deposit',
     );
-    debugPrint('[PayDay] 💰 Deposited £$payAmount into ${defaultAccount.name}');
 
     // 2. CASH FLOW ENVELOPES LINKED TO DEFAULT ACCOUNT
     final defaultEnvelopes = await envelopeRepo.getEnvelopesLinkedToAccount(defaultAccount.id).first;
@@ -130,10 +123,8 @@ class PayDayProcessor {
 
         envelopesFilled++;
         totalEnvelopeFill += fillAmount;
-        debugPrint('[PayDay] ✅ ${envelope.name}: +£$fillAmount (INTERNAL transfer)');
       } else {
         warnings.add('Skipped ${envelope.name} - insufficient funds in ${defaultAccount.name}');
-        debugPrint('[PayDay] ⚠️ Skipped ${envelope.name}');
       }
     }
 
@@ -163,7 +154,6 @@ class PayDayProcessor {
 
           envelopesFilled++;
           totalEnvelopeFill += envelopeFillAmount;
-          debugPrint('[PayDay] ✅ ${envelope.name} (from ${account.name}): +£$envelopeFillAmount (INTERNAL transfer)');
         } else {
           warnings.add('Skipped ${envelope.name} - insufficient funds in ${account.name}');
         }

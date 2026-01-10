@@ -104,17 +104,9 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
         }
       }
 
-      debugPrint('[TimeMachine] ✅ Initialized with next pay date: $_nextPayDate (adjustForWeekends: ${widget.paySettings.adjustForWeekends})');
     } else {
       _nextPayDate = DateTime.now().add(const Duration(days: 1));
-      debugPrint('[TimeMachine] ⚠️ No pay date in settings, using tomorrow');
     }
-
-    debugPrint('[TimeMachine] ✅ Initialized projection settings:');
-    debugPrint('  - Target date: $_targetDate');
-    debugPrint('  - Next pay date: $_nextPayDate');
-    debugPrint('  - Pay amount: ${_payAmountController.text}');
-    debugPrint('  - Pay frequency: $_payFrequency');
 
     _loadData();
 
@@ -588,15 +580,9 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
             // Only include payments linked to existing envelopes
             final isValid = validEnvelopeIds.contains(p.envelopeId);
 
-            if (!isValid) {
-              debugPrint('[TimeMachine] ⚠️ Filtering out orphaned scheduled payment: ${p.name} (envelope ${p.envelopeId} not found)');
-            }
-
             return isValid;
           })
           .toList();
-
-      debugPrint('[TimeMachine] Using ${scheduledPayments.length} valid scheduled payments for projection');
 
       final scenario = ProjectionScenario(
         startDate: DateTime.now(),
@@ -651,30 +637,21 @@ class _TimeMachineScreenState extends State<TimeMachineScreen> {
   }
 
   DateTime _calculateAnchorDate(DateTime target, String frequency) {
-    // print('\n>>> _calculateAnchorDate DEBUG (Time Machine) <<<');
-    // print('Target (Next Pay Date): $target');
-    // print('Frequency: $frequency');
-
     DateTime anchor;
     switch (frequency) {
       case 'weekly':
         anchor = target.subtract(const Duration(days: 7));
-    // print('WEEKLY: Anchor = target - 7 days = $anchor');
         break;
       case 'biweekly':
         anchor = target.subtract(const Duration(days: 14));
-    // print('BIWEEKLY: Anchor = target - 14 days = $anchor');
         break;
       case 'monthly':
         anchor = DateTime(target.year, target.month - 1, target.day);
-    // print('MONTHLY: Anchor = previous month same day = $anchor');
         break;
       default:
         anchor = target.subtract(const Duration(days: 1));
-    // print('DEFAULT: Anchor = target - 1 day = $anchor');
         break;
     }
-    // print('>>> Anchor date will be used as lastPayDate in projection <<<\n');
     return anchor;
   }
 

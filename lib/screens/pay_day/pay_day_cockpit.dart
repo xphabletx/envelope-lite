@@ -60,12 +60,8 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
   final ScrollController _scrollController = ScrollController();
   final Map<int, GlobalKey> _envelopeKeys =
       {}; // index -> GlobalKey for auto-scroll
-  bool _hasScrolledToTopForGold =
-      false; // Track if we've scrolled to top for gold stage
   double _initialAccountBalance =
       0.0; // Store the account balance before Phase 3 starts
-  bool _hasStartedExecution =
-      false; // Track if we've started the stuffing execution to prevent duplicates
 
   @override
   void initState() {
@@ -95,11 +91,6 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     if (_provider.currentPhase == CockpitPhase.strategyReview) {
       _syncTempAllocations();
     }
-
-    // Reset execution flag when phase changes away from stuffingExecution
-    if (_provider.currentPhase != CockpitPhase.stuffingExecution) {
-      _hasStartedExecution = false;
-    }
   }
 
   @override
@@ -112,15 +103,6 @@ class _PayDayCockpitState extends State<PayDayCockpit> {
     _provider.removeListener(_onProviderUpdate);
     _provider.dispose();
     super.dispose();
-  }
-
-  void _onAmountChanged(String value) {
-    // Debounce the updates (50ms as specified)
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 50), () {
-      final amount = double.tryParse(value.replaceAll(',', '')) ?? 0.0;
-      _provider.updateExternalInflow(amount);
-    });
   }
 
   void _syncTempAllocations() {

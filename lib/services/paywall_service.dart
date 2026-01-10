@@ -12,17 +12,14 @@ class PaywallService {
       final customerInfo = await Purchases.getCustomerInfo();
 
       // Debug: Print all active entitlement keys
-      debugPrint('[Paywall] 🔍 Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
 
       // Check for premium entitlement (checks BOTH IDs)
       final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
         customerInfo.entitlements.active,
       );
 
-      debugPrint('[Paywall] Has active subscription: $hasEntitlement');
       return hasEntitlement;
     } catch (e) {
-      debugPrint('[Paywall] Error checking subscription: $e');
       return false;
     }
   }
@@ -33,14 +30,11 @@ class PaywallService {
       final offerings = await Purchases.getOfferings();
 
       if (offerings.current == null) {
-        debugPrint('[Paywall] No offerings available');
         return null;
       }
 
-      debugPrint('[Paywall] Found ${offerings.current!.availablePackages.length} packages');
       return offerings;
     } catch (e) {
-      debugPrint('[Paywall] Error fetching offerings: $e');
       return null;
     }
   }
@@ -51,7 +45,6 @@ class PaywallService {
       final purchaseResult = await Purchases.purchase(PurchaseParams.package(package));
 
       // Debug: Print all active entitlement keys
-      debugPrint('[Paywall] 🔍 Active entitlement keys after purchase: ${purchaseResult.customerInfo.entitlements.active.keys.toList()}');
 
       // Check for premium entitlement (checks BOTH IDs)
       final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
@@ -75,7 +68,6 @@ class PaywallService {
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
 
       if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
-        debugPrint('[Paywall] User cancelled purchase');
       } else if (errorCode == PurchasesErrorCode.purchaseNotAllowedError) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -83,7 +75,6 @@ class PaywallService {
           );
         }
       } else {
-        debugPrint('[Paywall] Purchase error: $e');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Purchase failed. Please try again.')),
@@ -93,7 +84,6 @@ class PaywallService {
 
       return false;
     } catch (e) {
-      debugPrint('[Paywall] Unexpected purchase error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Purchase failed. Please try again.')),
@@ -109,7 +99,6 @@ class PaywallService {
       final customerInfo = await Purchases.restorePurchases();
 
       // Debug: Print all active entitlement keys
-      debugPrint('[Paywall] 🔍 Active entitlement keys after restore: ${customerInfo.entitlements.active.keys.toList()}');
 
       // Check for premium entitlement (checks BOTH IDs)
       final hasEntitlement = RevenueCatConfig.hasPremiumEntitlement(
@@ -135,7 +124,6 @@ class PaywallService {
         return false;
       }
     } catch (e) {
-      debugPrint('[Paywall] Restore error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to restore purchases')),
@@ -149,9 +137,7 @@ class PaywallService {
   Future<void> identifyUser(String userId) async {
     try {
       await Purchases.logIn(userId);
-      debugPrint('[Paywall] User identified: $userId');
     } catch (e) {
-      debugPrint('[Paywall] Error identifying user: $e');
     }
   }
 
@@ -163,12 +149,9 @@ class PaywallService {
       final isAnonymous = await Purchases.isAnonymous;
       if (!isAnonymous) {
         await Purchases.logOut();
-        debugPrint('[Paywall] User logged out from RevenueCat');
       } else {
-        debugPrint('[Paywall] User is anonymous, skipping RevenueCat logout');
       }
     } catch (e) {
-      debugPrint('[Paywall] Error logging out: $e');
     }
   }
 }

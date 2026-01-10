@@ -40,7 +40,6 @@ class _VerificationBannerState extends State<VerificationBanner> {
         setState(() => _isDismissed = true);
       }
     } catch (e) {
-      debugPrint('[VerificationBanner] Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error sending email: $e')),

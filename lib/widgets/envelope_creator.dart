@@ -156,7 +156,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         _bindersLoaded = true;
       });
     } catch (e) {
-      debugPrint('Error loading binders: $e');
       setState(() => _bindersLoaded = true);
     }
   }
@@ -182,7 +181,6 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         }
       });
     } catch (e) {
-      debugPrint('Error loading accounts: $e');
       setState(() => _accountsLoaded = true);
     }
   }
@@ -657,9 +655,7 @@ class _EnvelopeCreatorScreenState extends State<_EnvelopeCreatorScreen> {
         paymentType: ScheduledPaymentType.fixedAmount,
       );
 
-      debugPrint('✅ Autopilot scheduled payment created for envelope: $envelopeId');
     } catch (e) {
-      debugPrint('❌ Error creating autopilot payment: $e');
       // Don't throw - we don't want to block envelope creation if autopilot fails
     }
   }

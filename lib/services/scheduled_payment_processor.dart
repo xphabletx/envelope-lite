@@ -1,5 +1,4 @@
 // lib/services/scheduled_payment_processor.dart
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'envelope_repo.dart';
 import 'scheduled_payment_repo.dart';
@@ -56,7 +55,6 @@ class ScheduledPaymentProcessor {
       final duePayments = await paymentRepo.getAutomaticPaymentsDueToday();
 
       if (duePayments.isEmpty) {
-        debugPrint('No automatic payments due');
         return ScheduledPaymentProcessingResult(
           processedCount: 0,
           totalAmount: 0.0,
@@ -65,7 +63,6 @@ class ScheduledPaymentProcessor {
         );
       }
 
-      debugPrint('Processing ${duePayments.length} automatic payments');
 
       // Get all current user's envelopes once to avoid repeated queries
       // Only process payments for current user's envelopes, not partner's
@@ -88,7 +85,6 @@ class ScheduledPaymentProcessor {
 
             // If envelope was deleted, skip this payment and log it
             if (envelope == null) {
-              debugPrint('Skipped: ${payment.name} - envelope no longer exists (deleted)');
               errors.add(ScheduledPaymentError(
                 paymentName: payment.name,
                 envelopeName: 'Deleted Envelope',
@@ -109,7 +105,6 @@ class ScheduledPaymentProcessor {
 
               // Skip if envelope is empty
               if (amountToDeduct <= 0) {
-                debugPrint('Skipped: ${payment.name} - envelope is empty');
                 // Still mark as executed so it moves to next occurrence
                 await paymentRepo.markPaymentExecuted(payment.id);
                 continue;
@@ -146,7 +141,6 @@ class ScheduledPaymentProcessor {
                   },
                 );
 
-                debugPrint('Failed: ${payment.name} - insufficient balance');
                 continue;
               }
             }
@@ -167,9 +161,6 @@ class ScheduledPaymentProcessor {
             totalAmount += amountToDeduct;
             processedPaymentNames.add(payment.name);
 
-            debugPrint(
-              'Processed: ${payment.name} - ${currency.format(amountToDeduct)}',
-            );
 
             // DYNAMIC RECALCULATION: Trigger Insight recalculation after autopilot execution
             // This allows cash flow amounts to adjust automatically based on new balance
@@ -185,25 +176,17 @@ class ScheduledPaymentProcessor {
                 );
 
                 if (recalculated) {
-                  debugPrint(
-                    '✅ Insight recalculated for ${envelope.name} after autopilot payment',
-                  );
                 }
               } catch (e) {
-                debugPrint(
-                  '⚠️ Error recalculating Insight for ${envelope.name}: $e',
-                );
                 // Don't fail payment processing if recalc fails
               }
             }
           }
           // Handle group-based payments (future implementation)
           else if (payment.groupId != null) {
-            debugPrint('Group-based scheduled payments not yet implemented');
             // TODO: Implement proportional withdrawal from group envelopes
           }
         } catch (e) {
-          debugPrint('Error processing payment ${payment.name}: $e');
 
           final error = ScheduledPaymentError(
             paymentName: payment.name,
@@ -250,7 +233,6 @@ class ScheduledPaymentProcessor {
         errors: errors,
       );
     } catch (e) {
-      debugPrint('Fatal error in processAutomaticPayments: $e');
       rethrow;
     }
   }

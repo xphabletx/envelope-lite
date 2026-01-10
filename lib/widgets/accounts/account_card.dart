@@ -115,11 +115,6 @@ class _AccountCardState extends State<AccountCard>
 
         // Debug logging for account balance calculation
         if (snapshot.hasData) {
-          debugPrint('[AccountCard] ${widget.account.name}:');
-          debugPrint('  Time Machine Active: ${timeMachine.isActive}');
-          debugPrint('  Current Balance: ${displayAccount.currentBalance}');
-          debugPrint('  Assigned: $assigned');
-          debugPrint('  Available: $available');
         }
 
         final cardContent = Container(

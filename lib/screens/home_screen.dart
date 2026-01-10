@@ -241,7 +241,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Try the reconstructed path first (most reliable)
         if (File(reconstructedPath).existsSync()) {
-          debugPrint('[HomeScreen] ✅ Found profile photo at: $reconstructedPath');
           return CircleAvatar(
             backgroundImage: FileImage(File(reconstructedPath)),
             radius: radius,
@@ -250,16 +249,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Fallback: Try the stored path (might work if container didn't change)
         if (File(photoURL).existsSync()) {
-          debugPrint('[HomeScreen] ✅ Found profile photo at stored path: $photoURL');
           return CircleAvatar(
             backgroundImage: FileImage(File(photoURL)),
             radius: radius,
           );
         }
 
-        debugPrint('[HomeScreen] ⚠️ Profile photo not found at either path');
       } catch (e) {
-        debugPrint('[HomeScreen] ⚠️ Error loading profile photo: $e');
       }
 
       // Fallback to default icon

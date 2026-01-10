@@ -1,5 +1,4 @@
 // lib/services/pay_day_settings_service.dart
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/pay_day_settings.dart';
 import 'sync_manager.dart';
@@ -42,12 +41,10 @@ class PayDaySettingsService {
     try {
       // Use userId as the key in Hive
       await _settingsBox.put(settings.userId, settings);
-      debugPrint('[PayDaySettingsService] ✅ Settings updated in Hive: ${settings.userId}');
 
       // CRITICAL: Sync to Firebase to prevent data loss
       _syncManager.pushPayDaySettings(settings, userId);
     } catch (e) {
-      debugPrint('[PayDaySettingsService] ❌ Error updating settings: $e');
       rethrow;
     }
   }
@@ -57,9 +54,7 @@ class PayDaySettingsService {
     try {
       // Delete using userId as key
       await _settingsBox.delete(userId);
-      debugPrint('[PayDaySettingsService] ✅ Settings deleted from Hive');
     } catch (e) {
-      debugPrint('[PayDaySettingsService] ❌ Error deleting settings: $e');
       rethrow;
     }
   }
@@ -98,6 +93,5 @@ class PayDaySettingsService {
       nextPayDate: newNextDate,
     ));
 
-    debugPrint('[PayDaySettingsService] Updated next pay date to: $newNextDate');
   }
 }

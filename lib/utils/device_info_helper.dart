@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class DeviceInfoHelper {
@@ -21,7 +20,6 @@ class DeviceInfoHelper {
         platform = Platform.operatingSystem;
       }
     } catch (e) {
-      debugPrint('Error getting device info: $e');
       osVersion = 'Unknown';
       platform = 'Unknown';
     }

@@ -67,12 +67,9 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
   }
 
   void _navigateToScreen(String screenId) {
-    debugPrint('[TutorialManager] ═══════════════════════════════════════');
-    debugPrint('[TutorialManager] User requested navigation to: $screenId');
 
     // First, reset the tutorial so it will show again
     TutorialController.resetScreen(screenId).then((_) {
-      debugPrint('[TutorialManager] ✅ Tutorial "$screenId" reset successfully');
 
       // Show helpful message based on the screen
       String message;
@@ -108,7 +105,6 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
           message = 'Tutorial reset! ✅\n\nNavigate to the "$screenId" screen to see it.';
       }
 
-      debugPrint('[TutorialManager] Showing message: $message');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +122,6 @@ class _TutorialManagerScreenState extends State<TutorialManagerScreen> {
         _loadStatus();
       }
 
-      debugPrint('[TutorialManager] ═══════════════════════════════════════');
     });
   }
 

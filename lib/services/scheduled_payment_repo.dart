@@ -1,7 +1,6 @@
 // lib/services/scheduled_payment_repo.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter/foundation.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/scheduled_payment.dart';
 import 'hive_service.dart';
@@ -32,13 +31,10 @@ class ScheduledPaymentRepo {
   /// this is a no-op but included for consistency
   void dispose() {
     if (_disposed) {
-      debugPrint('[ScheduledPaymentRepo] ⚠️ Already disposed, skipping');
       return;
     }
 
-    debugPrint('[ScheduledPaymentRepo] 🔄 Disposing (local-only repo, no active streams)');
     _disposed = true;
-    debugPrint('[ScheduledPaymentRepo] ✅ Disposed');
   }
 
   // ======================= GETTERS =======================
@@ -54,11 +50,9 @@ class ScheduledPaymentRepo {
   Stream<List<ScheduledPayment>> get scheduledPaymentsStream {
     // GUARD: Return empty stream if user is not authenticated (during logout)
     if (FirebaseAuth.instance.currentUser == null) {
-      debugPrint('[ScheduledPaymentRepo] ⚠️ No authenticated user - returning empty stream');
       return Stream.value([]);
     }
 
-    debugPrint('[ScheduledPaymentRepo] 📦 Streaming from Hive (local only)');
 
     final initialPayments = _paymentBox.values
         .where((payment) => payment.userId == _userId)
@@ -142,7 +136,6 @@ class ScheduledPaymentRepo {
     );
 
     await _paymentBox.put(id, payment);
-    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment created in Hive: $name');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushScheduledPayment(payment, _userId);
@@ -191,7 +184,6 @@ class ScheduledPaymentRepo {
     );
 
     await _paymentBox.put(id, updatedPayment);
-    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment updated in Hive: $id');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushScheduledPayment(updatedPayment, _userId);
@@ -202,7 +194,6 @@ class ScheduledPaymentRepo {
   /// Delete scheduled payment
   Future<void> deleteScheduledPayment(String id) async {
     await _paymentBox.delete(id);
-    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment deleted from Hive: $id');
 
     // CRITICAL: Sync deletion to Firebase to prevent data loss
     _syncManager.deleteScheduledPayment(id, _userId);
@@ -236,7 +227,6 @@ class ScheduledPaymentRepo {
     );
 
     await _paymentBox.put(id, updatedPayment);
-    debugPrint('[ScheduledPaymentRepo] ✅ Scheduled payment marked as executed: $id');
 
     // CRITICAL: Sync to Firebase to prevent data loss
     _syncManager.pushScheduledPayment(updatedPayment, _userId);
@@ -307,7 +297,6 @@ class ScheduledPaymentRepo {
     for (final payment in paymentsToDelete) {
       await _paymentBox.delete(payment.id);
     }
-    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive');
   }
 
   /// Delete all payments for a group (when group is deleted)
@@ -319,7 +308,6 @@ class ScheduledPaymentRepo {
     for (final payment in paymentsToDelete) {
       await _paymentBox.delete(payment.id);
     }
-    debugPrint('[ScheduledPaymentRepo] ✅ Deleted ${paymentsToDelete.length} payments from Hive');
   }
 
   /// Execute a scheduled payment (create transaction in envelope/group)

@@ -77,10 +77,8 @@ class LocaleProvider extends ChangeNotifier {
       // Load from old 'celebration_emoji' key for backward compatibility
       _horizonEmoji = prefs.getString('celebration_emoji') ?? prefs.getString('horizon_emoji') ?? '🥰';
 
-      debugPrint('[LocaleProvider] ✅ Loaded from SharedPreferences: $_languageCode, $_currencyCode, horizon: $_horizonEmoji');
       notifyListeners();
     } catch (e) {
-      debugPrint('[LocaleProvider] ❌ Error loading locale preferences: $e');
     }
   }
 
@@ -93,9 +91,7 @@ class LocaleProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('language_code', languageCode);
 
-      debugPrint('[LocaleProvider] ✅ Language saved locally: $languageCode');
     } catch (e) {
-      debugPrint('[LocaleProvider] ❌ Error saving language: $e');
     }
   }
 
@@ -109,9 +105,7 @@ class LocaleProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('currency_code', currencyCode);
 
-      debugPrint('[LocaleProvider] ✅ Currency saved locally: $currencyCode');
     } catch (e) {
-      debugPrint('[LocaleProvider] ❌ Error saving currency: $e');
     }
   }
 
@@ -124,9 +118,7 @@ class LocaleProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('horizon_emoji', emoji);
 
-      debugPrint('[LocaleProvider] ✅ Horizon emoji saved locally: $emoji');
     } catch (e) {
-      debugPrint('[LocaleProvider] ❌ Error saving horizon emoji: $e');
     }
   }
 

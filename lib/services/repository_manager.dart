@@ -1,5 +1,4 @@
 // lib/services/repository_manager.dart
-import 'package:flutter/foundation.dart';
 import 'envelope_repo.dart';
 import 'account_repo.dart';
 import 'scheduled_payment_repo.dart';
@@ -37,11 +36,6 @@ class RepositoryManager {
     _scheduledPaymentRepo = scheduledPaymentRepo;
     _notificationRepo = notificationRepo;
 
-    debugPrint('[RepositoryManager] ✅ Registered repositories:');
-    if (_envelopeRepo != null) debugPrint('  - EnvelopeRepo');
-    if (_accountRepo != null) debugPrint('  - AccountRepo');
-    if (_scheduledPaymentRepo != null) debugPrint('  - ScheduledPaymentRepo');
-    if (_notificationRepo != null) debugPrint('  - NotificationRepo');
   }
 
   /// Dispose all registered repositories
@@ -49,7 +43,6 @@ class RepositoryManager {
   /// CRITICAL: Call this BEFORE clearing Hive data during logout
   /// to prevent PERMISSION_DENIED errors from Firestore streams
   void disposeAllRepositories() {
-    debugPrint('[RepositoryManager] 🔄 Disposing all repositories...');
 
     _envelopeRepo?.dispose();
     _accountRepo?.dispose();
@@ -62,7 +55,6 @@ class RepositoryManager {
     _scheduledPaymentRepo = null;
     _notificationRepo = null;
 
-    debugPrint('[RepositoryManager] ✅ All repositories disposed');
   }
 
   /// Check if any repositories are registered

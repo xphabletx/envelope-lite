@@ -710,27 +710,6 @@ class _QuickEntryCardState extends State<_QuickEntryCard> {
     });
   }
 
-  Future<void> _showDayPicker(BuildContext context) async {
-    final now = DateTime.now();
-    // Use existing date if set, otherwise use today
-    final initialDate = widget.data.firstPaymentDate ?? now;
-
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: now,
-      lastDate: DateTime(now.year + 2, 12, 31),
-      helpText: 'Select first payment date',
-    );
-
-    if (selectedDate != null && mounted) {
-      setState(() {
-        widget.data.recurringDay = selectedDate.day;
-        widget.data.firstPaymentDate = selectedDate;
-      });
-    }
-  }
-
   Widget _buildProTip(String text) {
     final theme = Theme.of(context);
     return Container(

@@ -97,7 +97,6 @@ class HorizonController extends ChangeNotifier {
   /// Autopilot Preparedness Check
   /// Formula: availableForBoost = accountBalance - cashflowReserve - autopilotCoverage
   Future<void> refreshAvailableFunds() async {
-    debugPrint('[HorizonController] ======== REFRESH AVAILABLE FUNDS START ========');
 
     try {
       // 1. Get account balance directly from the account
@@ -114,24 +113,17 @@ class HorizonController extends ChangeNotifier {
         // Use the account's current balance directly
         accountBalance = defaultAccount.currentBalance;
       }
-      debugPrint('[HorizonController] Account balance: $accountBalance');
 
       // 2. cashflowReserve is already calculated in calculateBaselines
-      debugPrint('[HorizonController] Cashflow reserve: $cashflowReserve');
 
       // 3. Calculate autopilot coverage (upcoming scheduled payments)
       await _calculateAutopilotCoverage();
-      debugPrint('[HorizonController] Autopilot coverage: $autopilotCoverage');
 
       // 4. Calculate available funds
       availableForBoost = accountBalance - cashflowReserve - autopilotCoverage;
       if (availableForBoost < 0) availableForBoost = 0.0;
 
-      debugPrint('[HorizonController] Available for boost: $availableForBoost');
-      debugPrint('[HorizonController] ======== REFRESH AVAILABLE FUNDS END ========');
-    } catch (e, stack) {
-      debugPrint('[HorizonController] ERROR refreshing funds: $e');
-      debugPrint('[HorizonController] Stack: $stack');
+    } catch (e) {
     }
   }
 
@@ -145,7 +137,6 @@ class HorizonController extends ChangeNotifier {
       final settings = payDayBox.get(envelopeRepo.currentUserId);
 
       if (settings == null) {
-        debugPrint('[HorizonController] No pay day settings - skipping autopilot');
         return;
       }
 
@@ -179,7 +170,6 @@ class HorizonController extends ChangeNotifier {
       }
 
       if (nextPayDay == null) {
-        debugPrint('[HorizonController] Could not determine next pay day');
         return;
       }
 
@@ -195,7 +185,6 @@ class HorizonController extends ChangeNotifier {
           .where((e) => e.userId == envelopeRepo.currentUserId)
           .toList();
 
-      debugPrint('[HorizonController] Checking ${allPayments.length} scheduled payments');
 
       for (final payment in allPayments) {
         final paymentDate = DateTime(
@@ -222,14 +211,11 @@ class HorizonController extends ChangeNotifier {
             if (envelope.currentAmount < payment.amount) {
               final shortfall = payment.amount - envelope.currentAmount;
               autopilotCoverage += shortfall;
-              debugPrint('[HorizonController]   "${payment.name}": shortfall \$$shortfall');
             }
           }
         }
       }
-    } catch (e, stack) {
-      debugPrint('[HorizonController] ERROR calculating autopilot: $e');
-      debugPrint('[HorizonController] Stack: $stack');
+    } catch (e) {
     }
   }
 

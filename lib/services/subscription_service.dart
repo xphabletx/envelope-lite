@@ -41,7 +41,6 @@ class SubscriptionService {
   /// Sets up the SDK with platform-specific API keys and configures logging
   Future<void> init() async {
     if (_isInitialized) {
-      debugPrint('[SubscriptionService] Already initialized, skipping');
       return;
     }
 
@@ -51,10 +50,8 @@ class SubscriptionService {
       // Debug: Show all logs for troubleshooting
       if (kReleaseMode) {
         await Purchases.setLogLevel(LogLevel.error);
-        debugPrint('[SubscriptionService] Log level set to ERROR (production)');
       } else {
         await Purchases.setLogLevel(LogLevel.debug);
-        debugPrint('[SubscriptionService] Log level set to DEBUG (development)');
       }
 
       // Configure platform-specific API keys
@@ -65,30 +62,23 @@ class SubscriptionService {
         // Production mode - use platform-specific production keys
         if (Platform.isIOS || Platform.isMacOS) {
           configuration = PurchasesConfiguration(RevenueCatConfig.iosApiKey);
-          debugPrint('[SubscriptionService] Using iOS production API key');
         } else if (Platform.isAndroid) {
           configuration = PurchasesConfiguration(RevenueCatConfig.androidApiKey);
-          debugPrint('[SubscriptionService] Using Android production API key');
         } else {
-          debugPrint('[SubscriptionService] Platform not supported, skipping initialization');
           return; // Web/Desktop not supported
         }
       } else {
         // Debug/development mode - use test key for all platforms
         if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
           configuration = PurchasesConfiguration(RevenueCatConfig.testApiKey);
-          debugPrint('[SubscriptionService] Using test API key (debug mode)');
         } else {
-          debugPrint('[SubscriptionService] Platform not supported, skipping initialization');
           return; // Web/Desktop not supported
         }
       }
 
       await Purchases.configure(configuration);
       _isInitialized = true;
-      debugPrint('[SubscriptionService] ✅ Initialized successfully');
     } catch (e) {
-      debugPrint('[SubscriptionService] ❌ Initialization failed: $e');
       // Don't rethrow - allow app to continue even if RevenueCat fails
     }
   }
@@ -104,8 +94,6 @@ class SubscriptionService {
     try {
       // VIP bypass check
       if (RevenueCatConfig.isVipUser(userEmail)) {
-        debugPrint('[SubscriptionService] 🔓 VIP Bypass Active for $userEmail');
-        debugPrint('[SubscriptionService] ⚠️ REMINDER: Remove VIP bypass before production release!');
         return true;
       }
 
@@ -113,19 +101,14 @@ class SubscriptionService {
       final customerInfo = await Purchases.getCustomerInfo();
 
       // Debug: Print all active and ALL entitlement keys
-      debugPrint('[SubscriptionService] 🔍 Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
-      debugPrint('[SubscriptionService] 🔍 Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
-      debugPrint('[SubscriptionService] 🔍 ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}');
 
       // Check for premium entitlement
       final hasPremium = RevenueCatConfig.hasPremiumEntitlement(
         customerInfo.entitlements.active,
       );
 
-      debugPrint('[SubscriptionService] Has active subscription: $hasPremium');
       return hasPremium;
     } catch (e) {
-      debugPrint('[SubscriptionService] Error checking subscription: $e');
       return false;
     }
   }
@@ -146,8 +129,6 @@ class SubscriptionService {
     try {
       // VIP bypass check (dev/testing)
       if (RevenueCatConfig.isVipUser(userEmail)) {
-        debugPrint('[SubscriptionService] ✅ Authorization granted for $userEmail (VIP)');
-        debugPrint('[SubscriptionService] ⚠️ REMINDER: Remove VIP bypass before production release!');
         return SyncAuthResult(
           authorized: true,
           reason: 'VIP user',
@@ -159,9 +140,6 @@ class SubscriptionService {
       final customerInfo = await Purchases.getCustomerInfo();
 
       // Debug: Print all active and ALL entitlement keys
-      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] Checking for entitlement: "${RevenueCatConfig.premiumEntitlementId}"');
-      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] Active entitlement keys: ${customerInfo.entitlements.active.keys.toList()}');
-      debugPrint('[SubscriptionService] 🔍 [SYNC CHECK] ALL entitlement keys: ${customerInfo.entitlements.all.keys.toList()}');
 
       // Check for premium entitlement
       final hasPremium = RevenueCatConfig.hasPremiumEntitlement(
@@ -169,7 +147,6 @@ class SubscriptionService {
       );
 
       if (hasPremium) {
-        debugPrint('[SubscriptionService] ✅ Authorization granted for $userEmail (Premium)');
         return SyncAuthResult(
           authorized: true,
           reason: 'Stuffrite Premium subscriber',
@@ -178,14 +155,12 @@ class SubscriptionService {
       }
 
       // No valid subscription or VIP status
-      debugPrint('[SubscriptionService] ⛔ Authorization denied for $userEmail (no premium)');
       return SyncAuthResult(
         authorized: false,
         reason: 'No active subscription',
         userEmail: userEmail,
       );
     } catch (e) {
-      debugPrint('[SubscriptionService] ❌ Error checking sync authorization: $e');
       return SyncAuthResult(
         authorized: false,
         reason: 'Error checking subscription: $e',
@@ -201,7 +176,6 @@ class SubscriptionService {
     try {
       return await Purchases.getCustomerInfo();
     } catch (e) {
-      debugPrint('[SubscriptionService] Error fetching customer info: $e');
       return null;
     }
   }
@@ -212,9 +186,7 @@ class SubscriptionService {
   Future<void> identifyUser(String userId) async {
     try {
       await Purchases.logIn(userId);
-      debugPrint('[SubscriptionService] User identified: $userId');
     } catch (e) {
-      debugPrint('[SubscriptionService] Error identifying user: $e');
     }
   }
 
@@ -228,12 +200,9 @@ class SubscriptionService {
       final isAnonymous = await Purchases.isAnonymous;
       if (!isAnonymous) {
         await Purchases.logOut();
-        debugPrint('[SubscriptionService] User logged out from RevenueCat');
       } else {
-        debugPrint('[SubscriptionService] User is anonymous, skipping RevenueCat logout');
       }
     } catch (e) {
-      debugPrint('[SubscriptionService] Error logging out: $e');
     }
   }
 
@@ -251,14 +220,11 @@ class SubscriptionService {
   /// Returns true if successfully presented, false otherwise
   Future<bool> presentCustomerCenter(BuildContext context) async {
     try {
-      debugPrint('[SubscriptionService] Presenting Customer Center...');
 
       await RevenueCatUI.presentCustomerCenter();
 
-      debugPrint('[SubscriptionService] ✅ Customer Center presented successfully');
       return true;
     } on PlatformException catch (e) {
-      debugPrint('[SubscriptionService] ❌ Platform error: ${e.message}');
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -270,7 +236,6 @@ class SubscriptionService {
       }
       return false;
     } catch (e) {
-      debugPrint('[SubscriptionService] ❌ Unexpected error: $e');
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -2,7 +2,6 @@
 // Service for recalculating Insight cash flow after Autopilot payments execute
 // This enables dynamic "catch-up" amounts that adjust automatically
 
-import 'package:flutter/foundation.dart';
 import 'envelope_repo.dart';
 import 'pay_day_settings_service.dart';
 import 'scheduled_payment_repo.dart';
@@ -28,18 +27,15 @@ class InsightRecalculationService {
     required NotificationRepo notificationRepo,
   }) async {
     try {
-      debugPrint('[InsightRecalc] 🔄 Starting recalculation for envelope $envelopeId');
 
       // 1. Get the envelope with current balance (after autopilot deduction)
       final envelope = envelopeRepo.getEnvelopeSync(envelopeId);
       if (envelope == null) {
-        debugPrint('[InsightRecalc] ⚠️ Envelope not found');
         return false;
       }
 
       // 2. Check if envelope has cash flow enabled
       if (!envelope.cashFlowEnabled) {
-        debugPrint('[InsightRecalc] ⚠️ Cash flow not enabled, skipping');
         return false;
       }
 
@@ -48,7 +44,6 @@ class InsightRecalculationService {
       final payDaySettings = await payDayService.getPayDaySettings();
 
       if (payDaySettings == null) {
-        debugPrint('[InsightRecalc] ⚠️ No Pay Day settings found');
         return false;
       }
 
@@ -59,14 +54,12 @@ class InsightRecalculationService {
           .toList();
 
       if (autopilotPayments.isEmpty) {
-        debugPrint('[InsightRecalc] ⚠️ No autopilot payments found');
         return false;
       }
 
       // 5. Get the next autopilot payment
       final nextPayment = _getNextScheduledPayment(autopilotPayments);
       if (nextPayment == null) {
-        debugPrint('[InsightRecalc] ⚠️ No upcoming autopilot payment');
         return false;
       }
 
@@ -76,12 +69,6 @@ class InsightRecalculationService {
         nextPayment.frequencyUnit,
       );
 
-      debugPrint('[InsightRecalc] 📊 Recalculating for:');
-      debugPrint('[InsightRecalc]   Current balance: \$${envelope.currentAmount}');
-      debugPrint('[InsightRecalc]   Bill amount: \$${nextPayment.amount}');
-      debugPrint('[InsightRecalc]   Next bill date: ${nextPayment.nextDueDate}');
-      debugPrint('[InsightRecalc]   Bill frequency: $billFrequency');
-      debugPrint('[InsightRecalc]   Pay frequency: ${payDaySettings.payFrequency}');
 
       // 6. Calculate new cash flow amount
       final calculation = _calculateCashFlow(
@@ -93,7 +80,6 @@ class InsightRecalculationService {
       );
 
       if (calculation == null) {
-        debugPrint('[InsightRecalc] ⚠️ Calculation failed');
         return false;
       }
 
@@ -104,21 +90,14 @@ class InsightRecalculationService {
       final isInSteadyState = calculation['isInSteadyState'] as bool;
       final payPeriodsPerCycle = calculation['payPeriodsPerCycle'] as int;
 
-      debugPrint('[InsightRecalc] 💰 Results:');
-      debugPrint('[InsightRecalc]   Old cash flow: \$$oldCashFlow');
-      debugPrint('[InsightRecalc]   New cash flow: \$$newCashFlow');
-      debugPrint('[InsightRecalc]   Steady state: $isInSteadyState');
-      debugPrint('[InsightRecalc]   Pay periods per cycle: $payPeriodsPerCycle');
 
       // 8. Only notify if amount changed significantly (more than $0.01)
       if ((newCashFlow - oldCashFlow).abs() < 0.01) {
-        debugPrint('[InsightRecalc] ✅ No significant change, skipping notification');
         return false;
       }
 
       // 9. DO NOT auto-update - just create notification with suggestion
       // User will approve the change via notification action
-      debugPrint('[InsightRecalc] 💡 Calculated new cash flow: \$$oldCashFlow → \$$newCashFlow (SUGGESTION ONLY)');
 
       // 10. Create notification with suggested change
       final periodsText = payPeriodsPerCycle == 1 ? 'paycheck' : '$payPeriodsPerCycle paychecks';
@@ -129,12 +108,12 @@ class InsightRecalculationService {
         type: NotificationType.scheduledPaymentProcessed, // Reuse existing type
         title: '💡 Autopilot Update: ${envelope.name}',
         message: isInSteadyState
-            ? '✅ Bill paid: \$${billAmountFormatted}\n\n'
+            ? '✅ Bill paid: \$$billAmountFormatted\n\n'
               '📊 Suggested Cash Flow: \$${newCashFlow.toStringAsFixed(2)}/paycheck\n'
               'Why? You have $periodsText between bills.\n'
               '$mathExplanation\n\n'
               '(Steady state reached)'
-            : '✅ Bill paid: \$${billAmountFormatted}\n\n'
+            : '✅ Bill paid: \$$billAmountFormatted\n\n'
               '📊 Suggested Cash Flow: \$${newCashFlow.toStringAsFixed(2)}/paycheck\n'
               'Why? You have $periodsText between bills.\n'
               '$mathExplanation',
@@ -153,7 +132,6 @@ class InsightRecalculationService {
 
       return true;
     } catch (e) {
-      debugPrint('[InsightRecalc] ❌ Error during recalculation: $e');
       return false;
     }
   }
@@ -217,14 +195,9 @@ class InsightRecalculationService {
       payDaySettings.payFrequency,
     );
 
-    debugPrint('[InsightRecalc] 📊 Calculation details:');
-    debugPrint('[InsightRecalc]   Next payday: $nextPayDate');
-    debugPrint('[InsightRecalc]   Next bill date: $nextBillDate');
-    debugPrint('[InsightRecalc]   Pay periods until bill: $payPeriodsUntilBill');
 
     // Calculate the gap (how much we need to save)
     final gap = billAmount - startingAmount;
-    debugPrint('[InsightRecalc]   Gap to save: \$$gap');
 
     // Calculate pay periods per bill cycle (for ongoing amount)
     final payPeriodsPerCycle = _getPayPeriodsPerBillCycle(
@@ -232,7 +205,6 @@ class InsightRecalculationService {
       billFrequency,
     );
 
-    debugPrint('[InsightRecalc]   Pay periods per cycle: $payPeriodsPerCycle');
 
     // Determine if we're in steady state
     // Steady state = we have at least one full cycle's worth of paydays before the bill
@@ -243,19 +215,15 @@ class InsightRecalculationService {
     if (gap <= 0) {
       // Already have enough - just maintain the balance
       recommendedCashFlow = billAmount / payPeriodsPerCycle.toDouble();
-      debugPrint('[InsightRecalc]   No gap - maintaining: \$$recommendedCashFlow/paycheck');
     } else if (payPeriodsUntilBill <= 0) {
       // Bill is due immediately or overdue - need full gap now
       recommendedCashFlow = gap;
-      debugPrint('[InsightRecalc]   Bill due now - need full gap: \$$recommendedCashFlow');
     } else if (isInSteadyState) {
       // In steady state - use sustainable ongoing amount
       recommendedCashFlow = billAmount / payPeriodsPerCycle.toDouble();
-      debugPrint('[InsightRecalc]   Steady state - ongoing amount: \$$recommendedCashFlow/paycheck');
     } else {
       // Setup phase - need catch-up amount
       recommendedCashFlow = gap / payPeriodsUntilBill.toDouble();
-      debugPrint('[InsightRecalc]   Setup phase - catch-up amount: \$$recommendedCashFlow/paycheck');
     }
 
     return {
@@ -342,7 +310,6 @@ class InsightRecalculationService {
     required String userId,
     required EnvelopeRepo repo,
   }) async {
-    debugPrint('[InsightRecalc] 🔄 Checking percentage-based allocations for recalculation');
 
     // Get all envelopes
     final envelopes = await repo.envelopesStream().first;
@@ -356,7 +323,6 @@ class InsightRecalculationService {
     ).toList();
 
     if (percentageEnvelopes.isEmpty) {
-      debugPrint('[InsightRecalc] No percentage-based envelopes to recalculate');
       return;
     }
 
@@ -365,7 +331,6 @@ class InsightRecalculationService {
     final paySettings = await payDayService.getPayDaySettings();
 
     if (paySettings == null || paySettings.expectedPayAmount == null) {
-      debugPrint('[InsightRecalc] ⚠️ No pay settings found, skipping recalculation');
       return;
     }
 
@@ -377,7 +342,6 @@ class InsightRecalculationService {
       final changeThreshold = lastKnownIncome * 0.05; // 5% threshold
 
       if (incomeChange > changeThreshold) {
-        debugPrint('[InsightRecalc] 💰 Income changed by \$${incomeChange.toStringAsFixed(2)} for ${envelope.name}');
 
         // Recalculate projected date
         final contributionPerPay = currentAvailableIncome * (envelope.allocationPercentage! / 100);
@@ -396,7 +360,6 @@ class InsightRecalculationService {
           final daysDifference = newProjectedDate.difference(oldDate).inDays.abs();
 
           if (daysDifference > 7) {
-            debugPrint('[InsightRecalc] 📅 Projected date changed by $daysDifference days');
 
             // Update envelope
             await repo.updateEnvelope(
@@ -405,7 +368,6 @@ class InsightRecalculationService {
               lastKnownAvailableIncome: currentAvailableIncome,
             );
 
-            debugPrint('[InsightRecalc] ✅ Updated ${envelope.name} with new projected date: ${newProjectedDate.day}/${newProjectedDate.month}/${newProjectedDate.year}');
           }
         }
       }

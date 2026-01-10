@@ -119,7 +119,6 @@ class SyncManager {
   ) {
     // CRITICAL: Never sync projected/future transactions from TimeMachine
     if (transaction.isFuture) {
-      debugPrint('[SyncManager] ⚠️ Skipping future transaction ${transaction.id} (projection)');
       return;
     }
 
@@ -297,18 +296,13 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping envelope sync');
-        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
         return;
       }
 
       // Log successful authorization with details
-      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
 
       // SOLO MODE: Sync to private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
-        debugPrint('[SyncManager] 📤 Writing to: users/$userId/envelopes/${envelope.id}');
-        debugPrint('[SyncManager] 📦 Envelope data: name="${envelope.name}", amount=${envelope.currentAmount}');
 
         final docRef = _firestore
             .collection('users')
@@ -322,16 +316,12 @@ class SyncManager {
         try {
           final snapshot = await docRef.get(const GetOptions(source: Source.server));
           if (snapshot.exists) {
-            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: envelope ${envelope.name} written to Firebase');
           } else {
-            debugPrint('[SyncManager] ⚠️ SERVER CHECK: envelope ${envelope.name} NOT FOUND on server (only local cache?)');
           }
         } catch (e) {
-          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
         }
       } else {
         // WORKSPACE MODE: Sync to workspace collection
-        debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/envelopes/${envelope.id}');
 
         final docRef = _firestore
             .collection('workspaces')
@@ -345,17 +335,12 @@ class SyncManager {
         try {
           final snapshot = await docRef.get(const GetOptions(source: Source.server));
           if (snapshot.exists) {
-            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: envelope ${envelope.name} written to workspace');
           } else {
-            debugPrint('[SyncManager] ⚠️ SERVER CHECK: envelope ${envelope.name} NOT FOUND on server (only local cache?)');
           }
         } catch (e) {
-          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
         }
       }
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync envelope ${envelope.id}: $e');
-      debugPrint('[SyncManager] ✗ Error type: ${e.runtimeType}');
       // Could implement retry logic here
     }
   }
@@ -374,18 +359,13 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping transaction sync');
-        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
         return;
       }
 
       // Log successful authorization with details
-      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
 
       // SOLO MODE: Sync to private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
-        debugPrint('[SyncManager] 📤 Writing to: users/$userId/transactions/${transaction.id}');
-        debugPrint('[SyncManager] 📦 Transaction data: type=${transaction.type}, amount=${transaction.amount}, envelopeId=${transaction.envelopeId}');
 
         final docRef = _firestore
             .collection('users')
@@ -399,16 +379,12 @@ class SyncManager {
         try {
           final snapshot = await docRef.get(const GetOptions(source: Source.server));
           if (snapshot.exists) {
-            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: transaction ${transaction.id} written to Firebase');
           } else {
-            debugPrint('[SyncManager] ⚠️ SERVER CHECK: transaction ${transaction.id} NOT FOUND on server (only local cache?)');
           }
         } catch (e) {
-          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
         }
       } else {
         // WORKSPACE MODE: Sync to workspace transfers collection (partner transfers only)
-        debugPrint('[SyncManager] 📤 Writing to: workspaces/$workspaceId/transfers/${transaction.id}');
 
         final docRef = _firestore
             .collection('workspaces')
@@ -422,19 +398,13 @@ class SyncManager {
         try {
           final snapshot = await docRef.get(const GetOptions(source: Source.server));
           if (snapshot.exists) {
-            debugPrint('[SyncManager] ✓ SERVER CONFIRMED: transfer ${transaction.id} written to workspace');
           } else {
-            debugPrint('[SyncManager] ⚠️ SERVER CHECK: transfer ${transaction.id} NOT FOUND on server (only local cache?)');
           }
         } catch (e) {
-          debugPrint('[SyncManager] ⚠️ SERVER CHECK FAILED: Could not verify server write (offline?): $e');
         }
 
-        debugPrint('[SyncManager] ✓ Synced partner transfer ${transaction.id} to workspace');
       }
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync transaction ${transaction.id}: $e');
-      debugPrint('[SyncManager] ✗ Error type: ${e.runtimeType}');
     }
   }
 
@@ -451,13 +421,10 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping envelope deletion');
-        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
         return;
       }
 
       // Log successful authorization with details
-      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
 
       // SOLO MODE: Delete from private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
@@ -468,7 +435,6 @@ class SyncManager {
             .doc(envelopeId)
             .delete();
 
-        debugPrint('[SyncManager] ✓ Deleted envelope $envelopeId from private collection');
       } else {
         // WORKSPACE MODE: Delete from workspace collection
         await _firestore
@@ -478,10 +444,8 @@ class SyncManager {
             .doc(envelopeId)
             .delete();
 
-        debugPrint('[SyncManager] ✓ Deleted envelope $envelopeId from workspace');
       }
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to delete envelope $envelopeId: $e');
     }
   }
 
@@ -498,13 +462,10 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping transaction deletion');
-        debugPrint('[SyncManager]    Reason: ${authResult.reason}');
         return;
       }
 
       // Log successful authorization with details
-      debugPrint('[SyncManager] ✅ Authorization granted for ${authResult.userEmail} (${authResult.reason})');
 
       // SOLO MODE: Delete from private user collection
       if (workspaceId == null || workspaceId.isEmpty) {
@@ -515,7 +476,6 @@ class SyncManager {
             .doc(transactionId)
             .delete();
 
-        debugPrint('[SyncManager] ✓ Deleted transaction $transactionId from private collection');
       } else {
         // WORKSPACE MODE: Delete from workspace transfers collection
         await _firestore
@@ -525,10 +485,8 @@ class SyncManager {
             .doc(transactionId)
             .delete();
 
-        debugPrint('[SyncManager] ✓ Deleted transaction $transactionId from workspace');
       }
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to delete transaction $transactionId: $e');
     }
   }
 
@@ -546,7 +504,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping group sync');
         return;
       }
 
@@ -557,9 +514,7 @@ class SyncManager {
           .doc(group.id)
           .set(group.toMap(), SetOptions(merge: true));
 
-      debugPrint('[SyncManager] ✓ Synced group ${group.name} to private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync group ${group.id}: $e');
     }
   }
 
@@ -573,7 +528,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping group deletion');
         return;
       }
 
@@ -584,9 +538,7 @@ class SyncManager {
           .doc(groupId)
           .delete();
 
-      debugPrint('[SyncManager] ✓ Deleted group $groupId from private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to delete group $groupId: $e');
     }
   }
 
@@ -604,7 +556,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping account sync');
         return;
       }
 
@@ -615,9 +566,7 @@ class SyncManager {
           .doc(account.id)
           .set(account.toMap(), SetOptions(merge: true));
 
-      debugPrint('[SyncManager] ✓ Synced account ${account.name} to private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync account ${account.id}: $e');
     }
   }
 
@@ -631,7 +580,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping account deletion');
         return;
       }
 
@@ -642,9 +590,7 @@ class SyncManager {
           .doc(accountId)
           .delete();
 
-      debugPrint('[SyncManager] ✓ Deleted account $accountId from private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to delete account $accountId: $e');
     }
   }
 
@@ -662,7 +608,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping scheduled payment sync');
         return;
       }
 
@@ -673,9 +618,7 @@ class SyncManager {
           .doc(payment.id)
           .set(payment.toMap(), SetOptions(merge: true));
 
-      debugPrint('[SyncManager] ✓ Synced scheduled payment ${payment.name} to private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync scheduled payment ${payment.id}: $e');
     }
   }
 
@@ -689,7 +632,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping scheduled payment deletion');
         return;
       }
 
@@ -700,9 +642,7 @@ class SyncManager {
           .doc(paymentId)
           .delete();
 
-      debugPrint('[SyncManager] ✓ Deleted scheduled payment $paymentId from private collection');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to delete scheduled payment $paymentId: $e');
     }
   }
 
@@ -720,7 +660,6 @@ class SyncManager {
       final authResult = await SubscriptionService().canSync(userEmail: userEmail);
 
       if (!authResult.authorized) {
-        debugPrint('[SyncManager] ⛔ No premium subscription - skipping pay day settings sync');
         return;
       }
 
@@ -732,9 +671,7 @@ class SyncManager {
             'payDaySettings': settings.toFirestore(),
           }, SetOptions(merge: true));
 
-      debugPrint('[SyncManager] ✓ Synced pay day settings to user document');
     } catch (e) {
-      debugPrint('[SyncManager] ✗ Failed to sync pay day settings: $e');
     }
   }
 

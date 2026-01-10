@@ -241,7 +241,6 @@ class AboutScreen extends StatelessWidget {
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch $url');
     }
   }
 
@@ -252,7 +251,6 @@ class AboutScreen extends StatelessWidget {
       query: 'subject=Stuffrite Support',
     );
     if (!await launchUrl(emailLaunchUri)) {
-      debugPrint('Could not launch email client');
     }
   }
 }

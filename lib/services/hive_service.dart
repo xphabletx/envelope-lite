@@ -60,7 +60,6 @@ class HiveService {
         Hive.registerAdapter(NotificationTypeAdapter());
       } catch (e) {
         // Adapters might already be registered on hot reload - this is OK
-        print('[HiveService] Adapter registration note: $e');
       }
 
       // Open all boxes with individual error handling

@@ -57,7 +57,6 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver> with Widget
       );
 
       if (result.processedCount > 0) {
-        debugPrint('Processed ${result.processedCount} scheduled payments');
       }
 
       // 2. Check for payments due tomorrow and warn about insufficient funds
@@ -70,10 +69,8 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver> with Widget
       );
 
       if (warningsCreated > 0) {
-        debugPrint('Created $warningsCreated day-before warnings');
       }
     } catch (e) {
-      debugPrint('Error processing scheduled payments on resume: $e');
     }
   }
 

@@ -39,7 +39,6 @@ void main() async {
 
   // Initialize Firebase (still needed for auth and workspace sync)
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint('[Main] 🔥 Firebase initialized');
 
   // Initialize Firebase App Check (only in Release mode to avoid debug token errors)
   if (kReleaseMode) {
@@ -48,12 +47,9 @@ void main() async {
         providerAndroid: AndroidPlayIntegrityProvider(),
         providerApple: AppleDeviceCheckProvider(),
       );
-      debugPrint('[Main] ✅ Firebase App Check activated (Release mode)');
     } catch (e) {
-      debugPrint('[Main] ⚠️ Firebase App Check activation failed: $e');
     }
   } else {
-    debugPrint('[Main] ⚠️ Firebase App Check skipped (Debug mode)');
   }
 
   // 🔥 Enable Firebase persistence for offline sync
@@ -64,33 +60,17 @@ void main() async {
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED, // Valid cache size
     );
 
-    debugPrint('[Main] ✅ Firebase persistence ENABLED (for offline sync)');
-    debugPrint('[Main] ⚠️ Firebase cache size set to unlimited');
   } catch (e) {
-    debugPrint('[Main] ⚠️ Could not configure Firebase settings: $e');
-    debugPrint(
-      '[Main] ⚠️ This is expected if settings were already configured',
-    );
   }
 
   // NEW: Initialize Hive (local storage - our primary storage)
   try {
     await HiveService.init();
-    debugPrint('[Main] 📦 Hive initialized successfully');
 
     // Validate all boxes are open
     final boxStatus = HiveService.validateBoxes();
-    final allOpen = boxStatus.values.every((isOpen) => isOpen);
-    if (!allOpen) {
-      final closedBoxes = boxStatus.entries
-          .where((e) => !e.value)
-          .map((e) => e.key)
-          .toList();
-      debugPrint('[Main] ⚠️ Some Hive boxes failed to open: $closedBoxes');
-    }
+    boxStatus.values.every((isOpen) => isOpen);
   } catch (e) {
-    debugPrint('[Main] ❌ CRITICAL: Hive initialization failed: $e');
-    debugPrint('[Main] ❌ App may not function correctly without local storage');
   }
 
   // NEW: Initialize RevenueCat
@@ -98,7 +78,6 @@ void main() async {
 
   // Initialize Logger Service
   await LoggerService.init();
-  debugPrint('[Main] 📝 Logger service initialized');
 
   // Log app version on startup
   try {
@@ -106,19 +85,13 @@ void main() async {
     await LoggerService.info(
       'App started: v${packageInfo.version} (${packageInfo.buildNumber})',
     );
-    debugPrint(
-      '[Main] 📱 App version: ${packageInfo.version} (${packageInfo.buildNumber})',
-    );
   } catch (e) {
-    debugPrint('[Main] ⚠️ Could not get package info: $e');
   }
 
   // Initialize Firebase Remote Config for update checking
   try {
     await AppUpdateService.init();
-    debugPrint('[Main] 🔄 Remote Config initialized for updates');
   } catch (e) {
-    debugPrint('[Main] ⚠️ Remote Config initialization failed: $e');
   }
 
   final prefs = await SharedPreferences.getInstance();
@@ -243,10 +216,8 @@ class _AuthGateState extends State<AuthGate> {
       final subscriptionFuture = SubscriptionService().hasActiveSubscription(
         userEmail: user.email,
       ).then((hasSub) {
-        debugPrint('[AuthGate] Subscription check completed during splash: $hasSub');
         return hasSub;
       }).catchError((e) {
-        debugPrint('[AuthGate] Subscription pre-warm failed: $e');
         return false;
       });
 
@@ -261,7 +232,6 @@ class _AuthGateState extends State<AuthGate> {
         ).then((_) {
           migrationService.dispose();
         }).catchError((e) {
-          debugPrint('[AuthGate] Migration during splash failed: $e');
           migrationService.dispose();
           // Continue anyway - user can access app offline
         });
@@ -329,9 +299,7 @@ class _AuthGateState extends State<AuthGate> {
         notificationRepo: notificationRepo,
       );
 
-      debugPrint('[AuthGate] ✅ Repositories initialized during splash');
     } catch (e) {
-      debugPrint('[AuthGate] ⚠️ Repository initialization failed: $e');
       // Continue anyway - repositories will be created later if needed
     }
   }
@@ -357,7 +325,6 @@ class HomeScreenWrapper extends StatelessWidget {
       builder: (context, workspaceProvider, repositoryProvider, _) {
         // If repositories are not initialized yet (edge case), show loading
         if (!repositoryProvider.areRepositoriesInitialized) {
-          debugPrint('[HomeScreenWrapper] ⚠️ Repositories not initialized, showing loading...');
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );

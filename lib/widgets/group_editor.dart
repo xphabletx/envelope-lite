@@ -245,12 +245,10 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       // Create envelopes from template NOW (if a template was selected)
       List<String> createdFromTemplate = [];
       if (_selectedTemplate != null && currentGroupId != null) {
-        debugPrint('[GroupEditor] Creating envelopes from template...');
         createdFromTemplate = await _createEnvelopesFromTemplateNow(
           _selectedTemplate!,
           currentGroupId,
         );
-        debugPrint('[GroupEditor] Created ${createdFromTemplate.length} envelopes from template');
       }
 
       // FILTER OUT DRAFT IDs and use real created IDs instead
@@ -261,11 +259,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
       // Add the envelopes created from template
       realIdsToSave.addAll(createdFromTemplate);
 
-      debugPrint('[GroupEditor] ========================================');
-      debugPrint('[GroupEditor] Updating group membership for binder: $currentGroupId');
-      debugPrint('[GroupEditor] Envelope IDs to assign: ${realIdsToSave.length}');
-      debugPrint('[GroupEditor] IDs: $realIdsToSave');
-      debugPrint('[GroupEditor] ========================================');
 
       await widget.envelopeRepo.updateGroupMembership(
         groupId: currentGroupId!,
@@ -273,7 +266,6 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         allEnvelopesStream: widget.envelopeRepo.envelopesStream(),
       );
 
-      debugPrint('[GroupEditor] ✅ Group membership updated successfully');
 
       if (!mounted) return;
       Navigator.of(context).pop(currentGroupId); // RETURN ID
@@ -531,18 +523,12 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
     BinderTemplate template,
     String groupId,
   ) async {
-    debugPrint('[Template] ========================================');
-    debugPrint('[Template] Creating envelopes from template: ${template.name}');
-    debugPrint('[Template] Binder ID: $groupId');
-    debugPrint('[Template] Template has ${template.envelopes.length} envelopes');
-    debugPrint('[Template] ========================================');
 
     final createdIds = <String>[];
 
     try {
       // Create all envelopes from template with emojis and groupId
       for (final envelope in template.envelopes) {
-        debugPrint('[Template] Creating envelope: ${envelope.name} (${envelope.emoji})');
 
         final envelopeId = await widget.envelopeRepo.createEnvelope(
           name: envelope.name,
@@ -557,16 +543,9 @@ class _GroupEditorScreenState extends State<_GroupEditorScreen> {
         );
 
         createdIds.add(envelopeId);
-        debugPrint('[Template] ✅ Created: ${envelope.name} → Binder: $groupId (ID: $envelopeId)');
       }
 
-      debugPrint('[Template] ========================================');
-      debugPrint('[Template] ✅ Created ${createdIds.length} envelopes');
-      debugPrint('[Template] Envelope IDs: $createdIds');
-      debugPrint('[Template] ========================================');
-    } catch (e, stackTrace) {
-      debugPrint('[Template] ❌ FAILED to create envelopes: $e');
-      debugPrint('[Template] Stack trace: $stackTrace');
+    } catch (error) {
       rethrow;
     }
 

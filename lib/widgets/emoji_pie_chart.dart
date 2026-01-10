@@ -28,7 +28,7 @@ class EmojiPieChart extends StatelessWidget {
             return Transform.scale(
               scale: scale,
               child: Text(
-                localeProvider.celebrationEmoji,
+                localeProvider.horizonEmoji,
                 style: const TextStyle(fontSize: 40),
               ),
             );

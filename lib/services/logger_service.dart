@@ -24,7 +24,6 @@ class LoggerService {
 
       log('INFO', 'Logger initialized');
     } catch (e) {
-      debugPrint('Failed to initialize logger: $e');
     }
   }
 
@@ -35,7 +34,6 @@ class LoggerService {
 
     // Always print to console in debug mode
     if (kDebugMode) {
-      debugPrint(logEntry.trim());
     }
 
     // Write to file
@@ -52,7 +50,6 @@ class LoggerService {
       // Trim log file if it gets too large
       await _trimLogFile();
     } catch (e) {
-      debugPrint('Failed to write log: $e');
     }
   }
 
@@ -129,7 +126,6 @@ class LoggerService {
         await init();
       }
     } catch (e) {
-      debugPrint('Failed to clear logs: $e');
     }
   }
 
@@ -146,7 +142,6 @@ class LoggerService {
         }
       }
     } catch (e) {
-      debugPrint('Failed to trim log file: $e');
     }
   }
 
@@ -159,11 +154,9 @@ class LoggerService {
 
         if (daysSinceModified > _maxLogDays) {
           await _logFile!.delete();
-          debugPrint('Cleaned old log file ($daysSinceModified days old)');
         }
       }
     } catch (e) {
-      debugPrint('Failed to clean old logs: $e');
     }
   }
 }

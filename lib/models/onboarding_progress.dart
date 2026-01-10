@@ -1,5 +1,6 @@
 // lib/models/onboarding_progress.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 /// Stores incremental onboarding progress
 /// Saved to users/{userId}/onboarding/progress
@@ -65,6 +66,7 @@ class OnboardingProgress {
 
   /// Convert to JSON Map (for SharedPreferences)
   Map<String, dynamic> toMap() {
+    debugPrint('[Onboarding:OnboardingProgress] 📊 Converting to Map format - userId: $userId, currentStep: $currentStep, userName: $userName, isAccountMode: $isAccountMode');
     return {
       'userId': userId,
       'currentStep': currentStep,
@@ -90,6 +92,7 @@ class OnboardingProgress {
 
   /// Convert to Firestore format
   Map<String, dynamic> toFirestore() {
+    debugPrint('[Onboarding:OnboardingProgress] 🔥 Converting to Firestore format - userId: $userId, currentStep: $currentStep, userName: $userName, isAccountMode: $isAccountMode');
     return {
       'userId': userId,
       'currentStep': currentStep,
@@ -115,6 +118,7 @@ class OnboardingProgress {
 
   /// Create from JSON Map (from SharedPreferences)
   factory OnboardingProgress.fromMap(Map<String, dynamic> data) {
+    debugPrint('[Onboarding:OnboardingProgress] 📥 Creating from Map - userId: ${data['userId']}, currentStep: ${data['currentStep']}, userName: ${data['userName']}, isAccountMode: ${data['isAccountMode']}');
     return OnboardingProgress(
       userId: data['userId'] as String,
       currentStep: data['currentStep'] as int? ?? 0,
@@ -145,6 +149,7 @@ class OnboardingProgress {
   /// Create from Firestore document
   factory OnboardingProgress.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    debugPrint('[Onboarding:OnboardingProgress] 🔥 Creating from Firestore - docId: ${doc.id}, userId: ${data['userId']}, currentStep: ${data['currentStep']}, userName: ${data['userName']}, isAccountMode: ${data['isAccountMode']}');
     return OnboardingProgress(
       userId: data['userId'] as String,
       currentStep: data['currentStep'] as int? ?? 0,
@@ -188,6 +193,7 @@ class OnboardingProgress {
     String? selectedTemplateId,
     String? celebrationEmoji,
   }) {
+    debugPrint('[Onboarding:OnboardingProgress] 🔄 CopyWith - updating fields: currentStep=${currentStep ?? "unchanged"}, userName=${userName ?? "unchanged"}, isAccountMode=${isAccountMode ?? "unchanged"}');
     return OnboardingProgress(
       userId: userId,
       currentStep: currentStep ?? this.currentStep,
@@ -213,6 +219,7 @@ class OnboardingProgress {
 
   /// Copy with updates from a map (used for incremental updates)
   OnboardingProgress copyWithMap(Map<String, dynamic> updates) {
+    debugPrint('[Onboarding:OnboardingProgress] 🔄 CopyWithMap - applying map updates: ${updates.keys.join(", ")}');
     return OnboardingProgress(
       userId: userId,
       currentStep: updates['currentStep'] as int? ?? currentStep,

@@ -1,5 +1,4 @@
 // lib/utils/target_helper.dart
-import 'package:flutter/foundation.dart';
 import '../models/envelope.dart';
 
 class TargetHelper {
@@ -76,61 +75,37 @@ class TargetHelper {
     required DateTime projectedDate,
     required String currencySymbol,
   }) {
-    debugPrint('[TargetHelper] ========================================');
-    debugPrint('[TargetHelper] Calculating time machine text:');
-    debugPrint('[TargetHelper]   Target Amount: $targetAmount');
-    debugPrint('[TargetHelper]   Target Date: $targetDate');
-    debugPrint('[TargetHelper]   Projected Amount: $projectedAmount');
-    debugPrint('[TargetHelper]   Projected Date (viewing): $projectedDate');
-    debugPrint('[TargetHelper]   Amount Met: ${projectedAmount >= targetAmount}');
 
     // Case 1: Projected date is exactly on horizon date
     if (_isSameDay(projectedDate, targetDate)) {
       if (projectedAmount >= targetAmount) {
-        debugPrint('[TargetHelper]   Result: Will reach horizon on time!');
-        debugPrint('[TargetHelper] ========================================');
         return "Will reach horizon on time! ✨";
       } else {
         final shortfall = targetAmount - projectedAmount;
-        debugPrint('[TargetHelper]   Result: Will be short by $shortfall');
-        debugPrint('[TargetHelper] ========================================');
         return "Will be $currencySymbol${shortfall.toStringAsFixed(2)} short";
       }
     }
 
     // Case 2: Projected date is beyond horizon date
     if (projectedDate.isAfter(targetDate)) {
-      debugPrint('[TargetHelper]   Viewing date is AFTER horizon date');
       if (projectedAmount >= targetAmount) {
         // Calculate when horizon was/will be reached
         // NOTE: This calculates days between viewing date and horizon DATE (not achievement date)
         final daysAfter = projectedDate.difference(targetDate).inDays;
-        debugPrint('[TargetHelper]   Days after horizon DATE: $daysAfter');
-        debugPrint('[TargetHelper]   Calculation: projectedDate ($projectedDate) - targetDate ($targetDate) = $daysAfter days');
 
         if (daysAfter == 0) {
-          debugPrint('[TargetHelper]   Result: Horizon reached on due date!');
-          debugPrint('[TargetHelper] ========================================');
           return "Horizon reached on due date! ✨";
         } else if (daysAfter == 1) {
-          debugPrint('[TargetHelper]   Result: Horizon reached 1 day ago');
-          debugPrint('[TargetHelper] ========================================');
           return "Horizon reached 1 day ago 🌅";
         } else if (daysAfter < 30) {
-          debugPrint('[TargetHelper]   Result: Horizon reached $daysAfter days ago');
-          debugPrint('[TargetHelper] ========================================');
           return "Horizon reached $daysAfter days ago 🌅";
         } else {
           final monthsAfter = (daysAfter / 30).round();
-          debugPrint('[TargetHelper]   Result: Horizon reached ${monthsAfter}mo ago');
-          debugPrint('[TargetHelper] ========================================');
           return "Horizon reached ${monthsAfter}mo ago 🌅";
         }
       } else {
         final shortfall = targetAmount - projectedAmount;
         final daysOverdue = projectedDate.difference(targetDate).inDays;
-        debugPrint('[TargetHelper]   Result: Will be short by $shortfall ($daysOverdue days overdue)');
-        debugPrint('[TargetHelper] ========================================');
         return "Will be $currencySymbol${shortfall.toStringAsFixed(2)} short (${daysOverdue}d overdue)";
       }
     }
@@ -303,27 +278,12 @@ class TargetHelper {
     final elapsedDuration = referenceDayStart.difference(startDate);
 
     // DEBUG: Log time progress calculation with detailed breakdown
-    debugPrint('[TargetHelper-TimeProgress] ========================================');
-    debugPrint('[TargetHelper-TimeProgress] Target Start Date Type: $targetStartDateType');
-    debugPrint('[TargetHelper-TimeProgress] Start Date: $startDate');
-    debugPrint('[TargetHelper-TimeProgress] Target Date (original): ${envelope.targetDate}');
-    debugPrint('[TargetHelper-TimeProgress] Target Date (with time 00:00:01): $targetWithTime');
-    debugPrint('[TargetHelper-TimeProgress] Reference Date (viewing): $reference');
-    debugPrint('[TargetHelper-TimeProgress] Reference Day Start (normalized): $referenceDayStart');
-    debugPrint('[TargetHelper-TimeProgress] ---');
-    debugPrint('[TargetHelper-TimeProgress] Total Duration: ${totalDuration.inDays} days (${totalDuration.inHours} hours)');
-    debugPrint('[TargetHelper-TimeProgress] Elapsed Duration: ${elapsedDuration.inDays} days (${elapsedDuration.inHours} hours)');
-    debugPrint('[TargetHelper-TimeProgress] ---');
-    debugPrint('[TargetHelper-TimeProgress] Calculation: ${elapsedDuration.inDays} / ${totalDuration.inDays} (using whole days)');
 
     // Progress based on whole days (date-based targets should not care about time of day)
     final progress = totalDuration.inDays > 0
         ? (elapsedDuration.inDays / totalDuration.inDays).clamp(0.0, 1.0)
         : 0.0;
 
-    debugPrint('[TargetHelper-TimeProgress] Time Progress (raw): $progress');
-    debugPrint('[TargetHelper-TimeProgress] Time Progress (%): ${(progress * 100).toStringAsFixed(2)}%');
-    debugPrint('[TargetHelper-TimeProgress] ========================================');
 
     return progress;
   }

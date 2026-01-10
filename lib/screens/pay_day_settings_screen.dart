@@ -90,7 +90,6 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
 
         await widget.service.updatePayDaySettings(settings);
 
-        debugPrint('[PayDaySettings] ✅ Pay day settings saved (will appear in Time Machine and Calendar)');
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +103,6 @@ class _PayDaySettingsScreenState extends State<PayDaySettingsScreen> {
         // Disable pay day - delete settings only
         await widget.service.deletePayDaySettings();
 
-        debugPrint('[PayDaySettings] ✅ Pay day settings deleted');
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

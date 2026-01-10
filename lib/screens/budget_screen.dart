@@ -218,9 +218,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
                 final userId = widget.repo.currentUserId;
                 final payDayService = PayDaySettingsService(widget.repo.db, userId);
 
-                debugPrint('[BudgetScreen] Loading pay day settings for time machine...');
                 final paySettings = await payDayService.getPayDaySettings();
-                debugPrint('[BudgetScreen] Pay day settings loaded: ${paySettings?.nextPayDate}');
 
                 if (!context.mounted) return;
 

@@ -39,9 +39,7 @@ class ThemeProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      debugPrint('[ThemeProvider] ✅ Loaded theme from SharedPreferences: $_currentThemeId');
     } catch (e) {
-      debugPrint('[ThemeProvider] ❌ Error loading theme: $e');
     }
   }
 
@@ -57,9 +55,7 @@ class ThemeProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('selected_theme_id', themeId);
 
-      debugPrint('[ThemeProvider] ✅ Theme saved locally: $themeId');
     } catch (e) {
-      debugPrint('[ThemeProvider] ❌ Error saving theme: $e');
     }
   }
 }

@@ -805,28 +805,29 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Column(
-                        children: [
-                          RadioListTile<TargetStartDateType>(
-                            title: Text(
-                              'From Today',
-                              style: fontProvider.getTextStyle(fontSize: 16),
-                            ),
-                            subtitle: Text(
-                              'Progress starts from now (${DateFormat('MMM dd, yyyy').format(DateTime.now())})',
-                              style: fontProvider.getTextStyle(
-                                fontSize: 14,
-                                color: theme.hintColor,
+                      RadioGroup<TargetStartDateType>(
+                        groupValue: _targetStartDateType,
+                        onChanged: (value) {
+                          setState(() {
+                            _targetStartDateType = value;
+                          });
+                        },
+                        child: Column(
+                          children: [
+                            RadioListTile<TargetStartDateType>(
+                              title: Text(
+                                'From Today',
+                                style: fontProvider.getTextStyle(fontSize: 16),
                               ),
+                              subtitle: Text(
+                                'Progress starts from now (${DateFormat('MMM dd, yyyy').format(DateTime.now())})',
+                                style: fontProvider.getTextStyle(
+                                  fontSize: 14,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                              value: TargetStartDateType.fromToday,
                             ),
-                            value: TargetStartDateType.fromToday,
-                            groupValue: _targetStartDateType,
-                            onChanged: (value) {
-                              setState(() {
-                                _targetStartDateType = value;
-                              });
-                            },
-                          ),
                           StreamBuilder<List<Envelope>>(
                             stream: widget.repo.envelopesStream(),
                             builder: (context, snapshot) {
@@ -851,39 +852,18 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                   ),
                                 ),
                                 value: TargetStartDateType.fromEnvelopeCreation,
-                                groupValue: _targetStartDateType,
-                                onChanged: createdAt != null
-                                    ? (value) {
-                                        setState(() {
-                                          _targetStartDateType = value;
-                                        });
-                                      }
-                                    : null, // Disable if no createdAt
+                                toggleable: createdAt == null, // Disable if no createdAt
                               );
                             },
                           ),
                           Row(
                             children: [
                               Expanded(
-                                child: RadioListTile<TargetStartDateType>(
-                                  title: Text(
-                                    'Custom Date',
-                                    style: fontProvider.getTextStyle(fontSize: 16),
-                                  ),
-                                  subtitle: Text(
-                                    _customTargetStartDate != null
-                                        ? 'Progress from ${DateFormat('MMM dd, yyyy').format(_customTargetStartDate!)}'
-                                        : 'Choose a specific start date',
-                                    style: fontProvider.getTextStyle(
-                                      fontSize: 14,
-                                      color: theme.hintColor,
-                                    ),
-                                  ),
-                                  value: TargetStartDateType.customDate,
-                                  groupValue: _targetStartDateType,
-                                  onChanged: (value) async {
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    // Update selection
                                     setState(() {
-                                      _targetStartDateType = value;
+                                      _targetStartDateType = TargetStartDateType.customDate;
                                     });
 
                                     // If no custom date set yet, open picker
@@ -903,6 +883,22 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                                       }
                                     }
                                   },
+                                  child: RadioListTile<TargetStartDateType>(
+                                    title: Text(
+                                      'Custom Date',
+                                      style: fontProvider.getTextStyle(fontSize: 16),
+                                    ),
+                                    subtitle: Text(
+                                      _customTargetStartDate != null
+                                          ? 'Progress from ${DateFormat('MMM dd, yyyy').format(_customTargetStartDate!)}'
+                                          : 'Choose a specific start date',
+                                      style: fontProvider.getTextStyle(
+                                        fontSize: 14,
+                                        color: theme.hintColor,
+                                      ),
+                                    ),
+                                    value: TargetStartDateType.customDate,
+                                  ),
                                 ),
                               ),
                               // Calendar icon button
@@ -929,6 +925,7 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           ),
                         ],
                       ),
+                    ),
                     ],
 
                     const SizedBox(height: 24),
@@ -1181,19 +1178,8 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                           }
                           autopilotFirstDate = payment.nextDueDate;
 
-                          debugPrint('[EnvelopeSettings] 📅 Extracted autopilot data from scheduled payment:');
-                          debugPrint('  Amount: $autopilotAmount');
-                          debugPrint('  Frequency: $autopilotFrequency');
-                          debugPrint('  First Date: $autopilotFirstDate');
-                          debugPrint('  Auto Execute: $autopilotAutoExecute');
                         }
 
-                        debugPrint('[EnvelopeSettings] 🔧 Creating InsightTile with initialData:');
-                        debugPrint('  autopilotEnabled: $hasAutopilot');
-                        debugPrint('  autopilotAmount: $autopilotAmount');
-                        debugPrint('  autopilotFrequency: ${autopilotFrequency ?? 'monthly'}');
-                        debugPrint('  autopilotFirstDate: $autopilotFirstDate');
-                        debugPrint('  autopilotAutoExecute: ${autopilotAutoExecute ?? true}');
 
                         return InsightTile(
                           key: _insightKey,
@@ -1239,7 +1225,6 @@ class _EnvelopeSettingsSheetState extends State<EnvelopeSettingsSheet> {
                             });
                           }
                         } catch (e) {
-                          debugPrint('Error updating from insight data: $e');
                         }
                       },
                     );

@@ -195,30 +195,25 @@ class PayDayCockpitProvider extends ChangeNotifier {
     _autopilotPreparedness.clear();
 
     try {
-      debugPrint('[PayDayCockpit] ==================== AUTOPILOT CALCULATION START ====================');
 
       // Get pay day settings to determine next pay day
       final payDayBox = Hive.box<PayDaySettings>('payDaySettings');
       final settings = payDayBox.get(userId);
 
       if (settings == null) {
-        debugPrint('[PayDayCockpit] No pay day settings found - skipping autopilot calculation');
         return; // No pay settings configured yet
       }
 
-      debugPrint('[PayDayCockpit] Settings found - lastPayDate: ${settings.lastPayDate}, nextPayDate: ${settings.nextPayDate}');
 
       // Use nextPayDate if available, otherwise calculate from lastPayDate
       DateTime? nextPayDay;
 
       if (settings.nextPayDate != null) {
         nextPayDay = settings.nextPayDate;
-        debugPrint('[PayDayCockpit] Using nextPayDate from settings: $nextPayDay');
       } else if (settings.lastPayDate != null) {
         final DateTime lastPayDate = settings.lastPayDate!;
         final String frequency = settings.payFrequency;
 
-        debugPrint('[PayDayCockpit] Calculating next pay day from last pay date: $lastPayDate, Frequency: $frequency');
 
         // Calculate next pay day based on frequency
         switch (frequency.toLowerCase()) {
@@ -242,12 +237,10 @@ class PayDayCockpitProvider extends ChangeNotifier {
             nextPayDay = lastPayDate.add(const Duration(days: 30));
         }
       } else {
-        debugPrint('[PayDayCockpit] No lastPayDate or nextPayDate found - skipping autopilot calculation');
         return;
       }
 
       if (nextPayDay == null) {
-        debugPrint('[PayDayCockpit] Could not determine next pay day - skipping autopilot calculation');
         return;
       }
 
@@ -256,31 +249,19 @@ class PayDayCockpitProvider extends ChangeNotifier {
       final today = DateTime(now.year, now.month, now.day);
       final nextPayDayNormalized = DateTime(nextPayDay.year, nextPayDay.month, nextPayDay.day);
 
-      debugPrint('[PayDayCockpit] Today: $today');
-      debugPrint('[PayDayCockpit] Next Pay Day: $nextPayDayNormalized');
 
       // Get all scheduled payments
       final allPayments = await scheduledPaymentRepo.scheduledPaymentsStream.first;
-      debugPrint('[PayDayCockpit] Found ${allPayments.length} total scheduled payments');
 
       // Filter payments due before next pay day
-      int included = 0;
-      int excluded = 0;
       for (final payment in allPayments) {
         final paymentDate = DateTime(payment.nextDueDate.year, payment.nextDueDate.month, payment.nextDueDate.day);
 
-        debugPrint('[PayDayCockpit] Checking payment: ${payment.name}');
-        debugPrint('[PayDayCockpit]   Due date: $paymentDate');
-        debugPrint('[PayDayCockpit]   Amount: ${payment.amount}');
-        debugPrint('[PayDayCockpit]   After today? ${paymentDate.isAfter(today)}');
-        debugPrint('[PayDayCockpit]   Not after next pay day? ${!paymentDate.isAfter(nextPayDayNormalized)}');
 
         // Include payments that are after today and before (or on) next pay day
         if (paymentDate.isAfter(today) && !paymentDate.isAfter(nextPayDayNormalized)) {
-          debugPrint('[PayDayCockpit]   ✓ INCLUDING this payment');
           _upcomingPayments.add(payment);
           _autopilotUpcoming += payment.amount;
-          included++;
 
           // Check preparedness: does the envelope have enough balance?
           if (payment.envelopeId != null) {
@@ -296,18 +277,10 @@ class PayDayCockpitProvider extends ChangeNotifier {
 
             _autopilotPreparedness[payment.envelopeId!] = envelope.currentAmount >= payment.amount;
           }
-        } else {
-          debugPrint('[PayDayCockpit]   ✗ EXCLUDING this payment');
-          excluded++;
         }
       }
 
-      debugPrint('[PayDayCockpit] Summary: Included $included payments, Excluded $excluded payments');
-      debugPrint('[PayDayCockpit] Total autopilot upcoming: \$${_autopilotUpcoming.toStringAsFixed(2)}');
-      debugPrint('[PayDayCockpit] ==================== AUTOPILOT CALCULATION END ====================');
     } catch (e) {
-      debugPrint('[PayDayCockpit] ERROR calculating autopilot payments: $e');
-      debugPrint('[PayDayCockpit] Stack trace: ${StackTrace.current}');
     }
   }
 

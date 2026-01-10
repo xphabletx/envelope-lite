@@ -64,11 +64,13 @@ class HorizonSummaryCard extends StatelessWidget {
       );
 
       if (earliestTargetDate == null ||
-          envelope.targetDate!.isBefore(earliestTargetDate))
+          envelope.targetDate!.isBefore(earliestTargetDate)) {
         earliestTargetDate = envelope.targetDate;
+      }
       if (latestTargetDate == null ||
-          envelope.targetDate!.isAfter(latestTargetDate))
+          envelope.targetDate!.isAfter(latestTargetDate)) {
         latestTargetDate = envelope.targetDate;
+      }
     }
 
     final avgTimeProgress = envelopesWithDates.isNotEmpty

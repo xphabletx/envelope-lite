@@ -58,7 +58,6 @@ class _GroupsHomeScreenState extends State<GroupsHomeScreen> {
     final projectedEnvelopes = inGroup.map((e) => timeMachine.getProjectedEnvelope(e)).toList();
     final totSaved = projectedEnvelopes.fold(0.0, (s, e) => s + e.currentAmount);
 
-    debugPrint('[GroupsHome] Binder ${g.name} total: $totSaved (${inGroup.length} envelopes, TimeMachine: ${timeMachine.isActive})');
 
     return {'totalSaved': totSaved, 'envelopes': projectedEnvelopes};
   }
@@ -1144,7 +1143,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                             color: Colors.transparent,
                             child: InkWell(
                               onTap: () async {
-                                debugPrint('[BinderSpread] Settings cog tapped!');
                                 // Navigate to group editor screen
                                 try {
                                   final groupRepo = GroupRepo(widget.repo);
@@ -1155,7 +1153,6 @@ class _BinderSpreadState extends State<_BinderSpread> {
                                     group: widget.group,
                                   );
                                 } catch (e) {
-                                  debugPrint('[BinderSpread] Error opening group editor: $e');
                                 }
                               },
                               borderRadius: BorderRadius.circular(8),

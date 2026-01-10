@@ -56,7 +56,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       final updatedUser = FirebaseAuth.instance.currentUser;
 
       if (updatedUser?.emailVerified ?? false) {
-        debugPrint('[EmailVerification] ✅ Email verified!');
 
         // Cancel timer when verified
         _timer?.cancel();
@@ -65,7 +64,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         // The reload above will trigger authStateChanges which will route correctly
       }
     } catch (e) {
-      debugPrint('[EmailVerification] Error checking verification: $e');
     } finally {
       if (mounted) {
         setState(() => _isCheckingVerification = false);
@@ -82,7 +80,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       final user = FirebaseAuth.instance.currentUser;
       await user?.sendEmailVerification();
 
-      debugPrint('[EmailVerification] ✅ Verification email resent');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +100,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         });
       }
     } catch (e) {
-      debugPrint('[EmailVerification] ❌ Error resending email: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),

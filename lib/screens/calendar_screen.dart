@@ -105,8 +105,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
           _focusedDay = timeMachine.futureDate!;
           _selectedDay = timeMachine.futureDate!;
         });
-        debugPrint('[TimeMachine::CalendarScreen] Calendar Initialization:');
-        debugPrint('[TimeMachine::CalendarScreen]   Jumped to future date: ${timeMachine.futureDate}');
       }
     });
 
@@ -126,7 +124,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
         });
       }
     } catch (e) {
-      debugPrint('Error restoring calendar view preference: $e');
     }
   }
 
@@ -143,7 +140,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kPrefsKeyCalendarCompact, isWeekMode);
     } catch (e) {
-      debugPrint('Error saving calendar view preference: $e');
     }
   }
 
@@ -319,8 +315,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
     if (timeMachine.isActive && timeMachine.futureDate != null) {
       if (endRange.isAfter(timeMachine.futureDate!)) {
         endRange = timeMachine.futureDate!.add(const Duration(days: 1));
-        debugPrint('[TimeMachine::CalendarScreen] Event Generation:');
-        debugPrint('[TimeMachine::CalendarScreen]   Capped end range at ${timeMachine.futureDate}');
       }
     }
 
@@ -344,7 +338,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
       for (final payDay in payDayOccurrences) {
         events.add(_CalendarEvent.fromPayDay(payDay, payDay.date));
       }
-      debugPrint('[Calendar] Added ${payDayOccurrences.length} pay day events to calendar');
     }
 
     events.sort((a, b) => a.date.compareTo(b.date));
@@ -954,8 +947,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                   final timeMachine = Provider.of<TimeMachineProvider>(context, listen: false);
                   if (timeMachine.isActive && timeMachine.futureDate != null) {
                     if (selectedDay.isAfter(timeMachine.futureDate!)) {
-                      debugPrint('[TimeMachine::CalendarScreen] Date Selection:');
-                      debugPrint('[TimeMachine::CalendarScreen]   Blocked selection of $selectedDay beyond ${timeMachine.futureDate}');
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Cannot select dates beyond projection date (${DateFormat('MMM dd, yyyy').format(timeMachine.futureDate!)})'),
@@ -1229,10 +1220,6 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
           initialData: const [],
           stream: _paymentRepo.scheduledPaymentsStream,
           builder: (context, paymentsSnapshot) {
-            debugPrint('[Calendar] ========================================');
-            debugPrint('[Calendar] Scheduled payments stream update');
-            debugPrint('[Calendar] Has data: ${paymentsSnapshot.hasData}');
-            debugPrint('[Calendar] All payments count: ${paymentsSnapshot.data?.length ?? 0}');
 
             return StreamBuilder<List<dynamic>>(
               initialData: widget.repo.getEnvelopesSync(showPartnerEnvelopes: false),
@@ -1242,22 +1229,10 @@ class _CalendarScreenV2State extends State<CalendarScreenV2> {
                 final existingEnvelopes = envelopesSnapshot.data ?? [];
                 final envelopeIds = existingEnvelopes.map((e) => e.id).toSet();
 
-                debugPrint('[Calendar] Envelope IDs: ${envelopeIds.length}');
 
                 final scheduledPayments = allPayments
                     .where((payment) => envelopeIds.contains(payment.envelopeId))
                     .toList();
-
-                debugPrint('[Calendar] Filtered scheduled payments: ${scheduledPayments.length}');
-
-                // Log each payment for debugging
-                for (final payment in allPayments) {
-                  debugPrint('[Calendar] Payment: ${payment.name}');
-                  debugPrint('[Calendar]   EnvelopeId: ${payment.envelopeId}');
-                  debugPrint('[Calendar]   Start Date: ${payment.startDate}');
-                  debugPrint('[Calendar]   Has matching envelope: ${envelopeIds.contains(payment.envelopeId)}');
-                }
-                debugPrint('[Calendar] ========================================');
 
                 // Get all calendar events (scheduled payments + pay day)
                 final groupedOccurrences = _getOccurrencesForVisibleRange(

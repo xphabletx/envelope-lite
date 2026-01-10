@@ -1,5 +1,4 @@
 // lib/config/revenue_cat_config.dart
-import 'package:flutter/foundation.dart';
 
 /// RevenueCat configuration for Stuffrite (com.stuffrite.app)
 ///
@@ -55,15 +54,11 @@ class RevenueCatConfig {
   /// Check if customer has premium entitlement
   /// Returns true if "Stuffrite Unlocked" entitlement is active
   static bool hasPremiumEntitlement(Map<String, dynamic> activeEntitlements) {
-    debugPrint('[RevenueCatConfig] 🔍 Checking for entitlement: "$premiumEntitlementId"');
 
     final hasPremium = activeEntitlements.containsKey(premiumEntitlementId);
 
     if (hasPremium) {
-      debugPrint('[RevenueCatConfig] ✅ Found entitlement: "$premiumEntitlementId"');
     } else {
-      debugPrint('[RevenueCatConfig] ⚠️ No premium entitlement found');
-      debugPrint('[RevenueCatConfig] 🔍 All available entitlement keys: ${activeEntitlements.keys.toList()}');
     }
 
     return hasPremium;

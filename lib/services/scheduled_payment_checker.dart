@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'envelope_repo.dart';
 import 'scheduled_payment_repo.dart';
@@ -32,11 +31,9 @@ class ScheduledPaymentChecker {
       final upcomingPayments = await paymentRepo.getPaymentsDueOnDate(tomorrow);
 
       if (upcomingPayments.isEmpty) {
-        debugPrint('[ScheduledPaymentChecker] No payments due tomorrow');
         return 0;
       }
 
-      debugPrint('[ScheduledPaymentChecker] Checking ${upcomingPayments.length} payments due tomorrow');
 
       // Get all current user's envelopes once to avoid repeated queries
       final fetchedEnvelopes = await envelopeRepo.envelopesStream(showPartnerEnvelopes: false).first;
@@ -71,7 +68,6 @@ class ScheduledPaymentChecker {
               },
             );
             warningsCreated++;
-            debugPrint('[ScheduledPaymentChecker] ⚠️ Warning: ${payment.name} - envelope deleted');
             continue;
           }
 
@@ -84,7 +80,6 @@ class ScheduledPaymentChecker {
 
             // Skip if envelope will have balance to pay
             if (amountToDeduct > 0) {
-              debugPrint('[ScheduledPaymentChecker] ✅ ${payment.name} - envelope balance OK');
               continue;
             }
 
@@ -104,7 +99,6 @@ class ScheduledPaymentChecker {
               },
             );
             warningsCreated++;
-            debugPrint('[ScheduledPaymentChecker] ⚠️ Warning: ${payment.name} - envelope empty');
 
           } else {
             // Fixed amount payment
@@ -112,7 +106,6 @@ class ScheduledPaymentChecker {
 
             // Check if envelope has sufficient balance
             if (envelope.currentAmount >= amountToDeduct) {
-              debugPrint('[ScheduledPaymentChecker] ✅ ${payment.name} - sufficient funds');
               continue;
             }
 
@@ -136,27 +129,18 @@ class ScheduledPaymentChecker {
             );
             warningsCreated++;
 
-            debugPrint(
-              '[ScheduledPaymentChecker] ⚠️ Warning: ${payment.name} - '
-              'needs ${currency.format(amountToDeduct)}, '
-              'has ${currency.format(envelope.currentAmount)}',
-            );
           }
         } catch (e) {
-          debugPrint('[ScheduledPaymentChecker] Error checking payment ${payment.name}: $e');
           // Continue checking other payments even if one fails
         }
       }
 
       if (warningsCreated > 0) {
-        debugPrint('[ScheduledPaymentChecker] Created $warningsCreated warning(s)');
       } else {
-        debugPrint('[ScheduledPaymentChecker] All payments have sufficient funds');
       }
 
       return warningsCreated;
     } catch (e) {
-      debugPrint('[ScheduledPaymentChecker] Fatal error in checkUpcomingPayments: $e');
       rethrow;
     }
   }
@@ -248,17 +232,11 @@ class ScheduledPaymentChecker {
           );
           warningsCreated++;
 
-          debugPrint(
-            '[ScheduledPaymentChecker] 📊 Weekly alert: ${envelope.name} - '
-            '${payments.length} payments totaling ${currency.format(totalUpcoming)}, '
-            'current balance ${currency.format(envelope.currentAmount)}',
-          );
         }
       }
 
       return warningsCreated;
     } catch (e) {
-      debugPrint('[ScheduledPaymentChecker] Error in checkWeeklyProjections: $e');
       rethrow;
     }
   }

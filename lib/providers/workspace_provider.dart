@@ -17,9 +17,6 @@ class WorkspaceProvider extends ChangeNotifier {
   /// Updates the workspace ID and notifies all listeners.
   /// This should be called when the user joins, creates, or leaves a workspace.
   Future<void> setWorkspaceId(String? newWorkspaceId) async {
-    debugPrint('[WorkspaceProvider] DEBUG: setWorkspaceId called');
-    debugPrint('[WorkspaceProvider] DEBUG: - Current workspace: $_workspaceId');
-    debugPrint('[WorkspaceProvider] DEBUG: - New workspace: $newWorkspaceId');
 
     if (_workspaceId != newWorkspaceId) {
       _workspaceId = newWorkspaceId;
@@ -28,17 +25,13 @@ class WorkspaceProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       if (newWorkspaceId != null) {
         await prefs.setString('active_workspace_id', newWorkspaceId);
-        debugPrint('[WorkspaceProvider] DEBUG: Workspace ID saved to SharedPreferences: $newWorkspaceId');
       } else {
         await prefs.remove('active_workspace_id');
-        debugPrint('[WorkspaceProvider] DEBUG: Workspace ID removed from SharedPreferences');
       }
 
       // Notify listeners to rebuild with new workspace
-      debugPrint('[WorkspaceProvider] DEBUG: Notifying listeners of workspace change');
       notifyListeners();
     } else {
-      debugPrint('[WorkspaceProvider] DEBUG: Workspace ID unchanged, skipping update');
     }
   }
 

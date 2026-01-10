@@ -65,7 +65,6 @@ class SettingsScreen extends StatelessWidget {
         'photoURL': photoURL,
       };
     } catch (e) {
-      debugPrint('[SettingsScreen] Error loading local user profile: $e');
       return {};
     }
   }
@@ -84,10 +83,8 @@ class SettingsScreen extends StatelessWidget {
         final userService = UserService(repo.db, repo.currentUserId);
         await userService.updateUserProfile(displayName: newName.trim());
       } catch (e) {
-        debugPrint('[SettingsScreen] ⚠️ Firestore sync failed (offline?): $e');
       }
     } catch (e) {
-      debugPrint('[SettingsScreen] Error updating display name: $e');
       rethrow;
     }
   }
@@ -979,9 +976,6 @@ class SettingsScreen extends StatelessWidget {
 
       if (workspaceId != null) {
         // WORKSPACE MODE: Upload to Firebase Storage (partner can see photo)
-        debugPrint(
-          '[Settings] 🤝 Workspace mode: uploading photo to Firebase Storage',
-        );
 
         final storageRef = FirebaseStorage.instance
             .ref()
@@ -1000,13 +994,10 @@ class SettingsScreen extends StatelessWidget {
           final userService = UserService(repo.db, userId);
           await userService.updateUserProfile(photoURL: downloadUrl);
         } catch (e) {
-          debugPrint('[Settings] ⚠️ Firestore sync failed (offline?): $e');
         }
 
-        debugPrint('[Settings] ✅ Photo uploaded to Firebase Storage');
       } else {
         // SOLO MODE: Save locally only (privacy + offline)
-        debugPrint('[Settings] 📦 Solo mode: saving photo locally');
 
         final appDir = await getApplicationDocumentsDirectory();
         final localPath = '${appDir.path}/profile_$userId.jpg';
@@ -1017,7 +1008,6 @@ class SettingsScreen extends StatelessWidget {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('profile_photo_path_$userId', localPath);
 
-        debugPrint('[Settings] ✅ Photo saved locally: $localPath');
       }
 
       if (context.mounted) {
@@ -1058,7 +1048,6 @@ class SettingsScreen extends StatelessWidget {
 
         // Try the reconstructed path first (most reliable)
         if (File(reconstructedPath).existsSync()) {
-          debugPrint('[Settings] ✅ Found profile photo at: $reconstructedPath');
           return CircleAvatar(
             backgroundImage: FileImage(File(reconstructedPath)),
             radius: 20,
@@ -1067,16 +1056,13 @@ class SettingsScreen extends StatelessWidget {
 
         // Fallback: Try the stored path (might work if container didn't change)
         if (File(photoURL).existsSync()) {
-          debugPrint('[Settings] ✅ Found profile photo at stored path: $photoURL');
           return CircleAvatar(
             backgroundImage: FileImage(File(photoURL)),
             radius: 20,
           );
         }
 
-        debugPrint('[Settings] ⚠️ Profile photo not found at either path');
       } catch (e) {
-        debugPrint('[Settings] ⚠️ Error loading profile photo: $e');
       }
 
       // Fallback to default icon
@@ -1125,7 +1111,6 @@ class SettingsScreen extends StatelessWidget {
         final userService = UserService(repo.db, repo.currentUserId);
         await userService.updateUserProfile(photoURL: '');
       } catch (e) {
-        debugPrint('[Settings] ⚠️ Firestore sync failed (offline?): $e');
       }
 
       if (context.mounted) {
@@ -1148,7 +1133,6 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch $url');
     }
   }
 
@@ -1369,22 +1353,18 @@ class SettingsScreen extends StatelessWidget {
       // 1. Delete all envelopes from Hive
       final envelopeBox = HiveService.getBox<Envelope>('envelopes');
       await envelopeBox.clear();
-      debugPrint('✅ Cleared all envelopes from Hive');
 
       // 2. Delete all transactions from Hive
       final transactionBox = HiveService.getBox<models.Transaction>('transactions');
       await transactionBox.clear();
-      debugPrint('✅ Cleared all transactions from Hive');
 
       // 3. Delete all scheduled payments from Hive
       final scheduledPaymentBox = HiveService.getBox<ScheduledPayment>('scheduledPayments');
       await scheduledPaymentBox.clear();
-      debugPrint('✅ Cleared all scheduled payments from Hive');
 
       // 4. Delete all groups from Hive
       final groupBox = HiveService.getBox<EnvelopeGroup>('groups');
       await groupBox.clear();
-      debugPrint('✅ Cleared all groups from Hive');
 
       // 5. Force delete from Firestore (cloud)
       // Delete from root collections (solo mode data)
@@ -1396,7 +1376,6 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from Firestore root collection');
       });
 
       await repo.db
@@ -1407,7 +1386,6 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} transactions from Firestore root collection');
       });
 
       await repo.db
@@ -1418,13 +1396,11 @@ class SettingsScreen extends StatelessWidget {
         for (var doc in snapshot.docs) {
           await doc.reference.delete();
         }
-        debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from Firestore root collection');
       });
 
       // WORKSPACE MODE: Also delete from workspace subcollections
       final workspaceId = repo.workspaceId;
       if (workspaceId != null && workspaceId.isNotEmpty) {
-        debugPrint('🔥 Detected workspace mode - deleting from workspace: $workspaceId');
 
         // Delete workspace envelopes (only user's own)
         await repo.db
@@ -1437,7 +1413,6 @@ class SettingsScreen extends StatelessWidget {
           for (var doc in snapshot.docs) {
             await doc.reference.delete();
           }
-          debugPrint('✅ Deleted ${snapshot.docs.length} envelopes from workspace collection');
         });
 
         // Delete workspace transactions (only user's own)
@@ -1451,7 +1426,6 @@ class SettingsScreen extends StatelessWidget {
           for (var doc in snapshot.docs) {
             await doc.reference.delete();
           }
-          debugPrint('✅ Deleted ${snapshot.docs.length} transactions from workspace collection');
         });
 
         // Delete workspace scheduled payments (only user's own)
@@ -1465,7 +1439,6 @@ class SettingsScreen extends StatelessWidget {
           for (var doc in snapshot.docs) {
             await doc.reference.delete();
           }
-          debugPrint('✅ Deleted ${snapshot.docs.length} scheduled payments from workspace collection');
         });
       }
 
@@ -1480,7 +1453,6 @@ class SettingsScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      debugPrint('❌ Error during nuclear reset: $e');
       if (context.mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(

@@ -92,7 +92,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
         });
       }
     } catch (e) {
-      debugPrint('Error loading workspace data: $e');
     }
   }
 
@@ -209,7 +208,6 @@ class _WorkspaceManagementScreenState extends State<WorkspaceManagementScreen>
       }
       return null;
     } catch (e) {
-      debugPrint('[WorkspaceManagement] Error loading profile photo for $userId: $e');
       return null;
     }
   }

@@ -147,14 +147,11 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
       stream: widget.accountRepo.accountStream(widget.account.id),
       initialData: widget.account,
       builder: (context, accountSnapshot) {
-        debugPrint('[AccountDetail] Stream update - hasData: ${accountSnapshot.hasData}, hasError: ${accountSnapshot.hasError}');
 
         if (accountSnapshot.hasError) {
-          debugPrint('[AccountDetail] Stream error: ${accountSnapshot.error}');
           // Account was deleted - navigate back
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              debugPrint('[AccountDetail] Account deleted, navigating back');
               Navigator.pop(context);
             }
           });
@@ -167,7 +164,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         }
 
         if (!accountSnapshot.hasData) {
-          debugPrint('[AccountDetail] No data in stream - showing spinner');
           return Scaffold(
             appBar: AppBar(
               title: FittedBox(child: Text(widget.account.name)),
@@ -177,7 +173,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
         }
 
         final account = accountSnapshot.data!;
-        debugPrint('[AccountDetail] Displaying account: ${account.name}');
 
         return Consumer<TimeMachineProvider>(
           builder: (context, timeMachine, _) {
@@ -281,8 +276,6 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                 textColor: theme.colorScheme.onSecondaryContainer,
                                 onTap: () {
                                   // DEBUG: Log navigation to stats
-                                  debugPrint('[AccountDetail] Opening Stats for account: ${displayAccount.name} (${displayAccount.id})');
-                                  debugPrint('[AccountDetail] Linked envelope IDs: $linkedEnvelopeIds');
 
                                   Navigator.push(
                                     context,

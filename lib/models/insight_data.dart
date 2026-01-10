@@ -1,7 +1,6 @@
 // lib/models/insight_data.dart
 // Data model for Insight financial planning calculations
 
-import 'package:flutter/foundation.dart';
 import 'envelope.dart';
 
 class InsightData {
@@ -82,9 +81,7 @@ class InsightData {
     this.isInSetupPhase = false,
     this.setupPhaseEndDate,
     this.payPeriodsUntilSteadyState,
-  }) {
-    debugPrint('[InsightData] 🆕 Created new InsightData: cashFlowEnabled=$cashFlowEnabled, autopilotAutoExecute=$autopilotAutoExecute');
-  }
+  });
 
   /// Get the effective cash flow amount (manual override takes precedence)
   double? get effectiveCashFlow {
@@ -202,14 +199,6 @@ class InsightData {
     int? payPeriodsUntilSteadyState,
     bool updateWarning = true, // Flag to indicate we're explicitly updating the warning
   }) {
-    debugPrint('[InsightData] 📝 copyWith called:');
-    debugPrint('  horizonAmount: ${horizonAmount ?? this.horizonAmount}');
-    debugPrint('  autopilotAmount: ${autopilotAmount ?? this.autopilotAmount}');
-    debugPrint('  calculatedCashFlow: ${calculatedCashFlow ?? this.calculatedCashFlow}');
-    debugPrint('  cashFlowEnabled: ${cashFlowEnabled ?? this.cashFlowEnabled}');
-    debugPrint('  isAffordable: ${isAffordable ?? this.isAffordable}');
-    debugPrint('  warningMessage (new): $warningMessage');
-    debugPrint('  updateWarning: $updateWarning');
 
     final newData = InsightData(
       horizonEnabled: horizonEnabled ?? this.horizonEnabled,

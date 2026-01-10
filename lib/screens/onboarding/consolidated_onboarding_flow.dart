@@ -78,6 +78,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   @override
   void initState() {
     super.initState();
+    debugPrint('[Onboarding:ConsolidatedFlow] 🚀 initState - Initializing onboarding flow for userId: ${widget.userId}');
     _progressService = OnboardingProgressService(
       FirebaseFirestore.instance,
       widget.userId,
@@ -87,9 +88,28 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
   /// Load any saved onboarding progress
   Future<void> _loadSavedProgress() async {
+    debugPrint('[Onboarding:ConsolidatedFlow] 📥 _loadSavedProgress - START');
     final progress = await _progressService.loadProgress();
 
     if (progress != null && mounted) {
+      debugPrint('[Onboarding:ConsolidatedFlow] 📊 _loadSavedProgress - Loaded progress data:');
+      debugPrint('  currentStep: ${progress.currentStep}');
+      debugPrint('  userName: ${progress.userName}');
+      debugPrint('  photoUrl: ${progress.photoUrl}');
+      debugPrint('  selectedCurrency: ${progress.selectedCurrency}');
+      debugPrint('  selectedTheme: ${progress.selectedTheme}');
+      debugPrint('  selectedFont: ${progress.selectedFont}');
+      debugPrint('  isAccountMode: ${progress.isAccountMode}');
+      debugPrint('  accountName: ${progress.accountName}');
+      debugPrint('  bankName: ${progress.bankName}');
+      debugPrint('  accountBalance: ${progress.accountBalance}');
+      debugPrint('  accountIconType: ${progress.accountIconType}');
+      debugPrint('  accountIconValue: ${progress.accountIconValue}');
+      debugPrint('  payAmount: ${progress.payAmount}');
+      debugPrint('  payFrequency: ${progress.payFrequency}');
+      debugPrint('  nextPayDate: ${progress.nextPayDate}');
+      debugPrint('  selectedTemplateId: ${progress.selectedTemplateId}');
+
       setState(() {
         _currentPageIndex = progress.currentStep;
         _userName = progress.userName;
@@ -116,15 +136,21 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         }
       });
 
+      debugPrint('[Onboarding:ConsolidatedFlow] ✅ _loadSavedProgress - State restored to step ${progress.currentStep}');
+
       // Restore theme and font to providers if they were saved
       if (progress.selectedTheme != null) {
         final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
         themeProvider.setTheme(progress.selectedTheme!);
+        debugPrint('[Onboarding:ConsolidatedFlow] 🎨 Restored theme: ${progress.selectedTheme}');
       }
       if (progress.selectedFont != null) {
         final fontProvider = Provider.of<FontProvider>(context, listen: false);
         fontProvider.setFont(progress.selectedFont!);
+        debugPrint('[Onboarding:ConsolidatedFlow] 🔤 Restored font: ${progress.selectedFont}');
       }
+    } else {
+      debugPrint('[Onboarding:ConsolidatedFlow] 📭 _loadSavedProgress - No saved progress found, starting fresh');
     }
 
     _buildPages();
@@ -137,6 +163,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
     // Jump to saved page if exists
     if (progress != null && _currentPageIndex > 0) {
+      debugPrint('[Onboarding:ConsolidatedFlow] 🔄 _loadSavedProgress - Jumping to page $_currentPageIndex');
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
           _pageController.jumpToPage(_currentPageIndex);
@@ -147,6 +174,22 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
 
   /// Save current progress to Firestore
   Future<void> _saveProgress() async {
+    debugPrint('[Onboarding:ConsolidatedFlow] 💾 _saveProgress - Saving current progress:');
+    debugPrint('  currentStep: $_currentPageIndex');
+    debugPrint('  userName: $_userName');
+    debugPrint('  photoUrl: $_photoUrl');
+    debugPrint('  selectedCurrency: $_selectedCurrency');
+    debugPrint('  selectedTheme: $_selectedTheme');
+    debugPrint('  selectedFont: $_selectedFont');
+    debugPrint('  isAccountMode: $_isAccountMode');
+    debugPrint('  accountName: $_accountName');
+    debugPrint('  bankName: $_bankName');
+    debugPrint('  accountBalance: $_accountBalance');
+    debugPrint('  payAmount: $_payAmount');
+    debugPrint('  payFrequency: $_payFrequency');
+    debugPrint('  nextPayDate: $_nextPayDate');
+    debugPrint('  selectedTemplateId: ${_selectedTemplate?.id}');
+
     final progress = OnboardingProgress(
       userId: widget.userId,
       currentStep: _currentPageIndex,
@@ -175,9 +218,19 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
   /// This ensures they're available for widgets like Insight in subsequent onboarding steps
   /// (e.g., when using template quick setup or group editor)
   Future<void> _savePayDaySettingsNow() async {
-    if (!_isAccountMode) return;
+    debugPrint('[Onboarding:ConsolidatedFlow] 💰 _savePayDaySettingsNow - Called');
+
+    if (!_isAccountMode) {
+      debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Not in account mode - skipping pay day settings save');
+      return;
+    }
 
     if (_payAmount != null && _payFrequency != null && _nextPayDate != null) {
+      debugPrint('[Onboarding:ConsolidatedFlow] 💰 Saving pay day settings:');
+      debugPrint('  payAmount: $_payAmount');
+      debugPrint('  payFrequency: $_payFrequency');
+      debugPrint('  nextPayDate: $_nextPayDate');
+
       try {
         final settings = PayDaySettings(
           userId: widget.userId,
@@ -192,19 +245,24 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           widget.userId,
         );
         await payDayService.updatePayDaySettings(settings);
-        debugPrint('[Onboarding] ✅ Pay day settings saved during onboarding');
+        debugPrint('[Onboarding:ConsolidatedFlow] ✅ Pay day settings saved successfully');
       } catch (e) {
-        debugPrint('[Onboarding] ⚠️ Error saving pay day settings during onboarding: $e');
+        debugPrint('[Onboarding:ConsolidatedFlow] ❌ Failed to save pay day settings: $e');
       }
+    } else {
+      debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Incomplete pay day data - not saving');
     }
   }
 
   void _buildPages() {
+    debugPrint('[Onboarding:ConsolidatedFlow] 🏗️ _buildPages - Building pages, isAccountMode: $_isAccountMode');
+
     _pages = [
       // Step 1: Name
       _NameSetupStep(
         initialName: _userName,
         onContinue: (name) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 👤 Name step - User entered name: $name');
           setState(() => _userName = name);
           _nextStep();
         },
@@ -215,16 +273,21 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         userId: widget.userId,
         initialPhoto: _photoUrl,
         onContinue: (photoUrl) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 📸 Photo step - Photo ${photoUrl != null ? "selected" : "skipped"}, path: $photoUrl');
           setState(() => _photoUrl = photoUrl);
           _nextStep();
         },
-        onSkip: _nextStep,
+        onSkip: () {
+          debugPrint('[Onboarding:ConsolidatedFlow] 📸 Photo step - User skipped photo');
+          _nextStep();
+        },
       ),
 
       // Step 3: Theme
       _ThemeSelectionStep(
         initialTheme: _selectedTheme,
         onContinue: (themeId) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 🎨 Theme step - User selected theme: $themeId');
           setState(() => _selectedTheme = themeId);
           _nextStep();
         },
@@ -234,6 +297,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       _FontSelectionStep(
         initialFont: _selectedFont,
         onContinue: (fontId) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 🔤 Font step - User selected font: $fontId');
           setState(() => _selectedFont = fontId);
           _nextStep();
         },
@@ -242,6 +306,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       // Step 5: Currency
       _CurrencySelectionStep(
         onContinue: (currencyCode) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 💱 Currency step - User selected currency: $currencyCode');
           setState(() => _selectedCurrency = currencyCode);
           _nextStep();
         },
@@ -250,6 +315,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       // Step 6: Mode Selection
       _ModeSelectionStep(
         onContinue: (isAccountMode) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 🔀 Mode selection - User chose ${isAccountMode ? "Account Mode" : "Simple Mode"}');
           setState(() {
             _isAccountMode = isAccountMode;
             // Rebuild pages to include/exclude account setup steps
@@ -268,6 +334,12 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           initialIconType: _accountIconType,
           initialIconValue: _accountIconValue,
           onContinue: (accountName, bankName, balance, iconType, iconValue) {
+            debugPrint('[Onboarding:ConsolidatedFlow] 🏦 Account setup - Collected account data:');
+            debugPrint('  accountName: $accountName');
+            debugPrint('  bankName: $bankName');
+            debugPrint('  balance: $balance');
+            debugPrint('  iconType: $iconType');
+            debugPrint('  iconValue: $iconValue');
             setState(() {
               _accountName = accountName;
               _bankName = bankName;
@@ -283,6 +355,10 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           initialFrequency: _payFrequency,
           initialNextPayDate: _nextPayDate,
           onContinue: (payAmount, frequency, nextPayDate) async {
+            debugPrint('[Onboarding:ConsolidatedFlow] 💰 Pay day setup - Collected pay day data:');
+            debugPrint('  payAmount: $payAmount');
+            debugPrint('  payFrequency: $frequency');
+            debugPrint('  nextPayDate: $nextPayDate');
             setState(() {
               _payAmount = payAmount;
               _payFrequency = frequency;
@@ -301,13 +377,17 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       // Step 8: Envelope Mindset
       _EnvelopeMindsetStep(
         selectedCurrency: _selectedCurrency,
-        onContinue: _nextStep,
+        onContinue: () {
+          debugPrint('[Onboarding:ConsolidatedFlow] 💡 Envelope mindset step - User continued');
+          _nextStep();
+        },
       ),
 
       // Step 9: Binder Template
       _BinderTemplateSelectionStep(
         userId: widget.userId,
         onContinue: (template) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 📋 Template selection - User selected template: ${template?.name} (${template?.id})');
           setState(() {
             _selectedTemplate = template;
             _buildPages(); // Rebuild pages to include Quick Setup
@@ -315,6 +395,7 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           _nextStep();
         },
         onSkip: () {
+          debugPrint('[Onboarding:ConsolidatedFlow] 📋 Template selection - User skipped template selection');
           setState(() => _selectedTemplate = null);
           // Skip template AND quick setup, go directly to completion
           _skipToCompletion();
@@ -329,12 +410,12 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           defaultAccountId: null, // Account not created yet during onboarding
           returnEnvelopeIds: true, // Get envelope IDs to link them to account later
           onComplete: (envelopeCount, [envelopeIds]) {
-            debugPrint('[Onboarding] 📦 Received envelopes from quick setup: count=$envelopeCount, ids=${envelopeIds?.length ?? 0}');
+            debugPrint('[Onboarding:ConsolidatedFlow] 📦 Quick setup complete - Created $envelopeCount envelopes');
+            debugPrint('[Onboarding:ConsolidatedFlow] 📦 Envelope IDs: ${envelopeIds ?? []}');
             setState(() {
               _createdEnvelopeCount = envelopeCount;
               _createdEnvelopeIds = envelopeIds ?? [];
             });
-            debugPrint('[Onboarding] 📦 Stored envelope IDs: ${_createdEnvelopeIds.length}');
             _nextStep();
           },
         ),
@@ -347,10 +428,13 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         onComplete: _completeOnboarding,
       ),
     ];
+
+    debugPrint('[Onboarding:ConsolidatedFlow] ✅ _buildPages - Built ${_pages.length} pages');
   }
 
   void _nextStep() {
     if (_currentPageIndex < _pages.length - 1) {
+      debugPrint('[Onboarding:ConsolidatedFlow] ➡️ _nextStep - Moving from page $_currentPageIndex to ${_currentPageIndex + 1}');
       setState(() => _currentPageIndex++);
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
@@ -358,11 +442,14 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
       );
       // Save progress after moving to next step
       _saveProgress();
+    } else {
+      debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ _nextStep - Already on last page ($_currentPageIndex)');
     }
   }
 
   void _previousStep() {
     if (_currentPageIndex > 0) {
+      debugPrint('[Onboarding:ConsolidatedFlow] ⬅️ _previousStep - Going back from page $_currentPageIndex to ${_currentPageIndex - 1}');
       // Dismiss keyboard before navigating back to prevent overflow
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() => _currentPageIndex--);
@@ -370,64 +457,79 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    } else {
+      debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ _previousStep - Already on first page');
     }
   }
 
   void _skipToCompletion() {
+    debugPrint('[Onboarding:ConsolidatedFlow] ⏭️ _skipToCompletion - User skipped to completion');
     // Jump directly to the completion step (last page)
     final completionPageIndex = _pages.length - 1;
+    debugPrint('[Onboarding:ConsolidatedFlow] ⏭️ Jumping to completion page at index $completionPageIndex');
     setState(() => _currentPageIndex = completionPageIndex);
     _pageController.jumpToPage(completionPageIndex);
     _saveProgress();
   }
 
   Future<void> _completeOnboarding() async {
+    debugPrint('[Onboarding:ConsolidatedFlow] 🎉 _completeOnboarding - START');
+    debugPrint('[Onboarding:ConsolidatedFlow] 📊 Collected data summary:');
+    debugPrint('  userName: $_userName');
+    debugPrint('  photoUrl: $_photoUrl');
+    debugPrint('  selectedCurrency: $_selectedCurrency');
+    debugPrint('  selectedTheme: $_selectedTheme');
+    debugPrint('  selectedFont: $_selectedFont');
+    debugPrint('  isAccountMode: $_isAccountMode');
+    debugPrint('  accountName: $_accountName');
+    debugPrint('  bankName: $_bankName');
+    debugPrint('  accountBalance: $_accountBalance');
+    debugPrint('  payAmount: $_payAmount');
+    debugPrint('  payFrequency: $_payFrequency');
+    debugPrint('  nextPayDate: $_nextPayDate');
+    debugPrint('  selectedTemplate: ${_selectedTemplate?.name}');
+    debugPrint('  createdEnvelopeCount: $_createdEnvelopeCount');
+    debugPrint('  createdEnvelopeIds: $_createdEnvelopeIds');
+
     // Guard against duplicate calls
     if (_isCompleting) {
-      debugPrint('[Onboarding] ⚠️ Already completing onboarding, ignoring duplicate call');
+      debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Already completing - preventing duplicate call');
       return;
     }
     _isCompleting = true;
 
-    debugPrint('[Onboarding] 🎉 Starting onboarding completion');
-    debugPrint('[Onboarding] 📊 Collected data summary:');
-    debugPrint('[Onboarding]   - User name: $_userName');
-    debugPrint('[Onboarding]   - Photo URL: $_photoUrl');
-    debugPrint('[Onboarding]   - Currency: $_selectedCurrency');
-    debugPrint('[Onboarding]   - Account mode: $_isAccountMode');
-    debugPrint('[Onboarding]   - Selected template: ${_selectedTemplate?.name ?? "none"}');
-    debugPrint('[Onboarding]   - Created envelope count: $_createdEnvelopeCount');
-    debugPrint('[Onboarding]   - Created envelope IDs: $_createdEnvelopeIds');
-    debugPrint('[Onboarding]   - Account name: $_accountName');
-    debugPrint('[Onboarding]   - Bank name: $_bankName');
-    debugPrint('[Onboarding]   - Account balance: $_accountBalance');
-    debugPrint('[Onboarding]   - Pay amount: $_payAmount');
-    debugPrint('[Onboarding]   - Pay frequency: $_payFrequency');
-    debugPrint('[Onboarding]   - Next pay date: $_nextPayDate');
-
     try {
+      debugPrint('[Onboarding:ConsolidatedFlow] 📝 PHASE 1: Saving to SharedPreferences');
       final prefs = await SharedPreferences.getInstance();
 
       // 1. Mark onboarding as complete in SharedPreferences (local-first, works offline)
       await prefs.setBool('hasCompletedOnboarding_${widget.userId}', true);
+      debugPrint('[Onboarding:ConsolidatedFlow] ✅ Marked onboarding as complete in SharedPreferences');
 
       // 2. Save displayName to FirebaseAuth user object (local-first, works offline)
+      debugPrint('[Onboarding:ConsolidatedFlow] 📝 PHASE 2: Updating FirebaseAuth');
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null && _userName != null) {
         await currentUser.updateDisplayName(_userName!.trim());
+        debugPrint('[Onboarding:ConsolidatedFlow] ✅ Updated FirebaseAuth displayName: ${_userName!.trim()}');
+      } else {
+        debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Skipped FirebaseAuth update - currentUser: ${currentUser != null}, userName: $_userName');
       }
 
       // 3. Save photoURL to SharedPreferences (local-first, works offline)
       if (_photoUrl != null) {
         await prefs.setString('profile_photo_path_${widget.userId}', _photoUrl!);
+        debugPrint('[Onboarding:ConsolidatedFlow] ✅ Saved photo path to SharedPreferences: $_photoUrl');
       }
 
       // 4. Save showTutorial flag to SharedPreferences (local-first)
       await prefs.setBool('showTutorial_${widget.userId}', true);
+      debugPrint('[Onboarding:ConsolidatedFlow] ✅ Set showTutorial flag');
 
       // 5. Best-effort sync to Firestore (optional, fails silently offline)
       // NOTE: Only sync display name and completion flag to Firestore
       // DO NOT sync local file paths to Firestore - they are device-specific and won't work across devices
+      debugPrint('[Onboarding:ConsolidatedFlow] 📝 PHASE 3: Syncing to Firestore (UserService)');
       try {
         final userService = UserService(
           FirebaseFirestore.instance,
@@ -438,13 +540,14 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           photoURL: null, // Don't sync local file paths to Firestore
           hasCompletedOnboarding: true,
         );
+        debugPrint('[Onboarding:ConsolidatedFlow] ✅ User profile synced to Firestore');
       } catch (e) {
-        debugPrint('[Onboarding] ⚠️ Firestore user profile sync failed (offline?): $e');
+        debugPrint('[Onboarding:ConsolidatedFlow] ❌ Failed to sync user profile to Firestore: $e');
       }
 
       // If in account mode, create the account and update pay day settings with account ID
-      debugPrint('[Onboarding] 🏦 Account mode enabled: $_isAccountMode, Envelope IDs to link: ${_createdEnvelopeIds.length}');
       if (_isAccountMode) {
+        debugPrint('[Onboarding:ConsolidatedFlow] 🏦 PHASE 4: Account mode - Creating account');
         final envelopeRepo = EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
           userId: widget.userId,
@@ -452,7 +555,12 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         final accountRepo = AccountRepo(envelopeRepo);
 
         // Create account
-        debugPrint('[Onboarding] 🏦 Creating account...');
+        debugPrint('[Onboarding:ConsolidatedFlow] 🏦 Creating account with:');
+        debugPrint('  name: ${_accountName ?? "Main Account"}');
+        debugPrint('  startingBalance: ${_accountBalance ?? 0.0}');
+        debugPrint('  iconType: ${_accountIconType ?? "emoji"}');
+        debugPrint('  iconValue: ${_accountIconValue ?? "🏦"}');
+
         final accountId = await accountRepo.createAccount(
           name: _accountName ?? 'Main Account',
           startingBalance: _accountBalance ?? 0.0,
@@ -463,12 +571,15 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           accountType: AccountType.bankAccount,
         );
 
+        debugPrint('[Onboarding:ConsolidatedFlow] ✅ Account created with ID: $accountId');
+
         // Update pay day settings with the newly created account ID
         // (Pay day settings were already saved earlier in _savePayDaySettingsNow,
         // but without the account ID since the account didn't exist yet)
         if (_payAmount != null &&
             _payFrequency != null &&
             _nextPayDate != null) {
+          debugPrint('[Onboarding:ConsolidatedFlow] 💰 PHASE 5: Updating pay day settings with account ID');
           final payDayService = PayDaySettingsService(
             FirebaseFirestore.instance,
             widget.userId,
@@ -477,11 +588,14 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
           // Get existing settings and update with account ID
           final existingSettings = await payDayService.getPayDaySettings();
           if (existingSettings != null) {
+            debugPrint('[Onboarding:ConsolidatedFlow] 💰 Updating existing pay day settings with accountId: $accountId');
             final updatedSettings = existingSettings.copyWith(
               defaultAccountId: accountId,
             );
             await payDayService.updatePayDaySettings(updatedSettings);
+            debugPrint('[Onboarding:ConsolidatedFlow] ✅ Pay day settings updated with account ID');
           } else {
+            debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ No existing pay day settings found - creating new');
             // Fallback: Create new settings if they don't exist for some reason
             final settings = PayDaySettings(
               userId: widget.userId,
@@ -491,7 +605,10 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
               defaultAccountId: accountId,
             );
             await payDayService.updatePayDaySettings(settings);
+            debugPrint('[Onboarding:ConsolidatedFlow] ✅ New pay day settings created with account ID');
           }
+        } else {
+          debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Skipping pay day settings update - incomplete data');
         }
 
         // Link ALL unlinked envelopes to the newly created account
@@ -499,8 +616,8 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
         // 1. Template-created envelopes (tracked in _createdEnvelopeIds)
         // 2. Custom binder envelopes (created via "Start from Scratch")
         // 3. Any other envelopes created during onboarding
-        debugPrint('[Onboarding] 🔗 Querying all user envelopes to link to account $accountId');
 
+        debugPrint('[Onboarding:ConsolidatedFlow] 📦 PHASE 6: Linking envelopes to account');
         try {
           // Get all current user's envelopes
           final allEnvelopes = await envelopeRepo.envelopesStream().first;
@@ -508,60 +625,66 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
               .where((e) => e.userId == widget.userId)
               .toList();
 
-          debugPrint('[Onboarding] 📊 Found ${userEnvelopes.length} total user envelopes');
+          debugPrint('[Onboarding:ConsolidatedFlow] 📦 Found ${userEnvelopes.length} total envelopes for user');
 
           // Find all envelopes that are NOT linked to any account
           final unlinkedEnvelopes = userEnvelopes
               .where((e) => e.linkedAccountId == null)
               .toList();
 
-          debugPrint('[Onboarding] 🔗 Found ${unlinkedEnvelopes.length} unlinked envelopes to link');
+          debugPrint('[Onboarding:ConsolidatedFlow] 📦 Found ${unlinkedEnvelopes.length} unlinked envelopes');
 
           if (unlinkedEnvelopes.isNotEmpty) {
             for (final envelope in unlinkedEnvelopes) {
               try {
-                debugPrint('[Onboarding] 🔗 Linking envelope "${envelope.name}" (${envelope.id}) to account $accountId');
+                debugPrint('[Onboarding:ConsolidatedFlow] 📦 Linking envelope "${envelope.name}" (${envelope.id}) to account $accountId');
                 await envelopeRepo.updateEnvelope(
                   envelopeId: envelope.id,
                   linkedAccountId: accountId,
                 );
-                debugPrint('[Onboarding] ✅ Successfully linked envelope "${envelope.name}"');
+                debugPrint('[Onboarding:ConsolidatedFlow] ✅ Envelope "${envelope.name}" linked successfully');
               } catch (e) {
-                debugPrint('[Onboarding] ⚠️ Failed to link envelope ${envelope.id} to account: $e');
+                debugPrint('[Onboarding:ConsolidatedFlow] ❌ Failed to link envelope "${envelope.name}": $e');
               }
             }
-            debugPrint('[Onboarding] ✅ Successfully linked ${unlinkedEnvelopes.length} envelopes to account');
+            debugPrint('[Onboarding:ConsolidatedFlow] ✅ All unlinked envelopes processed');
           } else {
-            debugPrint('[Onboarding] ℹ️ No unlinked envelopes found (all envelopes already linked)');
+            debugPrint('[Onboarding:ConsolidatedFlow] ℹ️ No unlinked envelopes to link');
           }
         } catch (e) {
-          debugPrint('[Onboarding] ⚠️ Failed to query/link envelopes: $e');
+          debugPrint('[Onboarding:ConsolidatedFlow] ❌ Error fetching/linking envelopes: $e');
 
           // Fallback: Try to link envelopes from the tracked IDs list
           if (_createdEnvelopeIds.isNotEmpty) {
-            debugPrint('[Onboarding] 🔄 Falling back to tracked envelope IDs: ${_createdEnvelopeIds.length}');
+            debugPrint('[Onboarding:ConsolidatedFlow] 🔄 Fallback: Linking ${_createdEnvelopeIds.length} tracked envelope IDs');
             for (final envelopeId in _createdEnvelopeIds) {
               try {
+                debugPrint('[Onboarding:ConsolidatedFlow] 📦 Linking tracked envelope $envelopeId to account $accountId');
                 await envelopeRepo.updateEnvelope(
                   envelopeId: envelopeId,
                   linkedAccountId: accountId,
                 );
+                debugPrint('[Onboarding:ConsolidatedFlow] ✅ Tracked envelope $envelopeId linked successfully');
               } catch (e) {
-                debugPrint('[Onboarding] ⚠️ Failed to link envelope $envelopeId: $e');
+                debugPrint('[Onboarding:ConsolidatedFlow] ❌ Failed to link tracked envelope $envelopeId: $e');
               }
             }
+          } else {
+            debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ No tracked envelope IDs to link');
           }
         }
 
-        debugPrint('[Onboarding] ✅ Account created with ID: $accountId');
       } else {
-        debugPrint('[Onboarding] ⚠️ Skipping account creation - not in account mode');
+        debugPrint('[Onboarding:ConsolidatedFlow] ℹ️ Not in account mode - skipping account creation and envelope linking');
       }
 
       // Clear onboarding progress after successful completion
+      debugPrint('[Onboarding:ConsolidatedFlow] 🗑️ PHASE 7: Clearing onboarding progress');
       await _progressService.clearProgress();
+      debugPrint('[Onboarding:ConsolidatedFlow] ✅ Onboarding progress cleared');
 
       // Navigate to home screen
+      debugPrint('[Onboarding:ConsolidatedFlow] 🏠 PHASE 8: Navigating to home screen');
       if (mounted) {
         final repo = EnvelopeRepo.firebase(
           FirebaseFirestore.instance,
@@ -575,10 +698,15 @@ class _ConsolidatedOnboardingFlowState extends State<ConsolidatedOnboardingFlow>
             scheduledPaymentRepo: scheduledPaymentRepo,
           )),
         );
+        debugPrint('[Onboarding:ConsolidatedFlow] 🎉 ✅ ONBOARDING COMPLETE - Navigated to home screen');
+      } else {
+        debugPrint('[Onboarding:ConsolidatedFlow] ⚠️ Widget not mounted - cannot navigate to home screen');
       }
     } catch (e) {
-      debugPrint('[Onboarding] Error completing onboarding: $e');
+      debugPrint('[Onboarding:ConsolidatedFlow] ❌ CRITICAL ERROR during onboarding completion: $e');
+      debugPrint('[Onboarding:ConsolidatedFlow] 📊 Error context: $_isCompleting, currentPageIndex: $_currentPageIndex');
       // Don't clear progress if there was an error - allow retry
+      _isCompleting = false; // Reset flag to allow retry
       rethrow;
     }
   }
@@ -782,6 +910,7 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
   }
 
   Future<void> _pickPhoto() async {
+    debugPrint('[Onboarding:PhotoStep] 📸 _pickPhoto - Starting photo picker');
     setState(() => _isLoading = true);
 
     try {
@@ -789,15 +918,19 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image == null) {
+        debugPrint('[Onboarding:PhotoStep] ⚠️ User cancelled photo selection');
         setState(() => _isLoading = false);
         return;
       }
+
+      debugPrint('[Onboarding:PhotoStep] 📸 Photo picked from gallery: ${image.path}');
 
       // Get theme colors before async gap
       final primaryColor = Theme.of(context).colorScheme.primary;
       final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
 
       // Crop the image to a circle
+      debugPrint('[Onboarding:PhotoStep] ✂️ Starting image cropper');
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: image.path,
         compressFormat: ImageCompressFormat.jpg,
@@ -834,12 +967,16 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
       );
 
       if (croppedFile != null) {
+        debugPrint('[Onboarding:PhotoStep] ✂️ Photo cropped successfully: ${croppedFile.path}');
+
         // Save to app documents directory
         final appDir = await getApplicationDocumentsDirectory();
         final fileName = 'profile_${widget.userId}.jpg';
         final savedImage = await File(
           croppedFile.path,
         ).copy('${appDir.path}/$fileName');
+
+        debugPrint('[Onboarding:PhotoStep] ✅ Photo saved to: ${savedImage.path}');
 
         if (mounted) {
           setState(() {
@@ -848,11 +985,13 @@ class _PhotoSetupStepState extends State<_PhotoSetupStep> {
           });
         }
       } else {
+        debugPrint('[Onboarding:PhotoStep] ⚠️ User cancelled cropping');
         if (mounted) {
           setState(() => _isLoading = false);
         }
       }
     } catch (e) {
+      debugPrint('[Onboarding:PhotoStep] ❌ Error during photo pick/crop: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
